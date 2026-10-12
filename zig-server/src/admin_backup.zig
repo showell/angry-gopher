@@ -42,13 +42,13 @@
 const std = @import("std");
 const ustar = @import("ustar.zig");
 const limits = @import("limits.zig");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const store = @import("store.zig");
-const http = @import("http.zig");
+const store = @import("webbox").store;
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const chat = @import("chat.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
 

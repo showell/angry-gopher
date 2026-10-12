@@ -11,8 +11,10 @@ zig **0.16.0** (`zig version`).
 
 ## Server (`src/server.zig`)
 
-`server.zig` is the entry point, and the `webbox` library (`src/webbox.zig`)
-does the serving. Its Linux host (`linux_host.zig`) listens on **:9001**,
+`server.zig` is the entry point, and the `webbox` library does the serving:
+the portable module `webbox` (`src/webbox.zig`), which the rest of the
+server imports by name, and its Linux host, the module `webbox_linux`
+(`src/webbox_linux.zig`, `linux_host.zig`), which listens on **:9001**,
 runs each accepted connection as its own task on the `std.Io` thread pool (so
 long-lived SSE streams don't starve other connections), and hands each
 request to `router.zig`, which routes by path prefix to the per-surface

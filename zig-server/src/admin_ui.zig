@@ -14,9 +14,9 @@
 //! is the one file that would change when it is.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const users = @import("users.zig");
 
 const Request = std.http.Server.Request;

@@ -30,12 +30,12 @@
 //! the next start measures afresh. A release forgets the player (`forget`).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const store = @import("store.zig");
+const store = @import("webbox").store;
 const storage = @import("storage.zig");
-const client_address = @import("client_address.zig");
-const free_space = @import("free_space.zig");
+const client_address = @import("webbox").client_address;
+const free_space = @import("webbox").free_space;
 
 pub const max_sessions: u32 = 500;
 pub const max_bytes: u64 = 16 << 20;

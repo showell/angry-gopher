@@ -18,12 +18,12 @@
 
 const std = @import("std");
 const limits = @import("limits.zig");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const chat = @import("chat.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 const settings = @import("settings.zig");
 const ui = @import("admin_ui.zig");
 const admin_host = @import("admin_host.zig");
@@ -168,7 +168,7 @@ const member_table_head =
 
 const testing = std.testing;
 const roots = @import("roots.zig");
-const store = @import("store.zig");
+const store = @import("webbox").store;
 
 test "fs: the admin's key form and revoked flash take uids only" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);

@@ -10,12 +10,12 @@
 //     be a re-parse the cursors miss.
 //
 // Work-units are deterministic (markdown.workUnits), so this is a stable signal,
-// not wall-time. Run: cd zig-server && zig run src/markdown_hostile_probe.zig
+// not wall-time. Run: cd zig-server && zig build markdown-probe
 const std = @import("std");
 const markdown = @import("markdown.zig");
 const chat_store = @import("chat_store.zig");
 const mtext = @import("markdown_text.zig");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 const CHAT_DIR_CANDIDATES = [_][]const u8{
     "/home/steve/AngryGopher/prod/chat",

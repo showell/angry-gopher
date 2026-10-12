@@ -32,14 +32,14 @@
 //! is untouched).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const chat = @import("chat.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
 const tokens = @import("search_tokens.zig");
-const mem_meter = @import("mem_meter.zig");
+const mem_meter = @import("webbox").mem_meter;
 
 const Request = std.http.Server.Request;
 

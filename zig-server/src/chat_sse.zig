@@ -19,13 +19,13 @@
 //! (`respond`, `push`); the live frames are the host's (bus.zig's `Kept`).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
-const Bus = @import("bus.zig").Bus;
-const sse = @import("sse.zig");
-const http = @import("http.zig");
+const Bus = @import("webbox").bus.Bus;
+const sse = @import("webbox").sse;
+const http = @import("webbox").http;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

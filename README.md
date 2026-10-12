@@ -19,7 +19,8 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
 - **This repo is the program.** Every route, page and app is written and
   tested here, on Linux, as always (`ops/start`, `ops/check`).
 - **gopher-metal is the machine.** Its `port.sh` reads `zig-server/src` from
-  a sibling checkout and swaps `std.Io` for metal's own, one line per file;
+  a sibling checkout, and its build hands those files metal's own `Io` as
+  `host_io` (std's here: `src/host_io_std.zig`), rewriting no line;
   its gates judge metal against this repo's Linux build, page by page, and
   run metal-vmm (the third repo, test-only). Its `README.md` and
   `CUTOVER.md` say how a release reaches the droplet.

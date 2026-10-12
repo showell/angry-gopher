@@ -27,11 +27,11 @@
 //! nothing here locks.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const tokens = @import("search_tokens.zig");
 const chat_store = @import("chat_store.zig");
-const mem_meter = @import("mem_meter.zig");
+const mem_meter = @import("webbox").mem_meter;
 
 /// One message, as a query answers it: slices of the index's text, good
 /// until the next message lands (one handler at a time: the answer is
@@ -579,7 +579,7 @@ test "an index that runs out of memory part way can be dropped without a leak" {
 }
 
 test "fs: a build out of memory fails, never an index missing what it could not hold; an append out of memory drops the index (155's review)" {
-    const store = @import("store.zig");
+    const store = @import("webbox").store;
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();

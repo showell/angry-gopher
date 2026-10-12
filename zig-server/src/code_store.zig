@@ -12,10 +12,10 @@
 //! source-URL helper, so the store doesn't depend on the UI layer.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
-const disk = @import("store.zig");
+const disk = @import("webbox").store;
 const images_store = @import("images_store.zig");
 const fence = @import("markdown_fence.zig");
 

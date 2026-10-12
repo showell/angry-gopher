@@ -7,7 +7,7 @@
 //! arena of its own over the process allocator, given back when it ends.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
@@ -21,6 +21,15 @@ pub const StartReport = struct {
     search: ?search_index.Stats,
     search_ms: i64,
 };
+
+/// **WHAT THE SETUP DID, IN WORDS**, a line each, for a host to say in its
+/// log with its own prefix: the same lines on every host.
+pub fn describeStart(r: StartReport, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    if (r.backfilled > 0) try w.print("wrote a last-message record for {d} chat session(s)\n", .{r.backfilled});
+    if (r.search) |st| {
+        try w.print("search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, r.search_ms });
+    } else try w.print("search index: not built ({s}); the first search builds it\n", .{if (search_index.failed_with) |e| @errorName(e) else "unknown"});
+}
 
 pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartReport {
     if (host_roots) |r| try roots.point(base, r);

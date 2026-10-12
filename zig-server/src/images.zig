@@ -7,15 +7,15 @@
 //! server-rendered page is the backlog), now fed for real by the fanout.
 
 const std = @import("std");
-const Io = std.Io;
-const http = @import("http.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const images_store = @import("images_store.zig");
-const sse = @import("sse.zig");
+const sse = @import("webbox").sse;
 const chrome = @import("chat_chrome.zig");
-const html = @import("html.zig");
-const Bus = @import("bus.zig").Bus;
+const html = @import("webbox").html;
+const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

@@ -14,11 +14,11 @@
 
 const std = @import("std");
 const limits = @import("limits.zig");
-const Io = std.Io;
-const http = @import("http.zig");
-const edge = @import("edge.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
+const edge = @import("webbox").edge;
 const users = @import("users.zig");
-const disk = @import("store.zig");
+const disk = @import("webbox").store;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

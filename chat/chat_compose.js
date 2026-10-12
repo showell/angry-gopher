@@ -108,21 +108,101 @@ window.ChatCompose = (function(){
   var upload_patience_ms=5*60*1000;
   var uploading=false;
   function megabytes(n){ return (n/1048576).toFixed(1)+' MB'; }
+
+  /* PRODUCT_DECISION: a photo is SHRUNK IN THE BROWSER before it is sent
+     (Steve, 2026-10-12): a phone's 10 MB photo becomes about 1 MB, ten times
+     less to send on a slow link and to write on the server. Its longest side
+     is at most `photo_longest_px`; a JPEG over `photo_reencode_over_bytes` is
+     re-encoded even at that size, at `photo_jpeg_quality`. A PNG (a
+     screenshot: text, transparency) stays PNG and is only scaled. A GIF or
+     WebP is sent as it is (either may be animated, and a canvas keeps one
+     frame). Drawing through a canvas drops the photo's metadata, its location
+     included. The original goes whenever the shrunk one is no smaller, or
+     anything about the shrinking fails or takes past `photo_prepare_ms`: a
+     resize can make an upload smaller, never stop it. */
+  var photo_longest_px=2048;
+  var photo_reencode_over_bytes=1.5*1048576;
+  var photo_jpeg_quality=0.85;
+  var photo_prepare_ms=15000;
+  var jpeg_types={ 'image/jpeg':1, 'image/jpg':1, 'image/pjpeg':1 };
+  /* The resize a picture gets: null to send it as it is, else the size and
+     type to draw it at. Pure, for tools/test_chat_resize.mjs. */
+  function resizePlan(type, bytes, width, height){
+    var jpeg = jpeg_types[type]===1;
+    if(!(jpeg || type==='image/png') || !(width>0 && height>0)) return null;
+    var longest=Math.max(width, height);
+    var scale = longest>photo_longest_px ? photo_longest_px/longest : 1;
+    if(scale===1 && !(jpeg && bytes>photo_reencode_over_bytes)) return null;
+    return { width: Math.max(1, Math.round(width*scale)),
+             height: Math.max(1, Math.round(height*scale)),
+             type: jpeg ? 'image/jpeg' : 'image/png' };
+  }
+  /* Hands `then` the file to send, exactly once: the shrunk one, or the
+     original. The decode is an <img>'s, which every current browser turns
+     upright by the photo's EXIF orientation (createImageBitmap's
+     'from-image' is newer, and refused by the browsers before it). */
+  // lint:called-once the resize kept apart from the send it hands a file to
+  function shrinkPicture(file, then){
+    var handed=false, url=null;
+    function hand(f){
+      if(handed) return;
+      handed=true; clearTimeout(watchdog);
+      if(url) URL.revokeObjectURL(url);
+      then(f);
+    }
+    var watchdog=setTimeout(function(){ hand(file); }, photo_prepare_ms);
+    if(!(jpeg_types[file.type]===1 || file.type==='image/png')) return hand(file);
+    try {
+      url=URL.createObjectURL(file);
+      var img=new Image();
+      img.onerror=function(){ hand(file); };
+      img.onload=function(){
+        try {
+          var plan=resizePlan(file.type, file.size, img.naturalWidth, img.naturalHeight);
+          if(!plan) return hand(file);
+          var canvas=document.createElement('canvas');
+          canvas.width=plan.width; canvas.height=plan.height;
+          var g=canvas.getContext('2d');
+          if(!g) return hand(file);
+          if(plan.type==='image/jpeg'){ g.fillStyle='#fff'; g.fillRect(0, 0, plan.width, plan.height); }
+          g.imageSmoothingQuality='high';
+          g.drawImage(img, 0, 0, plan.width, plan.height);
+          canvas.toBlob(function(blob){
+            try {
+              canvas.width=canvas.height=0;
+              if(!blob || blob.size>=file.size) return hand(file);
+              var name=(file.name||'image').replace(/\.[^.]*$/, '')+(plan.type==='image/jpeg' ? '.jpg' : '.png');
+              hand(new File([blob], name, { type:plan.type }));
+            } catch(e){ hand(file); }
+          }, plan.type, photo_jpeg_quality);
+        } catch(e){ hand(file); }
+      };
+      img.src=url;
+    } catch(e){ hand(file); }
+  }
+
   function uploadFile(file){
     if(!file) return;
     if(uploading){
       status.style.color=''; status.textContent='Still sending the last upload — one at a time, please.';
       return;
     }
+    uploading=true; uploadBtn.disabled=true;
+    status.style.color=ChatColors.mutedFg;
+    if(file.type.indexOf('image/')===0) status.textContent='Preparing image…';
+    shrinkPicture(file, sendFile);
+  }
+  function done(msg){
+    uploading=false; uploadBtn.disabled=false;
+    status.style.color=''; status.textContent=msg;
+  }
+  function sendFile(file){
     var isVideo=file.type.indexOf('video/')===0;
     var noun=isVideo?'screencast':'image';
     var cap=isVideo?MAX_VIDEO_BYTES:MAX_IMAGE_BYTES;
     if(file.size > cap){
-      status.style.color='';
-      status.textContent='That '+noun+' is '+megabytes(file.size)+' — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.');
-      return;
+      return done('That '+noun+' is '+megabytes(file.size)+' — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.'));
     }
-    uploading=true; uploadBtn.disabled=true;
     status.style.color=ChatColors.mutedFg;
     status.textContent='Uploading '+noun+': 0% of '+megabytes(file.size)+'…';
     var fd=new FormData(); fd.append('file',file);
@@ -136,10 +216,6 @@ window.ChatCompose = (function(){
         ? 'Uploading '+noun+': '+pct+'% of '+megabytes(e.total)+'…'
         : 'Saving '+noun+'…';
     };
-    function done(msg){
-      uploading=false; uploadBtn.disabled=false;
-      status.style.color=''; status.textContent=msg;
-    }
     xhr.onload=function(){
       if(xhr.status<200 || xhr.status>=300){
         var t=(xhr.responseText||'').trim();
@@ -254,5 +330,6 @@ window.ChatCompose = (function(){
   }
 
   return { init:init, isPending:isPending, ackIfPending:ackIfPending,
-           insertAtCursor:insertAtCursor, setMarkdown:setMarkdown, focus:focus };
+           insertAtCursor:insertAtCursor, setMarkdown:setMarkdown, focus:focus,
+           resizePlan:resizePlan, shrinkPicture:shrinkPicture };
 })();

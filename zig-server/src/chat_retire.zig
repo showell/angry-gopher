@@ -29,9 +29,9 @@
 //!     conversation now gone is dropped, so no kept user's page lands on a 404.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const store = @import("store.zig");
+const store = @import("webbox").store;
 const search_index = @import("search_index.zig");
 const chat_store = @import("chat_store.zig");
 const timefmt = @import("timefmt.zig");
@@ -528,7 +528,7 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expect(try store.has(io, a, try sessionPath(a, try chat_store.dmConvDir(a, "1_2"), "oldtopic")));
 
     // Search's index, built before the confirm (metal-vmm 155(b)).
-    const mem_meter = @import("mem_meter.zig");
+    const mem_meter = @import("webbox").mem_meter;
     const meter = mem_meter.useForTest(testing.allocator);
     defer meter.restore();
     const emptied = search_index.emptyForTest();

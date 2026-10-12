@@ -49,17 +49,17 @@ pub const signSessionNow = users_session.signSessionNow;
 
 const std = @import("std");
 
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 const Alloc = std.mem.Allocator;
 
 const auth = @import("auth.zig");
 
-const counter = @import("counter.zig");
+const counter = @import("webbox").counter;
 
-const http = @import("http.zig");
+const http = @import("webbox").http;
 
-const store = @import("store.zig");
+const store = @import("webbox").store;
 
 const uid_cookie = @import("uid_cookie.zig");
 
@@ -67,7 +67,7 @@ const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 
 const b64 = std.base64.url_safe_no_pad;
 
-const site_secret = @import("site_secret.zig");
+const site_secret = @import("webbox").site_secret;
 
 // Roots (roots.point overrides these at startup, from the host's roots). Defaults are
 // repo-relative, adjusted for the zig-server cwd.

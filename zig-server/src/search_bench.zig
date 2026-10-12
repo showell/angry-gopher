@@ -1,7 +1,7 @@
 //! search_bench: what search's index costs to build, on the host (metal-vmm
 //! QUEUE 155(e)). A measuring stick, not a gate.
 //!
-//!   cd zig-server && zig run -OReleaseFast src/search_bench.zig
+//!   cd zig-server && zig build search-bench
 //!
 //! A synthetic corpus of about `corpus_bytes` (Steve: four people, ~10 MB of
 //! chat), written as the store lays transcripts out, under .zig-cache/tmp:
@@ -12,11 +12,11 @@
 //! and a few queries. The disk cost on gopher-metal is the box's to measure.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
-const mem_meter = @import("mem_meter.zig");
-const store = @import("store.zig");
+const mem_meter = @import("webbox").mem_meter;
+const store = @import("webbox").store;
 
 const corpus_bytes = 10 << 20;
 const vocabulary = 20_000;

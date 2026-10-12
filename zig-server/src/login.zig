@@ -24,20 +24,20 @@
 
 const std = @import("std");
 const limits = @import("limits.zig");
-const Io = std.Io;
-const http = @import("http.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const names = @import("names.zig");
 const player = @import("player.zig");
 const uid_cookie = @import("uid_cookie.zig");
 const storage = @import("storage.zig");
-const client_address = @import("client_address.zig");
+const client_address = @import("webbox").client_address;
 const throttle = @import("login_throttle.zig");
 const chat = @import("chat.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 const store = @import("chat_store.zig");
 const chat_state = @import("chat_state.zig");
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -255,9 +255,13 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
         // **A RELEASE THAT CAN RELEASE NOTHING SAYS SO** (metal-vmm QUEUE
         // 172): a player cookie naming an account (its session lapsed) is
         // not that account's to release, and the answer a release that
-        // deleted gets would tell its owner their data is gone.
-        if (std.mem.eql(u8, release, "yes") and target == null and id.len != 0)
-            return req.respond("Nothing was released: log in to release your account.\n", .{ .status = .forbidden });
+        // deleted gets would tell its owner their data is gone. It is still
+        // a logout: its cookies are cleared as a plain logout's are.
+        if (std.mem.eql(u8, release, "yes") and target == null and id.len != 0) {
+            var hs: std.ArrayList(std.http.Header) = .empty;
+            for (logout_clears) |c| try hs.append(alloc, .{ .name = "set-cookie", .value = c });
+            return req.respond("Nothing was released: log in to release your account. You are logged out.\n", .{ .status = .forbidden, .extra_headers = hs.items });
+        }
         if (std.mem.eql(u8, release, "yes")) if (target) |t| {
             // Release: delete game data and the identity record (frees the name;
             // no id is ever reissued, so no name-backdoor remains).
@@ -530,8 +534,11 @@ fn renderLogoutComplete(req: *Request, alloc: Alloc) !void {
         \\  location.replace('/');
         \\</script>
     ;
-    try sendHTML(req, alloc, body, &.{ clear_uid_cookie, clear_auth_cookie, clear_legacy_uid_cookie, clear_legacy_auth_cookie });
+    try sendHTML(req, alloc, body, &logout_clears);
 }
+
+/// Every identity cookie a logout clears, under both names.
+const logout_clears = [_][]const u8{ clear_uid_cookie, clear_auth_cookie, clear_legacy_uid_cookie, clear_legacy_auth_cookie };
 
 // login_full_css: the shared stylesheet for the chat password screens.
 const login_full_css =

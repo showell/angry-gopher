@@ -47,7 +47,7 @@ class Tree:
 ROUTER_ONLY = {
     "router.zig": """\
         const std = @import("std");
-        const Io = std.Io;
+        const Io = @import("host_io").Io;
         pub fn route(io: Io) void { _ = io; }
     """,
 }
@@ -56,13 +56,13 @@ ROUTER_ONLY = {
 def with_router(**extra):
     """router.zig importing each extra file, plus those files."""
     imports = "".join(f'const _{i} = @import("{n}");\n' for i, n in enumerate(extra))
-    files = {"router.zig": 'const std = @import("std");\nconst Io = std.Io;\n' + imports}
+    files = {"router.zig": 'const std = @import("std");\nconst Io = @import("host_io").Io;\n' + imports}
     files.update(extra)
     return files
 
 
 class Clean(unittest.TestCase):
-    def test_the_alias_line_itself_is_not_a_finding(self):
+    def test_io_from_host_io_is_not_a_finding(self):
         with Tree(ROUTER_ONLY) as t:
             self.assertEqual(t.scan(), [])
 
@@ -80,7 +80,7 @@ class Clean(unittest.TestCase):
         every = {f for f in os.listdir(src) if f.endswith(".zig")}
         outside = every - L.closure(src, L.ROOTS)
         self.assertEqual(outside, {
-            "server.zig", "linux_host.zig", "linux_config.zig", "bind.zig", "stress.zig", "hash_password.zig",
+            "server.zig", "host_io_std.zig", "webbox_linux.zig", "linux_host.zig", "linux_config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
         })
@@ -106,9 +106,24 @@ class Seam(unittest.TestCase):
         with Tree(with_router(**{"a.zig": body})) as t:
             self.assertEqual(t.scan(), [])
 
-    def test_the_alias_spelled_with_extra_spaces_is_still_the_alias(self):
-        with Tree(with_router(**{"a.zig": "const  Io  =  std.Io ;\n"})) as t:
+    def test_std_io_through_the_import_itself_is_a_finding(self):
+        # `@import("std").Io` never spells `std.`, and is std's on every host.
+        for line, want in (('const Io = @import("std").Io;', '@import("std").Io'),
+                           ('const d = @import( "std" ).Io.Dir;', '@import( "std" ).Io')):
+            with self.subTest(line=line):
+                with Tree(with_router(**{"a.zig": line + "\n"})) as t:
+                    self.assertEqual(t.texts(), [("a.zig", want)])
+        # Its genuine interfaces stay allowed, as through `std.`.
+        with Tree(with_router(**{"a.zig": 'const W = @import("std").Io.Writer;\n'})) as t:
             self.assertEqual(t.scan(), [])
+
+    def test_the_old_alias_to_std_is_a_finding_however_spaced(self):
+        # Io comes from host_io, the one file the build swaps; an alias
+        # straight to std's would be std's on every host, the machine too.
+        for line in ("const Io = std.Io;", "const  Io  =  std.Io ;"):
+            with self.subTest(line=line):
+                with Tree(with_router(**{"a.zig": line + "\n"})) as t:
+                    self.assertEqual(t.texts(), [("a.zig", "std.Io")])
 
 
 class Host(unittest.TestCase):
@@ -240,7 +255,9 @@ class Reach(unittest.TestCase):
         with Tree(files) as t:
             self.assertEqual([n for n, _, _, _ in t.scan()], ["router.zig"])
 
-    def test_the_librarys_host_only_part_is_not_followed_from_its_root(self):
+    def test_the_library_naming_a_linux_file_is_a_finding_not_followed(self):
+        # The Linux half is its own module; webbox.zig naming a file of it
+        # would carry the host into every portable build.
         files = {
             "router.zig": "\n",
             "webbox.zig": 'pub const linux_host = @import("linux_host.zig");\n',
@@ -248,7 +265,7 @@ class Reach(unittest.TestCase):
         }
         with Tree(files) as t:
             self.assertEqual(L.closure(t.dir, L.ROOTS), {"router.zig", "webbox.zig"})
-            self.assertEqual(L.scan(t.dir, L.ROOTS), [])
+            self.assertEqual([(n, text) for n, _, text, _ in L.scan(t.dir, L.ROOTS)], [("webbox.zig", '@import("linux_host.zig")')])
 
     def test_a_portable_file_reaching_the_host_only_part_is_a_finding(self):
         files = {
@@ -260,16 +277,38 @@ class Reach(unittest.TestCase):
             found = L.scan(t.dir, L.ROOTS)
             self.assertEqual([(n, text) for n, _, text, _ in found], [("router.zig", '@import("linux_host.zig")')])
 
-    def test_a_portable_file_reaching_the_host_through_the_library_root_is_a_finding(self):
-        # `@import("webbox.zig").linux_host` is one field from the host, and
-        # on the bare-metal host it still compiles (freeSpaceAt answers null).
+    def test_a_portable_file_importing_the_linux_module_is_a_finding(self):
         files = {
-            "router.zig": 'const space = @import("webbox.zig").linux_host.freeSpaceAt("x");\n',
-            "webbox.zig": 'pub const linux_host = @import("linux_host.zig");\n',
-            "linux_host.zig": "var t = std.Io.Threaded.init(a, .{});\n",
+            "router.zig": 'const space = @import("webbox_linux").linux_host.freeSpaceAt("x");\n',
+            "webbox.zig": "\n",
         }
         with Tree(files) as t:
-            self.assertEqual([(n, text) for n, _, text, _ in L.scan(t.dir, L.ROOTS)], [("router.zig", '@import("webbox.zig")')])
+            self.assertEqual([(n, text) for n, _, text, _ in L.scan(t.dir, L.ROOTS)], [("router.zig", '@import("webbox_linux")')])
+
+    def test_the_webbox_module_is_followed_to_the_librarys_files(self):
+        files = {
+            "router.zig": 'const http = @import("webbox").http;\n',
+            "webbox.zig": 'pub const http = @import("http.zig");\n',
+            "http.zig": "const p = std.heap.page_allocator;\n",
+        }
+        with Tree(files) as t:
+            self.assertEqual(L.closure(t.dir), {"router.zig", "webbox.zig", "http.zig"})
+            self.assertEqual([n for n, _, _, _ in t.scan()], ["http.zig"])
+
+    def test_an_application_file_importing_a_library_file_by_path_is_a_finding(self):
+        # One file, one module: the application reaches the library as the
+        # `webbox` module, as the metal port hands it to the kernel. The
+        # library's own files import one another by path.
+        files = {
+            "router.zig": 'const http = @import("http.zig");\nconst w = @import("webbox.zig");\n',
+            "webbox.zig": 'pub const http = @import("http.zig");\n',
+            "http.zig": 'const edge = @import("edge.zig");\n',
+            "edge.zig": "\n",
+        }
+        with Tree(files) as t:
+            found = L.scan(t.dir, L.ROOTS)
+            self.assertEqual([(n, text) for n, _, text, _ in found], [("router.zig", '@import("http.zig")'), ("router.zig", '@import("webbox.zig")')])
+            self.assertIn('@import("webbox").http', found[0][3])
 
     def test_a_host_only_file_named_by_a_path_is_still_a_finding(self):
         files = {

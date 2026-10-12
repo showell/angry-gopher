@@ -23,7 +23,7 @@
 /// answering 431 (webbox's http.zig: a request head's size for any host).
 /// Here, above `body`: tools/check_caddy_limits.py evaluates every `pub
 /// const` after `body` begins.
-pub const head_bytes = @import("http.zig").head_bytes;
+pub const head_bytes = @import("webbox").http.head_bytes;
 
 /// Each route's body cap, in bytes: a body past it is refused with 413.
 pub const body = struct {

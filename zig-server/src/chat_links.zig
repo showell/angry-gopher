@@ -6,13 +6,13 @@
 //! missing file yields an "ask Steve to curate" stub, not a 404.
 
 const std = @import("std");
-const Io = std.Io;
-const http = @import("http.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const chrome = @import("chat_chrome.zig");
 const markdown = @import("markdown.zig");
-const disk = @import("store.zig");
+const disk = @import("webbox").store;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

@@ -22,10 +22,36 @@ pub fn build(b: *std.Build) void {
 
     // **THE `webbox` LIBRARY** (src/webbox.zig, a web server in a box): what
     // an application built on this server imports as one module, dog-park
-    // first. ops/check_zig holds its files to importing std and one another
-    // (tools/lint_webbox_library.py), so nothing else of angry-gopher's rides
-    // along.
-    _ = b.addModule("webbox", .{ .root_source_file = b.path("src/webbox.zig") });
+    // first, and angry-gopher itself: no file of the application imports a
+    // file of the library by path. ops/check_zig holds the library's files
+    // to importing std and one another, and the Linux half's also to the
+    // `webbox` module (tools/lint_webbox_library.py), so nothing else of
+    // angry-gopher's rides along.
+    //
+    // **TWO MODULES**: `webbox`, portable, which everything imports; and
+    // `webbox_linux` (src/webbox_linux.zig), the Linux host, which only a
+    // Linux `main` imports and which reaches the portable half as `webbox`.
+    //
+    // **`host_io`, THE ONE FILE THAT NAMES THE HOST**: every file takes its
+    // `Io` from it (`@import("host_io").Io`). Here it is src/host_io_std.zig,
+    // the standard library's; gopher-metal's build hands the same sources
+    // its own, the machine's. Exported, so an application's build hands
+    // its own code the same one.
+    const host_io = b.addModule("host_io", .{ .root_source_file = b.path("src/host_io_std.zig") });
+    const webbox = b.addModule("webbox", .{
+        .root_source_file = b.path("src/webbox.zig"),
+        .imports = &.{.{ .name = "host_io", .module = host_io }},
+    });
+    const webbox_linux = b.addModule("webbox_linux", .{
+        .root_source_file = b.path("src/webbox_linux.zig"),
+        .imports = &.{
+            .{ .name = "webbox", .module = webbox },
+            .{ .name = "host_io", .module = host_io },
+        },
+    });
+    root.addImport("host_io", host_io);
+    root.addImport("webbox", webbox);
+    root.addImport("webbox_linux", webbox_linux);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -148,6 +174,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    stress_mod.addImport("host_io", host_io);
     const stress_exe = b.addExecutable(.{ .name = "stress", .root_module = stress_mod });
     // Build (don't run) the harness to zig-out/bin/stress. The ops scripts run the
     // binary directly so they own the exit-code semantics — a `zig build run` step
@@ -164,8 +191,29 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    hash_mod.addImport("webbox", webbox);
+    hash_mod.addImport("host_io", host_io);
     const hash_exe = b.addExecutable(.{ .name = "hash-password", .root_module = hash_mod });
     b.step("hash-password", "Build zig-out/bin/hash-password").dependOn(&b.addInstallArtifact(hash_exe, .{}).step);
+
+    // **THE TOOLS RUN BY HAND**: measuring sticks and probes, not gates. Each
+    // reaches the library, so each is built here, where the `webbox` module
+    // is, and run by name: `zig build search-bench`, and so on.
+    const Tool = struct { step: []const u8, path: []const u8, optimize: std.builtin.OptimizeMode, help: []const u8 };
+    for ([_]Tool{
+        .{ .step = "search-bench", .path = "src/search_bench.zig", .optimize = .ReleaseFast, .help = "Measure what search's index costs to build (src/search_bench.zig)" },
+        .{ .step = "markdown-bench", .path = "src/markdown_bench.zig", .optimize = optimize, .help = "Render a corpus and report the slowest messages (src/markdown_bench.zig)" },
+        .{ .step = "markdown-probe", .path = "src/markdown_hostile_probe.zig", .optimize = optimize, .help = "Check the renderer stays linear on hostile shapes (src/markdown_hostile_probe.zig)" },
+        .{ .step = "markdown-regression", .path = "src/markdown_regression_test.zig", .optimize = optimize, .help = "Render the corpora and compare with the gold (ops/check_markdown; -- --rebaseline rewrites it)" },
+    }) |tool| {
+        const tool_mod = b.createModule(.{ .root_source_file = b.path(tool.path), .target = target, .optimize = tool.optimize });
+        tool_mod.addImport("webbox", webbox);
+        tool_mod.addImport("host_io", host_io);
+        const tool_exe = b.addExecutable(.{ .name = tool.step, .root_module = tool_mod });
+        const tool_run = b.addRunArtifact(tool_exe);
+        if (b.args) |args| tool_run.addArgs(args);
+        b.step(tool.step, tool.help).dependOn(&tool_run.step);
+    }
 
     // Unit tests (`zig build test`). Each listed module is a test root; a module
     // must be in this list for its `test {}` blocks to actually run under the
@@ -181,18 +229,25 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     router_tests.root_module.addImport("build_options", build_opts.createModule());
+    router_tests.root_module.addImport("webbox", webbox);
+    router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
     }
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(router_tests).step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_facts.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/webbox.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_facts.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/webbox.zig", "src/webbox_linux.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,
             .optimize = optimize,
         }) });
+        // A file of the application, or of the Linux host, reaches the
+        // library as the module; a file of the library, by path.
+        unit.root_module.addImport("webbox", webbox);
+        unit.root_module.addImport("webbox_linux", webbox_linux);
+        unit.root_module.addImport("host_io", host_io);
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }
 }

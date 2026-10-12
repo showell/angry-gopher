@@ -68,15 +68,15 @@ pub const validChannelName = chat_paths.validChannelName;
 
 const std = @import("std");
 
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 const Alloc = std.mem.Allocator;
 
 const timefmt = @import("timefmt.zig");
 
-const store = @import("store.zig");
+const store = @import("webbox").store;
 
-const bus_mod = @import("bus.zig");
+const bus_mod = @import("webbox").bus;
 
 const Bus = bus_mod.Bus;
 

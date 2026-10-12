@@ -7,13 +7,13 @@
 
 const std = @import("std");
 const chat_upload = @import("chat_upload.zig");
-const Io = std.Io;
-const http = @import("http.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const chat_state = @import("chat_state.zig");
 const presence = @import("presence.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 const chrome = @import("chat_chrome.zig");
 const Topic = @import("chat_conv.zig").Topic;
 

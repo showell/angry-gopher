@@ -1,7 +1,7 @@
 const std = @import("std");
 const markdown = @import("markdown.zig");
 const chat_store = @import("chat_store.zig");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 // Diagnostic timing probe for the markdown renderer over the REAL prod chat
 // corpus — NOT a gate, a measuring stick. It walks every chat transcript under
@@ -11,11 +11,9 @@ const Io = std.Io;
 // slowest individual messages — the starting point for hunting renderer
 // weaknesses.
 //
-// Locally:   cd zig-server && zig run src/markdown_bench.zig
-// On a host without a toolchain (the droplet): compile a static binary down
-// here and ship it, exactly like the main server —
-//   cd zig-server && zig build-exe src/markdown_bench.zig -femit-bin=markdown_bench
-//   rsync markdown_bench steve@<droplet>:/tmp/ && ssh steve@<droplet> /tmp/markdown_bench
+// Locally:   cd zig-server && zig build markdown-bench
+// On a host without a toolchain: build it here (it lands in .zig-cache; the
+// step's run line names it) and ship that binary, like the main server.
 //
 // The corpus root differs by machine, so instead of a runtime flag (a knob a
 // benchmark shouldn't have) we bake a fixed search list and use the FIRST that

@@ -17,12 +17,12 @@
 //! process-lifetime page allocator, NOT the per-request arena.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
-const mem_meter = @import("mem_meter.zig");
-const Bus = @import("bus.zig").Bus;
+const mem_meter = @import("webbox").mem_meter;
+const Bus = @import("webbox").bus.Bus;
 
 /// PresenceWindow: a markActive within this window (5 min) means online.
 const window_ns: i128 = 5 * std.time.ns_per_min;
@@ -131,7 +131,7 @@ test "presence: a came-online edge whose broadcast could not start is not spent:
     var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var hub = @import("bus.zig").Hub.init(io, std.testing.allocator);
+    var hub = @import("webbox").bus.Hub.init(io, std.testing.allocator);
     defer hub.entries.deinit(std.testing.allocator);
     var bus = Bus.of(&hub);
     // Nothing to be had: the name, the members, the text.

@@ -216,6 +216,41 @@ class Fires(unittest.TestCase):
             """)) as t:
                 self.assertEqual(t.lines(), [("a.zig", 3)])
 
+    def test_the_store_through_the_webbox_module(self):
+        # An application names the store as a member of the library's module
+        # (Phase B step 0); the lint saw nothing in 32 files until it read it.
+        with Tree({"a.zig": """\
+            const store = @import("webbox").store;
+            fn f() []const u8 {
+                return store.read(io, a, p, .unlimited) catch "";
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_a_wrapper_in_a_member_of_the_webbox_module(self):
+        # A library file's function is followed through the module's name for
+        # it, as one by path is.
+        with Tree({**one("""\
+            pub fn next(io: Io, a: Alloc, p: []const u8) ![]u8 {
+                return store.read(io, a, p, .unlimited);
+            }
+        """, name="counter.zig"), "a.zig": """\
+            const counter = @import("webbox").counter;
+            fn f() []const u8 {
+                return counter.next(io, a, p) catch "";
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_a_member_named_after_the_store_but_not_it_is_not_the_store(self):
+        with Tree({"a.zig": """\
+            const store = @import("webbox").store_cost;
+            fn f() []const u8 {
+                return store.read(io, a, p, .unlimited) catch "";
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [])
+
     def test_a_wrapper_in_another_file(self):
         # metal-vmm QUEUE 114: users.isMember was such a wrapper.
         with Tree({**one("""\

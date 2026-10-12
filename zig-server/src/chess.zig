@@ -10,8 +10,8 @@
 //! the wasm is built from, embedded at build time).
 
 const std = @import("std");
-const http = @import("http.zig");
-const html = @import("html.zig");
+const http = @import("webbox").http;
+const html = @import("webbox").html;
 
 const knight_wasm = @embedFile("knight_wasm");
 const queens_wasm = @embedFile("queens_wasm");

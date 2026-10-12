@@ -14,18 +14,18 @@
 //! 20s timer and upserts rows from onmessage events.
 
 const std = @import("std");
-const Io = std.Io;
-const http = @import("http.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
-const disk = @import("store.zig");
-const sse = @import("sse.zig");
+const disk = @import("webbox").store;
+const sse = @import("webbox").sse;
 const chrome = @import("chat_chrome.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 const timefmt = @import("timefmt.zig");
 const feed = @import("recent_feed.zig");
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

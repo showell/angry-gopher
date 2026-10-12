@@ -5,8 +5,9 @@
 //! plants set), the game store's floor, and the lines its setup's report
 //! prints.
 //!
-//! Prod runs on gopher-metal, which calls the same `router.start` and
-//! `router.route` with no operating system. On a Linux box the default bind
+//! Prod runs on gopher-metal, which takes this same application as a module
+//! (`router.site`, `router.hosting`) and calls the same `start` and `route`
+//! with no operating system. On a Linux box the default bind
 //! is every interface; a firewall keeps 9001 private and Caddy reaches it on
 //! localhost, and with GOPHER_BIND=127.0.0.1 a rehearsal on real data answers
 //! on loopback only.
@@ -25,9 +26,8 @@
 
 const std = @import("std");
 const router = @import("router.zig");
-const linux_host = @import("linux_host.zig");
-const free_space = @import("free_space.zig");
-const search_index = @import("search_index.zig");
+const linux_host = @import("webbox_linux").linux_host;
+const free_space = @import("webbox").free_space;
 
 pub fn main(init: std.process.Init.Minimal) !void {
     try linux_host.Server(router).run(init, .{
@@ -65,8 +65,9 @@ fn gameStoreSpace() ?free_space.Space {
 /// What this application's setup did (app_start.zig), said before the
 /// listener opens.
 fn report(started: *const router.Started) void {
-    if (started.app.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.app.backfilled});
-    if (started.app.search) |st| {
-        std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.app.search_ms });
-    } else std.debug.print("zig-server: search index not built ({s}): the first search builds it\n", .{if (search_index.failed_with) |e| @errorName(e) else "unknown"});
+    var buf: [1024]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buf);
+    router.hosting.describeStart(started.app, &w) catch @panic("the application's start report is past its 1 KiB buffer (router.hosting.describeStart)");
+    var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, w.buffered(), "\n"), '\n');
+    while (lines.next()) |line| std.debug.print("zig-server: {s}\n", .{line});
 }

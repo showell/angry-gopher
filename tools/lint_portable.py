@@ -12,19 +12,34 @@ module that does not is not a slower path there. It FAILS TO COMPILE.
 This lint computes that set from the import graph, starting at router.zig and
 at webbox.zig (the library an application built on this server imports, which
 the metal port carries too, whether or not this site's routes reach a file of
-it), and checks every file in it. A module outside the set (server.zig, the
-library's host-only part, the stress harness, the markdown tools) is
-host-side by definition and is not checked. There is no hardcoded list of exemptions to fall out of date.
+it), and checks every file in it. It follows a file's imports by path and its
+import of the `webbox` module (to webbox.zig). A module outside the set
+(server.zig, the library's Linux half `webbox_linux`, the stress harness, the
+markdown tools) is host-side by definition and is not checked. There is no
+hardcoded list of exemptions to fall out of date.
+
+THE LIBRARY'S EDGES, inside the set:
+
+  THE LINUX HALF     `@import("webbox_linux")`, or a file of it by path
+                     (linux_host.zig, bind.zig, linux_config.zig,
+                     webbox_linux.zig): the host itself.
+  BY ITS FILES       an application's file importing a file of the library
+                     by path (`@import("http.zig")`, `@import("webbox.zig")`):
+                     it imports the `webbox` module (`@import("webbox").http`).
+                     One file belongs to one module, and the metal port hands
+                     the library to the kernel as a module of its own.
 
 WHAT IT FORBIDS, inside the set and outside `test {}` blocks:
 
-  THE PORTING SEAM   Every file opens with `const Io = std.Io;`, and gopher-metal
-                     rewrites exactly that line. So `std.Io.Dir`, `.Clock`,
-                     `.Mutex` and `.Group` — the namespaces that machine
-                     replaces — must be spelled through the alias, and so must a
-                     bare `std.Io` in a signature. Spelled `std.` they are
-                     unreachable by the port, and `std.Io.Dir.cwd()` reaches for
-                     `std.posix.AT.FDCWD`.
+  THE HOST'S SEAM    Every file takes its `Io` from the `host_io` module
+                     (`const Io = @import("host_io").Io;`), one file each build
+                     chooses: std's on Linux, the machine's on gopher-metal. So
+                     `std.Io.Dir`, `.Clock`, `.Mutex` and `.Group` (the
+                     namespaces that machine replaces) are spelled through
+                     `Io`, and so is a bare `std.Io` in a signature, the old
+                     `const Io = std.Io;` alias included. Spelled `std.` they
+                     are std's on every host, and `std.Io.Dir.cwd()` reaches
+                     for `std.posix.AT.FDCWD`.
   THE STORE'S SEAM   `Io.Dir.cwd()` anywhere but store.zig (gopher-metal QUEUE
                      item 54). The Store is the one way to the disk: it keeps
                      FAT's rules (case, names, lengths) on every host, so a
@@ -80,14 +95,16 @@ import zig_source  # noqa: E402  the one reading of a source file the lints shar
 ROOT_MODULE = "router.zig"
 # The roots the real tree is checked from: the route table, and the webbox
 # library. Both must be there.
-ROOTS = (ROOT_MODULE, "webbox.zig")
-# The library's host-only files: a site served as a Linux process. webbox.zig
-# names them, for an application's Linux `main`; Zig analyses only what a
-# program uses, so the metal port never compiles them. Only webbox.zig may
-# import one: the closure stops at them there, and any other file reaching
-# one is a finding (HOST_ONLY_REACHED).
 LIBRARY_ROOT = "webbox.zig"
-HOST_ONLY = frozenset({"linux_host.zig", "bind.zig", "linux_config.zig"})
+ROOTS = (ROOT_MODULE, LIBRARY_ROOT)
+# The named modules a portable file may import that are files here, and the
+# file each is: the closure follows them.
+MODULE_FILES = {"webbox": LIBRARY_ROOT}
+# The library's Linux half, its own module (`webbox_linux`), and its files: a
+# site served as a Linux process, which only a Linux `main` imports. Any
+# portable file reaching one is a finding; the closure stops there.
+HOST_MODULES = frozenset({"webbox_linux"})
+HOST_ONLY = frozenset({"webbox_linux.zig", "linux_host.zig", "bind.zig", "linux_config.zig"})
 
 
 # (pattern, advice). Checked in order; one finding per match.
@@ -98,11 +115,14 @@ CWD = (re.compile(r"\bIo\.Dir\.cwd\s*\("),
        "the disk is the Store's: call store.zig (read, write, list, stat...) — it keeps FAT's rules on every host")
 
 RULES = [
-    # The porting seam.
+    # The host's seam.
     (re.compile(r"\bstd\.Io\.(Dir|Clock|Mutex|Group)\b"),
-     "spell it Io.{0} — the alias is what the port rewrites"),
+     "spell it Io.{0}, with Io from host_io: the build chooses the host there"),
     (re.compile(r"\bstd\.Io\b(?!\s*\.)"),
-     "spell it Io — the alias is what the port rewrites"),
+     'take it from host_io (const Io = @import("host_io").Io;): the build chooses the host there'),
+    # std's Io reached through the import itself, which `std.` never names.
+    (re.compile(r'@import\(\s*"std"\s*\)\s*\.\s*Io\b(?!\s*\.\s*(?:Reader|Writer|Limit)\b)'),
+     'take it from host_io (const Io = @import("host_io").Io;): the build chooses the host there'),
     # The host.
     (re.compile(r"\bstd\.Io\.(Threaded|net)\b"),
      "std.Io.{0} is the host's thread pool / sockets"),
@@ -122,8 +142,8 @@ RULES = [
      "std.fs.{0} is the old host file API — use Io.Dir"),
     (re.compile(r"\bstd\.debug\.print\b"),
      "std.debug.print writes the host's stderr"),
-    # std functions that take a REAL std.Io. Our `io` is only std.Io where the
-    # alias happens to be std's, so passing it compiles on Linux and nowhere
+    # std functions that take a REAL std.Io. Our `io` is only std.Io where
+    # host_io is std's, so passing it compiles on Linux and nowhere
     # else. The password hashers draw their salt through it.
     (re.compile(r"\b(?:bcrypt|scrypt|argon2|pwhash\.[a-z0-9]+)\.strHash\s*\("),
      "strHash takes a real std.Io — draw the salt with io.random and call strHashWithSalt"),
@@ -215,12 +235,29 @@ def test_only_lines(lines, tests):
     return {n for a, b in only for n in range(a, b + 1)}
 
 
+def library_files(src_dir: str):
+    """The library's portable files: webbox.zig and the files it names. Empty
+    in a tree without a library."""
+    path = os.path.join(src_dir, LIBRARY_ROOT)
+    if not os.path.isfile(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {LIBRARY_ROOT} | set(zig_source.imports(f.read()))
+
+
+def deps_of(text):
+    """What a file imports that is a file here: by path, and the `webbox`
+    module as webbox.zig."""
+    return zig_source.imports(text) + [MODULE_FILES[m] for m in zig_source.modules(text) if m in MODULE_FILES]
+
+
 def closure(src_dir: str, root=ROOT_MODULE):
     """Every local .zig file reachable from `root` (a name, or several) by
-    @import, the roots included.
+    @import, the roots included: by path, and through the `webbox` module.
 
-    Named modules (`@import("std")`, `@import("build_options")`) and embedded
-    assets are not files in src_dir and are not followed. A cycle terminates.
+    Other named modules (`@import("std")`, `@import("build_options")`) and
+    embedded assets are not files in src_dir and are not followed; nor is the
+    library's Linux half, which is a finding. A cycle terminates.
     """
     roots = (root,) if isinstance(root, str) else tuple(root)
     for r in roots:
@@ -237,9 +274,9 @@ def closure(src_dir: str, root=ROOT_MODULE):
             continue  # a dangling import is zig's error to report, not ours
         seen.add(name)
         with open(path, encoding="utf-8") as f:
-            for dep in zig_source.imports(f.read()):
-                if name == LIBRARY_ROOT and dep in HOST_ONLY:
-                    continue  # the library's host-only part: not portable, by design
+            for dep in deps_of(f.read()):
+                if os.path.basename(dep) in HOST_ONLY:
+                    continue  # the Linux half: a finding (scan), not followed
                 if dep not in seen:
                     todo.append(dep)
     return seen
@@ -248,24 +285,22 @@ def closure(src_dir: str, root=ROOT_MODULE):
 def scan(src_dir: str, root=ROOT_MODULE):
     """Findings as (file, line, text, advice), in file then line order."""
     found = []
+    library = library_files(src_dir)
     for name in sorted(closure(src_dir, root)):
-        if name in HOST_ONLY:
-            continue  # reached from a file not allowed it: said below, not scanned
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             text = f.read()
-        if name != LIBRARY_ROOT:
-            for dep in zig_source.imports(text):
-                base = os.path.basename(dep)
-                if base in HOST_ONLY:
-                    found.append((name, 0, f'@import("{dep}")',
-                                  f"{base} is the library's host-only part: only webbox.zig may import it"))
-                elif base == LIBRARY_ROOT:
-                    # Through the library's front door the host-only part is
-                    # one field away (`.linux_host`), and on the bare-metal
-                    # host it still compiles: a portable file imports the
-                    # library's members by their own files.
-                    found.append((name, 0, f'@import("{dep}")',
-                                  "a portable file imports a library member by its own file, never webbox.zig, which names the host-only part too"))
+        for m in zig_source.modules(text):
+            if m in HOST_MODULES:
+                found.append((name, 0, f'@import("{m}")',
+                              f"{m} is the library's Linux half: only a Linux main imports it"))
+        for dep in zig_source.imports(text):
+            base = os.path.basename(dep)
+            if base in HOST_ONLY:
+                found.append((name, 0, f'@import("{dep}")',
+                              f"{base} is the library's Linux half: only a Linux main reaches it, through the webbox_linux module"))
+            elif name not in library and base in library:
+                found.append((name, 0, f'@import("{dep}")',
+                              f'import the library as its module: @import("webbox"){"" if base == LIBRARY_ROOT else "." + base[:-4]}'))
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)
@@ -275,8 +310,6 @@ def scan(src_dir: str, root=ROOT_MODULE):
             if n in tests:
                 continue
             c = code(line)
-            if re.search(r"\bconst\s+Io\s*=\s*std\.Io\s*;", c):
-                c = re.sub(r"\bconst\s+Io\s*=\s*std\.Io\s*;", "", c)  # the alias itself
             for pattern, advice in rules:
                 for m in pattern.finditer(c):
                     arg = m.group(1) if m.groups() else ""

@@ -1,5 +1,5 @@
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const markdown = @import("markdown.zig");
 
 // The markdown DIALECT regression baseline. Our zig renderer (markdown.zig) IS
@@ -18,8 +18,8 @@ const markdown = @import("markdown.zig");
 //                      vanilla CommonMark: inline markup is PER-LINE, so `**`,
 //                      backticks, and `[...]` never pair across a hard wrap.
 //
-// Verify:       cd zig-server && zig run src/markdown_regression_test.zig
-// Re-baseline:  cd zig-server && zig run src/markdown_regression_test.zig -- --rebaseline
+// Verify:       cd zig-server && zig build markdown-regression   (ops/check_markdown)
+// Re-baseline:  cd zig-server && zig build markdown-regression -- --rebaseline   (ops/regen_markdown_gold)
 const GOLD_PATH = "/home/steve/showell_repos/gopher-gold/gold.jsonl";
 const ADVERSARIAL_PATH = "adversarial.jsonl";
 const DIALECT_PATH = "dialect.jsonl";

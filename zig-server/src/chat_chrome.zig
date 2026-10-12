@@ -12,8 +12,8 @@
 //! open-here/close-there seam used to drift per page (a mobile-break source).
 
 const std = @import("std");
-const html = @import("html.zig");
-const http = @import("http.zig");
+const html = @import("webbox").html;
+const http = @import("webbox").http;
 const Alloc = std.mem.Allocator;
 
 pub const Asset = struct { name: []const u8, body: []const u8 };

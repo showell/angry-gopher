@@ -49,15 +49,15 @@
 //! resolve against wherever the host is standing.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const storage = @import("storage.zig");
 const users = @import("users.zig");
 const player = @import("player.zig");
 const chat_store = @import("chat_store.zig");
-const store = @import("store.zig");
+const store = @import("webbox").store;
 
 /// Where the data and the accounts live, as the host spells them (webbox's).
-pub const Roots = @import("site.zig").Roots;
+pub const Roots = @import("webbox").site.Roots;
 
 /// **EVERY GLOBAL `point` SETS, IN ONE LIST** (metal-vmm QUEUE 157(c)), and
 /// the store's two bases, which webbox's `start` sets for a host and

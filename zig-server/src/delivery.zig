@@ -4,7 +4,7 @@
 //! server just ships the bundle.
 
 const std = @import("std");
-const http = @import("http.zig");
+const http = @import("webbox").http;
 
 // The delivery bundle, baked into the binary (wired in build.zig). Produced by
 // `ops/build_delivery`; gitignored build output that must exist to compile.

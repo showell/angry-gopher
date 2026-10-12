@@ -28,6 +28,9 @@ phase() {
 echo "==> JS syntax (chat/*.js, batched)"
 phase "js-syntax" node tools/check_js_syntax.mjs chat/*.js
 
+echo "==> the photo resize decision (chat_compose.js resizePlan)"
+phase "chat-resize" node tools/test_chat_resize.mjs
+
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py
 

@@ -29,10 +29,10 @@
 //! one storage wrote.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const counter = @import("counter.zig");
-const store = @import("store.zig");
+const counter = @import("webbox").counter;
+const store = @import("webbox").store;
 const game_limits = @import("game_limits.zig");
 
 /// append_mu serializes every game-store append (see the file header). One

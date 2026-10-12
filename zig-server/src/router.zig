@@ -19,8 +19,8 @@
 //! test, without a socket.
 
 const std = @import("std");
-const Io = std.Io;
-const http = @import("http.zig");
+const Io = @import("host_io").Io;
+const http = @import("webbox").http;
 const driving = @import("driving.zig");
 const delivery = @import("delivery.zig");
 const chess = @import("chess.zig");
@@ -41,8 +41,8 @@ const player = @import("player.zig");
 const brand = @import("brand.zig");
 const users = @import("users.zig");
 const uid_cookie = @import("uid_cookie.zig");
-const client_address = @import("client_address.zig");
-const free_space = @import("free_space.zig");
+const client_address = @import("webbox").client_address;
+const free_space = @import("webbox").free_space;
 // ── THE HOST CONTRACT ────────────────────────────────────────────────────────
 //
 // webbox's site.zig says it, three calls (Steve, 2026-10-10: one call for the
@@ -55,10 +55,10 @@ const free_space = @import("free_space.zig");
 
 /// The streaming seam: Hub, Bus (part of `route`'s signature), Kept, and the
 /// two ways to serve a kept stream.
-pub const streams = @import("bus.zig");
+pub const streams = @import("webbox").bus;
 pub const Bus = streams.Bus;
 pub const Hub = streams.Hub;
-pub const mem_meter = @import("mem_meter.zig");
+pub const mem_meter = @import("webbox").mem_meter;
 /// The setup as one call (site.zig's `start`, around this application's own:
 /// app_start.zig): contract step 2.
 pub const start = Served.start;
@@ -78,9 +78,9 @@ pub const host_facts = struct {
     pub const Fact = facts.Fact;
     pub const utc = facts.utc;
     pub const duration = facts.duration;
-    const facts = @import("host_facts.zig");
+    const facts = @import("webbox").host_facts;
 };
-const webbox_site = @import("site.zig");
+const webbox_site = @import("webbox").site;
 const app_start = @import("app_start.zig");
 const roots = @import("roots.zig");
 const search_index = @import("search_index.zig");
@@ -93,11 +93,30 @@ const game_limits = @import("game_limits.zig");
 /// The edge's refusal counts, which /version reports: a host counts what it
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
 /// for a head past its read buffer), in the same counters the routes use.
-pub const edge = @import("edge.zig");
-/// The largest upload a plain GET reads whole; a bigger one is streamed. A host
-/// with a page cache keeps files up to this by default, so what it keeps and
-/// what is read whole are one line (gopher-metal's `probe/gopher.zig`).
-pub const whole_read_max = @import("chat_upload.zig").whole_read_max;
+pub const edge = @import("webbox").edge;
+/// **THIS APPLICATION, AS A HOST TAKES IT** (Phase B step 1): `site`, the
+/// library's `Site(App)` around this application (start, route, the body
+/// rule's two questions), and `hosting`, what only the application can say
+/// to a host about itself. A host imports the application's root as a module
+/// and the library as `webbox`, and reaches nothing else of either.
+pub const site = Served;
+pub const hosting = struct {
+    /// What its data is called, where a host names it (gopher-metal's
+    /// console and /admin/host).
+    pub const data_name = "chat's data";
+    /// The largest upload a plain GET reads whole; a bigger one is streamed.
+    /// A host with a page cache keeps files up to this by default, so what it
+    /// keeps and what is read whole are one line.
+    pub const whole_read_max = @import("chat_upload.zig").whole_read_max;
+    /// The largest file worth keeping whole in a page cache: its largest
+    /// picture. A cache told to keep bigger ones keeps nothing more.
+    pub const cache_largest_most = request_limits.body.upload_image;
+    /// Its setup's report, a line each, for the host's log. It fits a host's
+    /// 1 KiB buffer; past it is a bug here, and a host stops on it.
+    pub fn describeStart(r: app_start.StartReport, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        return app_start.describeStart(r, w);
+    }
+};
 
 /// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
 /// the request target as it came, so `GET //evil.example/x` answered
@@ -157,17 +176,12 @@ fn routeBodyLimit(path: []const u8) u64 {
 
 /// When a request's body is read, and how long it may take (webbox's
 /// body.zig): the rule a host reads `bodyLimit` by.
-pub const body_rule = @import("body.zig");
+pub const body_rule = @import("webbox").body;
 /// The route's cap on a body, from the head's target: contract step 3's
 /// first half, before the body is read.
 pub const bodyLimit = Served.bodyLimit;
 /// Who is asking to upload, from the head (null: a stranger).
 pub const uploader = Served.uploader;
-/// The body a host holds in memory for the request it is about to route,
-/// handed to the handler's read as it is (metal-vmm QUEUE 170.5); null after.
-pub fn holdBody(body: ?[]u8) void {
-    http.held_body = body;
-}
 const Served = webbox_site.Site(App);
 
 /// route picks the handler by path prefix, passing the remainder (the path with
@@ -367,8 +381,8 @@ test "every embedded asset is kept by the browser and asked about each use: ETag
     defer threaded.deinit();
     const io = threaded.io();
     // /game and /puzzles serve their scripts to a player only.
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
     const paths = [_][]const u8{
         "/chat/chat.js",         "/chat/colors.js",         "/tutorial/tutorial.js", "/game/elm.js",
@@ -403,9 +417,9 @@ test "every page names its scripts by their bytes, and a script asked for by its
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
-    const meter = @import("mem_meter.zig").useForTest(std.heap.page_allocator); // a send allocates through it
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator); // a send allocates through it
     defer meter.restore();
     // A player for the games; two members and a topic between them for chat.
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
@@ -583,8 +597,8 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     // A real, AUTHORIZED member — uid 2, with a password and a valid signed
     // session — not a guest. `/admin/backup` holds every password hash and
@@ -617,7 +631,7 @@ const UidSite = struct {
 
     const storage = @import("storage.zig");
     const chat_store = @import("chat_store.zig");
-    const disk = @import("store.zig");
+    const disk = @import("webbox").store;
     const game_limits = @import("game_limits.zig");
     const secret = "a session secret of thirty-two bytes or more, for router tests";
 
@@ -673,8 +687,8 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     const id = try player.allocate(io, a, "Nikhil");
     const unsigned = try std.fmt.allocPrint(a, "gopher_uid={s}", .{id});
@@ -723,8 +737,8 @@ test "route: a guest upgrades only with a signed cookie" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     // A legacy guest: an account with a name and no password.
     try users.setUserName(io, a, "7", "Gus");
@@ -757,8 +771,8 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     // A member, with a game identity under their own number.
     try users.setUserName(io, a, "1", "Steve");
@@ -802,8 +816,8 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     const r = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
     try testing.expectEqualStrings("303 See Other", status(r));
@@ -852,8 +866,8 @@ test "route: /puzzles writes nothing; a session is made by its first move" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     const id = try player.allocate(io, a, "Nikhil");
     const me = try signedUid(a, id);
@@ -892,8 +906,8 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const limits = UidSite.game_limits;
 
     const id = try player.allocate(io, a, "Nikhil");
@@ -960,8 +974,8 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const limits = UidSite.game_limits;
     const host_proxy = client_address.save();
     defer host_proxy.restore();
@@ -1038,8 +1052,8 @@ test "route: HEAD /admin/backup reads nothing" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const admin_backup = @import("admin_backup.zig");
     const me = try adminSession(a, io);
 
@@ -1061,8 +1075,8 @@ test "route: start does the host's setup in one call: the data and the store poi
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(a);
     defer meter.restore();
     const emptied = search_index.emptyForTest();
@@ -1072,14 +1086,14 @@ test "route: start does the host's setup in one call: the data and the store poi
     const host_proxy = client_address.save();
     defer host_proxy.restore();
     const chat_store = @import("chat_store.zig");
-    const disk = @import("store.zig");
+    const disk = @import("webbox").store;
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
     try disk.write(io, a, md, "MSG_ChitChat_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello world", .{});
     // The store's bases are start's to set (webbox's site.zig), not the
     // application's: cleared here, so only start can have set them.
     disk.setBases("", "");
-    const data_dir = try std.fs.path.join(a, &.{ site.base, "data" });
-    const auth_dir = try std.fs.path.join(a, &.{ site.base, "auth" });
+    const data_dir = try std.fs.path.join(a, &.{ uid_site.base, "data" });
+    const auth_dir = try std.fs.path.join(a, &.{ uid_site.base, "auth" });
     var started = try start(io, .{
         .roots = .{ .data_dir = data_dir, .auth_dir = auth_dir },
         .free_space = .unknown,
@@ -1104,11 +1118,11 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const me = try adminSession(a, io);
     const chat_store = @import("chat_store.zig");
-    const disk = @import("store.zig");
+    const disk = @import("webbox").store;
     // Two more members; the admin is in channel "general", not in "quiet".
     for ([_][2][]const u8{ .{ "2", "Debbie" }, .{ "3", "Apoorva" } }) |m| {
         try users.setUserName(io, a, m[0], m[1]);
@@ -1163,8 +1177,8 @@ test "route: Recent's Who cell names the last author where the .count is behind 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
@@ -1212,8 +1226,8 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
     const chat_search = @import("chat_search.zig");
@@ -1291,8 +1305,8 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const tokens = @import("search_tokens.zig");
     const admin_search = @import("admin_search.zig");
     const chat_store = @import("chat_store.zig");
@@ -1411,8 +1425,8 @@ test "route: only a member's own session is the admin; a non-member's session, o
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const ask = struct {
         fn admin(al: std.mem.Allocator, i: Io, cookie: []const u8) ![]const u8 {
@@ -1444,8 +1458,8 @@ test "route: /admin/backup asks for the password again, and gives nothing withou
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const admin_backup = @import("admin_backup.zig");
     const me = try adminSession(a, io);
     const before = admin_backup.files_archived;
@@ -1492,8 +1506,8 @@ test "route: the re-sign's redirect stays on this site" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     const cases = [_][2][]const u8{
         .{ "//evil.example/x", "/" },
@@ -1517,8 +1531,8 @@ test "route: one address may have 3 legacy cookies re-signed an hour, then 429" 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const limits = UidSite.game_limits;
 
     var ids: [5][]const u8 = undefined;
@@ -1550,8 +1564,8 @@ test "route: /admin/secret changes the secret: members log in again, players are
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const me = try adminSession(a, io);
     const id = try player.allocate(io, a, "Nikhil");
     const old_uid = try signedUid(a, id); // signed with the secret before the change
@@ -1605,8 +1619,8 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     // The docs page allocates through it, and presence keeps a map in it for
     // the life of the process: an arena freed at the test's end would leave
@@ -1666,8 +1680,8 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
@@ -1705,8 +1719,8 @@ test "route: a release whose removals fail is not answered as done, and the acco
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
@@ -1746,8 +1760,8 @@ test "route: a release whose last removal fails leaves an account that can relea
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
@@ -1794,8 +1808,8 @@ test "route: a release whose removal inside the account fails keeps the password
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
@@ -1846,8 +1860,8 @@ test "route: an error after a request's body was read is answered 500 too, never
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
 
     const id = try player.allocate(io, a, "Nikhil");
     const me = try signedUid(a, id);
@@ -1881,8 +1895,8 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     const meter = mem_meter.useForTest(std.heap.page_allocator); // as above: presence outlives the test
     defer meter.restore();
@@ -1917,8 +1931,8 @@ test "route: a new topic differing only in case from one there is refused, 409, 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
     const steve = try memberSession(a, io, "1", "Steve");
@@ -1936,8 +1950,8 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
@@ -1965,8 +1979,8 @@ test "route: sign-up refuses a name it would have to change, never registering a
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const page = try postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
@@ -2002,8 +2016,8 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
@@ -2032,8 +2046,8 @@ test "route: one form decoder: a bad escape or a field sent twice is a 400 on ev
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
@@ -2057,8 +2071,8 @@ test "route: an admin delete of a player there is not says so, 404, where it wen
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const me = try adminSession(a, io);
     try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
     try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
@@ -2073,8 +2087,8 @@ test "route: a topic that is not there is a 404 that says so, on every tail but 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
@@ -2110,8 +2124,8 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
@@ -2137,8 +2151,8 @@ test "route: a session under its legacy name is moved to __Host-gopher_auth by t
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
     // Signed before the move, as a real legacy session was.
     const now_s: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -2160,8 +2174,8 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
     const value = try uid_cookie.sign(a, UidSite.secret, id, @min(nowSecs(io), http.legacy_issued_before_unix) - 3600);
     const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
@@ -2188,8 +2202,8 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
     const now = nowSecs(io);
     const old = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
@@ -2210,8 +2224,8 @@ test "route: every game write is counted as exactly what it wrote: an annotation
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const limits = UidSite.game_limits;
     const id = try player.allocate(io, a, "Nikhil");
     const me = try signedUid(a, id);
@@ -2242,8 +2256,8 @@ test "route: the conversation page hands the client the upload caps and the acce
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_upload = @import("chat_upload.zig");
@@ -2268,8 +2282,8 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_search = @import("chat_search.zig");
@@ -2303,8 +2317,8 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_search = @import("chat_search.zig");
@@ -2333,8 +2347,8 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     const reading_list = @import("reading_list.zig");
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
@@ -2383,9 +2397,9 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
-    const meter = @import("mem_meter.zig").useForTest(std.heap.page_allocator);
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
@@ -2418,8 +2432,8 @@ test "a release that can release nothing says so, never the page a release that 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     // A member's id in the player cookie and no session (it lapsed): the
     // account is not this cookie's to release.
     const ada = try users.allocateUser(io, a, "Ada");
@@ -2428,6 +2442,9 @@ test "a release that can release nothing says so, never the page a release that 
     const got = try postAs(a, io, "/logout", try signedUid(a, ada), "release=yes");
     try testing.expectEqualStrings("403 Forbidden", status(got));
     try testing.expect(try users.principalExists(io, a, ada));
+    // The logout half still happens (its cold review): every identity
+    // cookie is cleared, as a logout without a release clears them.
+    try testing.expect(std.mem.indexOf(u8, got, uid_cookie.cookie_name ++ "=; Path=/; Max-Age=0") != null);
 }
 
 test "a stream is a GET's: a POST to one is 405, its body never read nor held (metal-vmm QUEUE 176.3)" {
@@ -2437,8 +2454,8 @@ test "a stream is a GET's: a POST to one is 405, its body never read nor held (m
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
@@ -2464,8 +2481,8 @@ test "route: a legacy session is read on a POST (never redirected), not read pas
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
     const before = @min(nowSecs(io), http.legacy_issued_before_unix) - 3600;
     const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", before)});
@@ -2492,8 +2509,8 @@ test "route: a legacy uid signed after the cutoff names no one and is not moved;
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
     const late = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, http.legacy_issued_before_unix + 60)});
     const got = try UidSite.ask(a, io, "/play", late);

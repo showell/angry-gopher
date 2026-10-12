@@ -4,11 +4,11 @@
 //! metal-vmm QUEUE 174).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const timefmt = @import("timefmt.zig");
-const store = @import("store.zig");
-const bus_mod = @import("bus.zig");
+const store = @import("webbox").store;
+const bus_mod = @import("webbox").bus;
 const Bus = bus_mod.Bus;
 const users = @import("users.zig");
 const recent_feed = @import("recent_feed.zig");

@@ -20,12 +20,12 @@
 //! body so an inner `~~~` can't close it early — mirrors chat.js pickQuoteFence.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
-const disk = @import("store.zig");
+const disk = @import("webbox").store;
 const docs_store = @import("docs_store.zig");
-const mem_meter = @import("mem_meter.zig");
+const mem_meter = @import("webbox").mem_meter;
 
 /// reading_list_slug is the fixed doc every save appends to. Valid per
 /// docs_store.validDocSlug; titleFromSlug renders it "Reading list" in the
