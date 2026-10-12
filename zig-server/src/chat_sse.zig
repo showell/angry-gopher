@@ -25,6 +25,7 @@ const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const Bus = @import("bus.zig").Bus;
 const sse = @import("sse.zig");
+const http = @import("http.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -42,6 +43,8 @@ const Request = std.http.Server.Request;
 /// writes each live frame as it is, long after this handler has returned, and
 /// there is no chunk framing for it to carry on.
 pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
+    // A stream is a GET's (metal-vmm QUEUE 176.3).
+    if (req.head.method != .GET) return http.methodNotAllowed(req);
     const since = try sse.readResume(req, alloc);
     const viewer = try users.getUserName(io, alloc, uid);
 

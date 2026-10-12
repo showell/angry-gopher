@@ -2429,3 +2429,20 @@ test "a release that can release nothing says so, never the page a release that 
     try testing.expectEqualStrings("403 Forbidden", status(got));
     try testing.expect(try users.principalExists(io, a, ada));
 }
+
+test "a stream is a GET's: a POST to one is 405, its body never read nor held (metal-vmm QUEUE 176.3)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const got = try postAs(a, io, "/chat/notifications", cookies, "x" ** 100);
+    try testing.expectEqualStrings("405 Method Not Allowed", status(got));
+}
