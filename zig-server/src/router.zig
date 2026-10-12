@@ -2156,8 +2156,8 @@ test "route: a session under its legacy name is moved to __Host-gopher_auth by t
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
     // Signed before the move, as a real legacy session was.
     const now_s: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -2179,8 +2179,8 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var site = try UidSite.init(a, io);
-    defer site.deinit();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
     const value = try uid_cookie.sign(a, UidSite.secret, id, @min(nowSecs(io), http.legacy_issued_before_unix) - 3600);
     const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
