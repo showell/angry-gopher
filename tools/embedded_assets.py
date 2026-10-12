@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The front-end assets zig-server embeds, read from build.zig's own table.
+"""The front-end assets zig-server embeds, read from its table, zig-server/assets.zon
+(which build.zig, and gopher-metal's kernel build, read too).
 
     embedded_assets.py check      every generated asset is there, and every
                                   embedded file git does not track names its
@@ -24,15 +25,13 @@ NAME = re.compile(r'\.name\s*=\s*"')
 
 
 def rows():
-    whole = open(os.path.join(ROOT, "zig-server", "build.zig")).read()
-    start = whole.find("const assets = [_]")
-    if start < 0:
-        sys.exit("embedded_assets: no asset table in zig-server/build.zig")
-    table = whole[start:whole.find("\n    };", start)]
+    table = open(os.path.join(ROOT, "zig-server", "assets.zon")).read()
     got = ROW.findall(table)
     names = len(NAME.findall(table))
+    if names == 0:
+        sys.exit("embedded_assets: no asset in zig-server/assets.zon")
     if len(got) != names:
-        sys.exit(f"embedded_assets: {names} assets in build.zig's table, but {len(got)} rows read: has a row changed shape?")
+        sys.exit(f"embedded_assets: {names} assets in assets.zon, but {len(got)} rows read: has a row changed shape?")
     return got
 
 
@@ -44,7 +43,7 @@ def check():
         if by and not os.path.isfile(full):
             bad.append(f"{path} missing: run {by} first (embedded by zig build), or ops/build_embedded")
         elif not by and not tracked:
-            bad.append(f"{path} is embedded and not in git, but build.zig names no .built_by for it")
+            bad.append(f"{path} is embedded and not in git, but assets.zon names no .built_by for it")
     if bad:
         print("Error:\n  " + "\n  ".join(bad), file=sys.stderr)
         return 1

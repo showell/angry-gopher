@@ -2,7 +2,7 @@
 # CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
 #
 # Builds every front-end asset zig-server embeds that is a build output, by the
-# script build.zig's table names for it (`.built_by`), once each. The one list
+# script zig-server/assets.zon names for it (`.built_by`), once each. The one list
 # of builders (metal-vmm QUEUE 157(d)): ops/start and the stress harness call
 # this rather than naming the builders themselves.
 set -e
