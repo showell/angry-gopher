@@ -144,7 +144,24 @@ fn isMarked(io: Io, alloc: Alloc, id: []const u8) bool {
     const raw = store.read(io, alloc, p, .limited(64)) catch return true;
     const at = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return true;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    return now - at >= grace_seconds;
+    return pastGrace(now, at);
+}
+
+/// Whether a marker written at `at` is past its grace at `now`. Saturating
+/// (metal-vmm QUEUE 182): `at` is read from a file on the volume, and a
+/// marker of -9223372036854775808 overflowed `now - at`, a panic; it reads
+/// as long past, so the unsigned spelling is refused, as a bad marker is.
+fn pastGrace(now: i64, at: i64) bool {
+    return now -| at >= grace_seconds;
+}
+
+test "uid_cookie: a marker's time from the volume, at either end of i64, is judged, never an overflow (metal-vmm QUEUE 182)" {
+    const now: i64 = 1_800_000_000;
+    try std.testing.expect(pastGrace(now, std.math.minInt(i64)));
+    try std.testing.expect(pastGrace(now, std.math.minInt(i64) + 1));
+    try std.testing.expect(!pastGrace(now, std.math.maxInt(i64)));
+    try std.testing.expect(!pastGrace(now, now));
+    try std.testing.expect(pastGrace(now, now - grace_seconds));
 }
 
 /// Whether unsigned cookies are still honoured. The window opens the first
