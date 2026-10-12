@@ -82,18 +82,29 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
         return req.respond(msg, .{ .status = .forbidden });
     }
 
-    const token = randHex16(io, alloc) catch return req.respond("token\n", .{ .status = .internal_server_error });
-    const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, sniff.ext });
-    const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
-    disk.makeDir(io, alloc, dir) catch return req.respond("mkdir\n", .{ .status = .internal_server_error });
-    const path = try std.fs.path.join(alloc, &.{ dir, name });
-    disk.write(io, alloc, path, part.data, .{}) catch
-        return req.respond("write\n", .{ .status = .internal_server_error });
+    // **THE ALLOWANCE IS SPENT ON A FILE THAT IS THERE** (metal-vmm QUEUE
+    // 172): one that cannot be stored gives its bytes back, and its error goes
+    // on to the host's log (it was a 500 that said "write", unlogged, with the
+    // bytes spent for good).
+    const name = storeUpload(io, alloc, conv_dir, sid, sniff.ext, part.data) catch |e| {
+        _ = try users.reserveUploadBytes(io, alloc, uid, -@as(i64, @intCast(part.data.len)));
+        return e;
+    };
 
     const out = try std.fmt.allocPrint(alloc, "{{\"url\":\"{s}/{s}/uploads/{s}\",\"name\":{f},\"kind\":\"{s}\",\"width\":0,\"height\":0}}", .{
         base, sid, name, std.json.fmt(part.filename, .{}), @tagName(sniff.kind),
     });
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// The upload written under its topic, by a fresh name.
+fn storeUpload(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, ext: []const u8, data: []const u8) ![]const u8 {
+    const token = try randHex16(io, alloc);
+    const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, ext });
+    const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
+    try disk.makeDir(io, alloc, dir);
+    try disk.write(io, alloc, try std.fs.path.join(alloc, &.{ dir, name }), data, .{});
+    return name;
 }
 
 // ── serve path (GET <base>/<sid>/uploads/<file>) ──────────────────────────────

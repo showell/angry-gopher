@@ -2375,3 +2375,38 @@ test "a gallery that cannot read pages/home.txt is a 500 that names it, never a 
     try testing.expectEqualStrings("500 Internal Server Error", status(got));
     try testing.expect(std.mem.indexOf(u8, got, "could not be parsed") != null);
 }
+
+test "an upload that cannot be stored gives its bytes back to the allowance: the quota is never spent on a file that is not there (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const meter = @import("mem_meter.zig").useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const bo = try users.allocateUser(io, a, "Bo");
+    try users.setUserPassword(io, a, bo, "a password for Bo");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const key = try std.fmt.allocPrint(a, "{s}_{s}", .{ ada, bo });
+    const dm = try std.fmt.allocPrint(a, "/chat/c/{s}/scripts", .{key});
+    const hello = "markdown=hello";
+    _ = try serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, hello.len, hello }));
+    // Where the topic's uploads go is a file: the upload cannot be stored.
+    const updir = try std.fs.path.join(a, &.{ try chat_store.dmConvDir(a, key), "sessions", "scripts.uploads" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
+    const before = try users.userUploadBytes(io, a, ada);
+    const png = "\x89PNG\r\n\x1a\n" ++ "\x00" ** 64;
+    const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\n" ++ png ++ "\r\n--B--\r\n";
+    // The handler's error goes on to the host (site.zig answers it 500 and
+    // hands it on to be logged): here, to the test.
+    const got = serve(a, io, try std.fmt.allocPrint(a, "POST {s}/upload HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: multipart/form-data; boundary=B\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
+    try testing.expect(std.meta.isError(got));
+    try testing.expectEqual(before, try users.userUploadBytes(io, a, ada));
+}

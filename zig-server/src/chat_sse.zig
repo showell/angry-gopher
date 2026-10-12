@@ -72,9 +72,13 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     held.keep(renderLive, try bus.gpa().dupe(u8, viewer));
 }
 
-/// One live frame for this viewer, or nothing if the blob does not render.
-fn renderLive(viewer: []const u8, arena: Alloc, raw: []const u8) ?[]const u8 {
-    return liveFrame(arena, raw, viewer) catch null;
+/// One live frame for this viewer, or nothing if the blob is no message;
+/// memory that runs out ends the stream, to be resumed (metal-vmm QUEUE 172).
+fn renderLive(viewer: []const u8, arena: Alloc, raw: []const u8) Alloc.Error!?[]const u8 {
+    return liveFrame(arena, raw, viewer) catch |e| switch (e) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => null,
+    };
 }
 
 /// The fan-out blob shape appendMessage publishes (every wire field except the
@@ -248,9 +252,9 @@ test "renderLive passes the viewer through" {
     const a = arena.allocator();
     const blob = "{\"index\":0,\"from\":\"Ann\",\"at\":\"2pm\",\"id\":\"general_1\",\"cid\":\"\",\"markdown\":\"hi\"}";
     // A blob that does not parse renders nothing, rather than a broken frame.
-    try testing.expect(renderLive("Ann", a, "{\"index\":0}") == null);
-    const mine = renderLive("Ann", a, blob).?;
-    const theirs = renderLive("Bob", a, blob).?;
+    try testing.expect(try renderLive("Ann", a, "{\"index\":0}") == null);
+    const mine = (try renderLive("Ann", a, blob)).?;
+    const theirs = (try renderLive("Bob", a, blob)).?;
     try testing.expect(std.mem.indexOf(u8, mine, "\"mine\":true") != null);
     try testing.expect(std.mem.indexOf(u8, theirs, "\"mine\":false") != null);
 }
