@@ -34,7 +34,7 @@ pub const max_emoji_bytes = 16;
 
 /// serveFile answers GET /<…>/<sid>/reactions with the sidecar's bytes.
 pub fn serveFile(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
-    if (req.head.method != .GET) return http.methodNotAllowed(req);
+    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const bytes = try store.readReactions(io, alloc, conv_dir, sid);
     try req.respond(bytes, .{ .extra_headers = &.{http.ndjson_ct} });
 }
@@ -43,7 +43,7 @@ pub fn serveFile(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid:
 /// the event (which fans out live), 204. Bad input is a 400 with a one-line
 /// reason; `msg` beyond the transcript's count is one of them.
 pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_body_bytes)) orelse return;
     const msg_s = (try chat.formField(alloc, body, "msg")) orelse "";
     const emoji = (try chat.formField(alloc, body, "emoji")) orelse "";

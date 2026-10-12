@@ -44,7 +44,7 @@ const Request = std.http.Server.Request;
 /// there is no chunk framing for it to carry on.
 pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
     // A stream is a GET's (metal-vmm QUEUE 176.3).
-    if (req.head.method != .GET) return http.methodNotAllowed(req);
+    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const since = try sse.readResume(req, alloc);
     const viewer = try users.getUserName(io, alloc, uid);
 

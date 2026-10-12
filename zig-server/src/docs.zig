@@ -182,7 +182,7 @@ fn serveRawDoc(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug: []con
 /// docsList serves GET /chat/docs/list: a JSON listing of the principal's docs
 /// (slug + display title) for API-key clients.
 fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    if (req.head.method != .GET) return http.methodNotAllowed(req);
+    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const list = try docs_store.listUserDocs(io, alloc, uid);
 
     var b: std.ArrayList(u8) = .empty;
@@ -217,7 +217,7 @@ fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !voi
 /// docsSave overwrites an existing doc's body (autosave target) → 204. A POST for
 /// an unknown slug is rejected (autosave must not spawn a doc from a stale URL).
 fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
     const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
@@ -253,7 +253,7 @@ fn publishDocRecent(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, slug: []co
 /// docsRender renders posted markdown to HTML for the live-preview pane, reusing
 /// the chat markdown port.
 fn docsRender(req: *Request, alloc: Alloc) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const md = (try chat.formField(alloc, body, "body")) orelse "";
     // The live-preview fuzz path. markdown.render returns the visible
@@ -268,7 +268,7 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
 /// default partner and returns {conv, session, id} so the client can navigate to
 /// the posted message.
 fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
     const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
@@ -312,7 +312,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 /// request. reading_list.save caps the doc size (DocTooLarge → 413 here; a
 /// hammering client hits the bound, not unbounded growth).
 fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const conv = std.mem.trim(u8, (try chat.formField(alloc, body, "conv")) orelse "", " \t\r\n");
     const sid = std.mem.trim(u8, (try chat.formField(alloc, body, "sid")) orelse "", " \t\r\n");

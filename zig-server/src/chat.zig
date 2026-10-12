@@ -350,7 +350,7 @@ fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 /// message that began with it, is gone: nothing used it.)
 fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8) !void {
     const conv = topic.conv;
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     // Read headers BEFORE the body: reading the request body advances the
     // std.http.Server reader past `received_head`, after which iterateHeaders
@@ -388,7 +388,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
 /// whether `sid` is in the caller's per-conv Pinned group, then 204. Per-user
 /// state; conv-level auth already passed (any participant pins their own view).
 fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     try chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
     return req.respond("", .{ .status = .no_content });
 }
@@ -411,7 +411,7 @@ fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
 /// in the highest generalN session, where the partner already watches. Returns
 /// `{conv, sid}` JSON. Shared by DMs and channels (kind gates the DM-only extras).
 fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
     const topic_raw = (try formField(alloc, body, "topic")) orelse "";
@@ -500,7 +500,7 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 /// landing session and its session list (sorted). The discovery entry point for
 /// API-key clients.
 fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    if (req.head.method != .GET) return http.methodNotAllowed(req);
+    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
 
     var b: std.ArrayList(u8) = .empty;
     try b.print(alloc, "{{\"me\":{f},\"conversations\":[", .{std.json.fmt(uid, .{})});

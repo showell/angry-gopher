@@ -58,7 +58,7 @@ pub const most_bytes = 2 << 20;
 pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
     const words_route = std.mem.eql(u8, rest, "/words");
     if (!words_route and !std.mem.eql(u8, rest, "/messages")) return http.notFound(req);
-    if (req.head.method != .GET) return http.methodNotAllowed(req);
+    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     if (!admit(uid, nowMs(io))) {
         return req.respond("{\"error\":\"too many searches; wait a second\"}", .{ .status = .too_many_requests, .extra_headers = &.{http.json_ct} });
     }
