@@ -101,7 +101,7 @@ const SessionRead = struct { id: []const u8, value: []const u8, legacy: bool };
 fn sessionRead(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRead {
     const now = nowUnix(io);
     var one: [1][]const u8 = undefined;
-    const named = try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy, now);
+    const named = try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy, http.namesNow(now));
     const values: []const []const u8 = switch (named.values) {
         .none => return null,
         .one => |v| blk: {
