@@ -75,4 +75,7 @@ zig fmt --check src build.zig || { echo "Error: the files above are not as zig f
 t0=$SECONDS
 zig build           # compile the whole server
 zig build test      # run the unit tests
-echo "zig-server build + unit tests passed in $((SECONDS - t0))s."
+# The library's tests are its own build's, not zig-server's: the server builds
+# against the sibling checkout (build.zig.zon's ../../zig-webbox), so they run here.
+(cd "$REPO_DIR/../zig-webbox" && zig build test)
+echo "zig-server build + unit tests, and zig-webbox's unit tests, passed in $((SECONDS - t0))s."
