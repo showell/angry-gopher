@@ -104,9 +104,9 @@ pub fn allocate(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
 /// This is the ONLY call into this module from the chat side, and it goes away
 /// with login.zig when the surfaces separate.
 ///
-/// **WRITTEN ONLY WHEN THE NAME CHANGED** (gopher-metal 153(3)): it runs on
+/// **WRITTEN ONLY WHEN THE NAME CHANGED** (zig-metal-unikernel 153(3)): it runs on
 /// every login, the name is nearly always the one there, and a `replace` is
-/// many disk requests on gopher-metal; the read is from memory.
+/// many disk requests on zig-metal-unikernel; the read is from memory.
 ///
 /// **ITS WRITE IS THE LOGIN'S** (metal-vmm QUEUE 156(g)): a mirror that did
 /// not land fails the login, where it was swallowed and the member's games
@@ -360,7 +360,7 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
     try testing.expectEqualStrings("", try nameOf(io, a, "p999"));
 }
 
-test "fs: mirror writes a name only when it changed (gopher-metal 153(3))" {
+test "fs: mirror writes a name only when it changed (zig-metal-unikernel 153(3))" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();

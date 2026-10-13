@@ -5,7 +5,7 @@
 separate from how a Linux process starts (webbox's `linux_host.zig`, which
 `server.zig` calls). The point of the
 split is that the route table can be called by a host that is not Linux:
-gopher-metal boots it on a machine with no operating system. That only works if
+zig-metal-unikernel boots it on a machine with no operating system. That only works if
 every module the route table transitively imports stays off the host — and a
 module that does not is not a slower path there. It FAILS TO COMPILE.
 
@@ -33,14 +33,14 @@ WHAT IT FORBIDS, inside the set and outside `test {}` blocks:
 
   THE HOST'S SEAM    Every file takes its `Io` from the `host_io` module
                      (`const Io = @import("host_io").Io;`), one file each build
-                     chooses: std's on Linux, the machine's on gopher-metal. So
+                     chooses: std's on Linux, the machine's on zig-metal-unikernel. So
                      `std.Io.Dir`, `.Clock`, `.Mutex` and `.Group` (the
                      namespaces that machine replaces) are spelled through
                      `Io`, and so is a bare `std.Io` in a signature, the old
                      `const Io = std.Io;` alias included. Spelled `std.` they
                      are std's on every host, and `std.Io.Dir.cwd()` reaches
                      for `std.posix.AT.FDCWD`.
-  THE STORE'S SEAM   `Io.Dir.cwd()` anywhere but store.zig (gopher-metal QUEUE
+  THE STORE'S SEAM   `Io.Dir.cwd()` anywhere but store.zig (zig-metal-unikernel QUEUE
                      item 54). The Store is the one way to the disk: it keeps
                      FAT's rules (case, names, lengths) on every host, so a
                      direct call beside it is a path where Linux and the
@@ -71,7 +71,7 @@ WHAT IT ALLOWS:
 WHAT IT CANNOT SEE. A std function that takes a real `std.Io` compiles on
 Linux when handed our `io`, because there the alias IS std.Io. This lint names
 the ones that have bitten (the password hashers' strHash); it cannot know every
-std signature. The bare-metal build — gopher-metal's `zig build gopher` — is
+std signature. The bare-metal build — zig-metal-unikernel's `zig build gopher` — is
 the check that sees them all, and this lint is the fast, local subset.
 
 WHY IT EXISTS. Every rule here was a compile error on the bare-metal target

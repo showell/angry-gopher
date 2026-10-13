@@ -1,7 +1,7 @@
 //! admin_secret: /admin/secret — changing the session secret, for the day
-//! it leaks (gopher-metal QUEUE item 66; SECRET-LEAK.md there).
+//! it leaks (zig-metal-unikernel QUEUE item 66; SECRET-LEAK.md there).
 //!
-//! gopher-metal has no shell, so this is how its secret is changed. A GET
+//! zig-metal-unikernel has no shell, so this is how its secret is changed. A GET
 //! shows a form that says what a change does; a POST with uid 1's password
 //! (a session alone is not enough, as for /admin/backup) and a number of
 //! days changes it (users.rotateSecret):

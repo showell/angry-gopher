@@ -1,11 +1,11 @@
 //! admin_backup: GET /admin/backup — everything the Store keeps, as one tar,
-//! for the admin to download (gopher-metal QUEUE item 35).
+//! for the admin to download (zig-metal-unikernel QUEUE item 35).
 //!
-//! gopher-metal has no shell, so this is how its data leaves the machine. The
+//! zig-metal-unikernel has no shell, so this is how its data leaves the machine. The
 //! same route on Linux makes the two hosts' archives comparable, member by
 //! member.
 //!
-//! **STREAMED, NOT BUILT.** A tar of 250 MB will not fit in gopher-metal's
+//! **STREAMED, NOT BUILT.** A tar of 250 MB will not fit in zig-metal-unikernel's
 //! memory, so the archive is written as it is walked: one header, then the
 //! file in 64 KiB pieces read positionally, then the next. Memory is one
 //! piece, whatever the data's size. The price: an error after the first byte
@@ -13,20 +13,20 @@
 //!
 //! **SO THE LAST MEMBER SAYS IT IS WHOLE.** A tar cut between two members
 //! reads as complete: GNU tar and Python's tarfile list it and exit 0
-//! (gopher-metal REVIEW-admin-backup.md, finding 2, measured). So the archive
+//! (zig-metal-unikernel REVIEW-admin-backup.md, finding 2, measured). So the archive
 //! ends with `backup-manifest.txt`, written only once everything before it
 //! was: every file's SHA-256, size and path, then `end: N files, M bytes`.
 //! An archive without it, or whose files do not match it, was cut short.
-//! gopher-metal's droplet/check_backup.py checks one, and refuses one that
+//! zig-metal-unikernel's droplet/check_backup.py checks one, and refuses one that
 //! does not hold.
 //!
 //! **WHAT IS IN IT:** the two roots the host's start gave the Store, spelled as
-//! gopher-metal spells them (`data/...`, `auth/...`), every folder and file,
+//! zig-metal-unikernel spells them (`data/...`, `auth/...`), every folder and file,
 //! in name order on both hosts, with each file's modification time. Secrets
 //! are included: the session secret and the password hashes are part of
 //! what a restore needs, and the route is admin-only.
 //!
-//! **IT ASKS FOR THE PASSWORD AGAIN** (gopher-metal REVIEW-admin-backup.md,
+//! **IT ASKS FOR THE PASSWORD AGAIN** (zig-metal-unikernel REVIEW-admin-backup.md,
 //! finding 1). The session secret is in it, and the secret mints every
 //! session and every player's cookie. A session lasts a year and cannot be
 //! revoked, so a copied cookie must not be enough for it. A GET (or HEAD)
@@ -35,7 +35,7 @@
 //!
 //! A path ustar cannot hold (longer than its 255 bytes) is left out and
 //! named in a last member, `backup-skipped.txt`. The Store's path limit
-//! (256 as gopher-metal spells it) means at most a path of exactly 256. So
+//! (256 as zig-metal-unikernel spells it) means at most a path of exactly 256. So
 //! is anything that cannot be looked at, or is neither a file nor a folder
 //! (a link), each with why: only a root not there yet is left out unsaid.
 
@@ -71,7 +71,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const data = store.data_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
     const auth = store.auth_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
 
-    // **A HEAD READS NOTHING** (gopher-metal REVIEW-admin-backup.md, finding
+    // **A HEAD READS NOTHING** (zig-metal-unikernel REVIEW-admin-backup.md, finding
     // 7): it is the form's, as a GET is. Walking the data to write it into
     // nothing cost a whole backup's reads; on metal, that is every other
     // request waiting.
@@ -123,7 +123,7 @@ fn form(req: *Request, alloc: Alloc, err: []const u8, status: std.http.Status) !
         \\<label>Password <input type="password" name="password" autofocus></label>
         \\<button type="submit">Download the backup</button>
         \\</form>
-        \\<p class="muted">On gopher-metal, take it from prod over the private network, never through
+        \\<p class="muted">On zig-metal-unikernel, take it from prod over the private network, never through
         \\Caddy from a home connection: metal answers nothing else while it streams.</p>
         \\
     );

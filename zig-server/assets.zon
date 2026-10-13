@@ -1,5 +1,5 @@
 // **WHAT THIS APPLICATION SERVES BESIDES ITS CODE**, in two kinds, read by
-// every build of it: its own build.zig, gopher-metal's (the kernel, from
+// every build of it: its own build.zig, zig-metal-unikernel's (the kernel, from
 // -Dgopher-root, Phase B step 3), tools/embedded_assets.py, and the image and
 // judge that lay out a machine's site disk.
 //

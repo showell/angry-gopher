@@ -18,7 +18,7 @@
 //! allocates a session; but the append routes take any session the player
 //! owns, so one player in two tabs, or a client retrying, appends to one file
 //! twice at once. Measured: 1,814 of 2,000 lines landed from 8 concurrent
-//! writers (gopher-metal's GROWTH-game-store.md).
+//! writers (zig-metal-unikernel's GROWTH-game-store.md).
 //!
 //! **EVERY GAME WRITE IS ADMITTED BY WHAT IT WRITES** (metal-vmm QUEUE
 //! 157(b)): a handler writes through `makeGameSession`, `appendGameLine` or
@@ -101,7 +101,7 @@ pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
 }
 
 /// The puzzle session id a page offers: the one its first move will make.
-/// Nothing is written (gopher-metal QUEUE item 52: no write on a GET).
+/// Nothing is written (zig-metal-unikernel QUEUE item 52: no write on a GET).
 pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return counter.peek(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }

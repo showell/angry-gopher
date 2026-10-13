@@ -20,11 +20,11 @@ What it checks (all thresholds are constants below — no CLI args, by design):
   - disk      : the root filesystem still has free space
   - processes : nothing unexpected is running as `steve` (a rogue-binary smell
                 test) + a list of the heavy processes for eyeballing
-  - metal     : gopher-metal, on the private network, answers GET /version, and
-                runs the same commit as this server (gopher-metal QUEUE item 56)
+  - metal     : zig-metal-unikernel, on the private network, answers GET /version, and
+                runs the same commit as this server (zig-metal-unikernel QUEUE item 56)
   - metal-clock: metal's clock against this server's, from both /version's
                 `now_ms`, each read as its quickest of three requests with the
-                round trip halved out (gopher-metal's droplet/drift.py does the
+                round trip halved out (zig-metal-unikernel's droplet/drift.py does the
                 same over an hour)
   - metal-uptime: metal's uptime from /version's `started_ms`: a short one is
                 a recent restart (QUEUE item 107, fire drill 4)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The front-end assets zig-server embeds, read from its table, zig-server/assets.zon
-(which build.zig, and gopher-metal's kernel build, read too).
+(which build.zig, and zig-metal-unikernel's kernel build, read too).
 
     embedded_assets.py check      every generated asset is there, and every
                                   embedded file git does not track names its

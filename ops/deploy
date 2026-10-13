@@ -2,7 +2,7 @@
 # CANONICAL DEPLOY SCRIPT — DO NOT REINVENT.
 #
 # **WHILE METAL SERVES lynrummy.com (since 2026-10-04) THIS ONLY REFRESHES THE
-# WATCHDOG on prod.** The program reaches the site as a gopher-metal image.
+# WATCHDOG on prod.** The program reaches the site as a zig-metal-unikernel image.
 # Everything below the next paragraph is the Linux path, which runs only when
 # ~/linux-serves exists on prod (see "IT FAILS CLOSED").
 #
@@ -29,8 +29,8 @@
 # gopher-server is stopped by design — two hosts writing two copies of the data
 # cannot be merged (CUTOVER.md). So a deploy must NEVER start the Linux server
 # unless prod says, in so many words, that Linux serves. The PROGRAM and the
-# CONTENT now ship as a new gopher-metal image (built and deployed in the
-# gopher-metal repo); metal serves pages/ and gallery/ from its own boot image,
+# CONTENT now ship as a new zig-metal-unikernel image (built and deployed in the
+# zig-metal-unikernel repo); metal serves pages/ and gallery/ from its own boot image,
 # so this script does NOT ship them to prod when metal serves.
 #
 # **IT FAILS CLOSED** (QUEUE item 109): the Linux build-and-restart runs ONLY on
@@ -62,7 +62,7 @@ COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
 # The content trees (read at request time, not embedded). Shipped ONLY on the
 # Linux build-and-restart path below: when metal serves, metal reads pages/ and
-# gallery/ from its own boot image (droplet/chat.py in gopher-metal), so
+# gallery/ from its own boot image (droplet/chat.py in zig-metal-unikernel), so
 # shipping them to prod would ship content that nothing there serves (QUEUE
 # item 109). Each --delete is scoped to ONE tree, so the repo stays the source
 # of truth and the blast radius never reaches the data tree or ~/Auth.
@@ -108,8 +108,8 @@ if [ "$code" != 0 ]; then
     fi
     ship_watchdog
     echo "Deploy (metal-serving mode): only the watchdog was refreshed."
-    echo "A PROGRAM or CONTENT change ships as a new gopher-metal image — build and"
-    echo "deploy it in the gopher-metal repo (not here). The Linux server was NOT started."
+    echo "A PROGRAM or CONTENT change ships as a new zig-metal-unikernel image — build and"
+    echo "deploy it in the zig-metal-unikernel repo (not here). The Linux server was NOT started."
     exit 0
 fi
 

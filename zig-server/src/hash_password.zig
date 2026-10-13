@@ -1,9 +1,9 @@
 //! hash-password: a password on stdin, its bcrypt hash on stdout, as
 //! users.setUserPassword would store it (auth.zig, cost 10). For the way back
-//! in when the admin's password is lost (gopher-metal QUEUE.md item 89): the
+//! in when the admin's password is lost (zig-metal-unikernel QUEUE.md item 89): the
 //! hash is made here, on the machine of the person resetting it, and only the
 //! hash travels — to prod by ops/reset_admin_password, to metal in its boot
-//! disk's gopher-metal.conf by gopher-metal's droplet/chat.py.
+//! disk's zig-metal-unikernel.conf by zig-metal-unikernel's droplet/chat.py.
 //!
 //!     printf '%s' "$password" | zig-out/bin/hash-password
 //!

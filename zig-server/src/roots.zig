@@ -26,7 +26,7 @@
 //! about where a store lives.
 //!
 //! **HOW FAR THESE FOLDERS CAN GROW** (the store's 65,536-entry bound on a
-//! FAT folder, store.zig; gopher-metal QUEUE item 68; prod's counts from
+//! FAT folder, store.zig; zig-metal-unikernel QUEUE item 68; prod's counts from
 //! 2026-10-02):
 //!
 //!   - `data/players`: one folder per player, two entries each, so about

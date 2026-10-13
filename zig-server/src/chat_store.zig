@@ -178,7 +178,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // message again: a duplicate.
     const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
     const live_blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
-    // **NO `.lastauthor`** (gopher-metal 153(1)): the `.count` carries the
+    // **NO `.lastauthor`** (zig-metal-unikernel 153(1)): the `.count` carries the
     // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
     // A crash between the append and this leaves a count whose size is not the

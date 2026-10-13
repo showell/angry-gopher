@@ -1,5 +1,5 @@
 //! game_limits: how far one player, and the game store as a whole, may grow
-//! (gopher-metal QUEUE item 52; Steve, 2026-10-02: "No benign player would
+//! (zig-metal-unikernel QUEUE item 52; Steve, 2026-10-02: "No benign player would
 //! ever possibly fill up the disk; any Lyn Rummy play that fills up disk
 //! quickly is either a bot or a truly malicious entity").
 //!
@@ -18,7 +18,7 @@
 //!     of a legacy unsigned cookie (uid_cookie.zig); past any, a 429. The address
 //!     is client_address.zig's: the connection's, or, behind the trusted
 //!     reverse proxy (Caddy: Linux sets 127.0.0.1, Caddy on the same machine;
-//!     gopher-metal sets prod's private address), the one Caddy added. Kept
+//!     zig-metal-unikernel sets prod's private address), the one Caddy added. Kept
 //!     in a fixed table of `addresses`; an hour after an address's first
 //!     count, its counts start again, and a full table gives up its oldest.
 //!
@@ -44,7 +44,7 @@ pub const players_per_hour: u32 = 5;
 /// Legacy gopher_uid cookies one address may have re-signed in an hour
 /// (uid_cookie.zig): an owner needs one, a household a few. Without a bound,
 /// one GET per id took every player not yet back, and locked the owners out
-/// (gopher-metal REVIEW-signed-uid-and-limits.md, finding 1).
+/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 1).
 pub const resigns_per_hour: u32 = 3;
 pub const bytes_per_hour: u64 = 20_000_000;
 const hour: i64 = 60 * 60;

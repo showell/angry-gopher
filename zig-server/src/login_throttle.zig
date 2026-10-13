@@ -1,8 +1,8 @@
 //! login_throttle: refuse password guesses BEFORE the bcrypt (QUEUE.md item
-//! 97; gopher-metal's DESIGN-login-throttle.md, option B).
+//! 97; zig-metal-unikernel's DESIGN-login-throttle.md, option B).
 //!
 //! Each `/login/full` that verifies a member is a bcrypt check (cost 10) — tens
-//! of milliseconds of CPU, and on gopher-metal that is the machine's one
+//! of milliseconds of CPU, and on zig-metal-unikernel that is the machine's one
 //! processor. So an unlimited guesser is two problems at once: it guesses uid 1
 //! (the only account worth it), and it exhausts the core. The defence is to
 //! count failures and, past a bound, refuse with a 429 **before**
@@ -22,7 +22,7 @@
 //! **IT IS NOT A LOCK.** The windows reset, so a throttle is never itself a
 //! lasting lockout of a real member; and if an attack burns uid 1's account
 //! budget, the admin waits out the window or uses the reset runbook
-//! (gopher-metal's ADMIN-PASSWORD-LOST.md) — the honest break-glass.
+//! (zig-metal-unikernel's ADMIN-PASSWORD-LOST.md) — the honest break-glass.
 //!
 //! In memory, reset on restart, the same on both hosts (no allocation outlives
 //! a request), exactly as game_limits keeps its bounds — so the judge holds

@@ -37,8 +37,8 @@ lynrummy.com {
 		X-Frame-Options "SAMEORIGIN"
 	}
 
-	# Since 2026-10-04 the site is served by gopher-metal, on its private
-	# card (gopher-metal's CUTOVER.md). The way back is `localhost:9001`, the
+	# Since 2026-10-04 the site is served by zig-metal-unikernel, on its private
+	# card (zig-metal-unikernel's CUTOVER.md). The way back is `localhost:9001`, the
 	# zig server on this droplet, which stays stopped while metal serves.
 	reverse_proxy 10.100.0.4:80
 }

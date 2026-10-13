@@ -1,15 +1,15 @@
 //! limits: **EVERY BOUND ON WHAT A REQUEST MAY BRING, DEFINED ONCE**
-//! (Steve, 2026-10-07; gopher-metal HOST.md, "Limits").
+//! (Steve, 2026-10-07; zig-metal-unikernel HOST.md, "Limits").
 //!
 //! The same bound used to be written wherever it was needed: the request
-//! head's 16 KiB in Linux's server.zig and again in gopher-metal's kernel,
+//! head's 16 KiB in Linux's server.zig and again in zig-metal-unikernel's kernel,
 //! each route's body cap as a literal at its call, the upload caps inside
 //! chat_upload.zig, and Caddy's caps in deploy/Caddyfile. Now each is here
 //! (the head's bound re-exported: webbox's http.zig defines it for any host),
 //! and everything else reads it:
 //!
 //!   - both hosts size the request head's buffer from `head_bytes` (webbox's
-//!     http.zig defines it, for any host; linux_host.zig, and gopher-metal's
+//!     http.zig defines it, for any host; linux_host.zig, and zig-metal-unikernel's
 //!     probe/gopher.zig as router.request_limits);
 //!   - each route reads its body with its cap from `body`;
 //!   - tools/check_caddy_limits.py fails `ops/check_zig` if Caddy would refuse
@@ -17,7 +17,7 @@
 //!     one far past them (a cap gone stale).
 //!
 //! The Store's limits (a name, a path, a depth) are FAT's and live in
-//! store.zig, checked against gopher-metal's by its tools/check_limits.py.
+//! store.zig, checked against zig-metal-unikernel's by its tools/check_limits.py.
 
 /// The request line and headers together, the most either host reads before
 /// answering 431 (webbox's http.zig: a request head's size for any host).

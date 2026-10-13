@@ -9,7 +9,7 @@
 //! messages of a few dozen words drawn from a vocabulary of `vocabulary`
 //! words, the common ones far commoner (Zipf). Then `search_index.buildAll`
 //! from the disk, timed, with what it holds after (mem_meter's live bytes),
-//! and a few queries. The disk cost on gopher-metal is the box's to measure.
+//! and a few queries. The disk cost on zig-metal-unikernel is the box's to measure.
 
 const std = @import("std");
 const Io = @import("host_io").Io;

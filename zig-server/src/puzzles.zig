@@ -107,7 +107,7 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
 
 /// appendAction appends the POST body verbatim as one line in
 /// puzzle_<idx>/actions.dsl. **THE FIRST MOVE MAKES THE SESSION:** the page
-/// only offered its id (gopher-metal QUEUE item 52), so a session that is not
+/// only offered its id (zig-metal-unikernel QUEUE item 52), so a session that is not
 /// there yet is made here, with its meta, if it is the one offered. Two tabs
 /// opened before either moved were offered the same id, and share it.
 /// The per-puzzle dir is created on first append.

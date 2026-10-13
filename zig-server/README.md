@@ -52,7 +52,7 @@ std.Io thread pool, so requests are served concurrently.
 ## The edge's threat model, as deployed
 
 webbox's `edge.zig` policy assumes runtime safety is on, and it is on every
-build that serves: production is gopher-metal's ReleaseSafe kernel, and the
+build that serves: production is zig-metal-unikernel's ReleaseSafe kernel, and the
 Linux build is Debug (`ops/start`, `ops/deploy`; Debug's checks are a superset
 of ReleaseSafe's). An out-of-bounds index or copy panics, and the host
 restarts. `stress_test.py`'s edge-policy job is the test that asserts each
@@ -60,7 +60,7 @@ reject counter moved. The counters reach the watchdog (run by hand) through
 `/version`'s `rejects` (`home.zig`).
 
 The bare-metal side of webbox's `bus.zig` mailbox contract (the seeded simulator
-at the bottom of that file) is gopher-metal's HOST.md, "Live streams".
+at the bottom of that file) is zig-metal-unikernel's HOST.md, "Live streams".
 
 ## Markdown dialect regression harness
 

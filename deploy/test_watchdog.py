@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for deploy/watchdog.py's metal checks (gopher-metal QUEUE item 56),
+"""Tests for deploy/watchdog.py's metal checks (zig-metal-unikernel QUEUE item 56),
 against real servers on this machine.
 
     python3 deploy/test_watchdog.py

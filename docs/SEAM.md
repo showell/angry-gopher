@@ -1,6 +1,6 @@
 # The seam: what an application reaches for, and through what
 
-QUEUE.md item 78 (gopher-metal). A design note, no code. It is the companion to
+QUEUE.md item 78 (zig-metal-unikernel). A design note, no code. It is the companion to
 the essay "a web server in a box": the site's own logic runs unchanged on
 Linux and on a machine with no operating system, and the only thing that
 differs between the two is what sits under a small, named seam. This writes
@@ -32,7 +32,7 @@ Three things carry the whole seam:
 - **The `io` value** (`std.Io`). One handle, threaded through nearly every
   call, carries the clock, the CSPRNG, and the disk the Store reads. A host
   builds it: on Linux it is `std.Io.Threaded`, backed by the OS; on
-  gopher-metal it is the kernel's own, backed by the volume and a metal
+  zig-metal-unikernel it is the kernel's own, backed by the volume and a metal
   entropy source. The application never asks *which* — it asks `io`. This is
   why clock and random, which a note might expect to find reached around the
   seam, are already inside it: `Io.Clock.now` and `io.random` are the seam.
@@ -49,7 +49,7 @@ Three things carry the whole seam:
 
 Config is a near-miss worth naming: the *source* differs (Linux reads
 environment variables and a config file in webbox's `linux_config.zig`; metal
-reads `gopher-metal.conf`), but
+reads `zig-metal-unikernel.conf`), but
 both end at `roots.point`, so the application proper never sees the
 difference — only the two `main`s do. That is the seam working as intended:
 the host-specific part is confined to the host's entry point.

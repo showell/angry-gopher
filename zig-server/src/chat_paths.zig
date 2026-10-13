@@ -226,7 +226,7 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
 /// ({chat_store.chat_root}/users/<member>/images.md), so each must be what allocateUser
 /// makes: digits, with no leading zero. A half like `..` would otherwise
 /// write one level up on Linux, and `05_5` and `5_05` would split one DM in
-/// two (gopher-metal's REVIEW-request-paths.md, finding 3). Whether the other
+/// two (zig-metal-unikernel's REVIEW-request-paths.md, finding 3). Whether the other
 /// half is an account that exists is the route's to ask: this has no Io.
 pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool {
     const cut = cutSeq(key, "_") orelse return false;

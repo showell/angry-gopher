@@ -32,7 +32,7 @@ pub const cost: u6 = 10;
 /// cost, because verifyPassword reads it from the stored hash. This file's own
 /// tests still write at `cost` where the cost is the point (the known answer,
 /// and the `$2b$10$` form). Never a test build: every deployed binary, and
-/// gopher-metal's kernel, which builds the route table for a machine.
+/// zig-metal-unikernel's kernel, which builds the route table for a machine.
 pub const hashing_cost: u6 = if (builtin.is_test) 4 else cost;
 
 const crypt_len: usize = 60; // a modular-crypt bcrypt string is exactly 60 bytes

@@ -435,7 +435,7 @@ class Exemptions(unittest.TestCase):
 
 
 class StoreSeam(unittest.TestCase):
-    """Io.Dir.cwd() is store.zig's alone (gopher-metal QUEUE item 54)."""
+    """Io.Dir.cwd() is store.zig's alone (zig-metal-unikernel QUEUE item 54)."""
 
     CWD = 'fn f(io: Io) !void { try Io.Dir.cwd().writeFile(io, .{ .sub_path = "x", .data = "" }); }\n'
 

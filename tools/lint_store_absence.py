@@ -34,7 +34,7 @@ WHAT IT LETS PASS:
   try, catch unreachable,       the failure goes on, or stops the program.
   catch @panic(...)
   `// absent-ok: <why>` on      the failure may be read so there, and the
-  the line before the call      marker says why (as gopher-metal presumes an
+  the line before the call      marker says why (as zig-metal-unikernel presumes an
                                 omitted flush a bug unless a comment defends
                                 it). Any other comment defends nothing.
   the store's writes            a write whose failure is swallowed is another

@@ -225,7 +225,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
     const id = presented[0..dash];
     // **A UID, BEFORE IT IS A PATH.** The prefix names {users.auth_root}/<id>/...,
     // and an id with `/` or `..` in it reached other folders' password and
-    // api-key files (gopher-metal's REVIEW-request-paths.md, finding 4).
+    // api-key files (zig-metal-unikernel's REVIEW-request-paths.md, finding 4).
     if (!allDigits(id) or !try userIsAuthorized(io, alloc, id)) return null;
 
     // absent-ok: fails closed: a key that cannot be read admits no one.
@@ -249,7 +249,7 @@ pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]cons
     return sessionUserID(io, alloc, req);
 }
 
-// ── changing the secret (gopher-metal QUEUE item 66, SECRET-LEAK.md) ─────────
+// ── changing the secret (zig-metal-unikernel QUEUE item 66, SECRET-LEAK.md) ─────────
 //
 // The secret's files are webbox's (site_secret.zig), in users.session_secret_dir.
 

@@ -1,4 +1,4 @@
-//! uid_cookie: `gopher_uid`, signed (gopher-metal QUEUE item 51,
+//! uid_cookie: `gopher_uid`, signed (zig-metal-unikernel QUEUE item 51,
 //! DESIGN-signed-uid.md; Steve, 2026-10-02: re-identify once).
 //!
 //! `gopher_uid` names a player (`p<n>`), a member's game identity (digits),
@@ -116,7 +116,7 @@ pub fn issue(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 /// **A RE-SIGN CAN BE ASKED AGAIN, BRIEFLY.** The marker is written before
 /// the answer leaves, and if the signed cookie never reached the browser
 /// (the tab closed, the connection dropped), the owner had neither cookie
-/// (gopher-metal REVIEW-signed-uid-and-limits.md, finding 3). So a re-sign's
+/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 3). So a re-sign's
 /// marker holds the second it was written, and the same unsigned cookie is
 /// honoured again for `grace_seconds` after it: a reload recovers. A marker
 /// written for a new player or a login holds nothing, and has no grace:

@@ -23,7 +23,7 @@
 //! a conversation is a handful: its text, its messages, its map, and the
 //! words in one arena.
 //!
-//! **ONE HANDLER AT A TIME** (server.zig's `turn`, gopher-metal's one loop):
+//! **ONE HANDLER AT A TIME** (server.zig's `turn`, zig-metal-unikernel's one loop):
 //! nothing here locks.
 
 const std = @import("std");

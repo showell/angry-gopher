@@ -5,7 +5,7 @@
 //! a page allocator, a thread pool, an environment, a config file, a socket. A
 //! route table needs none of those. It needs a request, an Io, an allocator and
 //! the pub/sub bus, and every one of those can come from somewhere other than
-//! Linux — which is the point. gopher-metal boots the same application on a
+//! Linux — which is the point. zig-metal-unikernel boots the same application on a
 //! machine with no operating system, and until this split it had to skip the
 //! routing entirely and call one page's handler by hand, because the table was
 //! welded to the thing that owned the socket.
@@ -50,7 +50,7 @@ const free_space = @import("webbox").free_space;
 // `start(io, Host)`, then per request `route` and serve what it answered. A
 // kernel that boots this table has no other contact with the application, so
 // everything a host calls is exported from here, by the names both hosts use.
-// server.zig does these for Linux, gopher-metal's kernel with its own heap
+// server.zig does these for Linux, zig-metal-unikernel's kernel with its own heap
 // and paths on its own volume.
 
 /// The streaming seam: Hub, Bus (part of `route`'s signature), Kept, and the
@@ -87,7 +87,7 @@ const search_index = @import("search_index.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");
-/// The game store's bounds (gopher-metal QUEUE item 52), and where the game
+/// The game store's bounds (zig-metal-unikernel QUEUE item 52), and where the game
 /// store is (`dataRoot`).
 const game_limits = @import("game_limits.zig");
 /// The edge's refusal counts, which /version reports: a host counts what it
@@ -101,7 +101,7 @@ pub const edge = @import("webbox").edge;
 /// and the library as `webbox`, and reaches nothing else of either.
 pub const site = Served;
 pub const hosting = struct {
-    /// What its data is called, where a host names it (gopher-metal's
+    /// What its data is called, where a host names it (zig-metal-unikernel's
     /// console and /admin/host).
     pub const data_name = "chat's data";
     /// The largest upload a plain GET reads whole; a bigger one is streamed.
@@ -122,7 +122,7 @@ pub const hosting = struct {
 /// the request target as it came, so `GET //evil.example/x` answered
 /// `location: //evil.example/x`, which a browser reads as another host, and
 /// the absolute form `GET http://evil.example/` named one outright
-/// (gopher-metal REVIEW-signed-uid-and-limits.md, finding 2). A target that is
+/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 2). A target that is
 /// not a plain local path is sent to `/` instead.
 fn localTarget(target: []const u8) []const u8 {
     if (target.len == 0 or target[0] != '/') return "/";
@@ -863,7 +863,7 @@ fn removeSecret(a: std.mem.Allocator, io: Io) !void {
     try UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }));
 }
 
-// ── the game store's growth (gopher-metal QUEUE item 52) ─────────────────────
+// ── the game store's growth (zig-metal-unikernel QUEUE item 52) ─────────────────────
 
 fn nowSecs(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -1057,7 +1057,7 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try signedUid(a, ids[0])}), "198.51.100.1")));
 }
 
-// ── /admin/backup (gopher-metal REVIEW-admin-backup.md) ──────────────────────
+// ── /admin/backup (zig-metal-unikernel REVIEW-admin-backup.md) ──────────────────────
 
 /// An admin session for UidSite: uid 1, with a password.
 fn adminSession(a: std.mem.Allocator, io: Io) ![]const u8 {

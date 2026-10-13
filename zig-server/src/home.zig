@@ -268,7 +268,7 @@ fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []c
 /// is serving — the watchdog surfaces both in watchdog-status.txt.
 ///
 /// `now_ms` is this host's wall clock, in milliseconds since 1970:
-/// gopher-metal's droplet/drift.py compares two hosts' clocks with it, halving
+/// zig-metal-unikernel's droplet/drift.py compares two hosts' clocks with it, halving
 /// the round trip out, which a Date header's whole seconds could not resolve.
 /// started_ms is the server's start, in ms since 1970. It is stamped on the
 /// FIRST /version after boot (close enough: the watchdog polls within a cycle

@@ -4,7 +4,7 @@
 //! the live-byte meter and the edge's reject counters — the same numbers the
 //! public /version serves as JSON for the watchdog. And the HOST's: whatever
 //! the host handed over through host_facts.zig — on Linux its start time and
-//! memory, on gopher-metal its volumes, clocks and counters. The page is the
+//! memory, on zig-metal-unikernel its volumes, clocks and counters. The page is the
 //! same on both; only the second table differs. The host hands its half over
 //! because the route table must not reach for the machine (router.zig's rule).
 
@@ -81,7 +81,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
         try b.appendSlice(alloc, "</table>\n");
     }
 
-    // The host's own log, newest last: on gopher-metal the serial ring, its
+    // The host's own log, newest last: on zig-metal-unikernel the serial ring, its
     // secrets taken out as they were written.
     try b.appendSlice(alloc, "<h2>The log</h2>\n");
     if (try host_facts.logText(io, alloc)) |text| {

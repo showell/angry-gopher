@@ -18,7 +18,7 @@ The rules are the ones an attacker would want broken: the signed cookie
 (signed, signed_cookie, uid_cookie), the Store's names and paths (store), the game store's limits
 and whose address counts (game_limits, client_address), the admin's gate and the password
 asked again (admin_ui, admin_secret, admin_backup), and the member session
-(users). gopher-metal's tools/mutate_tcp.py is the same idea for its TCP.
+(users). zig-metal-unikernel's tools/mutate_tcp.py is the same idea for its TCP.
 
 Each mutant is applied to the committed file, and the file is put back with
 `git checkout -- FILE` after every one, interrupted or not. It refuses to

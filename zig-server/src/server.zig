@@ -1,11 +1,11 @@
 //! server: this site served as a Linux process. Everything a Linux host does
 //! is webbox's (linux_host.zig); this is what is angry-gopher's about it: the
-//! name it goes by, its environment variables (GOPHER_*, which gopher-metal's
+//! name it goes by, its environment variables (GOPHER_*, which zig-metal-unikernel's
 //! judge and gates, the deploy service, the stress harness and metal-vmm's
 //! plants set), the game store's floor, and the lines its setup's report
 //! prints.
 //!
-//! Prod runs on gopher-metal, which takes this same application as a module
+//! Prod runs on zig-metal-unikernel, which takes this same application as a module
 //! (`router.site`, `router.hosting`) and calls the same `start` and `route`
 //! with no operating system. On a Linux box the default bind
 //! is every interface; a firewall keeps 9001 private and Caddy reaches it on
@@ -15,10 +15,10 @@
 //! **KEEP-ALIVE IS OFF** (linux_host.zig serves one request a connection). It
 //! was first turned off when the accept loop was single-threaded and a
 //! held-open idle connection deadlocked /game's three parallel script loads;
-//! connections now run concurrently, and it is still off, as gopher-metal
+//! connections now run concurrently, and it is still off, as zig-metal-unikernel
 //! serves one request per connection too. The rules both hosts keep (one
-//! handler at a time, a small body read before the turn, as gopher-metal's
-//! ready.zig waits) are gopher-metal's HOST.md.
+//! handler at a time, a small body read before the turn, as zig-metal-unikernel's
+//! ready.zig waits) are zig-metal-unikernel's HOST.md.
 //!
 //! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
 //!         (from the repo root, for the embedded bundles)

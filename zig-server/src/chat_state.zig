@@ -49,7 +49,7 @@ pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const 
 /// AND bumps the last-conv pointer so /chat/default resumes the right pair.
 /// Best-effort.
 ///
-/// **WRITTEN ONLY WHEN IT CHANGES** (gopher-metal 153(1)): on every send and
+/// **WRITTEN ONLY WHEN IT CHANGES** (zig-metal-unikernel 153(1)): on every send and
 /// view the value is usually the one already there, and a write is disk
 /// requests each time; the read is from memory. `write` makes the folders.
 pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {

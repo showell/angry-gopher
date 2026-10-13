@@ -35,9 +35,9 @@ const max_any_upload = limits.body.upload_any;
 const range_window = 8 << 20; // 8 MiB
 
 /// **THE LINE BETWEEN HELD-WHOLE AND STREAMED** (QUEUE.md item 105). A plain GET
-/// of a file up to this is read whole — the read gopher-metal's page cache keeps
+/// of a file up to this is read whole — the read zig-metal-unikernel's page cache keeps
 /// (item 102), so a kept picture comes from memory — and a bigger one is
-/// streamed. **gopher-metal's page cache takes its default `largest` from this
+/// streamed. **zig-metal-unikernel's page cache takes its default `largest` from this
 /// constant** (`probe/gopher.zig`), so "small enough to cache" and "small enough
 /// to hold whole" are one number, in one place.
 pub const whole_read_max = 4 << 20; // 4 MiB
@@ -182,7 +182,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     };
     // **A FILE SMALL ENOUGH TO CACHE IS READ WHOLE; A BIGGER ONE IS STREAMED**
     // (QUEUE.md item 105, composing with item 102). A whole read (offset 0, the
-    // buffer holding all of it) is the read gopher-metal's page cache keeps, so
+    // buffer holding all of it) is the read zig-metal-unikernel's page cache keeps, so
     // a kept picture is served from memory; a file past the cap the cache keeps
     // — which is `whole_read_max` — would both fill that heap buffer and not be
     // cacheable, so it is streamed in `stream_piece` chunks: the heap holds a

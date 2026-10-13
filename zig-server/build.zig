@@ -55,7 +55,7 @@ pub fn build(b: *std.Build) void {
     // when one is missing, and when a file here that git does not track names
     // nothing. It kept a list of its own, which had lost delivery/app.js.
     // The table is zig-server/assets.zon, which every build of this
-    // application reads (gopher-metal's too).
+    // application reads (zig-metal-unikernel's too).
     const served: struct {
         embedded: []const struct { name: []const u8, path: []const u8, built_by: []const u8 = "" },
         site: []const []const u8,
@@ -94,7 +94,7 @@ pub fn build(b: *std.Build) void {
 
     // `zig build hash-password`: a password on stdin, its bcrypt hash out, as
     // the server stores it. For resetting a lost admin password
-    // (ops/reset_admin_password; gopher-metal's droplet/chat.py).
+    // (ops/reset_admin_password; zig-metal-unikernel's droplet/chat.py).
     const hash_mod = b.createModule(.{
         .root_source_file = b.path("src/hash_password.zig"),
         .target = target,

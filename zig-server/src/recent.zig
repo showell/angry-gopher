@@ -199,8 +199,8 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
 /// recorded date (a doc, a session with no messages, a message whose date
 /// will not read) is ordered and shown by its file's modification time. FAT
 /// keeps that in two-second steps, rounded down, so a file written at an odd
-/// second reads a second earlier on gopher-metal than on Linux, and the two
-/// hosts showed the same data differently (gopher-metal's MIGRATION.md,
+/// second reads a second earlier on zig-metal-unikernel than on Linux, and the two
+/// hosts showed the same data differently (zig-metal-unikernel's MIGRATION.md,
 /// "Rehearsed": 7 sessions). Every host floors it, so they agree.
 fn fileSeconds(mtime_ns: i96) i64 {
     const secs: i64 = @intCast(@divFloor(mtime_ns, std.time.ns_per_s));
@@ -239,7 +239,7 @@ fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []co
 /// authorName renders the most-recent author's display name, "You" when that is
 /// the viewer. `uid` is what the session's sidecar recorded, and "" where it
 /// does not know: an empty Who cell, never an older author, which could be a
-/// "You" the viewer did not write (gopher-metal 153(1)).
+/// "You" the viewer did not write (zig-metal-unikernel 153(1)).
 fn authorName(io: Io, alloc: Alloc, viewer: []const u8, uid: []const u8) ![]const u8 {
     if (uid.len == 0) return "";
     if (std.mem.eql(u8, uid, viewer)) return "You";

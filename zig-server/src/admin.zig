@@ -73,7 +73,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
 /// **AN ID FROM A FORM IS A UID BEFORE IT IS A PATH.** The key is written to
 /// and removed from {auth_root}/<id>/api-key, and principalExists and
 /// principalAuthorized look at what is on disk, not at the characters: `1/.`
-/// or `1/../2` passed both and named a folder (gopher-metal's
+/// or `1/../2` passed both and named a folder (zig-metal-unikernel's
 /// REVIEW-request-paths.md, finding 5).
 fn apiKeyTarget(io: Io, alloc: Alloc, id: []const u8) !bool {
     return users.validUid(id) and try users.principalExists(io, alloc, id) and try users.principalAuthorized(io, alloc, id);
@@ -109,7 +109,7 @@ const MemberRow = struct { id: []const u8, name: []const u8, is_admin: bool, is_
 /// renderMembersTable lists the official principals (members + agents), in the
 /// order `listAuthorized` gives them, with their lifetime image total vs the
 /// cap and per-member API-key controls. No "last active": last-seen is no
-/// longer kept (gopher-metal 153(2)), a disk write on every send and move.
+/// longer kept (zig-metal-unikernel 153(2)), a disk write on every send and move.
 fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
     var rows: std.ArrayList(MemberRow) = .empty;
     for (try users.listAuthorized(io, alloc)) |m| {

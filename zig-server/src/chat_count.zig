@@ -35,7 +35,7 @@ const sessionMdPath = chat_paths.sessionMdPath;
 /// What a session's last message is, for a listing that must not read the
 /// transcript: the words, when they were sent, and the uid that sent them
 /// (where the sidecar does not say, the member the last message names; empty
-/// when none does: never an older author, gopher-metal 153(1)).
+/// when none does: never an older author, zig-metal-unikernel 153(1)).
 pub const LastMessage = struct {
     markdown: []const u8,
     date: []const u8,
@@ -137,7 +137,7 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
 /// every session cost before the sidecar carried a last message.
 ///
 /// **THE AUTHOR FROM THE SIDECAR, WHERE IT SPEAKS FOR THIS MESSAGE**
-/// (gopher-metal 153(1)'s review): a message too long for the window, or a
+/// (zig-metal-unikernel 153(1)'s review): a message too long for the window, or a
 /// tail that would not read, still has its author in the `.count` when the
 /// transcript is exactly the one it counted, in messages and in size.
 /// Otherwise none: unknown, never an older author.
@@ -331,10 +331,10 @@ fn tryWriteCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, co
         })
     else
         head;
-    // **A `write`, NOT A `replace`** (gopher-metal 153(1)): the sidecar is a
+    // **A `write`, NOT A `replace`** (zig-metal-unikernel 153(1)): the sidecar is a
     // cache, checked against the transcript's size, so one a crash left
     // empty or torn is recounted, on either host (and `readCount` refuses
-    // one cut short of its newline); on gopher-metal a write is as safe as a
+    // one cut short of its newline); on zig-metal-unikernel a write is as safe as a
     // replace besides (STORE.md), at about half the disk requests.
     try store.write(io, alloc, path, text, .{});
 }
@@ -580,7 +580,7 @@ test "backfill: a session with no last-message record gets one, and only once" {
     const a = f.arena.allocator();
     // A sidecar as an older build left it: a count and a size, nothing more,
     // and the `.lastauthor` it wrote beside, which is no longer read
-    // (gopher-metal 153(1)).
+    // (zig-metal-unikernel 153(1)).
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "2 {d}\n", .{try fixtureTranscriptSize(&f)}));
     try store.write(f.io, a, try std.fs.path.join(a, &.{ f.dir, "sessions", "topic.lastauthor" }), "1", .{});
 
@@ -637,7 +637,7 @@ test "backfill: one pass reaches DMs and channels alike" {
 
 test "backfill: the record it writes can be read back" {
     // **THE ASSERTION THAT WAS MISSING.** The backfill has no uid to record
-    // (no `.lastauthor` is read, gopher-metal 153(1)), and a field left empty made the line one field short —
+    // (no `.lastauthor` is read, zig-metal-unikernel 153(1)), and a field left empty made the line one field short —
     // so the record was unreadable, `lastMessage` quietly read the whole
     // transcript instead, and every test still passed. What the backfill
     // writes has to PARSE, not merely lead to the right answer.
@@ -692,7 +692,7 @@ test "last message: a record left one behind still answers with the true last me
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("the second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
-    // The stale uid is not used, nor a `.lastauthor` (gopher-metal 153(1)):
+    // The stale uid is not used, nor a `.lastauthor` (zig-metal-unikernel 153(1)):
     // nothing says who wrote the newer message, so no author, never one that
     // could be wrong (a "You" for a message the viewer did not write).
     try testing.expectEqualStrings("", got.uid);
@@ -715,7 +715,7 @@ test "last message: one too long for the window is read the slow way, and is rig
     try testing.expectEqualStrings(huge, got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
     // And its author, from the sidecar: no `.lastauthor` is written now
-    // (gopher-metal 153(1)'s review).
+    // (zig-metal-unikernel 153(1)'s review).
     try testing.expectEqualStrings("1", got.uid);
 
     // A sidecar whose count matches but whose size does not (the transcript
@@ -740,7 +740,7 @@ test "last message: a sidecar claiming a size far past the file does not ask for
     try testing.expectEqualStrings("modest", got.markdown);
 }
 
-test "a send writes no .lastauthor, and its .count names the author over one an older server left (gopher-metal 153(1); that none is read even behind is the one-behind test's)" {
+test "a send writes no .lastauthor, and its .count names the author over one an older server left (zig-metal-unikernel 153(1); that none is read even behind is the one-behind test's)" {
     // The `.count` carries the author now. A `.lastauthor` left from before
     // names the previous author once a send no longer writes it: it is left
     // where it is, and nothing asks it.
@@ -759,7 +759,7 @@ test "a send writes no .lastauthor, and its .count names the author over one an 
     try testing.expectEqualStrings("1", got.uid);
 }
 
-test "the last session and conversation are written only when they change (gopher-metal 153(1))" {
+test "the last session and conversation are written only when they change (zig-metal-unikernel 153(1))" {
     const chat_state = @import("chat_state.zig");
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();

@@ -1,6 +1,6 @@
 # Deploying Angry Gopher (Lyn Rummy)
 
-> **Since 2026-10-04 lynrummy.com is served by gopher-metal** (see the
+> **Since 2026-10-04 lynrummy.com is served by zig-metal-unikernel** (see the
 > top-level README, "Where it runs"). This droplet now runs Caddy, which
 > proxies to metal, and the watchdog; its zig server is stopped. `ops/deploy`
 > fails closed (below): while metal serves it refreshes the watchdog and
@@ -33,10 +33,10 @@ It's also the mode `ops/start` runs locally, so prod ships what we dogfood. Flip
 
 **metal serves lynrummy.com now, and prod's Linux `gopher-server` is stopped by
 design** — two hosts writing two copies of the data cannot be merged
-(`CUTOVER.md` in gopher-metal). So:
+(`CUTOVER.md` in zig-metal-unikernel). So:
 
 - **The program AND the content** (`pages/`, `gallery/`) ship as a new
-  **gopher-metal image**, built and deployed in the gopher-metal repo. metal
+  **zig-metal-unikernel image**, built and deployed in the zig-metal-unikernel repo. metal
   serves the content from its own boot image, so `ops/deploy` does NOT ship it
   to prod — shipping it there would ship content nothing serves.
 - **Only the watchdog** still ships to the prod host, which is now the aux box
@@ -124,7 +124,7 @@ minute, four requests to metal's `/version` each time, most of the site's
 traffic, and nobody read it continuously). One run checks: the local server
 answers `GET /version` (or is stopped, as it should be while metal serves),
 exactly one `zig-server` process when it should be up, free RAM and disk,
-nothing unexpected running as `steve`; and gopher-metal, when `~/metal-url`
+nothing unexpected running as `steve`; and zig-metal-unikernel, when `~/metal-url`
 on the host names it (one line, `http://<metal's private address>`; the
 address stays off the repo): `metal` FAILs when metal's `/version` does not
 answer and WARNs when metal runs another commit than this server,

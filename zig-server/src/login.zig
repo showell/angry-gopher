@@ -284,7 +284,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
 /// signed, and every member is mirrored into the player store at login (same
 /// id), so a bare `gopher_uid=<a member's id>` with no session used to reach
 /// `player.current` and delete that member's game data and player row
-/// (gopher-metal REVIEW-request-paths.md, finding 1). An account's data is
+/// (zig-metal-unikernel REVIEW-request-paths.md, finding 1). An account's data is
 /// released only by the account itself (`user_id`: a session, an API key, or
 /// a guest's cookie); a cookie-only player may release itself only when no
 /// account has its id.

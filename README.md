@@ -6,13 +6,13 @@ Howell's personal website. Every line of code here was written by Claude.
 
 The site is a handful of small apps served from **one self-contained zig
 binary** — no database, storage is plain files on disk — served by
-gopher-metal behind Caddy (TLS); see "Where it runs" below. Each app has its own README as the canonical
+zig-metal-unikernel behind Caddy (TLS); see "Where it runs" below. Each app has its own README as the canonical
 home for its design intent; this file is the developer/agent map of the
 whole thing.
 
-## Where it runs: on gopher-metal, since 2026-10-04
+## Where it runs: on zig-metal-unikernel, since 2026-10-04
 
-**lynrummy.com is served by [gopher-metal](https://github.com/showell/gopher-metal)**,
+**lynrummy.com is served by [zig-metal-unikernel](https://github.com/showell/zig-metal-unikernel)**,
 this repo's zig server compiled into a kernel with no operating system under
 it, on its own DigitalOcean droplet. The two repos stay separate:
 
@@ -21,36 +21,36 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
 - **The library is [zig-webbox](https://github.com/showell/zig-webbox)**, a
   sibling checkout (`../zig-webbox`): the serving, the store, the cookies.
   This repo's server is an application of it, as Dog Park is.
-- **gopher-metal is the machine.** Its build compiles `zig-server/src` and
+- **zig-metal-unikernel is the machine.** Its build compiles `zig-server/src` and
   zig-webbox from their sibling checkouts as they are, and hands them metal's
   own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
   rewriting no line;
   its gates judge metal against this repo's Linux build, page by page, and
   run metal-vmm (the third repo, test-only). Its `README.md` and
   `CUTOVER.md` say how a release reaches the droplet.
-- **A change to the program reaches the site as a new gopher-metal image**,
+- **A change to the program reaches the site as a new zig-metal-unikernel image**,
   not through `ops/deploy`. The old Linux droplet still runs Caddy (TLS,
   body caps), which proxies to metal over the private network
   (`deploy/Caddyfile`); its own zig server is **stopped and must stay
   stopped**. `ops/deploy` fails closed: it restarts that server only when
   `~/linux-serves` is on prod (`deploy/README.md`).
-- **The way back is the previous gopher-metal image** on the same volume
-  (gopher-metal's `README.md`). Restarting the Linux server (`CUTOVER.md`) is
+- **The way back is the previous zig-metal-unikernel image** on the same volume
+  (zig-metal-unikernel's `README.md`). Restarting the Linux server (`CUTOVER.md`) is
   the last resort: its data is a copy frozen at the 2026-10-04 cutover, so
   everything written since would be lost.
 - **Keep `zig-server/src` portable to metal.** Server code reaches the host
   only through the seam in [`docs/SEAM.md`](docs/SEAM.md);
   `tools/lint_portable.py` (run by `ops/check_zig`) fails a change that
-  reaches around it. A change ships only after gopher-metal's gates pass on
+  reaches around it. A change ships only after zig-metal-unikernel's gates pass on
   it.
-- **The two hosts are one machine, by contract** (gopher-metal `HOST.md`,
+- **The two hosts are one machine, by contract** (zig-metal-unikernel `HOST.md`,
   `STORE.md`): Linux runs **one handler at a time** as metal's single loop
   does (the turn in webbox's `linux_host.zig`); every bound on a request is in
   [`zig-server/src/limits.zig`](zig-server/src/limits.zig), which both hosts
   size their buffers from and `tools/check_caddy_limits.py` holds the
   Caddyfile to; and `store.zig` answers the same on Linux and on metal, which
-  gopher-metal's `zig build store-judge` checks operation by operation.
-- **Which commit is live:** the "Serving" line in gopher-metal's `README.md`
+  zig-metal-unikernel's `zig build store-judge` checks operation by operation.
+- **Which commit is live:** the "Serving" line in zig-metal-unikernel's `README.md`
   names the release and its angry-gopher commit; `https://lynrummy.com/version`
   reports the running build's `commit`.
 
@@ -248,7 +248,7 @@ keyed by `{data_dir}/chat/_session_secret`, and so is every player's
 `gopher_uid`. The server *reads* this file but never creates the first
 one — so registration 500s ("session unavailable"), and `/play` sets no
 cookie, until it exists. (`/admin/secret` replaces one that exists;
-SECRET-LEAK.md in gopher-metal says when.) Seed it once with ≥ 32 random bytes:
+SECRET-LEAK.md in zig-metal-unikernel says when.) Seed it once with ≥ 32 random bytes:
 
 ```bash
 mkdir -p "$DATA_DIR/chat"
