@@ -204,6 +204,14 @@ pub const Bus = struct {
     /// application sees the request. An application bounds what one address
     /// may make and write by it; with none, such bounds do not apply.
     peer: ?[]const u8 = null,
+    /// **WHAT THE ANSWER'S STATUS LINE SAID** (metal-vmm QUEUE 189.2), for
+    /// the host's request line: set by `site.route`, which sees every byte
+    /// of the answer, the handler's or its own 500. 0 when no status line
+    /// went out (a client gone before the head).
+    status: u16 = 0,
+    /// When the request came, Unix milliseconds, if the host knows the wall
+    /// clock: the host sets it, as it does `peer` (189.5's 5xx list).
+    at_unix_ms: ?i64 = null,
 
     pub fn of(hub: *Hub) Bus {
         return .{ .hub = hub };

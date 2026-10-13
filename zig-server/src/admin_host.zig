@@ -18,6 +18,7 @@ const home = @import("home.zig");
 const mem_meter = @import("webbox").mem_meter;
 const edge = @import("webbox").edge;
 const host_facts = @import("webbox").host_facts;
+const traffic = @import("webbox").traffic;
 const build_options = @import("build_options");
 
 const Request = std.http.Server.Request;
@@ -27,6 +28,22 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "🐹 The running server", "/admin/host");
 
+    // **ERRORS FIRST, WHEN THERE ARE ANY** (metal-vmm QUEUE 189.5): every
+    // answer 500 or over since boot, the newest first, with its line.
+    const t = &traffic.global;
+    if (t.n_errors > 0) {
+        try b.print(alloc, "<h2>Errors since boot</h2>\n<p>{d} answers were 500 or over; the newest {d}, the newest first:</p>\n<pre class=\"log\">", .{
+            t.n_errors, @min(t.n_errors, traffic.errors_kept),
+        });
+        var k: usize = 0;
+        while (t.newestError(k)) |e| : (k += 1) {
+            var line: std.Io.Writer.Allocating = .init(alloc);
+            try traffic.writeSeen(e, &line.writer);
+            try b.print(alloc, "{s}\n", .{try html.htmlEscape(alloc, line.written())});
+        }
+        try b.appendSlice(alloc, "</pre>\n");
+    }
+
     const mem = mem_meter.snapshot();
     try b.appendSlice(alloc, "<h2>The application</h2>\n<table>");
     try row(&b, alloc, "version", home.version);
@@ -35,6 +52,20 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
         try ui.humanBytes(alloc, @intCast(mem.live_bytes)), mem.live_allocs,
     }));
     try row(&b, alloc, "base heap, allocations ever", try std.fmt.allocPrint(alloc, "{d}", .{mem.total_allocs}));
+    {
+        var classes: std.Io.Writer.Allocating = .init(alloc);
+        try t.writeClasses(&classes.writer);
+        try row(&b, alloc, "requests since boot", classes.written());
+        var fams: std.Io.Writer.Allocating = .init(alloc);
+        try t.writeFamilies(&fams.writer);
+        try row(&b, alloc, "by part of the site", if (fams.written().len > 0) fams.written() else "none yet");
+        var slow: std.Io.Writer.Allocating = .init(alloc);
+        for (t.slowest[0..t.n_slowest], 0..) |*one, i| {
+            if (i > 0) try slow.writer.writeAll("; ");
+            try traffic.writeSeen(one, &slow.writer);
+        }
+        try row(&b, alloc, "the slowest", if (t.n_slowest > 0) slow.written() else "none yet");
+    }
     try row(&b, alloc, "requests refused at the edge", try edge.countsText(alloc));
     try row(&b, alloc, "chat fan-out failures since boot", try @import("chat_store.zig").fanoutText(alloc));
     try row(&b, alloc, "listings that skipped a malformed channel", try @import("chat_store.zig").malformedText(alloc));
