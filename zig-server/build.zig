@@ -20,35 +20,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // **THE `webbox` LIBRARY** (src/webbox.zig, a web server in a box): what
-    // an application built on this server imports as one module, dog-park
-    // first, and angry-gopher itself: no file of the application imports a
-    // file of the library by path. ops/check_zig holds the library's files
-    // to importing std and one another, and the Linux half's also to the
-    // `webbox` module (tools/lint_webbox_library.py), so nothing else of
-    // angry-gopher's rides along.
-    //
-    // **TWO MODULES**: `webbox`, portable, which everything imports; and
-    // `webbox_linux` (src/webbox_linux.zig), the Linux host, which only a
-    // Linux `main` imports and which reaches the portable half as `webbox`.
-    //
-    // **`host_io`, THE ONE FILE THAT NAMES THE HOST**: every file takes its
-    // `Io` from it (`@import("host_io").Io`). Here it is src/host_io_std.zig,
-    // the standard library's; gopher-metal's build hands the same sources
-    // its own, the machine's. Exported, so an application's build hands
-    // its own code the same one.
-    const host_io = b.addModule("host_io", .{ .root_source_file = b.path("src/host_io_std.zig") });
-    const webbox = b.addModule("webbox", .{
-        .root_source_file = b.path("src/webbox.zig"),
-        .imports = &.{.{ .name = "host_io", .module = host_io }},
-    });
-    const webbox_linux = b.addModule("webbox_linux", .{
-        .root_source_file = b.path("src/webbox_linux.zig"),
-        .imports = &.{
-            .{ .name = "webbox", .module = webbox },
-            .{ .name = "host_io", .module = host_io },
-        },
-    });
+    // **THE `webbox` LIBRARY** (zig-webbox, a web server in a box), what
+    // this application is built on: no file here imports a file of it by
+    // path. Three modules: `webbox`, portable, which everything imports;
+    // `webbox_linux`, the Linux host, which only a Linux `main` imports; and
+    // `host_io`, the one file that names the host (std's here; the
+    // unikernel's build hands the same sources the machine's).
+    const webbox_dep = b.dependency("webbox", .{ .target = target, .optimize = optimize });
+    const host_io = webbox_dep.module("host_io");
+    const webbox = webbox_dep.module("webbox");
+    const webbox_linux = webbox_dep.module("webbox_linux");
     root.addImport("host_io", host_io);
     root.addImport("webbox", webbox);
     root.addImport("webbox_linux", webbox_linux);
@@ -156,7 +137,16 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }) });
-    router_tests.root_module.addImport("build_options", build_opts.createModule());
+    // The request-edge harness reads every number parse in the source, the
+    // library's too: where zig-webbox's sources are.
+    const router_opts = b.addOptions();
+    router_opts.addOption([]const u8, "commit", "dev");
+    router_opts.addOption(bool, "fake_leak", false);
+    router_opts.addOption([]const u8, "webbox_src", webbox_dep.builder.pathFromRoot("src"));
+    router_tests.root_module.addImport("build_options", router_opts.createModule());
+    // roots.zig's test reads what the library's store.setBases assigns.
+    const webbox_store_source = webbox_dep.path("src/store.zig");
+    router_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     router_tests.root_module.addImport("webbox", webbox);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
@@ -165,17 +155,17 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(router_tests).step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_facts.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/webbox.zig", "src/webbox_linux.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/reactions.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,
             .optimize = optimize,
         }) });
-        // A file of the application, or of the Linux host, reaches the
-        // library as the module; a file of the library, by path.
+        // A file of the application reaches the library as its modules.
         unit.root_module.addImport("webbox", webbox);
         unit.root_module.addImport("webbox_linux", webbox_linux);
         unit.root_module.addImport("host_io", host_io);
+        unit.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }
 }

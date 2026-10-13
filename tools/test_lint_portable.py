@@ -68,16 +68,13 @@ class Clean(unittest.TestCase):
 
     def test_the_real_tree_is_clean(self):
         # The lint's own subject. If this fails, run the lint for the details.
-        here = os.path.dirname(os.path.abspath(__file__))
-        src = os.path.join(here, "..", "zig-server", "src")
-        self.assertEqual(L.scan(src, L.ROOTS), [])
+        self.assertEqual(L.scan(L.zig_source.TREE, L.ROOTS), [])
 
     def test_the_real_partition_is_the_hosts_plus_config(self):
         # The set is DERIVED; this pins what it derives today, so a module that
         # silently falls out of (or into) reach is noticed.
-        here = os.path.dirname(os.path.abspath(__file__))
-        src = os.path.join(here, "..", "zig-server", "src")
-        every = {f for f in os.listdir(src) if f.endswith(".zig")}
+        src = L.zig_source.TREE
+        every = {f for f in L.zig_source.listing(src) if f.endswith(".zig")}
         outside = every - L.closure(src, L.ROOTS)
         self.assertEqual(outside, {
             "server.zig", "host_io_std.zig", "webbox_linux.zig", "linux_host.zig", "linux_config.zig", "bind.zig", "stress.zig", "hash_password.zig",

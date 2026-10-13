@@ -238,7 +238,7 @@ def test_only_lines(lines, tests):
 def library_files(src_dir: str):
     """The library's portable files: webbox.zig and the files it names. Empty
     in a tree without a library."""
-    path = os.path.join(src_dir, LIBRARY_ROOT)
+    path = zig_source.at(src_dir, LIBRARY_ROOT)
     if not os.path.isfile(path):
         return set()
     with open(path, encoding="utf-8") as f:
@@ -256,12 +256,13 @@ def closure(src_dir: str, root=ROOT_MODULE):
     @import, the roots included: by path, and through the `webbox` module.
 
     Other named modules (`@import("std")`, `@import("build_options")`) and
-    embedded assets are not files in src_dir and are not followed; nor is the
+    embedded assets are not files in src_dir (a folder, or several read as
+    one) and are not followed; nor is the
     library's Linux half, which is a finding. A cycle terminates.
     """
     roots = (root,) if isinstance(root, str) else tuple(root)
     for r in roots:
-        start = os.path.join(src_dir, r)
+        start = zig_source.at(src_dir, r)
         if not os.path.isfile(start):
             raise FileNotFoundError(f"the root {r} is not at {start}")
     seen, todo = set(), deque(roots)
@@ -269,7 +270,7 @@ def closure(src_dir: str, root=ROOT_MODULE):
         name = todo.popleft()
         if name in seen:
             continue
-        path = os.path.join(src_dir, name)
+        path = zig_source.at(src_dir, name)
         if not os.path.isfile(path):
             continue  # a dangling import is zig's error to report, not ours
         seen.add(name)
@@ -287,7 +288,7 @@ def scan(src_dir: str, root=ROOT_MODULE):
     found = []
     library = library_files(src_dir)
     for name in sorted(closure(src_dir, root)):
-        with open(os.path.join(src_dir, name), encoding="utf-8") as f:
+        with open(zig_source.at(src_dir, name), encoding="utf-8") as f:
             text = f.read()
         for m in zig_source.modules(text):
             if m in HOST_MODULES:
@@ -301,7 +302,7 @@ def scan(src_dir: str, root=ROOT_MODULE):
             elif name not in library and base in library:
                 found.append((name, 0, f'@import("{dep}")',
                               f'import the library as its module: @import("webbox"){"" if base == LIBRARY_ROOT else "." + base[:-4]}'))
-        with open(os.path.join(src_dir, name), encoding="utf-8") as f:
+        with open(zig_source.at(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)
         tests |= test_only_lines(lines, tests)
@@ -318,8 +319,7 @@ def scan(src_dir: str, root=ROOT_MODULE):
 
 
 def main() -> int:
-    here = os.path.dirname(os.path.abspath(__file__))
-    src = os.path.normpath(os.path.join(here, "..", "zig-server", "src"))
+    src = zig_source.TREE
     reach = closure(src, ROOTS)
     found = scan(src, ROOTS)
     if not found:

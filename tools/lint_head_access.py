@@ -20,8 +20,10 @@ import glob
 import os
 import sys
 
-SRC = os.path.join(os.path.dirname(__file__), "..", "zig-server", "src")
-ALLOWED = {"http.zig"}  # the owning chokepoint — raw head access lives here only
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zig_source  # noqa: E402  the tree the lints judge: the application's and the library's
+
+ALLOWED = {"http.zig"}  # the owning chokepoint (the library's) — raw head access lives here only
 
 # Standalone HTTP *client* programs, not server request handlers. The foot-gun this
 # lint guards is the SERVER head (std.http.Server.Request) dangling past a body read;
@@ -43,7 +45,7 @@ def code_part(line):
 
 def main():
     violations = []
-    for path in sorted(glob.glob(os.path.join(SRC, "*.zig"))):
+    for path in sorted(p for src in zig_source.TREE for p in glob.glob(os.path.join(src, "*.zig"))):
         if os.path.basename(path) in ALLOWED or os.path.basename(path) in CLIENT_MODULES:
             continue
         with open(path) as f:

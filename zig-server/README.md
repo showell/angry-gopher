@@ -11,10 +11,11 @@ zig **0.16.0** (`zig version`).
 
 ## Server (`src/server.zig`)
 
-`server.zig` is the entry point, and the `webbox` library does the serving:
-the portable module `webbox` (`src/webbox.zig`), which the rest of the
-server imports by name, and its Linux host, the module `webbox_linux`
-(`src/webbox_linux.zig`, `linux_host.zig`), which listens on **:9001**,
+`server.zig` is the entry point, and the `webbox` library
+([zig-webbox](https://github.com/showell/zig-webbox), the sibling checkout
+`../../zig-webbox`) does the serving: the portable module `webbox`, which
+the rest of the server imports by name, and its Linux host, the module
+`webbox_linux` (its `linux_host.zig`), which listens on **:9001**,
 runs each accepted connection as its own task on the `std.Io` thread pool (so
 long-lived SSE streams don't starve other connections), and hands each
 request to `router.zig`, which routes by path prefix to the per-surface
@@ -50,7 +51,7 @@ std.Io thread pool, so requests are served concurrently.
 
 ## The edge's threat model, as deployed
 
-`src/edge.zig`'s policy assumes runtime safety is on, and it is on every
+webbox's `edge.zig` policy assumes runtime safety is on, and it is on every
 build that serves: production is gopher-metal's ReleaseSafe kernel, and the
 Linux build is Debug (`ops/start`, `ops/deploy`; Debug's checks are a superset
 of ReleaseSafe's). An out-of-bounds index or copy panics, and the host
@@ -58,7 +59,7 @@ restarts. `stress_test.py`'s edge-policy job is the test that asserts each
 reject counter moved. The counters reach the watchdog (run by hand) through
 `/version`'s `rejects` (`home.zig`).
 
-The bare-metal side of `src/bus.zig`'s mailbox contract (the seeded simulator
+The bare-metal side of webbox's `bus.zig` mailbox contract (the seeded simulator
 at the bottom of that file) is gopher-metal's HOST.md, "Live streams".
 
 ## Markdown dialect regression harness

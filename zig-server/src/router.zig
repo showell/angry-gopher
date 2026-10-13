@@ -2798,34 +2798,37 @@ test "request edges: every number a request carries, at its type's edges, as a m
     defer threaded.deinit();
     const io = threaded.io();
 
-    // **EVERY SITE IS KNOWN**: read from the source as it stands.
-    var src = try Io.Dir.cwd().openDir(io, "src", .{ .iterate = true });
-    defer src.close(io);
-    var files = src.iterate();
+    // **EVERY SITE IS KNOWN**: read from the source as it stands, this
+    // application's and the library's (zig-webbox's).
     var found: usize = 0;
-    while (try files.next(io)) |entry| {
-        if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".zig")) continue;
-        const text = try src.readFileAlloc(io, entry.name, a, .limited(4 << 20));
-        var lines = std.mem.splitScalar(u8, text, '\n');
-        var func: []const u8 = "";
-        var in_test = false;
-        while (lines.next()) |line| {
-            const t = std.mem.trimStart(u8, line, " ");
-            if (std.mem.startsWith(u8, t, "test \"")) in_test = true;
-            if (std.mem.indexOf(u8, t, "fn ")) |at| if (std.mem.startsWith(u8, t, "fn ") or std.mem.startsWith(u8, t, "pub fn ")) {
-                const name = t[at + 3 ..];
-                func = name[0 .. std.mem.indexOfScalar(u8, name, '(') orelse name.len];
-                in_test = false;
-            };
-            if (std.mem.startsWith(u8, t, "//") or in_test) continue;
-            if (std.mem.indexOf(u8, t, "parseInt(") == null) continue;
-            found += 1;
-            const known = for (edge_sites) |s| {
-                if (std.mem.eql(u8, s.file, entry.name) and std.mem.eql(u8, s.func, func)) break true;
-            } else false;
-            if (!known) {
-                std.debug.print("request edges: {s}'s {s} parses a number, and is not in edge_sites: cover it with a request, or say why none reaches it\n", .{ entry.name, func });
-                return error.TestUnexpectedResult;
+    for ([_][]const u8{ "src", @import("build_options").webbox_src }) |dir| {
+        var src = try Io.Dir.cwd().openDir(io, dir, .{ .iterate = true });
+        defer src.close(io);
+        var files = src.iterate();
+        while (try files.next(io)) |entry| {
+            if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".zig")) continue;
+            const text = try src.readFileAlloc(io, entry.name, a, .limited(4 << 20));
+            var lines = std.mem.splitScalar(u8, text, '\n');
+            var func: []const u8 = "";
+            var in_test = false;
+            while (lines.next()) |line| {
+                const t = std.mem.trimStart(u8, line, " ");
+                if (std.mem.startsWith(u8, t, "test \"")) in_test = true;
+                if (std.mem.indexOf(u8, t, "fn ")) |at| if (std.mem.startsWith(u8, t, "fn ") or std.mem.startsWith(u8, t, "pub fn ")) {
+                    const name = t[at + 3 ..];
+                    func = name[0 .. std.mem.indexOfScalar(u8, name, '(') orelse name.len];
+                    in_test = false;
+                };
+                if (std.mem.startsWith(u8, t, "//") or in_test) continue;
+                if (std.mem.indexOf(u8, t, "parseInt(") == null) continue;
+                found += 1;
+                const known = for (edge_sites) |s| {
+                    if (std.mem.eql(u8, s.file, entry.name) and std.mem.eql(u8, s.func, func)) break true;
+                } else false;
+                if (!known) {
+                    std.debug.print("request edges: {s}'s {s} parses a number, and is not in edge_sites: cover it with a request, or say why none reaches it\n", .{ entry.name, func });
+                    return error.TestUnexpectedResult;
+                }
             }
         }
     }

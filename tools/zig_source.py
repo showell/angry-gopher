@@ -21,7 +21,33 @@ What it does not see: an import through a name (`const s = @import("std");
 s.heap...`). The lints that care say so; the build of the port is the guard
 there.
 """
+import os
 import re
+
+# The tree the lints judge: the application's sources and the library's,
+# zig-webbox, a sibling checkout (zig-server/build.zig.zon's dependency). The
+# two hold no file of the same name, so a lint reads them as one folder.
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_SRC = os.path.join(_REPO, "zig-server", "src")
+LIBRARY_SRC = os.path.normpath(os.path.join(_REPO, "..", "zig-webbox", "src"))
+TREE = (APP_SRC, LIBRARY_SRC)
+
+
+def at(src, name):
+    """Where `name` is in `src`: a folder, or several read as one (TREE), the
+    first that has it; else where the first would have it."""
+    dirs = (src,) if isinstance(src, str) else tuple(src)
+    for d in dirs:
+        path = os.path.join(d, name)
+        if os.path.isfile(path):
+            return path
+    return os.path.join(dirs[0], name)
+
+
+def listing(src):
+    """Every file name in `src`: a folder, or several read as one."""
+    dirs = (src,) if isinstance(src, str) else tuple(src)
+    return sorted({n for d in dirs for n in os.listdir(d)})
 
 _IMPORT = re.compile(r'@import\(\s*"([^"]+\.zig)"\s*,?\s*\)')
 _MODULE = re.compile(r'@import\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,?\s*\)')

@@ -337,7 +337,7 @@ test "point assigns no global the list of roots does not name, and restore puts 
     }
     // And what store.setBases assigns, which webbox's start and pointForTest
     // call (the review of 157: the test was blind to it).
-    const store_src = @embedFile("store.zig");
+    const store_src = @embedFile("webbox_store_source");
     const sb = std.mem.indexOf(u8, store_src, "pub fn setBases(").?;
     const sb_body = store_src[sb .. sb + std.mem.indexOf(u8, store_src[sb..], "\n}\n").?];
     var sb_lines = std.mem.splitScalar(u8, sb_body, '\n');

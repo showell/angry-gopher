@@ -1,11 +1,14 @@
 .{
-    // angry-gopher's server as a package: the `webbox` library, two modules
-    // an application built on it depends on: `webbox` (src/webbox.zig,
-    // portable, what its code imports) and `webbox_linux`
-    // (src/webbox_linux.zig, the Linux host, for its Linux `main`).
-    .name = .webbox,
+    // angry-gopher's server, an application of the `webbox` library.
+    .name = .angry_gopher,
     .version = "0.1.0",
-    .fingerprint = 0x90f0ca47715bdd8d,
+    .fingerprint = 0xc485d60137dc1e9a,
     .minimum_zig_version = "0.16.0",
     .paths = .{ "build.zig", "build.zig.zon", "src" },
+    .dependencies = .{
+        // The web-server-in-a-box library: zig-webbox, a sibling checkout
+        // of angry-gopher (../../zig-webbox from here), modules `webbox`,
+        // `webbox_linux` and `host_io`.
+        .webbox = .{ .path = "../../zig-webbox" },
+    },
 }

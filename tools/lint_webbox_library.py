@@ -56,12 +56,16 @@ def problems(src):
     for root, may in ROOTS.items():
         out += problems_of(src, root, may)
     library = members(src)
-    for name in sorted(os.listdir(src)):
+    for name in zig_source.listing(src):
         if not name.endswith(".zig") or name in library:
             continue
-        for dep in imports(os.path.join(src, name)):
+        text = read(zig_source.at(src, name))
+        for dep in zig_source.imports(text):
             if os.path.basename(dep) in library:
                 out.append(f"{name} imports {dep} by path: an application imports the library by name (@import(\"webbox\") or @import(\"webbox_linux\"))")
+        for embedded in zig_source.embeds(text):
+            if os.path.basename(embedded) in library:
+                out.append(f"{name} embeds {embedded}, a file of the library, by path: the build hands it over by name (addAnonymousImport)")
     return out
 
 
@@ -69,14 +73,14 @@ def members(src):
     """The library's files: each root and the files it names."""
     out = set()
     for root in ROOTS:
-        path = os.path.join(src, root)
+        path = zig_source.at(src, root)
         if os.path.exists(path):
             out |= {root} | set(imports(path))
     return out
 
 
 def problems_of(src, root_name, may_import):
-    root = os.path.join(src, root_name)
+    root = zig_source.at(src, root_name)
     if not os.path.exists(root):
         return [f"{root_name}: the library's root, and not there"]
     named = set(imports(root))
@@ -89,7 +93,7 @@ def problems_of(src, root_name, may_import):
         if name in seen:
             continue
         seen.add(name)
-        path = os.path.join(src, name)
+        path = zig_source.at(src, name)
         if not os.path.exists(path):
             out.append(f"{name}: imported by the library, and not there")
             continue
@@ -156,15 +160,26 @@ def self_test():
             assert len(got) == 1 and f"app.zig imports {spelling} by path" in got[0], (spelling, got)
         write("app.zig", 'const u = @import("users.zig");\n')
         assert problems(d) == [], problems(d)
-    print("lint_webbox_library: its self-test passes (a clean library; one reaching outside, on one line or split; a commented import; an embedded file; the Linux half through the module, not by path; the portable half reaching for the Linux one, or for itself; an application's file by name, never by path)")
+        write("app.zig", 'const s = @embedFile("a.zig");\n')
+        got = problems(d)
+        assert len(got) == 1 and "app.zig embeds a.zig, a file of the library" in got[0], got
+        write("app.zig", 'const s = @embedFile("webbox_store_source");\n')
+        assert problems(d) == [], problems(d)
+    print("lint_webbox_library: its self-test passes (a clean library; one reaching outside, on one line or split; a commented import; an embedded file; the Linux half through the module, not by path; the portable half reaching for the Linux one, or for itself; an application's file by name, never by path, nor embedding one)")
 
 
 def main():
     if sys.argv[1:] == ["--self-test"]:
         self_test()
         return 0
-    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "zig-server", "src")
+    src = zig_source.TREE
     found = problems(src)
+    # The library lives in zig-webbox: a file of it in the application's
+    # folder would shadow the library's own (the lints read the
+    # application's folder first) and be compiled by nothing.
+    for name in sorted(members(src) | {"host_io_std.zig"}):
+        if os.path.exists(os.path.join(zig_source.APP_SRC, name)):
+            found.append(f"{name} is a file of the library, and is in angry-gopher's zig-server/src: it lives in zig-webbox")
     for p in found:
         print("webbox library:", p)
     if found:
