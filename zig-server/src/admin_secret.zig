@@ -45,8 +45,11 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const days = std.fmt.parseInt(i64, days_text, 10) catch -1;
     if (days < 0 or days > max_days)
         return form(req, alloc, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
-    users.rotateSecret(io, alloc, days) catch |e|
+    users.rotateSecret(io, alloc, days) catch |e| {
+        // A volume refusing writes is site.route's 503 (metal-vmm QUEUE 188.2).
+        if (e == error.ReadOnlyFileSystem) return e;
         return form(req, alloc, try std.fmt.allocPrint(alloc, "The secret was not changed: {s}.", .{@errorName(e)}), .internal_server_error);
+    };
 
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "The secret is changed", "");
