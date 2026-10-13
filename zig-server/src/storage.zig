@@ -11,7 +11,8 @@
 //!   meta                       — created_at + catalog snapshot (DSL)
 //!   puzzle_<idx>/actions.dsl   — one `<seq>) <action>` line per append
 //!
-//! **APPENDS ARE SERIALIZED** (append_mu). store.append stats the file's size
+//! **APPENDS ARE SERIALIZED BY THE HOST**: one handler runs at a time (its
+//! turn, zig-metal-unikernel HOST.md), so this file keeps no lock. store.append stats the file's size
 //! and then writes at it (the std.Io file API exposes no O_APPEND), so two
 //! appends to one file at once could both write at the old end, one over the
 //! other. This file once said that could not happen, because one request
@@ -34,11 +35,6 @@ const Alloc = std.mem.Allocator;
 const counter = @import("webbox").counter;
 const store = @import("webbox").store;
 const game_limits = @import("game_limits.zig");
-
-/// append_mu serializes every game-store append (see the file header). One
-/// lock for the store, as chat_mu is for chat: appends are one positional
-/// write each, so contention costs little.
-var append_mu: Io.Mutex = .init;
 
 /// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
@@ -106,20 +102,17 @@ pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return counter.peek(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
-/// create_mu makes "is it there, and is it the one offered" and the making of
-/// it one step, so two first moves at once make one session, not two.
-var create_mu: Io.Mutex = .init;
-
 /// Makes puzzle session `session_id`, with `meta`, if it is the one a page
 /// offered (`nextPuzzleSessionID`) and is not there yet; answers whether the
-/// session is there afterwards. An id never offered makes nothing.
+/// session is there afterwards. An id never offered makes nothing. "Is it
+/// there, and is it the one offered" and the making of it are one step
+/// because one handler runs at a time (no lock: HOST.md's turn), so two
+/// first moves make one session, not two.
 fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, meta: []const u8) !bool {
-    create_mu.lockUncancelable(io);
-    defer create_mu.unlock(io);
     if (try puzzleSessionExists(io, alloc, user_id, session_id)) return true;
     if (session_id != try nextPuzzleSessionID(io, alloc, user_id)) return false;
     const got = try allocatePuzzleSessionID(io, alloc, user_id);
-    std.debug.assert(got == session_id); // under create_mu, and counter's own lock
+    std.debug.assert(got == session_id); // one handler at a time
     try writePuzzleSessionFile(io, alloc, user_id, session_id, "meta", meta);
     return true;
 }
@@ -202,11 +195,9 @@ pub fn appendPuzzleMove(io: Io, alloc: Alloc, payer: Payer, session_id: i64, puz
 }
 
 /// appendLine appends `line`, already whole with its newline, to `path`,
-/// creating parent dirs: one positional write at the current end, under
-/// append_mu (see the atomicity note at the top of this file).
+/// creating parent dirs: one positional write at the current end, inside
+/// one handler's turn (see the atomicity note at the top of this file).
 fn appendLine(io: Io, alloc: Alloc, path: []const u8, line: []const u8) !void {
-    append_mu.lockUncancelable(io);
-    defer append_mu.unlock(io);
     _ = try store.append(io, alloc, path, line);
 }
 
@@ -332,8 +323,14 @@ fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
 const testing = std.testing;
 const roots = @import("roots.zig");
 
-/// One writer of the concurrent-append test. `parent` must be thread-safe:
-/// the test passes the page allocator (named only inside a test block).
+/// The host's turn, as the writers below take it: a handler runs only inside
+/// it (webbox's linux_host `turn`; the bare-metal host's one loop), and
+/// this file keeps no lock of its own.
+var test_turn: Io.Mutex = .init;
+
+/// One writer of the concurrent-append test, each append in a turn of its
+/// own, as a handler's would be. `parent` must be thread-safe: the test
+/// passes the page allocator (named only inside a test block).
 fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, writer: usize, n: usize) void {
     var arena = std.heap.ArenaAllocator.init(parent);
     defer arena.deinit();
@@ -345,11 +342,13 @@ fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, write
         const line = std.fmt.bufPrint(&buf, "{d}-{d}) {s}", .{ writer, i, "x" ** 1500 }) catch return;
         const dir = sessionDir(alloc, user_id, session_id) catch return;
         const path = join(alloc, &.{ dir, "actions.dsl" }) catch return;
+        test_turn.lockUncancelable(io);
+        defer test_turn.unlock(io);
         appendLine(io, alloc, path, lineOf(alloc, .actions, line) catch return) catch return;
     }
 }
 
-test "fs: appends to one session from many writers at once all land, whole" {
+test "fs: appends to one session from many writers at once, each in the host's turn, all land, whole" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
     var arena = std.heap.ArenaAllocator.init(testing.allocator);

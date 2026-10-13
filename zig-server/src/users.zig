@@ -150,10 +150,6 @@ pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 /// a runaway/abuse backstop, not a tight quota.
 pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
 
-/// upload_bytes_mu serializes the read-add-write on the lifetime upload total so
-/// two concurrent uploads can't both slip past the cap.
-var upload_bytes_mu: Io.Mutex = .init;
-
 /// userUploadBytes returns the cumulative bytes a user has ever uploaded
 /// ({users_root}/{id}/upload-bytes), 0 when there is no such file. A file
 /// that cannot be read, or does not hold a number, is an error: counting it
@@ -169,13 +165,12 @@ pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) !i64 {
 
 /// reserveUploadBytes atomically adds `n` to the user's lifetime upload total if
 /// that stays within max_upload_lifetime_bytes, returning true; otherwise nothing
-/// changes and it returns false. Serialized via upload_bytes_mu.
+/// changes and it returns false. No lock: one handler runs at a time (the
+/// host's turn, HOST.md), so the read, the check and the write are one step.
 /// A total that cannot be read or written is an error, and the upload is
 /// refused with it: neither may let an upload past the cap uncounted.
 pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
     if (!allDigits(id)) return false;
-    upload_bytes_mu.lockUncancelable(io);
-    defer upload_bytes_mu.unlock(io);
     const total = (try userUploadBytes(io, alloc, id)) + n;
     if (total > max_upload_lifetime_bytes) return false;
     const dir = try std.fs.path.join(alloc, &.{ users_root, id });

@@ -90,11 +90,11 @@ const search_index = @import("search_index.zig");
 /// default is repo-relative-from-zig-server like the others.
 pub var chat_root: []const u8 = "../games/lynrummy/chat-data";
 
-/// chat_mu serializes the read-count-then-append on the write path AND the
-/// read-backlog-then-subscribe on the stream path. It's what makes a message land
-/// in EITHER the backlog OR the live stream, never both and never neither (see
-/// appendMessage / openStream).
-var chat_mu: Io.Mutex = .init;
+// No lock: a handler runs only inside the host's turn, one at a time
+// (zig-metal-unikernel HOST.md), so the read-count-then-append on the write path
+// and the read-backlog-then-subscribe on the stream path never interleave. That
+// is what makes a message land in EITHER the backlog OR the live stream, never
+// both and never neither (see appendMessage / openStream).
 
 /// sep joins message blocks on disk: blank line, 13 hyphens, newline. A body
 /// line that would collide with it is backslash-escaped (see unescapeBodyLine).
@@ -128,16 +128,13 @@ pub const Stream = struct {
     sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
 };
 
-/// openStream: under chat_mu, decode the session backlog
+/// openStream: inside one handler's turn, decode the session backlog
 /// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
 pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8) !Stream {
     const path = try sessionMdPath(alloc, conv_dir, sid);
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
-
-    chat_mu.lockUncancelable(io);
-    defer chat_mu.unlock(io);
 
     // A session nobody has written to is genuinely empty; a session that will
     // not read is not, and showing it as empty is how a transcript looks lost.
@@ -147,11 +144,10 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
     return .{ .backlog = msgs, .sub = sub };
 }
 
-/// appendMessage stores one message: under
-/// chat_mu, read the current count → the message index, encode the on-disk block
+/// appendMessage stores one message, inside one handler's turn: read the current count → the message index, encode the on-disk block
 /// (with separator + body-line escaping), append it, record the count and the
-/// author in the `.count`, then publish a fan-out blob to the live subscribers — all under the
-/// one lock so a concurrent openStream can't double- or zero-count it. Returns
+/// author in the `.count`, then publish a fan-out blob to the live subscribers — all in
+/// one turn, so no other handler's openStream can double- or zero-count it. Returns
 /// the stored message (id + server-stamped date). NO render here: the blob
 /// carries raw markdown; each stream renders per-viewer.
 pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
@@ -160,9 +156,6 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // on reload. A nameless member (a release cut short) cannot post.
     if (from_name.len == 0) return error.NoAuthor;
     const path = try sessionMdPath(alloc, conv_dir, sid);
-
-    chat_mu.lockUncancelable(io);
-    defer chat_mu.unlock(io);
 
     const index = try messageCount(io, alloc, conv_dir, sid);
 
@@ -200,8 +193,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
-    // session's first message. Best-effort; runs under chat_mu so the lock order
-    // is chat_mu → imagesMu (leaf).
+    // session's first message. Best-effort; inside the same handler's turn.
     fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg, from_id, index);
 
     return msg;
@@ -227,12 +219,9 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// appendReaction records one event `{msg, uid, from, emoji, on, at}` on the
 /// sidecar and fans it out live on the topic's bus key, wrapped as
 /// `{"reaction":<line>}` so the transcript stream can tell it from a message
-/// blob. Under chat_mu so `msg_num` (1-based, the N of MSG_<sid>_N) is checked
+/// blob. Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is checked
 /// against the transcript's real count. Returns the stored line.
 pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, msg_num: usize, uid: []const u8, from_name: []const u8, emoji: []const u8, on: bool) ![]const u8 {
-    chat_mu.lockUncancelable(io);
-    defer chat_mu.unlock(io);
-
     const count = try messageCount(io, alloc, conv_dir, sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
 
