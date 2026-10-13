@@ -8,9 +8,10 @@ unreadable game log resumed as a new game; an unreadable upload total gave a
 user their allowance again. Each was a read whose error was caught into a
 value, so a disk that failed looked exactly like a file that was not there.
 
-WHAT IT REFUSES, in every zig-server/src file but store.zig and outside
-`test {}` blocks and the helpers only tests use: a call of one of the store's
-reads (`read`, `readOrEmpty`, `readOrNull`, `readAt`, `stat`, `statOrNull`,
+WHAT IT REFUSES, in every file of the tree the lints judge (zig_source.TREE:
+the application's zig-server/src and the library's zig-webbox/src, read as
+one folder) but the library's store.zig, and outside `test {}` blocks and
+the helpers only tests use: a call of one of the store's reads (`read`, `readOrEmpty`, `readOrNull`, `readAt`, `stat`, `statOrNull`,
 `has`, `list`), under whatever name the file gives store.zig, or of any
 function that reads the store, directly or through others (`readers`,
 computed on every run: users.isMember was such a wrapper, metal-vmm QUEUE
@@ -60,6 +61,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lint_portable import test_lines, test_only_lines  # noqa: E402
+import zig_source  # noqa: E402  the tree the lints judge: the application's and the library's
 
 STORE = "store.zig"
 READS = ("read", "readOrEmpty", "readOrNull", "readAt", "stat", "statOrNull", "has", "list")
@@ -468,12 +470,13 @@ def findings(name: str, lines, found=None):
     return out
 
 
-def scan(src_dir: str):
-    """Findings as (file, line, text), in file then line order."""
+def scan(src):
+    """Findings as (file, line, text), in file then line order, from `src`: a
+    folder, or several read as one (zig_source.TREE)."""
     files = {}
-    for name in sorted(os.listdir(src_dir)):
+    for name in zig_source.listing(src):
         if name.endswith(".zig"):
-            with open(os.path.join(src_dir, name), encoding="utf-8") as f:
+            with open(zig_source.at(src, name), encoding="utf-8") as f:
                 files[name] = f.readlines()
     reading = readers(files)
     found = []
@@ -484,9 +487,7 @@ def scan(src_dir: str):
 
 
 def main() -> int:
-    here = os.path.dirname(os.path.abspath(__file__))
-    src = os.path.normpath(os.path.join(here, "..", "zig-server", "src"))
-    found = scan(src)
+    found = scan(zig_source.TREE)
     if not found:
         print("store-absence lint: no read of the store makes its failure a value without saying why")
         return 0

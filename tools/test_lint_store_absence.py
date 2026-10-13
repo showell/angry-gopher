@@ -242,6 +242,35 @@ class Fires(unittest.TestCase):
         """}) as t:
             self.assertEqual(t.lines(), [("a.zig", 3)])
 
+    def test_the_library_folder_beside_the_applications(self):
+        # The lint reads zig_source.TREE: the application's folder and the
+        # library's as one. The store is the library's; a read in it, and a
+        # wrapper of it called from the application, are both found.
+        with tempfile.TemporaryDirectory() as app, tempfile.TemporaryDirectory() as lib:
+            files = {
+                (lib, "store.zig"): "pub fn readOrNull() void {}\n",
+                (lib, "counter.zig"): """\
+                    const store = @import("store.zig");
+                    fn current(io: Io, a: Alloc, p: []const u8) !i64 {
+                        const body = (store.readOrNull(io, a, p, .limited(64)) catch null) orelse return 1;
+                        return parse(body);
+                    }
+                    pub fn next(io: Io, a: Alloc, p: []const u8) !i64 {
+                        return (try current(io, a, p)) + 1;
+                    }
+                """,
+                (app, "a.zig"): """\
+                    const counter = @import("webbox").counter;
+                    fn f() i64 {
+                        return counter.next(io, a, p) catch 0;
+                    }
+                """,
+            }
+            for (d, name), body in files.items():
+                with open(os.path.join(d, name), "w", encoding="utf-8") as f:
+                    f.write(textwrap.dedent(body))
+            self.assertEqual([(name, n) for name, n, _ in L.scan((app, lib))], [("a.zig", 3), ("counter.zig", 3)])
+
     def test_a_member_named_after_the_store_but_not_it_is_not_the_store(self):
         with Tree({"a.zig": """\
             const store = @import("webbox").store_cost;
