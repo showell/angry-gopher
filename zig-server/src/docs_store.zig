@@ -203,11 +203,9 @@ pub fn createUserDoc(io: Io, alloc: Alloc, uid: []const u8, title: []const u8) !
     return slug;
 }
 
-/// append_mu guards the read-modify-write in appendToUserDoc. An overwrite
-/// (writeUserDoc / autosave) is last-writer-wins and needs no lock, but an APPEND
-/// reads-then-writes, so two concurrent appends (the same user saving from two
-/// tabs) could otherwise drop one writer's bytes.
-var append_mu: Io.Mutex = .init;
+// No lock: appendToUserDoc's read-modify-write is one step because one
+// handler runs at a time (the host's turn, zig-metal-unikernel HOST.md), so two
+// appends (the same user saving from two tabs) never drop one writer's bytes.
 
 /// appendToUserDoc appends `addition` to a doc, CREATING it at the exact slug
 /// (never collision-suffixed, unlike createUserDoc) when it doesn't exist yet —
@@ -217,9 +215,6 @@ var append_mu: Io.Mutex = .init;
 /// user's own private doc, but they're still ours to host.
 pub fn appendToUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, addition: []const u8, max_bytes: usize) !void {
     const path = try docPath(alloc, uid, slug); // re-validates the slug (traversal chokepoint)
-
-    append_mu.lockUncancelable(io);
-    defer append_mu.unlock(io);
 
     // **A DOCUMENT THAT WILL NOT READ IS NOT AN EMPTY DOCUMENT.** The write
     // below replaces the file with what was read plus this addition, so a
@@ -274,4 +269,50 @@ test "a doc that cannot be read is an error, never an empty doc for the editor t
     try testing.expectEqualStrings("", try readUserDoc(io, a, "1", "notes")); // not there: empty
     try disk.makeDir(io, a, try docPath(a, "1", "notes")); // there, and unreadable
     try testing.expect(std.meta.isError(readUserDoc(io, a, "1", "notes")));
+}
+
+/// The host's turn, as the writers below take it: a handler runs only inside
+/// it (webbox's linux_host `turn`; the bare-metal host's one loop), and
+/// this file keeps no lock of its own.
+var test_turn: Io.Mutex = .init;
+
+/// One writer of the concurrent-append test, each append in a turn of its
+/// own, as a handler's would be. `parent` must be thread-safe: the test
+/// passes the page allocator.
+fn appendMany(io: Io, parent: Alloc, writer: usize, n: usize) void {
+    var arena = std.heap.ArenaAllocator.init(parent);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var buf: [64]u8 = undefined;
+    for (0..n) |i| {
+        const line = std.fmt.bufPrint(&buf, "{d}-{d}\n", .{ writer, i }) catch return;
+        test_turn.lockUncancelable(io);
+        defer test_turn.unlock(io);
+        appendToUserDoc(io, alloc, "1", "reading-list", line, 0) catch return;
+    }
+}
+
+test "appends to one doc from many writers at once, each in the host's turn, all land" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
+    var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const writers = 8;
+    const each = 50;
+    var group: Io.Group = .init;
+    for (0..writers) |w| {
+        group.concurrent(io, appendMany, .{ io, std.heap.page_allocator, w, each }) catch
+            group.async(io, appendMany, .{ io, std.heap.page_allocator, w, each });
+    }
+    try group.await(io);
+
+    const body = try readUserDoc(io, a, "1", "reading-list");
+    try testing.expectEqual(@as(usize, writers * each), std.mem.count(u8, body, "\n"));
 }

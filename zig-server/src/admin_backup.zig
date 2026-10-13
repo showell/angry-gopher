@@ -87,7 +87,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
     }
-    throttle.clearAddress(io, client);
+    throttle.clearAddress(client);
 
     // A failed backup is an error answer, never an archive cut short: what
     // can be known before the answer starts is asked first (QUEUE 110).

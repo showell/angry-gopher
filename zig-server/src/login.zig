@@ -200,7 +200,7 @@ fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_
         throttle.recordFailure(io, address, member_id);
         return .wrong;
     }
-    throttle.clearAddress(io, address);
+    throttle.clearAddress(address);
     return .ok;
 }
 

@@ -2403,11 +2403,11 @@ test "route: every game write is counted as exactly what it wrote: an annotation
     for (writes) |w| {
         var before: u64 = 0;
         for (w.files) |f| before += if (try UidSite.disk.statOrNull(io, a, try std.fs.path.join(a, &.{ games, f }))) |st| st.size else 0;
-        const counted = limits.countedBytes(io, id) orelse 0;
+        const counted = limits.countedBytes(id) orelse 0;
         try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, w.target, me, w.body)));
         var after: u64 = 0;
         for (w.files) |f| after += (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, f }))).size;
-        try testing.expectEqual(after - before, limits.countedBytes(io, id).? - counted);
+        try testing.expectEqual(after - before, limits.countedBytes(id).? - counted);
     }
 }
 

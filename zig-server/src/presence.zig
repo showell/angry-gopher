@@ -27,15 +27,16 @@ const Bus = @import("webbox").bus.Bus;
 /// PresenceWindow: a markActive within this window (5 min) means online.
 const window_ns: i128 = 5 * std.time.ns_per_min;
 
-/// The lastSeen map (uid → most-recent markActive, in real-clock ns) and its
-/// guard. Process-lifetime; keys are dupes owned by the metered base allocator
+/// The lastSeen map (uid → most-recent markActive, in real-clock ns).
+/// Process-lifetime; keys are dupes owned by the metered base allocator
 /// (mem_meter) so this map's growth shows up in the leak meter. Captured at
 /// module level, so the route table reaches the meter's singleton: that is why
 /// the meter's child has no default. It once defaulted to page_allocator, "so
 /// base() is valid even before init() runs", and that mmap was the one thing
 /// standing between zig-metal-unikernel and angry-gopher's real dispatch.
 const gpa = mem_meter.base();
-var mu: Io.Mutex = .init;
+// No lock: only handlers reach these maps, one at a time (the host's turn,
+// zig-metal-unikernel HOST.md); a kept stream's task never does.
 var last_seen: std.StringHashMapUnmanaged(i128) = .empty;
 /// Came-online broadcasts owed (one that could not start), uid → when it
 /// was last tried (metal-vmm QUEUE 177.6): kept apart from `last_seen`, so
@@ -60,8 +61,6 @@ fn nowNs(io: Io) i128 {
 pub fn markActive(io: Io, uid: []const u8) bool {
     if (uid.len == 0) return false;
     const now = nowNs(io);
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const gop = last_seen.getOrPut(gpa, uid) catch return false;
     if (!gop.found_existing) {
         // getOrPut stored the borrowed (arena) key slice; replace it with a
@@ -92,8 +91,6 @@ pub fn markActive(io: Io, uid: []const u8) bool {
 /// still online (177.6: it was set back a window, which showed an active
 /// user offline).
 fn unmark(io: Io, uid: []const u8) void {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const key = last_seen.getKey(uid) orelse return;
     owed.put(gpa, key, nowNs(io)) catch {};
 }
@@ -103,8 +100,6 @@ fn unmark(io: Io, uid: []const u8) void {
 /// first-paint Online flag.
 pub fn isOnline(io: Io, uid: []const u8) bool {
     if (uid.len == 0) return false;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const v = last_seen.get(uid) orelse return false;
     return (nowNs(io) - v) < window_ns;
 }

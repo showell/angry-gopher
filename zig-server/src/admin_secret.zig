@@ -40,7 +40,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
     }
-    throttle.clearAddress(io, client);
+    throttle.clearAddress(client);
     const days_text = std.mem.trim(u8, (try chat.formField(alloc, sent, "days")) orelse "", " ");
     const days = std.fmt.parseInt(i64, days_text, 10) catch -1;
     if (days < 0 or days > max_days)

@@ -44,7 +44,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, in, "That is not the password.", .forbidden);
     }
-    throttle.clearAddress(io, client);
+    throttle.clearAddress(client);
 
     if (in.days_err) return form(req, alloc, in, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
 

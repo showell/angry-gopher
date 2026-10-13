@@ -97,15 +97,14 @@ const Usage = struct {
 
 var table: [slots]Usage = @splat(.{});
 var tick: u64 = 0;
-var mu: Io.Mutex = .init;
+// No lock on the tables: only handlers reach them, one at a time (the host's
+// turn, zig-metal-unikernel HOST.md).
 
 /// Whether `id`, from `client`, may add `bytes`, and a session if
 /// `new_session`; null when it may, and then it is counted against both.
 pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !?Refusal {
     if (free_space.read()) |s| if (s.free < s.total / 4) return .floor;
     if (id.len == 0 or id.len > id_max) return .bytes; // never a player's: refuse rather than miscount
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const u = try slot(io, alloc, id);
     if (new_session and u.sessions >= max_sessions) return .sessions;
     if (u.bytes + bytes > max_bytes) return .bytes;
@@ -121,8 +120,6 @@ pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_sess
 /// (metal-vmm QUEUE 172: a first move for a session not offered was counted
 /// as written).
 pub fn giveBack(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !void {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const u = try slot(io, alloc, id);
     if (new_session) u.sessions -|= 1;
     u.bytes -|= bytes;
@@ -133,8 +130,6 @@ pub fn giveBack(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_s
 /// when it may, and then it is counted.
 pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
     const c = client orelse return null;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const s = seenSlot(c, now(io));
     if (s.resigns >= resigns_per_hour) return .address_resigns;
     s.resigns += 1;
@@ -145,8 +140,6 @@ pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
 /// then it is counted.
 pub fn admitPlayer(io: Io, client: ?[]const u8) !?Refusal {
     const c = client orelse return null;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const s = seenSlot(c, now(io));
     if (s.players >= players_per_hour) return .address_players;
     s.players += 1;
@@ -159,9 +152,7 @@ fn now(io: Io) i64 {
 
 /// Drops what is kept for `id`: their folder has gone (a release), or changed
 /// behind the table's back.
-pub fn forget(io: Io, id: []const u8) void {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
+pub fn forget(id: []const u8) void {
     for (&table) |*u| if (u.len != 0 and std.mem.eql(u8, u.id[0..u.len], id)) {
         u.len = 0;
     };
@@ -169,9 +160,7 @@ pub fn forget(io: Io, id: []const u8) void {
 
 /// What is counted for `id` so far, or null when nothing is: for a test that
 /// holds the count to what landed (metal-vmm QUEUE 157(b)).
-pub fn countedBytes(io: Io, id: []const u8) ?u64 {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
+pub fn countedBytes(id: []const u8) ?u64 {
     for (&table) |*u| if (u.len != 0 and std.mem.eql(u8, u.id[0..u.len], id)) return u.bytes;
     return null;
 }
@@ -213,7 +202,7 @@ var seen: [addresses]Seen = @splat(.{});
 
 /// `addr`'s counts for the hour it is in: found (and started again if its
 /// hour is over), or a new slot, taken from an empty one, one whose hour is
-/// over, or the one whose hour began longest ago. Under `mu`.
+/// over, or the one whose hour began longest ago.
 fn seenSlot(addr_in: []const u8, t: i64) *Seen {
     const addr = addr_in[0..@min(addr_in.len, addr_max)];
     var free: ?*Seen = null;
@@ -331,11 +320,11 @@ test "fs: a player is measured once, counted up, and refused at each bound" {
     try testing.expect((try admit(io, a, "p2", null, true, 100)) == null);
 
     // A release forgets: measured afresh, from the disk.
-    forget(io, "p1");
+    forget("p1");
     try testing.expect((try admit(io, a, "p1", null, false, 1)) == null);
 
     // Sessions: up to the bound, then not one more; a write to one is still fine.
-    forget(io, "p2");
+    forget("p2");
     for (0..max_sessions) |_| try testing.expect((try admit(io, a, "p2", null, true, 0)) == null);
     try testing.expectEqual(Refusal.sessions, (try admit(io, a, "p2", null, true, 0)).?);
     try testing.expect((try admit(io, a, "p2", null, false, 10)) == null);

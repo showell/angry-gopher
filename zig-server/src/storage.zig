@@ -62,7 +62,7 @@ pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
     const root = try userRoot(alloc, user_id);
     // What they held is forgotten whatever the removal did: the next write
     // measures the folder afresh.
-    defer game_limits.forget(io, user_id);
+    defer game_limits.forget(user_id);
     try store.removeTree(io, alloc, root);
 }
 
