@@ -17,8 +17,8 @@
 //! held-open idle connection deadlocked /game's three parallel script loads;
 //! connections now run concurrently, and it is still off, as zig-metal-unikernel
 //! serves one request per connection too. The rules both hosts keep (one
-//! handler at a time, a small body read before the turn, as zig-metal-unikernel's
-//! ready.zig waits) are zig-metal-unikernel's HOST.md.
+//! handler at a time, every body read before the turn, an upload's too, as zig-metal-unikernel's
+//! drain.zig drains it) are zig-metal-unikernel's HOST.md.
 //!
 //! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
 //!         (from the repo root, for the embedded bundles)
