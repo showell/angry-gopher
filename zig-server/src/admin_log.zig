@@ -16,6 +16,7 @@ const webbox = @import("webbox");
 const http = webbox.http;
 const host_facts = webbox.host_facts;
 const log_view = webbox.log_view;
+const traffic = webbox.traffic;
 const build_options = @import("build_options");
 
 const Request = std.http.Server.Request;
@@ -50,6 +51,24 @@ fn write(w: *std.Io.Writer, io: Io, alloc: Alloc, f: log_view.Filter) !void {
     try w.writeAll("# The host's log, for agents (metal-vmm QUEUE 189.3): lines beginning \"# \" are\n" ++
         "# this header; the rest is the log as written, its secrets taken out then.\n");
     try w.print("# the application: commit {s}\n", .{build_options.commit});
+    // The counts an agent would grep for (189.5), every 5xx first.
+    const t = &traffic.global;
+    try w.writeAll("# requests since boot: ");
+    try t.writeClasses(w);
+    try w.writeAll("\n# by part of the site: ");
+    try t.writeFamilies(w);
+    try w.writeByte('\n');
+    var k: usize = 0;
+    while (t.newestError(k)) |e| : (k += 1) {
+        try w.writeAll("# 5xx: ");
+        try traffic.writeSeen(e, w);
+        try w.writeByte('\n');
+    }
+    for (t.slowest[0..t.n_slowest]) |*one| {
+        try w.writeAll("# slow: ");
+        try traffic.writeSeen(one, w);
+        try w.writeByte('\n');
+    }
     const logs = (try host_facts.allLogs(io, alloc)) orelse {
         try w.writeAll("# This host keeps no log of its own to show here.\n");
         return;

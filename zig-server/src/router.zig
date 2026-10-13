@@ -138,11 +138,33 @@ fn localTarget(target: []const u8) []const u8 {
 /// players' refused the escape as a 500.
 const App = struct {
     pub const routes = routed;
+    pub const family = familyOf;
     pub const setup = app_start.setup;
     pub const StartReport = app_start.StartReport;
     pub const bodyLimit = routeBodyLimit;
     pub const uploader = uploaderOf;
 };
+
+/// **WHICH PART OF THE SITE A REQUEST IS FOR** (metal-vmm QUEUE 189.5), as
+/// /admin/host counts them: an upload (posted or fetched), a live stream,
+/// docs, the rest of chat, the games, the admin pages, or the site around
+/// them (the home page, sign-in, assets).
+pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
+
+fn familyOf(path: []const u8) Family {
+    if (http.pathUnder(path, "/admin") != null) return .admin;
+    const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
+    if (in_chat) |sub| {
+        // As routeBodyLimit reads an upload: `.../upload/` is the upload.
+        if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload") or std.mem.indexOf(u8, sub, "/uploads/") != null) return .uploads;
+        if (std.mem.endsWith(u8, sub, "/stream") or std.mem.eql(u8, sub, "/notifications")) return .streams;
+        if (http.pathUnder(sub, "/docs") != null) return .docs;
+        return .chat;
+    }
+    for ([_][]const u8{ "/game", "/puzzles", "/driving", "/chess", "/delivery", "/tutorial", "/play" }) |g|
+        if (http.pathUnder(path, g) != null) return .games;
+    return .site;
+}
 
 /// **WHO MAY HOLD AN UPLOAD SLOT** (metal-vmm QUEUE 169): whom the upload's
 /// routes take, by the same gate (chat and channels: a member or an agent,
@@ -1632,6 +1654,69 @@ test "route: /admin/log is the host's whole log as text, by the admin's key only
     try testing.expectEqualStrings("405 Method Not Allowed", status(try postForm(a, io, "/admin/log", me, "x=1")));
     // Without the admin's key: a sign-in for no one, a 404 for a member.
     try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/admin/log", ""), "RESTART") == null);
+}
+
+test "route families: each request counted under its part of the site (metal-vmm QUEUE 189.5)" {
+    for ([_]struct { []const u8, Family }{
+        .{ "/chat/c/1_2/ChitChat/upload", .uploads },
+        .{ "/chat/c/1_2/ChitChat/upload/", .uploads },
+        .{ "/chat/c/1_2/ChitChat/uploads/0123abcd.png", .uploads },
+        .{ "/chat/c/1_2/ChitChat/stream", .streams },
+        .{ "/chat/recent/stream", .streams },
+        .{ "/chat/notifications", .streams },
+        .{ "/chat/docs/new", .docs },
+        .{ "/chat/c/1_2/ChitChat/send", .chat },
+        .{ "/chat", .chat },
+        .{ "/channel/x", .chat },
+        .{ "/game/sessions/1/actions", .games },
+        .{ "/puzzles", .games },
+        .{ "/driving", .games },
+        .{ "/chess/knight", .games },
+        .{ "/delivery", .games },
+        .{ "/tutorial", .games },
+        .{ "/play", .games },
+        .{ "/admin/host", .admin },
+        .{ "/admin/lynrummy", .admin },
+        .{ "/admin", .admin },
+        .{ "/", .site },
+        .{ "/login", .site },
+        .{ "/chatter", .site }, // not under /chat
+    }) |c| {
+        if (familyOf(c[0]) != c[1]) {
+            std.debug.print("{s}: {t}, not {t}\n", .{ c[0], familyOf(c[0]), c[1] });
+            return error.TestExpectedEqual;
+        }
+    }
+}
+
+test "route: /admin/host counts the requests since boot, the slowest, and puts every 5xx first (metal-vmm QUEUE 189.5)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const traffic = @import("webbox").traffic;
+    const saved = traffic.global;
+    defer traffic.global = saved;
+    traffic.global = .{};
+    const me = try adminSession(a, io);
+    _ = try UidSite.ask(a, io, "/chat", me);
+    _ = try UidSite.ask(a, io, "/nope", me);
+    // No errors yet: none said.
+    const calm = try UidSite.ask(a, io, "/admin/host", me);
+    try testing.expect(std.mem.indexOf(u8, calm, "Errors since boot") == null);
+    try testing.expect(std.mem.indexOf(u8, calm, "<td>requests since boot</td><td>2 requests:") != null);
+    try testing.expect(std.mem.indexOf(u8, calm, "<td>by part of the site</td><td>chat 1, site 1</td>") != null);
+    try testing.expect(std.mem.indexOf(u8, calm, "<td>the slowest</td>") != null);
+    // A 5xx: the page leads with it, ahead of everything else.
+    traffic.global.note(.{ .family = "chat", .status = 503, .took_ns = 4 * std.time.ns_per_ms, .target = "/chat/c/1_2/T/send", .at_unix_ms = 1_791_900_127_123, .err = "ReadOnlyFileSystem" });
+    const loud = try UidSite.ask(a, io, "/admin/host", me);
+    const errors_at = std.mem.indexOf(u8, loud, "<h2>Errors since boot</h2>") orelse return error.TestExpectedEqual;
+    try testing.expect(errors_at < std.mem.indexOf(u8, loud, "<h2>The application</h2>").?);
+    try testing.expect(std.mem.indexOf(u8, loud, "2026-10-13T14:02:07.123Z /chat/c/1_2/T/send 503 in 4.0 ms (ReadOnlyFileSystem)") != null);
 }
 
 test "route: /admin/secret changes the secret: members log in again, players are re-signed for the days given" {
