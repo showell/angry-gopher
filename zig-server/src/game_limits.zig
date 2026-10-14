@@ -179,6 +179,14 @@ pub const Forgot = struct {
 };
 
 /// Forgets everyone, and every address: for a test that moves the data root.
+/// **WHAT THE STORE HOLDS, FORGOTTEN** (metal-vmm QUEUE 200): every
+/// player's measured usage, measured again from the disk on its next
+/// `admit`, after something other than this server changed the store (a
+/// script). The per-address counts (`seen`) are not the store's, and stay.
+pub fn forgetUsage() void {
+    table = @splat(.{});
+}
+
 pub fn forgetAll() void {
     table = @splat(.{});
     seen = @splat(.{});

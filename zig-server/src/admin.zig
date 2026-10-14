@@ -10,6 +10,8 @@
 //!   *    /admin/secret   change the session secret: admin_secret.zig
 //!   *    /admin/retire   retire old topics and users: admin_retire.zig
 //!   GET  /admin/search   every message containing a key, the slow way: admin_search.zig
+//!   POST /admin/script   a signed Shale script, run: admin_script.zig (its own
+//!                        locks, the bearer and the signature, not a session)
 //!
 //! The GAME roster — players, sessions, disk, delete — is a separate screen at
 //! /admin/lynrummy (admin_lynrummy.zig), and the two cross-link. They were one
@@ -33,6 +35,7 @@ const admin_backup = @import("admin_backup.zig");
 const admin_secret = @import("admin_secret.zig");
 const admin_retire = @import("admin_retire.zig");
 const admin_search = @import("admin_search.zig");
+const admin_script = @import("admin_script.zig");
 
 const Request = std.http.Server.Request;
 
@@ -40,6 +43,8 @@ const Request = std.http.Server.Request;
 /// request's address (router.zig's resolved `client_address`), for the login
 /// throttle on the password re-entries (QUEUE.md item 100).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []const u8) !void {
+    // Before the session gate: the bearer only, refused in plain text.
+    if (std.mem.eql(u8, sub, "/script")) return admin_script.handle(req, io, alloc);
     if (!try ui.requireAdmin(req, io, alloc)) return;
     if (std.mem.eql(u8, sub, "/apikey")) return handleAPIKey(req, io, alloc);
     if (std.mem.eql(u8, sub, "/host")) return admin_host.render(req, io, alloc);

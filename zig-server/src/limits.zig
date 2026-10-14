@@ -51,11 +51,16 @@ pub const body = struct {
     /// larger kind, and a margin for the multipart framing around it.
     pub const upload_any = upload_video + (1 << 20);
 
+    /// A signed script (webbox's script_route.zig): its envelope's two
+    /// header lines and the script, at most the script's own budget.
+    /// (admin_script.zig holds it to those two at compile time.)
+    pub const script = 64 * 1024 + 512;
+
     /// The largest of the small forms, which every route not named in
     /// router.zig's `routeBodyLimit` takes at most.
     pub const largest_form = @max(secret_form, retire_form, form, reaction, game_append);
 
     /// The largest body any route but the upload takes: Caddy's ordinary cap
     /// must be at least this.
-    pub const largest_ordinary = @max(secret_form, retire_form, form, chat_message, reaction, doc, game_new_session, game_append);
+    pub const largest_ordinary = @max(secret_form, retire_form, form, chat_message, reaction, doc, game_new_session, game_append, script);
 };

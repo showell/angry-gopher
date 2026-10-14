@@ -34,6 +34,7 @@ const users_session = @import("users_session.zig");
 const apiKeyMatches = users_session.apiKeyMatches;
 pub const clock_skew_secs = users_session.clock_skew_secs;
 pub const currentUserID = users_session.currentUserID;
+pub const bearerUserID = users_session.bearerUserID;
 pub const session_cookie = users_session.session_cookie;
 pub const session_cookie_legacy = users_session.session_cookie_legacy;
 pub const sessionToMove = users_session.sessionToMove;

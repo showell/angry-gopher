@@ -141,6 +141,13 @@ pub fn sessionToMove(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]co
     return if (s.legacy) s.value else null;
 }
 
+/// **THE BEARER ONLY** (metal-vmm QUEUE 200): the principal an
+/// `Authorization: Bearer` key names, and never a session cookie's, for a
+/// route that a page must not be able to drive (the script route).
+pub fn bearerUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    return apiKeyUserID(io, alloc, req);
+}
+
 /// apiKeyUserID resolves the principal id from an Authorization: Bearer key.
 fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     const key = (try bearerToken(req, alloc)) orelse return null;

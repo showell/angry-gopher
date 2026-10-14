@@ -193,6 +193,7 @@ fn routeBodyLimit(path: []const u8) u64 {
         return caps.chat_message;
     }
     if (http.pathUnder(path, "/game") != null) return caps.game_new_session;
+    if (std.mem.eql(u8, path, "/admin/script")) return caps.script;
     return caps.largest_form;
 }
 
@@ -504,6 +505,7 @@ test "routeBodyLimit: every handler's cap is within its path's, and only the upl
         .{ .path = "/admin/retire", .cap = caps.retire_form },
         .{ .path = "/admin/backup", .cap = caps.secret_form },
         .{ .path = "/admin/secret", .cap = caps.secret_form },
+        .{ .path = "/admin/script", .cap = caps.script },
         .{ .path = "/puzzles/sessions/1/puzzles/0/actions", .cap = caps.game_append },
         .{ .path = "/game/new-session", .cap = caps.game_new_session },
         .{ .path = "/game/sessions/1/actions", .cap = caps.game_append },
@@ -2687,6 +2689,83 @@ test "route: a legacy uid signed after the cutoff names no one and is not moved;
     try testing.expect(setUid(ended) == null);
 }
 
+// ── the script route (metal-vmm QUEUE 200) ──────────────────────────────────
+
+fn scriptDurable() bool {
+    return true;
+}
+
+/// A signed script's request: `body` the envelope, `auth` the header line.
+fn scriptRequest(a: std.mem.Allocator, auth: []const u8, body: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "POST /admin/script HTTP/1.1\r\nHost: x\r\n{s}Content-Length: {d}\r\n\r\n{s}", .{ auth, body.len, body });
+}
+
+test "route: a signed script deletes a topic, memory follows the store (search finds it no more), and each lock refuses alone (metal-vmm 200)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_search = @import("chat_search.zig");
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const store = @import("webbox").store;
+    const script_route = @import("webbox").script_route;
+    const Ed25519 = std.crypto.sign.Ed25519;
+    store.durable_now = scriptDurable;
+    defer store.durable_now = null;
+
+    const me = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    const key = try users.setUserAPIKey(io, a, "1");
+    const debbie_key = try users.setUserAPIKey(io, a, "2");
+    const bearer = try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{key});
+    try writeTranscript(a, io, "1_2", "ChitChat", &.{"the zebra crossing"});
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":1,") != null);
+
+    const kp = try Ed25519.KeyPair.generateDeterministic(@splat(3));
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const src = "remove(\"chat/1_2/sessions/ChitChat.md\")\nprint(\"deleted\")\n";
+    const signed = try script_route.signedBytes(a, "test.example", 1, now + 300, src);
+    const body = try script_route.envelope(a, (try kp.sign(signed, null)).toBytes(), signed);
+
+    // No key configured: refused, never open.
+    const no_key = try serve(a, io, try scriptRequest(a, bearer, body));
+    try testing.expectEqualStrings("403 Forbidden", status(no_key));
+    try testing.expect(std.mem.indexOf(u8, no_key, "refused (no_key)") != null);
+    const conf = try std.fmt.allocPrint(a, "public_key = {s}\ntarget = test.example\n", .{&std.fmt.bytesToHex(kp.public_key.toBytes(), .lower)});
+    try store.write(io, a, try std.fs.path.join(a, &.{ store.auth_base.?, "shale.conf" }), conf, .{});
+
+    // The first lock: no bearer, a session cookie instead, another's key.
+    try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, try scriptRequest(a, "", body))));
+    try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, try scriptRequest(a, try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{me}), body))));
+    try testing.expectEqualStrings("403 Forbidden", status(try serve(a, io, try scriptRequest(a, try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{debbie_key}), body))));
+    // The second: the admin's key, with a script signed by another key.
+    const other = try Ed25519.KeyPair.generateDeterministic(@splat(4));
+    const forged = try serve(a, io, try scriptRequest(a, bearer, try script_route.envelope(a, (try other.sign(signed, null)).toBytes(), signed)));
+    try testing.expectEqualStrings("403 Forbidden", status(forged));
+    try testing.expect(std.mem.indexOf(u8, forged, "refused (bad_signature)") != null);
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":1,") != null);
+
+    // Both: it runs, the topic is gone, and so is it from search.
+    const ran = try serve(a, io, try scriptRequest(a, bearer, body));
+    try testing.expectEqualStrings("200 OK", status(ran));
+    try testing.expect(std.mem.indexOf(u8, ran, "deleted\n── effects (1) ──\nremove chat/1_2/sessions/ChitChat.md: ok\n── finished (") != null);
+    try testing.expect(std.mem.indexOf(u8, ran, "── memory rebuilt from the store in ") != null);
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":0,") != null);
+    // Sent again: a replay.
+    const again = try serve(a, io, try scriptRequest(a, bearer, body));
+    try testing.expectEqualStrings("409 Conflict", status(again));
+    try testing.expect(std.mem.indexOf(u8, again, "refused (replayed)") != null);
+}
+
 // ── request edges (metal-vmm QUEUE 183) ─────────────────────────────────────
 //
 // **EVERY NUMBER A REQUEST CAN CARRY, AT ITS TYPE'S EDGES.** Twice a
@@ -2733,6 +2812,10 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "admin_secret.zig", .func = "render" },
     .{ .file = "admin_retire.zig", .func = "readForm" },
     .{ .file = "log_view.zig", .func = "parseFilter" },
+    .{ .file = "script_route.zig", .func = "parse" },
+    .{ .file = "script_route.zig", .func = "lastSequence", .unreachable_because = "a sequence file the server wrote" },
+    .{ .file = "shale_sign.zig", .func = "main", .unreachable_because = "the signer, on the box, not the server" },
+    .{ .file = "shale_sign.zig", .func = "lastFor", .unreachable_because = "the signer, on the box, not the server" },
     .{ .file = "log_view.zig", .func = "requestAt", .unreachable_because = "the host's own log lines, not a request's" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
     .{ .file = "bus.zig", .func = "keepaliveSetting", .unreachable_because = "the host's start-up setting, not a request's" },
@@ -2780,12 +2863,18 @@ const edge_requests = [_][]const u8{
     "POST /admin/secret HTTP/1.1\r\nHost: x\r\nCookie: {C}\r\nContent-Length: {L}\r\n\r\npassword=pw&days={N}",
     "GET /admin/log?request={N} HTTP/1.1\r\nHost: x\r\nCookie: {C}\r\n\r\n",
     "POST /admin/retire HTTP/1.1\r\nHost: x\r\nCookie: {C}\r\nContent-Length: {L}\r\n\r\npassword=pw&days={N}&keep={N}",
+    // The script route's envelope (metal-vmm 200), by the admin's key: its
+    // numbers are read before the signature is checked.
+    "POST /admin/script HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {B}\r\nContent-Length: {L}\r\n\r\nshale-signature " ++ "00" ** 64 ++ "\nshale-1 target=x sequence={N} expires=1800000000\nprint(1)\n",
+    "POST /admin/script HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {B}\r\nContent-Length: {L}\r\n\r\nshale-signature " ++ "00" ** 64 ++ "\nshale-1 target=x sequence=1 expires={N}\nprint(1)\n",
 };
 
-/// `template` with its `{N}`, `{C}` and `{L}` (the body's length) filled.
-fn edgeRequest(a: std.mem.Allocator, template: []const u8, n: []const u8, cookies: []const u8) ![]const u8 {
+/// `template` with its `{N}`, `{C}`, `{B}` (the admin's API key) and `{L}`
+/// (the body's length) filled.
+fn edgeRequest(a: std.mem.Allocator, template: []const u8, n: []const u8, cookies: []const u8, bearer: []const u8) ![]const u8 {
     const with_n = try std.mem.replaceOwned(u8, a, template, "{N}", n);
-    const with_c = try std.mem.replaceOwned(u8, a, with_n, "{C}", cookies);
+    const with_b = try std.mem.replaceOwned(u8, a, with_n, "{B}", bearer);
+    const with_c = try std.mem.replaceOwned(u8, a, with_b, "{C}", cookies);
     const body_at = (std.mem.indexOf(u8, with_c, "\r\n\r\n") orelse return with_c) + 4;
     return std.mem.replaceOwned(u8, a, with_c, "{L}", try std.fmt.allocPrint(a, "{d}", .{with_c.len - body_at}));
 }
@@ -2841,6 +2930,7 @@ test "request edges: every number a request carries, at its type's edges, as a m
     _ = try memberSession(a, io, "2", "Debbie");
     const id = try player.allocate(io, a, "Steve");
     const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try signedUid(a, id) });
+    const bearer = try users.setUserAPIKey(io, a, "1");
     try writeTranscript(a, io, "1_2", "ChitChat", &.{"hello"});
     const chat_store = @import("chat_store.zig");
     try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.uploads", "a.png" }), "\x89PNG\r\n\x1a\n" ++ "x" ** 1000, .{});
@@ -2848,7 +2938,7 @@ test "request edges: every number a request carries, at its type's edges, as a m
     const current = ".zig-cache/tmp/request_edges_current";
     var sent: usize = 0;
     for (edge_requests) |template| for (edge_numbers) |n| {
-        const raw = try edgeRequest(a, template, n, cookies);
+        const raw = try edgeRequest(a, template, n, cookies, bearer);
         // Where a panic came from: the stack names the site, this the request.
         try Io.Dir.cwd().writeFile(io, .{ .sub_path = current, .data = raw });
         _ = serve(a, io, raw) catch |e| switch (e) {

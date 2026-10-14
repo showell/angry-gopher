@@ -56,3 +56,46 @@ pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartRe
     const search_ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
     return .{ .backfilled = backfilled, .search = search, .search_ms = search_ms };
 }
+
+/// **MEMORY MADE THE STORE'S AGAIN** (metal-vmm QUEUE 200): after something
+/// other than this server's own handlers changed the store (a script), the
+/// state it holds that comes from the store is rebuilt the way start-up
+/// builds it, so nothing in memory disagrees with what is on the disk:
+/// every chat session's last-message record (written where missing), the
+/// search index (built again from every transcript), and the two caches
+/// that are filled as they are used (game_limits' usage, measured again on
+/// each player's next write; reading_list's lists, read again). Nothing
+/// else this server holds is the store's (presence, the throttles and the
+/// counts are its own).
+pub const Refresh = struct {
+    backfilled: usize,
+    search: ?search_index.Stats,
+    ms: i64,
+};
+
+pub fn refresh(io: Io, base: std.mem.Allocator) Refresh {
+    const t0 = Io.Clock.now(.awake, io);
+    const backfilled = blk: {
+        var pass = std.heap.ArenaAllocator.init(base);
+        defer pass.deinit();
+        break :blk chat_store.backfillAll(io, pass.allocator());
+    };
+    const search = blk: {
+        var pass = std.heap.ArenaAllocator.init(base);
+        defer pass.deinit();
+        break :blk search_index.buildAll(io, pass.allocator());
+    };
+    @import("game_limits.zig").forgetUsage();
+    @import("reading_list.zig").forgetCache();
+    const ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
+    return .{ .backfilled = backfilled, .search = search, .ms = ms };
+}
+
+/// What `refresh` did, a line, for the script route's reply.
+pub fn describeRefresh(r: Refresh, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    try w.print("── memory rebuilt from the store in {d} ms: ", .{r.ms});
+    if (r.search) |st| {
+        try w.print("search index {d} messages in {d} transcripts", .{ st.messages, st.transcripts });
+    } else try w.print("search index NOT built ({s}; the next search builds it)", .{if (search_index.failed_with) |e| @errorName(e) else "unknown"});
+    try w.print(", {d} last-message record(s) written, game usage and reading lists forgotten ──\n", .{r.backfilled});
+}

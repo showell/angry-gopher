@@ -247,6 +247,13 @@ pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, 
 /// does, so it can run over testing.allocator and prove a refresh frees what it
 /// replaces. A cache that leaked on re-parse would grow with every edit to a
 /// reading list, which is exactly the slope the leak meter exists to catch.
+/// Every cached reading list forgotten, read again from its doc on its next
+/// use (metal-vmm QUEUE 200: after a script changed the store, whatever the
+/// docs' times say).
+pub fn forgetCache() void {
+    dropCache();
+}
+
 fn dropCache() void {
     var it = cache.iterator();
     while (it.next()) |kv| {
