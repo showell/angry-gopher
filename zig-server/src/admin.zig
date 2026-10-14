@@ -12,6 +12,8 @@
 //!   GET  /admin/search   every message containing a key, the slow way: admin_search.zig
 //!   POST /admin/script   a signed Shale script, run: admin_script.zig (its own
 //!                        locks, the bearer and the signature, not a session)
+//!   *    /admin/script-key  the key and target scripts are checked against:
+//!                        admin_script_key.zig (the admin's password again)
 //!
 //! The GAME roster — players, sessions, disk, delete — is a separate screen at
 //! /admin/lynrummy (admin_lynrummy.zig), and the two cross-link. They were one
@@ -36,6 +38,7 @@ const admin_secret = @import("admin_secret.zig");
 const admin_retire = @import("admin_retire.zig");
 const admin_search = @import("admin_search.zig");
 const admin_script = @import("admin_script.zig");
+const admin_script_key = @import("admin_script_key.zig");
 
 const Request = std.http.Server.Request;
 
@@ -53,6 +56,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
     if (std.mem.eql(u8, sub, "/secret")) return admin_secret.render(req, io, alloc, client);
     if (std.mem.eql(u8, sub, "/retire")) return admin_retire.render(req, io, alloc, client);
     if (std.mem.eql(u8, sub, "/search")) return admin_search.render(req, io, alloc);
+    if (std.mem.eql(u8, sub, "/script-key")) return admin_script_key.render(req, io, alloc, client);
     if (sub.len != 0 and !std.mem.eql(u8, sub, "/")) return http.notFound(req);
     return renderRoster(req, io, alloc);
 }

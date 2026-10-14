@@ -45,14 +45,24 @@ comptime {
 }
 
 /// **A RUN FITS IN ABOUT A SECOND OF THE TURN ON THE DROPLET** (metal-vmm
-/// QUEUE 200, measured on metal-vmm: FEEDBACK, "200"). Output stays at
-/// Shale's 256 KiB, the reply's own buffer.
+/// QUEUE 200). Measured (zig-webbox's runner, ReleaseSafe, natively, which
+/// is the guest's arithmetic): at Shale's defaults the steps are cheap, 5M
+/// in 45 ms, and the step budget stops a read- or listing-heavy script
+/// first; 1,000 replaces were 142 ms on Linux's page cache. On metal the
+/// cost is the disk: a replace is several writes (the sibling, the rename,
+/// FAT sectors, the directory), each a command to a DigitalOcean volume at
+/// about a millisecond, so Shale's 1,000 changes would hold the site for
+/// seconds and its 10,000 reads of files not in the page cache longer. So,
+/// with each disk command taken at 1 ms: 100 changes (about 0.6 s at six
+/// commands each), 500 reads (0.5 s cold, much less warm), 16 MiB read in
+/// all, 2M steps (20 ms). The worst one script can do is near one budget,
+/// not all four at once: a second or so. Output stays at Shale's 256 KiB.
 pub const budgets: script.Budgets = .{
-    .steps = 1_000_000,
+    .steps = 2_000_000,
     .arena_bytes = 8 * 1024 * 1024,
-    .reads = 2_000,
+    .reads = 500,
     .read_bytes = 16 * 1024 * 1024,
-    .changes = 500,
+    .changes = 100,
 };
 
 /// What a run prints: the turn is one at a time on both hosts, so one

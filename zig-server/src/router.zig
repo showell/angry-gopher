@@ -506,6 +506,7 @@ test "routeBodyLimit: every handler's cap is within its path's, and only the upl
         .{ .path = "/admin/backup", .cap = caps.secret_form },
         .{ .path = "/admin/secret", .cap = caps.secret_form },
         .{ .path = "/admin/script", .cap = caps.script },
+        .{ .path = "/admin/script-key", .cap = caps.secret_form },
         .{ .path = "/puzzles/sessions/1/puzzles/0/actions", .cap = caps.game_append },
         .{ .path = "/game/new-session", .cap = caps.game_new_session },
         .{ .path = "/game/sessions/1/actions", .cap = caps.game_append },
@@ -2740,8 +2741,15 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     const no_key = try serve(a, io, try scriptRequest(a, bearer, body));
     try testing.expectEqualStrings("403 Forbidden", status(no_key));
     try testing.expect(std.mem.indexOf(u8, no_key, "refused (no_key)") != null);
-    const conf = try std.fmt.allocPrint(a, "public_key = {s}\ntarget = test.example\n", .{&std.fmt.bytesToHex(kp.public_key.toBytes(), .lower)});
-    try store.write(io, a, try std.fs.path.join(a, &.{ store.auth_base.?, "shale.conf" }), conf, .{});
+    // The key set on the admin's page, the password typed again: a wrong
+    // one sets nothing.
+    const hex = std.fmt.bytesToHex(kp.public_key.toBytes(), .lower);
+    for ([_][]const u8{ "nope", "pw" }, [_][]const u8{ "403 Forbidden", "200 OK" }) |pw, want| {
+        const form = try std.fmt.allocPrint(a, "public_key={s}&target=test.example&password={s}", .{ &hex, pw });
+        const set = try serve(a, io, try std.fmt.allocPrint(a, "POST /admin/script-key HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ me, form.len, form }));
+        try testing.expectEqualStrings(want, status(set));
+        if (std.mem.eql(u8, pw, "nope")) try testing.expectEqualStrings("403 Forbidden", status(try serve(a, io, try scriptRequest(a, bearer, body))));
+    }
 
     // The first lock: no bearer, a session cookie instead, another's key.
     try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, try scriptRequest(a, "", body))));
