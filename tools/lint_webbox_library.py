@@ -44,6 +44,21 @@ def imports(path):
     return zig_source.imports(read(path))
 
 
+def resolved(importer, dep):
+    """`dep` as the library names it: relative to the folder of the file
+    that imports it (zig's own rule), e.g. `script/diag.zig`."""
+    return os.path.normpath(os.path.join(os.path.dirname(importer), dep))
+
+
+def vouched(dep, named):
+    """**A FOLDER THE ROOT NAMES A FILE OF IS THE LIBRARY'S** (metal-vmm
+    QUEUE 199-200): Shale lives in `script/`, and the root names its entry
+    (`script/script.zig`); the files that entry reaches inside its folder
+    are the library's too. A file at the top is the root's to name."""
+    folder = os.path.dirname(dep)
+    return folder != "" and not folder.startswith("..") and any(os.path.dirname(n) == folder for n in named)
+
+
 # Each root, and the named modules its files may import.
 ROOTS = {
     "webbox.zig": {"std", "builtin", "host_io"},
@@ -53,11 +68,12 @@ ROOTS = {
 
 def problems(src):
     out = []
+    tests = set()
     for root, may in ROOTS.items():
-        out += problems_of(src, root, may)
+        out += problems_of(src, root, may, tests)
     library = members(src)
     for name in zig_source.listing(src):
-        if not name.endswith(".zig") or name in library:
+        if not name.endswith(".zig") or name in library or name in tests:
             continue
         text = read(zig_source.at(src, name))
         for dep in zig_source.imports(text):
@@ -79,7 +95,15 @@ def members(src):
     return out
 
 
-def problems_of(src, root_name, may_import):
+def is_test(name):
+    """**THE LIBRARY'S OWN TESTS** (`*_test.zig`, reached from a library
+    file's `test` block): compiled only by zig-webbox's `zig build test`,
+    with its own modules, never into an application, so they may embed the
+    sources they check and name test options. Recorded, not walked."""
+    return name.endswith("_test.zig")
+
+
+def problems_of(src, root_name, may_import, tests=None):
     root = zig_source.at(src, root_name)
     if not os.path.exists(root):
         return [f"{root_name}: the library's root, and not there"]
@@ -99,9 +123,14 @@ def problems_of(src, root_name, may_import):
             continue
         for embedded in zig_source.embeds(read(path)):
             out.append(f"{name} embeds {embedded}: what a page serves is the application's, not the library's")
-        for dep in imports(path):
-            if dep not in named:
-                out.append(f"{name} imports {dep}, which {root_name} does not name: the library reaches outside itself")
+        for raw in imports(path):
+            dep = resolved(name, raw)
+            if is_test(dep):
+                if tests is not None:
+                    tests.add(dep)
+                continue
+            if dep not in named and not vouched(dep, named):
+                out.append(f"{name} imports {raw}, which {root_name} does not name: the library reaches outside itself")
                 continue  # said once, at the edge; what lies past it is not the library's
             todo.append(dep)
         for m in zig_source.modules(read(path)):
@@ -150,6 +179,24 @@ def self_test():
         got = problems(d)
         assert len(got) == 1 and "b.zig imports the module webbox" in got[0], got
         write("b.zig", 'const std = @import("std");\n')
+        # A folder the root names a file of: what that file reaches in its
+        # folder is the library's; outside it, it is not.
+        os.mkdir(os.path.join(d, "sub"))
+        write("webbox.zig", 'pub const a = @import("a.zig");\npub const b = @import("b.zig");\npub const s = @import("sub/s.zig");\n')
+        write("sub/s.zig", 'const t = @import("t.zig");\nconst std = @import("std");\n')
+        write("sub/t.zig", 'const s = @import("../users.zig");\n')
+        got = problems(d)
+        assert len(got) == 1 and "sub/t.zig imports ../users.zig" in got[0], got
+        write("sub/t.zig", 'const std = @import("std");\n')
+        assert problems(d) == [], problems(d)
+        # The library's own test, reached from its test block: it may embed
+        # and name its options, and is not an application's file.
+        write("b.zig", 'const std = @import("std");\ntest {\n    _ = @import("b_test.zig");\n}\n')
+        write("b_test.zig", 'const b = @import("b.zig");\nconst o = @import("test_options");\nconst s = @embedFile("b.zig");\n')
+        assert problems(d) == [], problems(d)
+        os.remove(os.path.join(d, "b_test.zig"))
+        write("b.zig", 'const std = @import("std");\n')
+        write("webbox.zig", 'pub const a = @import("a.zig");\npub const b = @import("b.zig");\n')
         # An application's file, built by something or nothing, imports the
         # library by name; by path, or by "./", is a finding.
         write("app.zig", 'const a = @import("webbox").a;\nconst l = @import("webbox_linux").host;\n')

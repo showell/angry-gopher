@@ -80,6 +80,9 @@ class Clean(unittest.TestCase):
             "server.zig", "host_io_std.zig", "webbox_linux.zig", "linux_host.zig", "linux_config.zig", "linux_durable.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
+            # zig-webbox's two Linux programs for Shale (metal-vmm 199, 200):
+            # the runner and the signer, never in a server.
+            "script_runner.zig", "shale_sign.zig",
         })
 
 
