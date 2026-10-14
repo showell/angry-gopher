@@ -42,7 +42,10 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     _ = script_route.parseConfig(text) catch
         return form(req, io, alloc, "The key is 64 hex digits (shale-sign pubkey prints it), and the target a host name (a-z 0-9 . -).", .bad_request);
     const paths = try script_route.Paths.under(alloc, webbox.store.auth_base orelse users.auth_root);
-    webbox.store.replace(io, alloc, paths.config, text, .{ .private = true }) catch |e| {
+    // The sequence rises to the clock's seconds with the key: nothing
+    // signed before now runs after, even if the old sequence was lost.
+    const floor: u64 = @intCast(@max(0, @divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s)));
+    script_route.installKey(io, alloc, paths, text, floor) catch |e| {
         if (e == error.ReadOnlyFileSystem) return e;
         return form(req, io, alloc, try std.fmt.allocPrint(alloc, "The key was not set: {s}.", .{@errorName(e)}), .internal_server_error);
     };

@@ -2734,7 +2734,9 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     const kp = try Ed25519.KeyPair.generateDeterministic(@splat(3));
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const src = "remove(\"chat/1_2/sessions/ChitChat.md\")\nprint(\"deleted\")\n";
-    const signed = try script_route.signedBytes(a, "test.example", 1, now + 300, src);
+    // Numbered past the clock, as the signer numbers: setting the key
+    // raises the sequence to the clock's seconds.
+    const signed = try script_route.signedBytes(a, "test.example", @intCast(now + 60), now + 300, src);
     const body = try script_route.envelope(a, (try kp.sign(signed, null)).toBytes(), signed);
 
     // No key configured: refused, never open.
@@ -2750,6 +2752,12 @@ test "route: a signed script deletes a topic, memory follows the store (search f
         try testing.expectEqualStrings(want, status(set));
         if (std.mem.eql(u8, pw, "nope")) try testing.expectEqualStrings("403 Forbidden", status(try serve(a, io, try scriptRequest(a, bearer, body))));
     }
+
+    // Numbered before the key was set: refused, so nothing signed before a
+    // key is set again (the sequence lost, say) runs after it.
+    const early = try script_route.signedBytes(a, "test.example", 1, now + 300, src);
+    const stale = try serve(a, io, try scriptRequest(a, bearer, try script_route.envelope(a, (try kp.sign(early, null)).toBytes(), early)));
+    try testing.expectEqualStrings("409 Conflict", status(stale));
 
     // The first lock: no bearer, a session cookie instead, another's key.
     try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, try scriptRequest(a, "", body))));
