@@ -2842,6 +2842,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "chat_retire.zig", .func = "allMembers", .unreachable_because = "folder names on the disk" },
     .{ .file = "counter.zig", .func = "current", .unreachable_because = "a counter file the server wrote" },
     .{ .file = "linux_host.zig", .func = "portFrom", .unreachable_because = "the environment" },
+    .{ .file = "linux_host.zig", .func = "countAnswers", .unreachable_because = "a keep-alive test's client, counting the host's answers (zig-webbox, metal-vmm QUEUE 213)" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },
     .{ .file = "router.zig", .func = "countFiles", .unreachable_because = "a test's helper" },
     .{ .file = "session_meta.zig", .func = "applyMetaScalar", .unreachable_because = "a meta file the server wrote" },
