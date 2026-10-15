@@ -65,6 +65,16 @@ pub const budgets: script.Budgets = .{
     .changes = 100,
 };
 
+/// **A BACKGROUND RUN'S BUDGETS** (Steve, 2026-10-15): the same, but for its
+/// reads. An atomic run holds up requests, so its reads stay at 500; a
+/// background run only fills the gaps between them, so it may read 10,000.
+/// They apply once this route sets a `backing` (metal-vmm QUEUE 216).
+pub const background_budgets: script.Budgets = blk: {
+    var b = budgets;
+    b.reads = 10_000;
+    break :blk b;
+};
+
 /// What a run prints: the turn is one at a time on both hosts, so one
 /// buffer serves every run (a static one, as metal wants).
 var out_buf: [script.Budgets.default_output_bytes]u8 = undefined;
@@ -87,7 +97,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
     const paths = try script_route.Paths.under(alloc, store.auth_base orelse users.auth_root);
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 
-    var outcome = try script_route.handle(io, alloc, body, .{ .paths = paths, .data_root = data_root, .budgets = budgets, .now = now, .out = &out_buf });
+    var outcome = try script_route.handle(io, alloc, body, .{ .paths = paths, .data_root = data_root, .budgets = budgets, .now = now, .out = &out_buf, .background_budgets = background_budgets });
     defer outcome.deinit();
     var w: std.Io.Writer = .fixed(&reply_buf);
     script_route.writeReply(&outcome, &w) catch {};
