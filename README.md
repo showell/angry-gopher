@@ -26,7 +26,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
   rewriting no line;
   its gates judge metal against this repo's Linux build, page by page, and
-  run metal-vmm (the third repo, test-only). Its `README.md` and
+  run metal-vmm (test-only). Its `README.md` and
   `CUTOVER.md` say how a release reaches the droplet.
 - **A change to the program reaches the site as a new zig-metal-unikernel image**,
   not through `ops/deploy`. The old Linux droplet still runs Caddy (TLS,
@@ -35,7 +35,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   stopped**. `ops/deploy` fails closed: it restarts that server only when
   `~/linux-serves` is on prod (`deploy/README.md`).
 - **The way back is the previous zig-metal-unikernel image** on the same volume
-  (zig-metal-unikernel's `README.md`). Restarting the Linux server (`CUTOVER.md`) is
+  (zig-metal-unikernel's `README.md`). Restarting the Linux server (zig-metal-unikernel's `CUTOVER.md`) is
   the last resort: its data is a copy frozen at the 2026-10-04 cutover, so
   everything written since would be lost.
 - **Keep `zig-server/src` portable to metal.** Server code reaches the host
@@ -48,7 +48,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   does (the turn in webbox's `linux_host.zig`); every bound on a request is in
   [`zig-server/src/limits.zig`](zig-server/src/limits.zig), which both hosts
   size their buffers from and `tools/check_caddy_limits.py` holds the
-  Caddyfile to; and `store.zig` answers the same on Linux and on metal, which
+  Caddyfile to; and zig-webbox's `store.zig` answers the same on Linux and on metal, which
   zig-metal-unikernel's `zig build store-judge` checks operation by operation.
 - **Which commit is live:** the "Serving" line in zig-metal-unikernel's `README.md`
   names the release and its angry-gopher commit; `https://lynrummy.com/version`
@@ -325,7 +325,7 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring (members only) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
-| `/admin` | The chat roster and API keys; `/admin/host` (the running server), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret); `/admin/lynrummy` (the game roster). All hardcoded to uid 1 |
+| `/admin` | The chat roster and API keys; `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script: zig-webbox's `script_route`, its language in zig-webbox's `docs/SHALE.md`) and `/admin/script-key`. All hardcoded to uid 1 |
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |
 | `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
@@ -376,7 +376,7 @@ ops/start              Start the zig server on :9001 (rebuild + relaunch)
 ops/list               List ops commands
 ops/check              Pre-commit gate (~35s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
 ops/check_full         Milestone gate: ops/check + the heavy conformance suites + agent self-play + benches
-ops/check_zig          zig server compiles + two lints + every unit test (~20s)
+ops/check_zig          zig server compiles + the lints + the Caddy limits + every unit test, here and zig-webbox's
 ops/check_markdown     Markdown dialect regression (~3s)
 ops/check_delivery     Delivery zig-solver conformance (~30s warm): native
                        gold check + the built solver.wasm driven over every
