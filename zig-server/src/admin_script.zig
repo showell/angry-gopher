@@ -96,7 +96,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
             if (r.log_failed != null) log_failures += 1;
             if (r.changedStore()) app_start.describeRefresh(app_start.refresh(io, webbox.mem_meter.base()), &w) catch {};
         },
-        .refused => {},
+        // The site steps no background run yet (zig-webbox's route refuses
+        // one, `no_background`, while `backing` is unset).
+        .refused, .started, .killed => {},
     }
     try req.respond(w.buffered(), .{ .status = outcome.status(), .extra_headers = &.{.{ .name = "content-type", .value = "text/plain; charset=utf-8" }} });
 }
