@@ -27,5 +27,9 @@ echo "===== ops/test_css ====="
 
 echo
 echo "===== deploy/check_caddy_logs.py ====="
-python3 deploy/test_check_caddy_logs.py -q 2>&1 | tail -1
+python3 deploy/test_check_caddy_logs.py -q
 python3 deploy/check_caddy_logs.py
+
+echo
+echo "===== ops/knocks_test.py ====="
+python3 ops/knocks_test.py -q

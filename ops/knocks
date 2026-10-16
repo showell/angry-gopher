@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""**WHO KNOCKED** (metal-vmm QUEUE 221): prod's access logs and sshd's last
+day, read on demand. No hook, no schedule, no baseline: its output is the
+view.
+
+    ops/knocks
+
+Settings in ops/knocks.conf, beside it. One ssh to prod reads every Caddy
+access log, the rotated ones too (`<name>-access-<time>.log`, gzipped), and
+`journalctl -u ssh --since -24h`. Then, from that text alone:
+- per site: its requests and their status classes, its top 10 addresses,
+  every 4xx path in families (`/.env`, `/wp-*`, `/.git`, `/cgi-bin`,
+  `*.php`, other), and every 413 and 5xx with its address, method, path and
+  User-Agent;
+- for ssh, one line: the failures and their distinct sources.
+
+**EXITS 1** when a site's log is missing or empty, when a site's newest line
+is older than its limit, or on an accepted ssh login from an address not
+allowed; 0 otherwise; 2 when it cannot run (no settings, no allowlist, the
+ssh failed).
+"""
+import collections
+import configparser
+import base64
+import gzip
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CONF = os.path.join(HERE, "knocks.conf")
+
+# One ssh: each log as a section `==> <path>`, then sshd's journal as `==> ssh`.
+# Rotated logs are gzipped; they go across as base64 so the text stays text.
+REMOTE = r'''sudo sh -c '
+for f in /var/log/caddy/*-access*.log /var/log/caddy/*-access*.log.gz; do
+  [ -f "$f" ] || continue
+  echo "==> $f"
+  case "$f" in *.gz) base64 -w0 "$f"; echo;; *) cat "$f";; esac
+done
+echo "==> ssh"
+journalctl -u ssh --since -24h --no-pager -o short-unix
+' '''
+
+LOG_NAME = re.compile(r"^(?P<site>.+?)-access(?:-[^/]*)?\.log(?P<gz>\.gz)?$")
+ACCEPTED = re.compile(r"Accepted \S+ for \S+ from (?P<addr>\S+) port")
+# A session of sshd's (its pid) that failed: a key-only sshd says so in
+# several lines a try, so tries are counted by session, not by line.
+SESSION = re.compile(r"sshd\[(?P<pid>\d+)\]: (?P<msg>.*)")
+FAILURE = re.compile(r"^(?:Invalid user |Failed |Connection closed by (?:invalid|authenticating) user |Disconnected from (?:invalid|authenticating) user |Unable to negotiate |banner exchange: )")
+ADDR = re.compile(r"(?:from |user \S+ |by )(?P<addr>[0-9a-fA-F:.]+) port")
+
+
+# ── the pure half ────────────────────────────────────────────────────────
+
+def sections(text: str):
+    """The fetched text as {name: body}: `==> <path>` starts each."""
+    out, name, lines = {}, None, []
+    for line in text.split("\n"):
+        if line.startswith("==> "):
+            if name is not None:
+                out[name] = "\n".join(lines)
+            name, lines = line[4:].strip(), []
+        else:
+            lines.append(line)
+    if name is not None:
+        out[name] = "\n".join(lines)
+    return out
+
+
+def site_lines(secs):
+    """{site: [log line, ...]} from the access-log sections, rotated ones
+    decoded; every site with a log file is a key, an empty one too."""
+    sites = collections.defaultdict(list)
+    for name, body in secs.items():
+        m = LOG_NAME.match(os.path.basename(name))
+        if not m:
+            continue
+        if m.group("gz"):
+            raw = gzip.decompress(base64.b64decode(body.strip())) if body.strip() else b""
+            body = raw.decode("utf-8", "replace")
+        sites[m.group("site")].extend(l for l in body.split("\n") if l.strip())
+    return sites
+
+
+def family(path: str) -> str:
+    """A 4xx path's family."""
+    p = path.split("?", 1)[0]
+    if p.startswith("/.env"):
+        return "/.env"
+    if "/wp-" in p:
+        return "/wp-*"
+    if p.startswith("/.git"):
+        return "/.git"
+    if p.startswith("/cgi-bin"):
+        return "/cgi-bin"
+    if ".php" in p:
+        return "*.php"
+    return "other"
+
+
+def report(text: str, limits: dict, allow: set, now: float):
+    """The view as lines, and the alarms."""
+    secs = sections(text)
+    sites = site_lines(secs)
+    out, alarms = [], []
+    for site in sorted(set(sites) | set(limits)):
+        lines = sites.get(site)
+        if site in limits and not lines:
+            alarms.append(f"{site}: its log is {'empty' if site in sites else 'missing'}")
+            out.append(f"== {site}: no requests ({'an empty log' if site in sites else 'no log'})")
+            continue
+        recs = []
+        for l in lines:
+            try:
+                recs.append(json.loads(l))
+            except ValueError:
+                pass
+        classes = collections.Counter(f"{r.get('status', 0) // 100}xx" for r in recs)
+        newest = max((r.get("ts", 0) for r in recs), default=0)
+        age_h = (now - newest) / 3600
+        out.append(f"== {site}: {len(recs)} requests ({', '.join(f'{k} {classes[k]}' for k in sorted(classes))}), newest {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(newest))} ({age_h:.1f} h ago)")
+        if site in limits and age_h > limits[site]:
+            alarms.append(f"{site}: its newest line is {age_h:.1f} h old, past its {limits[site]} h")
+        addrs = collections.Counter(r.get("request", {}).get("client_ip") or r.get("request", {}).get("remote_ip", "?") for r in recs)
+        out.append("   top addresses: " + ", ".join(f"{a} {n}" for a, n in addrs.most_common(10)))
+        fams = collections.Counter(family(r.get("request", {}).get("uri", "")) for r in recs if 400 <= r.get("status", 0) < 500)
+        if fams:
+            out.append("   4xx paths: " + ", ".join(f"{f} {n}" for f, n in sorted(fams.items(), key=lambda x: (-x[1], x[0]))))
+        for r in recs:
+            s = r.get("status", 0)
+            if s == 413 or s >= 500:
+                q = r.get("request", {})
+                ua = (q.get("headers", {}).get("User-Agent") or ["-"])[0]
+                out.append(f"   {s} {q.get('client_ip') or q.get('remote_ip', '?')} {q.get('method', '?')} {q.get('uri', '?')} {ua}")
+    journal = secs.get("ssh", "")
+    failed, sources = set(), set()
+    for m in SESSION.finditer(journal):
+        if FAILURE.match(m.group("msg")):
+            failed.add(m.group("pid"))
+            a = ADDR.search(m.group("msg"))
+            if a:
+                sources.add(a.group("addr"))
+    out.append(f"== ssh: {len(failed)} failed sessions from {len(sources)} sources in the last day")
+    for m in ACCEPTED.finditer(journal):
+        if m.group("addr") not in allow:
+            alarms.append(f"ssh: an accepted login from {m.group('addr')}, not in the allowlist")
+    return out, alarms
+
+
+# ── the I/O half ─────────────────────────────────────────────────────────
+
+def settings():
+    c = configparser.ConfigParser()
+    if not c.read(CONF):
+        raise SystemExit(2)
+    limits = {k: float(v) for k, v in c["sites"].items()}
+    allow = set(c["ssh"].get("allow", "").split())
+    return c["prod"]["host"], limits, allow
+
+
+def main() -> int:
+    try:
+        host, limits, allow = settings()
+    except (SystemExit, KeyError, ValueError):
+        print(f"knocks: no usable settings in {CONF}")
+        return 2
+    if not allow:
+        print(f"knocks: the ssh allowlist in {CONF} is empty: every accepted login would be an alarm; fill in the dev box's address")
+        return 2
+    got = subprocess.run(["ssh", host, REMOTE], capture_output=True, text=True)
+    if got.returncode != 0:
+        print(f"knocks: ssh {host} failed: {got.stderr.strip()}")
+        return 2
+    lines, alarms = report(got.stdout, limits, allow, time.time())
+    print("\n".join(lines))
+    for a in alarms:
+        print(f"ALARM {a}")
+    return 1 if alarms else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

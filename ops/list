@@ -127,6 +127,10 @@ Available ops commands (run from repo root):
   ops/fetch_prod_doc <slug>
                          Print one prod doc's raw markdown (the <slug>.md
                          file). Delegates to chat/chat_client.py.
+  ops/knocks             Who knocked on prod: every site's access log and
+                         sshd's last day, read over one ssh (settings in
+                         ops/knocks.conf). Exits 1 on a missing or stale
+                         log, or a login from an address not allowed.
 
 Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git).
 EOF
