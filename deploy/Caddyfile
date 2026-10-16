@@ -14,8 +14,13 @@
 # **A HANDSHAKE THAT NAMES NO HOST** (a scanner's, to the bare address: no
 # browser leaves SNI out) is given the bare address's certificate, so it
 # reaches the catch-all below and its log, whichever address it came in on.
+#
+# **NEVER TRUSTED** (the box, installing 221): `tls internal` below would have
+# Caddy try to put its own root in prod's trust store at every reload, and
+# log an error when it can't. We never want it trusted.
 {
 	default_sni 162.243.1.123
+	skip_install_trust
 }
 
 # **EVERY SITE LOGS** (metal-vmm QUEUE 221, Steve: "we should have more

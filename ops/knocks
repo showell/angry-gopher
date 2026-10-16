@@ -130,6 +130,13 @@ def report(text: str, limits: dict, allow: set, now: float):
         fams = collections.Counter(family(r.get("request", {}).get("uri", "")) for r in recs if 400 <= r.get("status", 0) < 500)
         if fams:
             out.append("   4xx paths: " + ", ".join(f"{f} {n}" for f, n in sorted(fams.items(), key=lambda x: (-x[1], x[0]))))
+        # "other" is never a dead end: its top paths, the query left off.
+        others = collections.Counter(r.get("request", {}).get("uri", "").split("?", 1)[0] for r in recs
+                                     if 400 <= r.get("status", 0) < 500 and family(r.get("request", {}).get("uri", "")) == "other")
+        if others:
+            top = sorted(others.items(), key=lambda x: (-x[1], x[0]))
+            rest = f" (and {len(top) - 5} more)" if len(top) > 5 else ""
+            out.append("   other: " + ", ".join(f"{p} {n}" for p, n in top[:5]) + rest)
         for r in recs:
             s = r.get("status", 0)
             if s == 413 or s >= 500:

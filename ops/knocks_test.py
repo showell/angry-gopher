@@ -65,6 +65,15 @@ class Knocks(unittest.TestCase):
         self.assertIn("4xx paths: /cgi-bin 1", text)
         self.assertIn("== ssh: 2 failed sessions from 2 sources", text)
 
+    def test_other_lists_its_paths_never_only_a_count(self):
+        text = fixture()
+        extra = "\n".join(rec(NOW - 700 - i, "192.0.2.60", "GET", p, 404) for i, p in enumerate(["/a", "/b", "/a?x=1", "/c", "/d", "/e", "/f"]))
+        text = text.replace("==> /var/log/caddy/roc-access.log\n", "==> /var/log/caddy/roc-access.log\n" + extra + "\n")
+        lines, _ = knocks.report(text, LIMITS, ALLOW, NOW)
+        joined = "\n".join(lines)
+        self.assertIn("4xx paths: other 7", joined)
+        self.assertIn("   other: /a 2, /b 1, /c 1, /d 1, /e 1 (and 1 more)", joined)
+
     def test_a_missing_log_alarms(self):
         _, alarms = knocks.report(fixture(drop=("roc-access",)), LIMITS, ALLOW, NOW)
         self.assertEqual(alarms, ["roc: its log is missing"])
