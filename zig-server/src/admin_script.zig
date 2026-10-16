@@ -23,6 +23,15 @@
 //!
 //! **THE BUDGETS ARE THIS ROUTE'S** (`budgets`), smaller than Shale's
 //! defaults: on metal a run holds the turn, and the whole site waits for it.
+//!
+//! **BACKGROUND RUNS** (metal-vmm QUEUE 222, as Dog Park's `shale.zig`): a
+//! signed `mode=background` script is answered at once (202, its number) and
+//! stepped a slice at a time between requests (`between`, which webbox's
+//! Site hands each host); it only reads, under `background_budgets`. One at a
+//! time: a second is refused while one runs; a signed `mode=kill` ends it.
+//! `GET /admin/script` shows the run going, or the one that ended last, with
+//! what it printed. Accepted only once a host has stepped: one that never
+//! calls `between` refuses it (`no_background`) rather than leave it unrun.
 
 const std = @import("std");
 const Io = @import("host_io").Io;
@@ -84,20 +93,36 @@ var reply_buf: [script.Budgets.default_output_bytes + 64 * 1024]u8 = undefined;
 /// Runs whose end could not be logged, since start (/admin/host).
 pub var log_failures: u64 = 0;
 
+/// Whether a host has called `between`: only then is a background run
+/// accepted.
+var stepped: bool = false;
+
+/// **ONE SLICE BETWEEN REQUESTS**, for the host (webbox's `Site.between`):
+/// whether the run goes on.
+pub fn between(io: Io, now: i64) bool {
+    stepped = true;
+    return script_route.sliceBackground(io, now);
+}
+
 pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
     const uid = (try users.bearerUserID(io, alloc, req)) orelse
         return refuse(req, .unauthorized, "refused (no_bearer): the admin's API key, as Authorization: Bearer, is required\nnot run\n");
     if (!std.mem.eql(u8, uid, ui.admin_uid))
         return refuse(req, .forbidden, "refused (not_admin): that key is not the admin's\nnot run\n");
+    if (req.head.method == .GET) {
+        var s: std.Io.Writer = .fixed(&reply_buf);
+        script_route.writeBackgroundStatus(&s) catch {};
+        return req.respond(s.buffered(), .{ .extra_headers = &.{.{ .name = "content-type", .value = "text/plain; charset=utf-8" }} });
+    }
     if (req.head.method != .POST)
-        return refuse(req, .method_not_allowed, "refused (method): POST a signed script\nnot run\n");
+        return refuse(req, .method_not_allowed, "refused (method): POST a signed script, or GET the background run's state\nnot run\n");
     const body = (try http.readLimitedBody(req, alloc, limits.body.script)) orelse return;
     const store = webbox.store;
     const data_root = store.data_base orelse return refuse(req, .service_unavailable, "refused (no_roots): this host has no data root\nnot run\n");
     const paths = try script_route.Paths.under(alloc, store.auth_base orelse users.auth_root);
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 
-    var outcome = try script_route.handle(io, alloc, body, .{ .paths = paths, .data_root = data_root, .budgets = budgets, .now = now, .out = &out_buf, .background_budgets = background_budgets });
+    var outcome = try script_route.handle(io, alloc, body, .{ .paths = paths, .data_root = data_root, .budgets = budgets, .now = now, .out = &out_buf, .background_budgets = background_budgets, .backing = if (stepped) webbox.mem_meter.base() else null });
     defer outcome.deinit();
     var w: std.Io.Writer = .fixed(&reply_buf);
     script_route.writeReply(&outcome, &w) catch {};
@@ -106,8 +131,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
             if (r.log_failed != null) log_failures += 1;
             if (r.changedStore()) app_start.describeRefresh(app_start.refresh(io, webbox.mem_meter.base()), &w) catch {};
         },
-        // The site steps no background run yet (zig-webbox's route refuses
-        // one, `no_background`, while `backing` is unset).
+        // A background run only reads: nothing to rebuild.
         .refused, .started, .killed => {},
     }
     try req.respond(w.buffered(), .{ .status = outcome.status(), .extra_headers = &.{.{ .name = "content-type", .value = "text/plain; charset=utf-8" }} });

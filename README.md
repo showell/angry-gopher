@@ -325,7 +325,7 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring (members only) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
-| `/admin` | The chat roster and API keys; `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script: zig-webbox's `script_route`, its language in zig-webbox's `docs/SHALE.md`) and `/admin/script-key`. All hardcoded to uid 1 |
+| `/admin` | The chat roster and API keys; `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script: zig-webbox's `script_route`, its language in zig-webbox's `docs/SHALE.md`; from v32 a `mode=background` run too, answered at once and stepped between requests on both hosts, its state and output on `GET /admin/script`, one at a time, ended by `mode=kill`) and `/admin/script-key`. All hardcoded to uid 1 |
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |
 | `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
