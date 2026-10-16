@@ -108,12 +108,31 @@ the SSH key was added at droplet creation).
      sudo apt-get update && sudo apt-get install -y caddy'
    ```
 
-   Then install the Caddyfile:
+   Then install the Caddyfile, as `/etc/caddy/Caddyfile`. **Every site
+   logs** (metal-vmm QUEUE 221): it defines the `access_log` snippet that
+   each site block imports, its own (lynrummy.com, and the bare address's
+   catch-all, `knock`) and the ones in `/etc/caddy/sites/` (Dog Park's,
+   roc's), so it goes in **before** a site file that imports it. **Each log
+   is made Caddy's first**: `caddy validate` runs as root and would create a
+   missing one as root's, and the reload would then fail "permission
+   denied" (Caddy keeps its old config):
 
    ```
    scp deploy/Caddyfile steve@<IP>:/tmp/
-   ssh steve@<IP> 'sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy'
+   ssh steve@<IP> 'set -e
+     for n in lynrummy knock dogpark roc; do
+       f=/var/log/caddy/$n-access.log
+       [ -f $f ] || sudo install -o caddy -g caddy -m 640 /dev/null $f
+     done
+     sudo caddy validate --adapter caddyfile --config /tmp/Caddyfile
+     sudo install -m 644 /tmp/Caddyfile /etc/caddy/Caddyfile
+     sudo systemctl reload caddy'
    ```
+
+   `deploy/check_caddy_logs.py` (in `ops/check_common`) fails on a site
+   block here that logs nowhere; name Dog Park's and roc's files to check
+   theirs too. **What no log sees:** a TLS handshake naming a host no site
+   has fails before HTTP, so nothing of it is written anywhere.
 
 ## Watchdog
 

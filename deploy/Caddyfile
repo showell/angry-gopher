@@ -10,7 +10,37 @@
 # are `__Host-` (metal-vmm QUEUE 162.2, 167.5), which a browser keeps only
 # over HTTPS (localhost aside, in Chrome and Firefox). Test signing in over
 # HTTPS: a hostname with its own certificate, or `tls internal`.
+
+# **A HANDSHAKE THAT NAMES NO HOST** (a scanner's, to the bare address: no
+# browser leaves SNI out) is given the bare address's certificate, so it
+# reaches the catch-all below and its log, whichever address it came in on.
+{
+	default_sni 162.243.1.123
+}
+
+# **EVERY SITE LOGS** (metal-vmm QUEUE 221, Steve: "we should have more
+# visibility" for scanners): each site block on this host, here and in
+# /etc/caddy/sites/, imports this with its short name, `import access_log
+# <name>`, and writes every request, as Caddy saw it, to
+# /var/log/caddy/<name>-access.log: JSON, a line a request, rolled at 10 MiB,
+# five kept. deploy/check_caddy_logs.py fails on a site block without it.
+# Defined here, above the `import` of the other sites' files, so theirs see it.
+#
+# **MAKE EACH LOG CADDY'S FIRST** (deploy/README.md, step 5): `sudo caddy
+# validate` runs as root and creates a missing log as root's, and the reload
+# that follows then fails "permission denied", Caddy keeping its old config.
+(access_log) {
+	log {
+		output file /var/log/caddy/{args[0]}-access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+}
+
 lynrummy.com {
+	import access_log lynrummy
 	encode gzip
 
 	# Coarse outer caps. The server's handlers enforce tighter per-route limits
@@ -41,6 +71,23 @@ lynrummy.com {
 	# card (zig-metal-unikernel's CUTOVER.md). The way back is `localhost:9001`, the
 	# zig server on this droplet, which stays stopped while metal serves.
 	reverse_proxy 10.100.0.4:80
+}
+
+# **WHAT NO SITE CLAIMS** (QUEUE 221): a scanner that asks for the bare
+# address, by plain http or by https, is logged to knock-access.log and
+# answered a bare 404. `tls internal` gives the bare address a certificate of
+# Caddy's own, which no browser trusts and a scanner does not check, so its
+# request gets as far as this log. **A TLS HANDSHAKE NAMING A HOST NO SITE
+# HAS STILL FAILS BEFORE ANY LOG**: Caddy has no certificate to offer it, so
+# nothing of that request reaches HTTP, and no line is written for it.
+http://162.243.1.123 {
+	import access_log knock
+	respond 404
+}
+https://162.243.1.123 {
+	tls internal
+	import access_log knock
+	respond 404
 }
 
 # The other sites on this host, one file each, which their own deploys install
