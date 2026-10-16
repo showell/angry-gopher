@@ -5,7 +5,7 @@
 //!   GET  /admin          the roster
 //!   POST /admin/apikey   generate (or revoke=1) a member's API key
 //!   GET  /admin/host     the running server: admin_host.zig
-//!   GET  /admin/log      the host's whole log as plain text, for agents: admin_log.zig
+//!   GET  /admin/log      the host's whole log as plain text, for agents: webbox.admin_log
 //!   *    /admin/backup   an archive of data/ and auth/: admin_backup.zig
 //!   *    /admin/secret   change the session secret: admin_secret.zig
 //!   *    /admin/retire   retire old topics and users: admin_retire.zig
@@ -32,13 +32,14 @@ const html = @import("webbox").html;
 const settings = @import("settings.zig");
 const ui = @import("admin_ui.zig");
 const admin_host = @import("admin_host.zig");
-const admin_log = @import("admin_log.zig");
 const admin_backup = @import("admin_backup.zig");
 const admin_secret = @import("admin_secret.zig");
 const admin_retire = @import("admin_retire.zig");
 const admin_search = @import("admin_search.zig");
 const admin_script = @import("admin_script.zig");
 const admin_script_key = @import("admin_script_key.zig");
+const admin_log = @import("webbox").admin_log;
+const build_options = @import("build_options");
 
 const Request = std.http.Server.Request;
 
@@ -51,7 +52,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
     if (!try ui.requireAdmin(req, io, alloc)) return;
     if (std.mem.eql(u8, sub, "/apikey")) return handleAPIKey(req, io, alloc);
     if (std.mem.eql(u8, sub, "/host")) return admin_host.render(req, io, alloc);
-    if (std.mem.eql(u8, sub, "/log")) return admin_log.render(req, io, alloc);
+    if (std.mem.eql(u8, sub, "/log")) return admin_log.render(req, io, alloc, "commit " ++ build_options.commit);
     if (std.mem.eql(u8, sub, "/backup")) return admin_backup.render(req, io, alloc, client);
     if (std.mem.eql(u8, sub, "/secret")) return admin_secret.render(req, io, alloc, client);
     if (std.mem.eql(u8, sub, "/retire")) return admin_retire.render(req, io, alloc, client);
