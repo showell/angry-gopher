@@ -50,9 +50,9 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   size their buffers from and `tools/check_caddy_limits.py` holds the
   Caddyfile to; and zig-webbox's `store.zig` answers the same on Linux and on metal, which
   zig-metal-unikernel's `zig build store-judge` checks operation by operation.
-- **Which commit is live:** the "Serving" line in zig-metal-unikernel's `README.md`
-  names the release and its angry-gopher commit; `https://lynrummy.com/version`
-  reports the running build's `commit`.
+- **Which commit is live:** `https://lynrummy.com/version` reports the running
+  build's `commit`; `git tag --points-at <commit>` names its release
+  (zig-metal-unikernel's README, "Where it stands", says how to read the rest).
 
 ## The apps
 
