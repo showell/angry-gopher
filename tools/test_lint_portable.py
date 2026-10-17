@@ -83,6 +83,9 @@ class Clean(unittest.TestCase):
             # zig-webbox's two Linux programs for Shale (metal-vmm 199, 200):
             # the runner and the signer, never in a server.
             "script_runner.zig", "shale_sign.zig",
+            # Shale's two benches, run by hand (zig-webbox `script-bench`,
+            # `shale-scale`), and the Linux host's fetch (metal-vmm 228).
+            "script_bench.zig", "shale_scale.zig", "linux_fetch.zig",
         })
 
 

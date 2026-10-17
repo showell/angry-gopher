@@ -14,7 +14,9 @@ host, which only a Linux `main` imports). For each root:
   and also `webbox` for `webbox_linux` (the Linux host reaches the
   portable half as the module, never by path: one file, one module);
 - no file embeds a file (`@embedFile`): what a page serves is the
-  application's.
+  application's. One exception, `shale_source`: Shale source beside the file
+  that embeds it (Shale's prelude), which the library compiles itself and
+  never serves.
 
 And for every other file in the folder, the application's (whatever builds
 it, or nothing does: a bench run by hand): it imports the library by name,
@@ -103,6 +105,14 @@ def is_test(name):
     return name.endswith("_test.zig")
 
 
+def shale_source(embedded):
+    """**THE LIBRARY'S OWN SHALE** (metal-vmm QUEUE 230): a `.shale` file in
+    the embedding file's own folder, by bare name, is library code (the
+    prelude every script is compiled with), not a page. Any path, or any
+    other kind of file, is still refused."""
+    return embedded.endswith(".shale") and "/" not in embedded
+
+
 def problems_of(src, root_name, may_import, tests=None):
     root = zig_source.at(src, root_name)
     if not os.path.exists(root):
@@ -122,7 +132,8 @@ def problems_of(src, root_name, may_import, tests=None):
             out.append(f"{name}: imported by the library, and not there")
             continue
         for embedded in zig_source.embeds(read(path)):
-            out.append(f"{name} embeds {embedded}: what a page serves is the application's, not the library's")
+            if not shale_source(embedded):
+                out.append(f"{name} embeds {embedded}: what a page serves is the application's, not the library's")
         for raw in imports(path):
             dep = resolved(name, raw)
             if is_test(dep):
@@ -161,6 +172,12 @@ def self_test():
         write("b.zig", 'const page = @embedFile("chat.js");\n')
         got = problems(d)
         assert len(got) == 1 and "b.zig embeds chat.js" in got[0], got
+        # Shale's prelude, beside the file: the library's own; by a path, not.
+        write("b.zig", 'const p = @embedFile("prelude.shale");\n')
+        assert problems(d) == [], problems(d)
+        write("b.zig", 'const p = @embedFile("../prelude.shale");\n')
+        got = problems(d)
+        assert len(got) == 1 and "b.zig embeds ../prelude.shale" in got[0], got
         write("b.zig", 'const std = @import("std");\n')
         # The Linux half: its files reach the portable half as the module.
         write("webbox_linux.zig", 'pub const host = @import("host.zig");\n')
@@ -212,7 +229,7 @@ def self_test():
         assert len(got) == 1 and "app.zig embeds a.zig, a file of the library" in got[0], got
         write("app.zig", 'const s = @embedFile("webbox_store_source");\n')
         assert problems(d) == [], problems(d)
-    print("lint_webbox_library: its self-test passes (a clean library; one reaching outside, on one line or split; a commented import; an embedded file; the Linux half through the module, not by path; the portable half reaching for the Linux one, or for itself; an application's file by name, never by path, nor embedding one)")
+    print("lint_webbox_library: its self-test passes (a clean library; one reaching outside, on one line or split; a commented import; an embedded file, but not Shale's prelude beside it; the Linux half through the module, not by path; the portable half reaching for the Linux one, or for itself; an application's file by name, never by path, nor embedding one)")
 
 
 def main():
