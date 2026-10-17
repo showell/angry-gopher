@@ -66,9 +66,12 @@ still equals the baseline. There is **no external oracle** — `html` is whateve
 our renderer produces, frozen and human-reviewed. Three corpora:
 
 - `~/showell_repos/gopher-gold/gold.jsonl` — the real corpus of chat messages
-  and docs, in a separate private checkout (it embeds real user messages).
-  **When that checkout is absent, the harness prints "cannot read" and
-  checks only the two corpora below, and `ops/check_markdown` still passes.**
+  and docs, in a separate private git repository on the dev box only (it
+  embeds real user messages; it has no remote). **Without it the harness
+  stops**, naming the file. To make it again from a backup's `chat/`
+  (a data_dir's), `cd zig-server && zig build markdown-regression -- --capture
+  CHAT_ROOT`: every transcript's messages and every user doc, rendered now.
+  `git -C ~/showell_repos/gopher-gold log` says which backup it came from.
 - `adversarial.jsonl` — hand-written hostile corners the real corpus never hit.
 - `dialect.jsonl` — where our dialect deliberately departs from vanilla
   CommonMark: inline markup is **per-line**, so `**`, backticks, and `[...]`

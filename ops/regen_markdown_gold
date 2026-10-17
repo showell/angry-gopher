@@ -11,8 +11,10 @@
 # deliberate act. ALWAYS read the git diff of each corpus afterward and confirm
 # only the cases you meant to change actually moved.
 #
-# gold.jsonl lives in the PRIVATE gopher-gold repo (real user messages); its
-# diff is reviewed/committed there, separately from this repo.
+# gold.jsonl lives in the PRIVATE gopher-gold repo (real user messages, the
+# dev box only, no remote); its diff is reviewed/committed there, separately
+# from this repo. Making it again from a backup is `-- --capture CHAT_ROOT`
+# (zig-server/README.md).
 
 set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
