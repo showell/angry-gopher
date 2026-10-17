@@ -13,7 +13,7 @@ private network (`deploy/Caddyfile`). When Linux serves, the same Caddy
 fronts the local **zig server** on `localhost:9001` instead. (`/admin` is
 gated by the app, to uid 1 (`admin_ui.requireAdmin`), not by the proxy.)
 
-When Linux serves, the host runs **no zig/Go/Node/Elm toolchain** — we build locally and
+The host runs **no zig/Go/Node/Elm toolchain** — we build locally and
 ship a **single statically linked binary**: the Elm/TS bundles, the
 Safari and chess WASM cores and the puzzle catalogs are baked in at
 compile time (`build.zig` `@embedFile`). The site's own files —
@@ -182,7 +182,8 @@ servers, one of them stopped (needs `zig build` first).
   `ops/backup` pulls a timestamped tarball of this host's `data_dir`
   (`~/AngryGopher/prod`) to `~/AngryGopher/backups` on the dev box; that
   is the Linux copy, frozen at the 2026-10-04 cutover. DigitalOcean's
-  weekly droplet backups cover whole-droplet recovery of this host.
+  weekly droplet backups (control panel) are worth enabling for
+  whole-droplet recovery of this host.
 - **Account store (`~/Auth`):** the shared account data — `name`, `password`,
   `api-key`, and `next-id.txt` — lives under `~/Auth` (config `auth_dir`,
   default `~/Auth`), deliberately OUTSIDE `data_dir`. So it is **not** in the
