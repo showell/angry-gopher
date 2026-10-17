@@ -2971,44 +2971,46 @@ test "request edges: every number a request carries, at its type's edges, as a m
 
     // **EVERY SITE IS KNOWN**: read from the source as it stands, this
     // application's and the library's (zig-webbox's).
-    var found: usize = 0;
+    // Every folder, read as Zig by the library's own reading (webbox's
+    // edge_sites.parseSites, Zig's tokenizer), so a site in a sub-folder
+    // (Shale's script/) or after an `inline fn` is seen.
+    const library_sites = @import("webbox").edge_sites;
+    var listed_seen = [_]bool{false} ** edge_sites.len;
     for ([_][]const u8{ "src", @import("build_options").webbox_src }) |dir| {
         var src = try Io.Dir.cwd().openDir(io, dir, .{ .iterate = true });
         defer src.close(io);
-        var files = src.iterate();
+        var files = try src.walk(a);
+        defer files.deinit();
         while (try files.next(io)) |entry| {
-            if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".zig")) continue;
+            if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".zig")) continue;
             // A test file is no request's: its helpers are tests' too.
-            if (std.mem.endsWith(u8, entry.name, "_test.zig")) continue;
-            const text = try src.readFileAlloc(io, entry.name, a, .limited(4 << 20));
-            var lines = std.mem.splitScalar(u8, text, '\n');
-            var func: []const u8 = "";
-            var in_test = false;
-            while (lines.next()) |line| {
-                const t = std.mem.trimStart(u8, line, " ");
-                if (std.mem.startsWith(u8, t, "test \"")) in_test = true;
-                if (std.mem.indexOf(u8, t, "fn ")) |at| if (std.mem.startsWith(u8, t, "fn ") or std.mem.startsWith(u8, t, "pub fn ")) {
-                    const name = t[at + 3 ..];
-                    func = name[0 .. std.mem.indexOfScalar(u8, name, '(') orelse name.len];
-                    in_test = false;
-                };
-                if (std.mem.startsWith(u8, t, "//") or in_test) continue;
-                if (std.mem.indexOf(u8, t, "parseInt(") == null) continue;
-                found += 1;
-                // The library's own unreachable sites are its to name.
-                const known = for (edge_sites) |s| {
-                    if (std.mem.eql(u8, s.file, entry.name) and std.mem.eql(u8, s.func, func)) break true;
-                } else for (@import("webbox").edge_sites.unreachable_from_requests) |s| {
-                    if (!std.mem.eql(u8, dir, "src") and std.mem.eql(u8, s.file, entry.name) and std.mem.eql(u8, s.func, func)) break true;
+            if (std.mem.endsWith(u8, entry.basename, "_test.zig")) continue;
+            const path = try a.dupe(u8, entry.path);
+            const text = try src.readFileAllocOptions(io, path, a, .limited(4 << 20), .of(u8), 0);
+            for (try library_sites.parseSites(a, text)) |parse_at| {
+                const own = for (edge_sites, 0..) |s, i| {
+                    if (std.mem.eql(u8, s.file, path) and std.mem.eql(u8, s.func, parse_at.func)) {
+                        listed_seen[i] = true;
+                        break true;
+                    }
                 } else false;
-                if (!known) {
-                    std.debug.print("request edges: {s}'s {s} parses a number, and is not in edge_sites: cover it with a request, or say why none reaches it\n", .{ entry.name, func });
+                // The library's own unreachable sites are its to name.
+                const library = !std.mem.eql(u8, dir, "src") and for (library_sites.unreachable_from_requests) |s| {
+                    if (std.mem.eql(u8, s.file, path) and std.mem.eql(u8, s.func, parse_at.func)) break true;
+                } else false;
+                if (!own and !library) {
+                    std.debug.print("request edges: {s}:{d}, in {s}, parses a number, and is not in edge_sites: cover it with a request, or say why none reaches it\n", .{ path, parse_at.line, parse_at.func });
                     return error.TestUnexpectedResult;
                 }
             }
         }
     }
-    try testing.expect(found >= edge_sites.len);
+    // And every entry is still a site: a stale one would excuse whatever
+    // parse came to a function of its name later.
+    for (edge_sites, listed_seen) |s, seen| {
+        errdefer std.debug.print("request edges: edge_sites names {s}'s {s}, which parses no number now\n", .{ s.file, s.func });
+        try testing.expect(seen);
+    }
 
     // A member, a player, a topic with a message, and an upload in it.
     var uid_site = try UidSite.init(a, io);
