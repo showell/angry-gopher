@@ -338,65 +338,10 @@ fn viewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !View
 
 // ══ TESTS ════════════════════════════════════════════════════════════════════
 //
-// **THESE EXIST BECAUSE OF THE SPLIT.** Routing used to be reachable only
-// through a socket, so it had no tests at all. `route` now takes a request, an
-// Io, an allocator and a bus — so a test can hand it a canned request over a
-// fixed reader and read the response out of a buffer, with no listener, no port
-// and no config. The same four arguments are what the bare-metal host supplies.
+// The tests are router_*_test.zig's, their harness router_harness.zig's.
 
 const testing = std.testing;
-
-/// serve runs one raw HTTP request through `route` and answers the raw response.
-/// This is the whole harness: `std.http.Server` over a reader that is a string
-/// and a writer that is a buffer.
-fn serve(alloc: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
-    return serveFrom(alloc, io, raw, null);
-}
-
-/// serve, from a connection whose address the host knows to be `peer`.
-fn serveFrom(alloc: std.mem.Allocator, io: Io, raw: []const u8, peer: ?[]const u8) ![]const u8 {
-    var reader: std.Io.Reader = .fixed(raw);
-    var out: std.Io.Writer.Allocating = .init(alloc);
-    var server = std.http.Server.init(&reader, &out.writer);
-
-    var req = try server.receiveHead();
-    req.head.keep_alive = false;
-
-    var hub = Hub.init(io, alloc);
-    var b = Bus.of(&hub);
-    b.peer = peer;
-    if (try route(&req, io, alloc, &b)) |k| streams.drop(&hub, k);
-    try out.writer.flush();
-    return out.written();
-}
-
-fn get(alloc: std.mem.Allocator, io: Io, target: []const u8) ![]const u8 {
-    const raw = try std.fmt.allocPrint(alloc, "GET {s} HTTP/1.1\r\nHost: x\r\n\r\n", .{target});
-    return serve(alloc, io, raw);
-}
-
-fn status(response: []const u8) []const u8 {
-    const line_end = std.mem.indexOf(u8, response, "\r\n") orelse response.len;
-    const sp = std.mem.indexOfScalar(u8, response[0..line_end], ' ') orelse return "";
-    return response[sp + 1 .. line_end];
-}
-
-/// The value of response header `name`, or null.
-fn responseHeader(response: []const u8, name: []const u8) ?[]const u8 {
-    const head_end = std.mem.indexOf(u8, response, "\r\n\r\n") orelse response.len;
-    var lines = std.mem.splitSequence(u8, response[0..head_end], "\r\n");
-    _ = lines.next();
-    while (lines.next()) |line| {
-        const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
-        if (std.ascii.eqlIgnoreCase(line[0..colon], name)) return std.mem.trim(u8, line[colon + 1 ..], " ");
-    }
-    return null;
-}
-
-fn responseBody(response: []const u8) []const u8 {
-    const head_end = std.mem.indexOf(u8, response, "\r\n\r\n") orelse return "";
-    return response[head_end + 4 ..];
-}
+const harness = @import("router_harness.zig");
 
 test "every embedded asset is kept by the browser and asked about each use: ETag, no-cache, 304 (metal-vmm QUEUE 158)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -406,9 +351,9 @@ test "every embedded asset is kept by the browser and asked about each use: ETag
     defer threaded.deinit();
     const io = threaded.io();
     // /game and /puzzles serve their scripts to a player only.
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
     const paths = [_][]const u8{
         "/chat/chat.js",           "/chat/colors.js",      "/game/elm.js",
         "/game/engine.js",         "/game/engine_glue.js", "/driving/blitter.js",
@@ -419,20 +364,20 @@ test "every embedded asset is kept by the browser and asked about each use: ETag
     };
     for (paths) |path| {
         errdefer std.debug.print("asset {s}\n", .{path});
-        const first = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ path, me }));
-        try testing.expectEqualStrings("200 OK", status(first));
-        try testing.expectEqualStrings("no-cache", responseHeader(first, "cache-control") orelse "");
-        const tag = responseHeader(first, "etag") orelse return error.NoETag;
+        const first = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ path, me }));
+        try testing.expectEqualStrings("200 OK", harness.status(first));
+        try testing.expectEqualStrings("no-cache", harness.responseHeader(first, "cache-control") orelse "");
+        const tag = harness.responseHeader(first, "etag") orelse return error.NoETag;
         try testing.expect(tag.len > 2 and tag[0] == '"' and tag[tag.len - 1] == '"');
 
-        const again = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nIf-None-Match: {s}\r\n\r\n", .{ path, me, tag }));
-        try testing.expectEqualStrings("304 Not Modified", status(again));
-        try testing.expectEqualStrings("", responseBody(again));
-        try testing.expectEqualStrings(tag, responseHeader(again, "etag") orelse "");
+        const again = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nIf-None-Match: {s}\r\n\r\n", .{ path, me, tag }));
+        try testing.expectEqualStrings("304 Not Modified", harness.status(again));
+        try testing.expectEqualStrings("", harness.responseBody(again));
+        try testing.expectEqualStrings(tag, harness.responseHeader(again, "etag") orelse "");
 
-        const other = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nIf-None-Match: \"0\"\r\n\r\n", .{ path, me }));
-        try testing.expectEqualStrings("200 OK", status(other));
-        try testing.expectEqualStrings(responseBody(first), responseBody(other));
+        const other = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nIf-None-Match: \"0\"\r\n\r\n", .{ path, me }));
+        try testing.expectEqualStrings("200 OK", harness.status(other));
+        try testing.expectEqualStrings(harness.responseBody(first), harness.responseBody(other));
     }
 }
 
@@ -443,12 +388,12 @@ test "every page names its scripts by their bytes, and a script asked for by its
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator); // a send allocates through it
     defer meter.restore();
     // A player for the games; two members and a topic between them for chat.
-    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const bo = try users.allocateUser(io, a, "Bo");
@@ -456,8 +401,8 @@ test "every page names its scripts by their bytes, and a script asked for by its
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const dm = try std.fmt.allocPrint(a, "/chat/c/{s}_{s}/scripts", .{ ada, bo });
     const body = "markdown=hello";
-    const sent = try serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
-    try testing.expect(status(sent)[0] == '2' or status(sent)[0] == '3');
+    const sent = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
+    try testing.expect(harness.status(sent)[0] == '2' or harness.status(sent)[0] == '3');
 
     const pages = [_][]const u8{
         dm,      "/chat/recent", "/chat/images", "/chat/code",    "/chat/docs",    "/chat/links",
@@ -465,9 +410,9 @@ test "every page names its scripts by their bytes, and a script asked for by its
     };
     for (pages) |page| {
         errdefer std.debug.print("page {s}\n", .{page});
-        const got = try UidSite.ask(a, io, page, cookies);
-        try testing.expectEqualStrings("200 OK", status(got));
-        const html = responseBody(got);
+        const got = try harness.UidSite.ask(a, io, page, cookies);
+        try testing.expectEqualStrings("200 OK", harness.status(got));
+        const html = harness.responseBody(got);
         var scripts: u32 = 0;
         var at: usize = 0;
         while (std.mem.indexOfPos(u8, html, at, "<script")) |tag| {
@@ -481,15 +426,15 @@ test "every page names its scripts by their bytes, and a script asked for by its
             errdefer std.debug.print("script {s}\n", .{src});
             scripts += 1;
             const q = std.mem.indexOf(u8, src, "?h=") orelse return error.NoHash;
-            const asked = try UidSite.ask(a, io, src, cookies);
-            try testing.expectEqualStrings("200 OK", status(asked));
-            try testing.expectEqualStrings("public, max-age=31536000, immutable", responseHeader(asked, "cache-control") orelse "");
-            try testing.expectEqualStrings(try std.fmt.allocPrint(a, "\"{s}\"", .{src[q + 3 ..]}), responseHeader(asked, "etag") orelse "");
+            const asked = try harness.UidSite.ask(a, io, src, cookies);
+            try testing.expectEqualStrings("200 OK", harness.status(asked));
+            try testing.expectEqualStrings("public, max-age=31536000, immutable", harness.responseHeader(asked, "cache-control") orelse "");
+            try testing.expectEqualStrings(try std.fmt.allocPrint(a, "\"{s}\"", .{src[q + 3 ..]}), harness.responseHeader(asked, "etag") orelse "");
             // The same path with another hash: today's bytes, asked about each use.
-            const stale = try UidSite.ask(a, io, try std.fmt.allocPrint(a, "{s}?h=0", .{src[0..q]}), cookies);
-            try testing.expectEqualStrings("200 OK", status(stale));
-            try testing.expectEqualStrings("no-cache", responseHeader(stale, "cache-control") orelse "");
-            try testing.expectEqualStrings(responseBody(asked), responseBody(stale));
+            const stale = try harness.UidSite.ask(a, io, try std.fmt.allocPrint(a, "{s}?h=0", .{src[0..q]}), cookies);
+            try testing.expectEqualStrings("200 OK", harness.status(stale));
+            try testing.expectEqualStrings("no-cache", harness.responseHeader(stale, "cache-control") orelse "");
+            try testing.expectEqualStrings(harness.responseBody(asked), harness.responseBody(stale));
         }
         try testing.expect(scripts > 0);
     }
@@ -544,8 +489,8 @@ test "route: the table answers, and an unknown path is a 404" {
 
     // The fallthrough. "/drivingX" must NOT reach /driving — http.pathUnder wants a
     // boundary, and this is the case that rule exists for.
-    try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/nope")));
-    try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/drivingX")));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.get(a, io, "/nope")));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.get(a, io, "/drivingX")));
 
     // Only "/" is the index; the notFound fallthrough catches everything else.
     // The home page reads pages/home.txt from the repo's root, and a test runs
@@ -553,9 +498,9 @@ test "route: the table answers, and an unknown path is a 404" {
     // 500 ("Home unavailable"), never the fallthrough's 404. (It answered 200
     // with that page until a failed render became a 500, which is how this
     // test came to pass on a page that never rendered.)
-    const index = try get(a, io, "/");
-    try testing.expect(!std.mem.eql(u8, status(index), "404 Not Found"));
-    try testing.expect(std.mem.indexOf(u8, index, "Home unavailable") != null or std.mem.eql(u8, status(index), "200 OK"));
+    const index = try harness.get(a, io, "/");
+    try testing.expect(!std.mem.eql(u8, harness.status(index), "404 Not Found"));
+    try testing.expect(std.mem.indexOf(u8, index, "Home unavailable") != null or std.mem.eql(u8, harness.status(index), "200 OK"));
 }
 
 test "route: a query string never changes which arm is taken" {
@@ -567,8 +512,8 @@ test "route: a query string never changes which arm is taken" {
     const io = threaded.io();
 
     // http.pathOf's whole job: the asset URLs carry their hash, ?h= (http.hashedSrc).
-    try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/nope?h=0")));
-    try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/drivingX?h=0")));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.get(a, io, "/nope?h=0")));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.get(a, io, "/drivingX?h=0")));
 }
 
 test "route: the game surfaces send a nameless visitor to /play, not into the store" {
@@ -580,12 +525,12 @@ test "route: the game surfaces send a nameless visitor to /play, not into the st
     const io = threaded.io();
 
     // No cookie, so no player. The gate IS the contract — see puzzles.zig.
-    const r = try get(a, io, "/puzzles");
-    try testing.expectEqualStrings("303 See Other", status(r));
+    const r = try harness.get(a, io, "/puzzles");
+    try testing.expectEqualStrings("303 See Other", harness.status(r));
     try testing.expect(std.mem.indexOf(u8, r, "location: /play?next=/puzzles") != null);
 
-    const g = try get(a, io, "/game");
-    try testing.expectEqualStrings("303 See Other", status(g));
+    const g = try harness.get(a, io, "/game");
+    try testing.expectEqualStrings("303 See Other", harness.status(g));
     try testing.expect(std.mem.indexOf(u8, g, "location: /play?next=/game") != null);
 }
 
@@ -601,8 +546,8 @@ test "route: ADMIN_ONLY — both admin screens refuse an anonymous request" {
     // password door — never to /play, which would hand out a name and get you
     // no closer. This is the regression that must never pass.
     for ([_][]const u8{ "/admin", "/admin/lynrummy" }) |path| {
-        const r = try get(a, io, path);
-        try testing.expectEqualStrings("303 See Other", status(r));
+        const r = try harness.get(a, io, path);
+        try testing.expectEqualStrings("303 See Other", harness.status(r));
         try testing.expect(std.mem.indexOf(u8, r, "location: /login/full") != null);
         try testing.expect(std.mem.indexOf(u8, r, "/play") == null);
     }
@@ -611,7 +556,7 @@ test "route: ADMIN_ONLY — both admin screens refuse an anonymous request" {
     // page is there. (A bare gopher_uid is a guest: never an authorized member,
     // so it can never be uid 1.)
     const raw = "GET /admin HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid=1\r\n\r\n";
-    const r = try serve(a, io, raw);
+    const r = try harness.serve(a, io, raw);
     try testing.expect(std.mem.indexOf(u8, r, "200 OK") == null);
 }
 
@@ -622,7 +567,7 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     // A real, AUTHORIZED member — uid 2, with a password and a valid signed
@@ -634,76 +579,17 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     // the member case, which a bare gopher_uid cannot stand in for.
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
 
     for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/retire", "/admin/apikey", "/admin/host", "/admin/log", "/admin/lynrummy", "/admin/search?key=lay" }) |path| {
-        const resp = try UidSite.ask(a, io, path, member);
+        const resp = try harness.UidSite.ask(a, io, path, member);
         try testing.expect(std.mem.indexOf(u8, resp, "200 OK") == null); // never served to a member
         try testing.expect(std.mem.indexOf(u8, resp, "$2") == null); // no bcrypt hash in the body
-        try testing.expect(std.mem.indexOf(u8, resp, UidSite.secret) == null); // nor the session secret
+        try testing.expect(std.mem.indexOf(u8, resp, harness.UidSite.secret) == null); // nor the session secret
     }
 }
 
 // ── gopher_uid, signed (uid_cookie.zig) ──────────────────────────────────────
-
-/// A site in a temporary folder, every root pointed at it, with a session
-/// secret; `deinit` puts the roots back for the rest of the test binary.
-const UidSite = struct {
-    tmp: testing.TmpDir,
-    saved: roots.Saved,
-    base: []const u8,
-    forgot: @import("game_limits.zig").Forgot,
-
-    const storage = @import("storage.zig");
-    const chat_store = @import("chat_store.zig");
-    const disk = @import("webbox").store;
-    const game_limits = @import("game_limits.zig");
-    const secret = "a session secret of thirty-two bytes or more, for router tests";
-
-    fn init(a: std.mem.Allocator, io: Io) !UidSite {
-        var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = undefined, .base = undefined, .forgot = undefined };
-        s.base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &s.tmp.sub_path });
-        s.saved = try roots.pointForTest(a, s.base);
-        errdefer s.saved.restore();
-        try disk.write(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }), secret, .{});
-        s.forgot = UidSite.game_limits.forgetForTest(); // what it kept was measured under other roots
-        return s;
-    }
-
-    fn deinit(s: *UidSite) void {
-        s.forgot.end();
-        s.saved.restore();
-        s.tmp.cleanup();
-    }
-
-    /// GET `target` with `cookies` as the Cookie header.
-    fn ask(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8) ![]const u8 {
-        return serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ target, cookies }));
-    }
-
-    /// Closes the window for unsigned cookies: a time in the past.
-    fn closeWindow(a: std.mem.Allocator, io: Io) !void {
-        try disk.replace(io, a, try std.fs.path.join(a, &.{ player.player_root, "unsigned-window" }), "1\n", .{});
-    }
-
-    fn marked(a: std.mem.Allocator, io: Io, id: []const u8) bool {
-        const p = std.fs.path.join(a, &.{ player.player_root, id, "signed" }) catch return false;
-        return disk.has(io, a, p) catch false;
-    }
-};
-
-/// The value of the response's __Host-gopher_uid Set-Cookie, or null.
-fn setUid(response: []const u8) ?[]const u8 {
-    const at = std.mem.indexOf(u8, response, "set-cookie: __Host-gopher_uid=") orelse return null;
-    const rest = response[at + "set-cookie: __Host-gopher_uid=".len ..];
-    return rest[0 .. std.mem.indexOfScalar(u8, rest, ';') orelse rest.len];
-}
-
-fn playingAs(response: []const u8, name: []const u8) bool {
-    var buf: [128]u8 = undefined;
-    const want = std.fmt.bufPrint(&buf, "Currently playing as <strong>{s}</strong>", .{name}) catch return false;
-    return std.mem.indexOf(u8, response, want) != null;
-}
 
 test "route: an unsigned gopher_uid is re-identified once, then never" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -712,7 +598,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     const id = try player.allocate(io, a, "Nikhil");
@@ -720,39 +606,39 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
 
     // The owner's first visit: a redirect to the same page that sets the
     // signed cookie, and the id marked.
-    const first = try UidSite.ask(a, io, "/play?next=/game", unsigned);
-    try testing.expectEqualStrings("303 See Other", status(first));
+    const first = try harness.UidSite.ask(a, io, "/play?next=/game", unsigned);
+    try testing.expectEqualStrings("303 See Other", harness.status(first));
     try testing.expect(std.mem.indexOf(u8, first, "location: /play?next=/game") != null);
-    const signed = setUid(first) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, signed, nowSecs(io)).?);
-    try testing.expect(UidSite.marked(a, io, id));
+    const signed = harness.setUid(first) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, signed, harness.nowSecs(io)).?);
+    try testing.expect(harness.UidSite.marked(a, io, id));
 
     // The signed cookie is the player.
     const with_signed = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{signed});
-    const page = try UidSite.ask(a, io, "/play", with_signed);
-    try testing.expectEqualStrings("200 OK", status(page));
-    try testing.expect(playingAs(page, "Nikhil"));
+    const page = try harness.UidSite.ask(a, io, "/play", with_signed);
+    try testing.expectEqualStrings("200 OK", harness.status(page));
+    try testing.expect(harness.playingAs(page, "Nikhil"));
 
     // The same unsigned cookie again within the grace (the answer may have
     // been lost): re-signed again. Once the grace is over: no one.
-    const lost = try UidSite.ask(a, io, "/play", unsigned);
-    try testing.expectEqualStrings("303 See Other", status(lost));
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, setUid(lost).?, nowSecs(io)).?);
+    const lost = try harness.UidSite.ask(a, io, "/play", unsigned);
+    try testing.expectEqualStrings("303 See Other", harness.status(lost));
+    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, harness.setUid(lost).?, harness.nowSecs(io)).?);
     const marker = try std.fs.path.join(a, &.{ player.player_root, id, "signed" });
-    try UidSite.disk.replace(io, a, marker, "1790000000\n", .{}); // signed long ago
-    const again = try UidSite.ask(a, io, "/play", unsigned);
-    try testing.expectEqualStrings("200 OK", status(again));
-    try testing.expect(!playingAs(again, "Nikhil"));
-    try testing.expect(setUid(again) == null);
-    const game_page = try UidSite.ask(a, io, "/game", unsigned);
+    try harness.UidSite.disk.replace(io, a, marker, "1790000000\n", .{}); // signed long ago
+    const again = try harness.UidSite.ask(a, io, "/play", unsigned);
+    try testing.expectEqualStrings("200 OK", harness.status(again));
+    try testing.expect(!harness.playingAs(again, "Nikhil"));
+    try testing.expect(harness.setUid(again) == null);
+    const game_page = try harness.UidSite.ask(a, io, "/game", unsigned);
     try testing.expect(std.mem.indexOf(u8, game_page, "location: /play?next=/game") != null);
 
     // A POST with it is never the re-identification: no redirect, no cookie.
     const other = try player.allocate(io, a, "Debbie");
-    const post = try serve(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n", .{other}));
-    try testing.expect(setUid(post) == null); // an empty name: the form again, no player made
-    try testing.expect(!playingAs(post, "Debbie")); // and the form names no one
-    try testing.expect(!UidSite.marked(a, io, other));
+    const post = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n", .{other}));
+    try testing.expect(harness.setUid(post) == null); // an empty name: the form again, no player made
+    try testing.expect(!harness.playingAs(post, "Debbie")); // and the form names no one
+    try testing.expect(!harness.UidSite.marked(a, io, other));
 }
 
 test "route: a guest upgrades only with a signed cookie" {
@@ -762,7 +648,7 @@ test "route: a guest upgrades only with a signed cookie" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     // A legacy guest: an account with a name and no password.
@@ -772,20 +658,20 @@ test "route: a guest upgrades only with a signed cookie" {
     const post = try std.fmt.allocPrint(a, "POST /login/full HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid=7\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ post_body.len, post_body });
 
     // Unsigned, straight to the POST: the stranger form, and no password set.
-    const forged = try serve(a, io, post);
+    const forged = try harness.serve(a, io, post);
     try testing.expect(std.mem.indexOf(u8, forged, upgrade) == null);
     try testing.expect(!try users.isMember(io, a, "7"));
 
     // The guest's own first GET re-signs, and the signed cookie upgrades.
-    const first = try UidSite.ask(a, io, "/login/full", "gopher_uid=7");
-    try testing.expectEqualStrings("303 See Other", status(first));
-    const signed = setUid(first) orelse return error.NoSetCookie;
-    const page = try UidSite.ask(a, io, "/login/full", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{signed}));
+    const first = try harness.UidSite.ask(a, io, "/login/full", "gopher_uid=7");
+    try testing.expectEqualStrings("303 See Other", harness.status(first));
+    const signed = harness.setUid(first) orelse return error.NoSetCookie;
+    const page = try harness.UidSite.ask(a, io, "/login/full", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{signed}));
     try testing.expect(std.mem.indexOf(u8, page, upgrade) != null);
 
     // After it, the unsigned spelling is the stranger form, POST or GET.
-    try testing.expect(std.mem.indexOf(u8, try serve(a, io, post), upgrade) == null);
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/login/full", "gopher_uid=7"), upgrade) == null);
+    try testing.expect(std.mem.indexOf(u8, try harness.serve(a, io, post), upgrade) == null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/login/full", "gopher_uid=7"), upgrade) == null);
     try testing.expect(!try users.isMember(io, a, "7"));
 }
 
@@ -796,7 +682,7 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     // A member, with a game identity under their own number.
@@ -807,31 +693,31 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     try users.setUserName(io, a, "3", "Claude");
     try player.mirror(io, a, "3", "Claude");
     for ([_][]const u8{ "gopher_uid=1", "gopher_uid=3", "gopher_uid=p99", "gopher_uid=../1" }) |c| {
-        const r = try UidSite.ask(a, io, "/play", c);
-        try testing.expectEqualStrings("200 OK", status(r));
-        try testing.expect(setUid(r) == null);
-        try testing.expect(!playingAs(r, "Steve") and !playingAs(r, "Claude"));
+        const r = try harness.UidSite.ask(a, io, "/play", c);
+        try testing.expectEqualStrings("200 OK", harness.status(r));
+        try testing.expect(harness.setUid(r) == null);
+        try testing.expect(!harness.playingAs(r, "Steve") and !harness.playingAs(r, "Claude"));
     }
-    try testing.expect(!UidSite.marked(a, io, "1"));
+    try testing.expect(!harness.UidSite.marked(a, io, "1"));
 
     // A forged signature: the right shape, the wrong MAC.
     const forged = try uid_cookie.sign(a, "not the site's secret, though just as long", "1", 1_790_000_000);
-    const f = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{forged}));
-    try testing.expect(!playingAs(f, "Steve"));
+    const f = try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{forged}));
+    try testing.expect(!harness.playingAs(f, "Steve"));
 
     // The member's games follow their session.
-    const session = try users.signSession(a, UidSite.secret, "1", @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s)));
-    const m = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{session}));
-    try testing.expect(playingAs(m, "Steve"));
+    const session = try users.signSession(a, harness.UidSite.secret, "1", @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s)));
+    const m = try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{session}));
+    try testing.expect(harness.playingAs(m, "Steve"));
 
     // A player never yet signed, once the window has shut: no one.
     const id = try player.allocate(io, a, "Nikhil");
-    try UidSite.closeWindow(a, io);
-    const late = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
-    try testing.expectEqualStrings("200 OK", status(late));
-    try testing.expect(setUid(late) == null);
-    try testing.expect(!playingAs(late, "Nikhil"));
-    try testing.expect(!UidSite.marked(a, io, id));
+    try harness.UidSite.closeWindow(a, io);
+    const late = try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
+    try testing.expectEqualStrings("200 OK", harness.status(late));
+    try testing.expect(harness.setUid(late) == null);
+    try testing.expect(!harness.playingAs(late, "Nikhil"));
+    try testing.expect(!harness.UidSite.marked(a, io, id));
 }
 
 test "route: /play mints a signed gopher_uid, marked as signed" {
@@ -841,48 +727,32 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
-    const r = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
-    try testing.expectEqualStrings("303 See Other", status(r));
-    const v = setUid(r) orelse return error.NoSetCookie;
-    const id = uid_cookie.verify(UidSite.secret, v, nowSecs(io)) orelse return error.Unsigned;
-    try testing.expect(UidSite.marked(a, io, id));
+    const r = try harness.serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
+    try testing.expectEqualStrings("303 See Other", harness.status(r));
+    const v = harness.setUid(r) orelse return error.NoSetCookie;
+    const id = uid_cookie.verify(harness.UidSite.secret, v, harness.nowSecs(io)) orelse return error.Unsigned;
+    try testing.expect(harness.UidSite.marked(a, io, id));
     // Its unsigned spelling is refused from the start: not re-signed, even
     // within a re-sign's grace, since this id never had an unsigned cookie.
-    const bare = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
-    try testing.expectEqualStrings("200 OK", status(bare));
-    try testing.expect(setUid(bare) == null);
-    try testing.expect(!playingAs(bare, "Nikhil"));
+    const bare = try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
+    try testing.expectEqualStrings("200 OK", harness.status(bare));
+    try testing.expect(harness.setUid(bare) == null);
+    try testing.expect(!harness.playingAs(bare, "Nikhil"));
     // With no session secret, nothing is minted: no unsigned cookie instead.
     try removeSecret(a, io);
-    const none = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Debbie&next=%2Fgame");
-    try testing.expectEqualStrings("500 Internal Server Error", status(none));
-    try testing.expect(setUid(none) == null);
+    const none = try harness.serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Debbie&next=%2Fgame");
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(none));
+    try testing.expect(harness.setUid(none) == null);
 }
 
 fn removeSecret(a: std.mem.Allocator, io: Io) !void {
-    try UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }));
+    try harness.UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }));
 }
 
 // ── the game store's growth (zig-metal-unikernel QUEUE item 52) ─────────────────────
-
-fn nowSecs(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-}
-
-/// A signed gopher_uid cookie for `id`, as /play would have set: signed an
-/// hour ago, so it is inside its lifetime whenever the tests run.
-fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
-    var threaded = std.Io.Threaded.init(a, .{});
-    defer threaded.deinit();
-    return std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, nowSecs(threaded.io()) - 3600)});
-}
-
-fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
-    return serve(a, io, try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
-}
 
 test "route: /puzzles writes nothing; a session is made by its first move" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -891,37 +761,37 @@ test "route: /puzzles writes nothing; a session is made by its first move" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     const id = try player.allocate(io, a, "Nikhil");
-    const me = try signedUid(a, id);
-    const games = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id });
+    const me = try harness.signedUid(a, id);
+    const games = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id });
 
     // Loaded three times: the same session offered, and nothing on disk.
     for (0..3) |_| {
-        const page = try UidSite.ask(a, io, "/puzzles", me);
-        try testing.expectEqualStrings("200 OK", status(page));
+        const page = try harness.UidSite.ask(a, io, "/puzzles", me);
+        try testing.expectEqualStrings("200 OK", harness.status(page));
         try testing.expect(std.mem.indexOf(u8, page, "session_id: 1\\n") != null);
     }
-    try testing.expect(!try UidSite.disk.has(io, a, games));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, games));
 
     // An id never offered makes nothing.
-    try testing.expectEqualStrings("404 Not Found", status(try postAs(a, io, "/puzzles/sessions/5/puzzles/0/actions", me, "1) x")));
-    try testing.expect(!try UidSite.disk.has(io, a, games));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postAs(a, io, "/puzzles/sessions/5/puzzles/0/actions", me, "1) x")));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, games));
 
     // The first move makes the session, with its meta, and lands.
-    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
     const s1 = try std.fs.path.join(a, &.{ games, "puzzle", "sessions", "1" });
-    const meta = try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ s1, "meta" }), .limited(1 << 20));
+    const meta = try harness.UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ s1, "meta" }), .limited(1 << 20));
     try testing.expect(std.mem.startsWith(u8, meta, "created_at: "));
     try testing.expect(std.mem.indexOf(u8, meta, "\ncatalog:\n") != null);
     // A second move, from a tab offered the same id, lands in the same one.
-    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "2) y")));
-    try testing.expectEqualStrings("1) x\n2) y\n", try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ s1, "puzzle_0", "actions.dsl" }), .limited(64)));
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "2) y")));
+    try testing.expectEqualStrings("1) x\n2) y\n", try harness.UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ s1, "puzzle_0", "actions.dsl" }), .limited(64)));
 
     // The next load offers the next session.
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/puzzles", me), "session_id: 2\\n") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/puzzles", me), "session_id: 2\\n") != null);
 }
 
 test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and all below a quarter free" {
@@ -931,49 +801,49 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const limits = UidSite.game_limits;
+    const limits = harness.UidSite.game_limits;
 
     const id = try player.allocate(io, a, "Nikhil");
-    const me = try signedUid(a, id);
-    const games = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id });
+    const me = try harness.signedUid(a, id);
+    const games = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id });
 
     // A game, then its folder filled to 100 bytes short of the bound.
-    const made = try postAs(a, io, "/game/new-session", me, "state");
-    try testing.expectEqualStrings("200 OK", status(made));
+    const made = try harness.postAs(a, io, "/game/new-session", me, "state");
+    try testing.expectEqualStrings("200 OK", harness.status(made));
     limits.forgetAll(); // the filler below is written behind its back
-    const meta_len = (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "meta" }))).size;
-    const counter_len = (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, "next-session-id.txt" }))).size;
+    const meta_len = (try harness.UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "meta" }))).size;
+    const counter_len = (try harness.UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, "next-session-id.txt" }))).size;
     const filler = try a.alloc(u8, limits.max_bytes - meta_len - counter_len - 100);
     @memset(filler, 'x');
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ games, "filler" }), filler, .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ games, "filler" }), filler, .{});
 
     // 99 bytes and its newline: exactly to the bound. Then one byte more is refused.
     const line = "y" ** 99;
-    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/game/sessions/1/actions", me, line)));
-    const over = try postAs(a, io, "/game/sessions/1/actions", me, "z");
-    try testing.expectEqualStrings("507 Insufficient Storage", status(over));
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/game/sessions/1/actions", me, line)));
+    const over = try harness.postAs(a, io, "/game/sessions/1/actions", me, "z");
+    try testing.expectEqualStrings("507 Insufficient Storage", harness.status(over));
     try testing.expect(std.mem.indexOf(u8, over, "16 MiB") != null);
-    try testing.expectEqualStrings("507 Insufficient Storage", status(try postAs(a, io, "/game/new-session", me, "state")));
-    try testing.expectEqualStrings("507 Insufficient Storage", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
+    try testing.expectEqualStrings("507 Insufficient Storage", harness.status(try harness.postAs(a, io, "/game/new-session", me, "state")));
+    try testing.expectEqualStrings("507 Insufficient Storage", harness.status(try harness.postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
     // Nothing of the refused writes landed.
-    const actions = try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "actions.dsl" }), .limited(1 << 10));
+    const actions = try harness.UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "actions.dsl" }), .limited(1 << 10));
     try testing.expectEqual(@as(usize, 100), actions.len);
-    try testing.expect(!try UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "2" })));
-    try testing.expect(!try UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "puzzle" })));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "2" })));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "puzzle" })));
 
     // Sessions: another player with 500 on disk may not make one more,
     // but may still play in the ones they have.
     const other = try player.allocate(io, a, "Debbie");
-    const them = try signedUid(a, other);
+    const them = try harness.signedUid(a, other);
     for (1..limits.max_sessions + 1) |n| {
-        try UidSite.disk.write(io, a, try std.fmt.allocPrint(a, "{s}/{s}/puzzle/sessions/{d}/meta", .{ UidSite.storage.data_root, other, n }), "m", .{});
+        try harness.UidSite.disk.write(io, a, try std.fmt.allocPrint(a, "{s}/{s}/puzzle/sessions/{d}/meta", .{ harness.UidSite.storage.data_root, other, n }), "m", .{});
     }
-    const refused = try postAs(a, io, "/game/new-session", them, "state");
-    try testing.expectEqualStrings("507 Insufficient Storage", status(refused));
+    const refused = try harness.postAs(a, io, "/game/new-session", them, "state");
+    try testing.expectEqualStrings("507 Insufficient Storage", harness.status(refused));
     try testing.expect(std.mem.indexOf(u8, refused, "500 game sessions") != null);
-    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/7/puzzles/0/actions", them, "1) x")));
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/puzzles/sessions/7/puzzles/0/actions", them, "1) x")));
 
     // The floor: below a quarter free, nobody's game is saved; /play still
     // names a new player (the player store is not the game store).
@@ -981,11 +851,11 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     defer host_space.restore();
     free_space.reader = lowDisk;
     const third = try player.allocate(io, a, "Gus");
-    const floor = try postAs(a, io, "/game/new-session", try signedUid(a, third), "state");
-    try testing.expectEqualStrings("507 Insufficient Storage", status(floor));
+    const floor = try harness.postAs(a, io, "/game/new-session", try harness.signedUid(a, third), "state");
+    try testing.expectEqualStrings("507 Insufficient Storage", harness.status(floor));
     try testing.expect(std.mem.indexOf(u8, floor, "low on disk") != null);
-    const named = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 21\r\n\r\nname=Ann&next=%2Fgame");
-    try testing.expectEqualStrings("303 See Other", status(named));
+    const named = try harness.serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 21\r\n\r\nname=Ann&next=%2Fgame");
+    try testing.expectEqualStrings("303 See Other", harness.status(named));
 }
 
 fn lowDisk() ?free_space.Space {
@@ -999,9 +869,9 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const limits = UidSite.game_limits;
+    const limits = harness.UidSite.game_limits;
     const host_proxy = client_address.save();
     defer host_proxy.restore();
     client_address.trusted_proxy = "10.0.0.1";
@@ -1009,34 +879,34 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     const Name = struct {
         fn post(al: std.mem.Allocator, i: Io, peer: []const u8, xff: []const u8) ![]const u8 {
             const body = "name=Ann&next=%2Fgame";
-            return serveFrom(al, i, try std.fmt.allocPrint(al, "POST /play HTTP/1.1\r\nHost: x\r\n{s}Content-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ xff, body.len, body }), peer);
+            return harness.serveFrom(al, i, try std.fmt.allocPrint(al, "POST /play HTTP/1.1\r\nHost: x\r\n{s}Content-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ xff, body.len, body }), peer);
         }
     };
 
     // Straight from an address: five, then a 429 that says why.
     for (0..limits.players_per_hour) |_|
-        try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "203.0.113.7", "")));
+        try testing.expectEqualStrings("303 See Other", harness.status(try Name.post(a, io, "203.0.113.7", "")));
     const sixth = try Name.post(a, io, "203.0.113.7", "");
-    try testing.expectEqualStrings("429 Too Many Requests", status(sixth));
+    try testing.expectEqualStrings("429 Too Many Requests", harness.status(sixth));
     try testing.expect(std.mem.indexOf(u8, sixth, "the last hour") != null);
-    try testing.expect(setUid(sixth) == null);
+    try testing.expect(harness.setUid(sixth) == null);
     // Another address is its own.
-    try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "198.51.100.1", "")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try Name.post(a, io, "198.51.100.1", "")));
     // An X-Forwarded-For from anyone but the proxy is not believed: still 203.0.113.7.
-    try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "203.0.113.7", "X-Forwarded-For: 192.0.2.50\r\n")));
+    try testing.expectEqualStrings("429 Too Many Requests", harness.status(try Name.post(a, io, "203.0.113.7", "X-Forwarded-For: 192.0.2.50\r\n")));
 
     // Through the proxy: the last address it forwarded for is the one counted,
     // whatever the client put before it.
     for (0..limits.players_per_hour) |_|
-        try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 1.2.3.4, 192.0.2.9\r\n")));
-    try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 5.6.7.8, 192.0.2.9\r\n")));
-    try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.9, 192.0.2.10\r\n")));
+        try testing.expectEqualStrings("303 See Other", harness.status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 1.2.3.4, 192.0.2.9\r\n")));
+    try testing.expectEqualStrings("429 Too Many Requests", harness.status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 5.6.7.8, 192.0.2.9\r\n")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.9, 192.0.2.10\r\n")));
     // What the proxy forwards that is not an address is not believed: the
     // request counts against the proxy itself, so six different pieces of
     // garbage are one address, and the sixth is refused.
     for (0..limits.players_per_hour) |k|
-        try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", try std.fmt.allocPrint(a, "X-Forwarded-For: 192.0.2.11, not-one-{d}\r\n", .{k}))));
-    try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.11, not-one-9\r\n")));
+        try testing.expectEqualStrings("303 See Other", harness.status(try Name.post(a, io, "10.0.0.1", try std.fmt.allocPrint(a, "X-Forwarded-For: 192.0.2.11, not-one-{d}\r\n", .{k}))));
+    try testing.expectEqualStrings("429 Too Many Requests", harness.status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.11, not-one-9\r\n")));
 
     // Game writes: 20 MB from one address an hour, across players.
     const ids = [_][]const u8{ try player.allocate(io, a, "One"), try player.allocate(io, a, "Two") };
@@ -1046,9 +916,9 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     var refused: ?[]const u8 = null;
     var n: usize = 0;
     while (refused == null) : (n += 1) {
-        const r = try serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ try signedUid(a, ids[n % 2]), big.len, big }), "203.0.113.7");
-        if (std.mem.eql(u8, status(r), "429 Too Many Requests")) refused = r else {
-            try testing.expectEqualStrings("200 OK", status(r));
+        const r = try harness.serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ try harness.signedUid(a, ids[n % 2]), big.len, big }), "203.0.113.7");
+        if (std.mem.eql(u8, harness.status(r), "429 Too Many Requests")) refused = r else {
+            try testing.expectEqualStrings("200 OK", harness.status(r));
             sent += big.len;
         }
     }
@@ -1057,18 +927,10 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     // Neither player is near their own 16 MiB: it was the address.
     try testing.expect(sent / 2 < limits.max_bytes);
     // From elsewhere, the same player still saves.
-    try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try signedUid(a, ids[0])}), "198.51.100.1")));
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try harness.signedUid(a, ids[0])}), "198.51.100.1")));
 }
 
 // ── /admin/backup (zig-metal-unikernel REVIEW-admin-backup.md) ──────────────────────
-
-/// An admin session for UidSite: uid 1, with a password.
-fn adminSession(a: std.mem.Allocator, io: Io) ![]const u8 {
-    try users.setUserName(io, a, "1", "Steve");
-    try users.setUserPassword(io, a, "1", "hunter2");
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    return std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
-}
 
 test "route: HEAD /admin/backup reads nothing" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -1077,19 +939,19 @@ test "route: HEAD /admin/backup reads nothing" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const admin_backup = @import("admin_backup.zig");
-    const me = try adminSession(a, io);
+    const me = try harness.adminSession(a, io);
 
     const before = admin_backup.files_archived;
-    const head = try serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/backup HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
-    try testing.expectEqualStrings("200 OK", status(head));
+    const head = try harness.serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/backup HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
+    try testing.expectEqualStrings("200 OK", harness.status(head));
     try testing.expectEqual(before, admin_backup.files_archived);
     // The download (a POST with the password) does walk it: the secret and
     // the account files, at least.
-    const got = try postForm(a, io, "/admin/backup", me, "password=hunter2");
-    try testing.expectEqualStrings("200 OK", status(got));
+    const got = try harness.postForm(a, io, "/admin/backup", me, "password=hunter2");
+    try testing.expectEqualStrings("200 OK", harness.status(got));
     try testing.expect(admin_backup.files_archived >= before + 3);
 }
 
@@ -1100,7 +962,7 @@ test "route: start does the host's setup in one call: the data and the store poi
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(a);
     defer meter.restore();
@@ -1143,9 +1005,9 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try adminSession(a, io);
+    const me = try harness.adminSession(a, io);
     const chat_store = @import("chat_store.zig");
     const disk = @import("webbox").store;
     // Two more members; the admin is in channel "general", not in "quiet".
@@ -1167,8 +1029,8 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
         const path = try std.fs.path.join(a, &.{ chat_store.chat_root, t.dir, "sessions", try std.fmt.allocPrint(a, "{s}.md", .{t.sid}) });
         try disk.write(io, a, path, t.body, .{});
     }
-    const got = try UidSite.ask(a, io, "/admin/search?key=lay", me);
-    try testing.expectEqualStrings("200 OK", status(got));
+    const got = try harness.UidSite.ask(a, io, "/admin/search?key=lay", me);
+    try testing.expectEqualStrings("200 OK", harness.status(got));
     try testing.expect(std.mem.indexOf(u8, got, "/chat/c/1_2/ChitChat#msg-ChitChat_1") != null);
     try testing.expect(std.mem.indexOf(u8, got, "/channel/general/Trips#msg-Trips_1") != null);
     try testing.expect(std.mem.indexOf(u8, got, "ChitChat_2") == null);
@@ -1182,13 +1044,13 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     // site that the admin's cookie follows, get the form and read nothing.
     const admin_search = @import("admin_search.zig");
     const read_before = admin_search.transcripts_read;
-    const head = try serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
-    try testing.expectEqualStrings("200 OK", status(head));
+    const head = try harness.serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
+    try testing.expectEqualStrings("200 OK", harness.status(head));
     try testing.expectEqual(read_before, admin_search.transcripts_read);
-    const cross = try serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: cross-site\r\nCookie: {s}\r\n\r\n", .{me}));
+    const cross = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: cross-site\r\nCookie: {s}\r\n\r\n", .{me}));
     try testing.expect(std.mem.indexOf(u8, cross, "messages match") == null);
     try testing.expect(std.mem.indexOf(u8, cross, "does not run; press Search") != null);
-    const typed = try serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: none\r\nCookie: {s}\r\n\r\n", .{me}));
+    const typed = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: none\r\nCookie: {s}\r\n\r\n", .{me}));
     try testing.expect(std.mem.indexOf(u8, typed, "3 messages match") != null);
 }
 
@@ -1202,47 +1064,27 @@ test "route: Recent's Who cell names the last author where the .count is behind 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    const debbie = try memberSession(a, io, "2", "Debbie");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
     const first = "MSG_ChitChat_1\nfrom: Debbie\ndate: 2026-10-10T00:00:00Z\n\nhello";
-    try writeTranscript(a, io, "1_2", "ChitChat", &.{}); // the folder
+    try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{}); // the folder
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
-    try UidSite.disk.write(io, a, md, first ++ chat_store.sep ++ "MSG_ChitChat_2\nfrom: Steve\ndate: 2026-10-10T00:01:00Z\n\nhi back", .{});
+    try harness.UidSite.disk.write(io, a, md, first ++ chat_store.sep ++ "MSG_ChitChat_2\nfrom: Steve\ndate: 2026-10-10T00:01:00Z\n\nhi back", .{});
     // The .count as it stood after the first message: one behind.
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" }), try std.fmt.allocPrint(a, "1 {d}\n0 2\n", .{first.len}), .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" }), try std.fmt.allocPrint(a, "1 {d}\n0 2\n", .{first.len}), .{});
 
-    const mine = try UidSite.ask(a, io, "/chat/recent", steve);
+    const mine = try harness.UidSite.ask(a, io, "/chat/recent", steve);
     try testing.expect(std.mem.indexOf(u8, mine, "\"who\":\"You\"") != null);
-    const theirs = try UidSite.ask(a, io, "/chat/recent", debbie);
+    const theirs = try harness.UidSite.ask(a, io, "/chat/recent", debbie);
     try testing.expect(std.mem.indexOf(u8, theirs, "\"who\":\"Steve\"") != null);
 }
 
 // ── search (metal-vmm QUEUE 155) ─────────────────────────────────────────────
-
-/// A member's session for UidSite.
-fn memberSession(a: std.mem.Allocator, io: Io, uid: []const u8, name: []const u8) ![]const u8 {
-    try users.setUserName(io, a, uid, name);
-    try users.setUserPassword(io, a, uid, "pw");
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    return std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, uid, now)});
-}
-
-/// A transcript as the store lays it out: one message a body, numbered from 1.
-fn writeTranscript(a: std.mem.Allocator, io: Io, dir: []const u8, sid: []const u8, bodies: []const []const u8) !void {
-    const chat_store = @import("chat_store.zig");
-    var t: std.ArrayList(u8) = .empty;
-    for (bodies, 1..) |body, n| {
-        if (n > 1) try t.appendSlice(a, chat_store.sep);
-        try t.print(a, "MSG_{s}_{d}\nfrom: Someone\ndate: 2026-10-10T00:{d:0>2}:00Z\n\n{s}", .{ sid, n, n % 60, body });
-    }
-    const path = try std.fs.path.join(a, &.{ chat_store.chat_root, dir, "sessions", try std.fmt.allocPrint(a, "{s}.md", .{sid}) });
-    try UidSite.disk.write(io, a, path, t.items, .{});
-}
 
 test "route: search suggests and finds only in what the viewer can see; a word only in another pair's DM is neither (metal-vmm 155(d))" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -1251,7 +1093,7 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
@@ -1262,44 +1104,44 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     defer forgot.end();
     const chat_store = @import("chat_store.zig");
 
-    const me = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    _ = try memberSession(a, io, "3", "Apoorva");
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
-    try writeTranscript(a, io, "1_2", "ChitChat", &.{ "the page LAYOUT is off", "\u{201C}Layover\u{201D} in Denver?" });
-    try writeTranscript(a, io, "channels/general", "Trips", &.{"a layout, again"});
+    const me = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Apoorva");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
+    try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{ "the page LAYOUT is off", "\u{201C}Layover\u{201D} in Denver?" });
+    try harness.writeTranscript(a, io, "channels/general", "Trips", &.{"a layout, again"});
     // Not mine: another pair's DM, and a channel I am not in.
-    try writeTranscript(a, io, "2_3", "Private", &.{"the layaway plan, secretly"});
-    try writeTranscript(a, io, "channels/quiet", "Hush", &.{"a layer cake, secretly"});
+    try harness.writeTranscript(a, io, "2_3", "Private", &.{"the layaway plan, secretly"});
+    try harness.writeTranscript(a, io, "channels/quiet", "Hush", &.{"a layer cake, secretly"});
 
-    const words = try UidSite.ask(a, io, "/chat/search/words?prefix=LAY", me);
-    try testing.expectEqualStrings("200 OK", status(words));
+    const words = try harness.UidSite.ask(a, io, "/chat/search/words?prefix=LAY", me);
+    try testing.expectEqualStrings("200 OK", harness.status(words));
     try testing.expect(std.mem.indexOf(u8, words, "{\"word\":\"layout\",\"count\":2}") != null);
     try testing.expect(std.mem.indexOf(u8, words, "{\"word\":\"layover\",\"count\":1}") != null);
     try testing.expect(std.mem.indexOf(u8, words, "layaway") == null);
     try testing.expect(std.mem.indexOf(u8, words, "layer") == null);
     // A word in what I can see and in what I cannot: counted in mine only
     // ("the" is in 1_2 once, and in 2_3).
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/words?prefix=the", me), "{\"word\":\"the\",\"count\":1}") != null);
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=the", me), "\"matched\":1,") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/words?prefix=the", me), "{\"word\":\"the\",\"count\":1}") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=the", me), "\"matched\":1,") != null);
 
-    const found = try UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
+    const found = try harness.UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
     try testing.expect(std.mem.indexOf(u8, found, "\"matched\":2") != null);
     try testing.expect(std.mem.indexOf(u8, found, "\"conv\":\"/chat/c/1_2\",\"kind\":\"dm\",\"sid\":\"ChitChat\",\"id\":\"ChitChat_1\"") != null);
     try testing.expect(std.mem.indexOf(u8, found, "\"conv\":\"/channel/general\",\"kind\":\"channel\",\"sid\":\"Trips\",\"id\":\"Trips_1\"") != null);
     // **THE LEAK**: words only in what others can see.
     chat_search.forgetAll();
     for ([_][]const u8{ "/chat/search/messages?word=secretly", "/chat/search/messages?word=layaway", "/chat/search/words?prefix=secr" }) |target| {
-        const got = try UidSite.ask(a, io, target, me);
-        try testing.expectEqualStrings("200 OK", status(got));
+        const got = try harness.UidSite.ask(a, io, target, me);
+        try testing.expectEqualStrings("200 OK", harness.status(got));
         try testing.expect(std.mem.indexOf(u8, got, "secretly") == null or std.mem.indexOf(u8, got, "\"word\":\"secretly\",\"matched\":0,\"unreadable\":0,\"messages\":[]") != null);
         try testing.expect(std.mem.indexOf(u8, got, "layaway plan") == null);
         try testing.expect(std.mem.indexOf(u8, got, "\"count\"") == null);
     }
     // And one who can see them finds them.
-    const deb = try memberSession(a, io, "2", "Debbie");
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=secretly", deb), "\"matched\":2") != null);
+    const deb = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=secretly", deb), "\"matched\":2") != null);
 
     // **A MESSAGE THAT LANDS IS FOUND**, without a build from the disk.
     var hub = Hub.init(io, a);
@@ -1307,13 +1149,13 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     const meta = chat_store.ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
     _ = try chat_store.appendMessage(io, a, &bus, meta, try chat_store.dmConvDir(a, "1_2"), "1_2", "ChitChat", "Steve", "1", "zeppelins, tonight", "");
     chat_search.forgetAll();
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
 
     // **A FEW SEARCHES A SECOND**, then 429.
     chat_search.forgetAll();
     var refused = false;
     for (0..chat_search.per_second + 1) |_| {
-        if (std.mem.eql(u8, status(try UidSite.ask(a, io, "/chat/search/words?prefix=la", me)), "429 Too Many Requests")) refused = true;
+        if (std.mem.eql(u8, harness.status(try harness.UidSite.ask(a, io, "/chat/search/words?prefix=la", me)), "429 Too Many Requests")) refused = true;
     }
     try testing.expect(refused);
 }
@@ -1330,7 +1172,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const tokens = @import("search_tokens.zig");
     const admin_search = @import("admin_search.zig");
@@ -1344,8 +1186,8 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
         try users.setUserName(io, a, m[0], m[1]);
         try users.setUserPassword(io, a, m[0], "pw");
     }
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
     const vocabulary = [_][]const u8{
         "Layout",      "layout,",     "\u{201C}layout\u{201D}", "lay", "player", "LAY!", "(lay)", "layer",    "don't",                "don\u{2019}t",
         "caf\u{00E9}", "CAF\u{00C9}", "\u{65E5}\u{672C}",       "a",   "x1",     "e.g.", "3.14",  "**bold**", "\u{2014}dash\u{2014}", "plan",
@@ -1365,7 +1207,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
             }
             try bodies.append(a, body.items);
         }
-        try writeTranscript(a, io, pl[0], pl[1], bodies.items);
+        try harness.writeTranscript(a, io, pl[0], pl[1], bodies.items);
         const base = if (std.mem.startsWith(u8, pl[0], "channels/")) try std.fmt.allocPrint(a, "/channel/{s}", .{pl[0]["channels/".len..]}) else try std.fmt.allocPrint(a, "/chat/c/{s}", .{pl[0]});
         for (bodies.items, 1..) |body, n| try holds.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}_{d}", .{ base, pl[1], pl[1], n }), body);
     }
@@ -1450,30 +1292,26 @@ test "route: only a member's own session is the admin; a non-member's session, o
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const ask = struct {
         fn admin(al: std.mem.Allocator, i: Io, cookie: []const u8) ![]const u8 {
-            return serve(al, i, try std.fmt.allocPrint(al, "GET /admin HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{cookie}));
+            return harness.serve(al, i, try std.fmt.allocPrint(al, "GET /admin HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{cookie}));
         }
     };
 
     // uid 1 with a name and no password is not a member: a session signed
     // rightly for it names no one.
     try users.setUserName(io, a, "1", "Steve");
-    const early = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
-    try testing.expectEqualStrings("303 See Other", status(try ask.admin(a, io, early)));
+    const early = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "1", now)});
+    try testing.expectEqualStrings("303 See Other", harness.status(try ask.admin(a, io, early)));
 
     // Once a member, the session is the admin; a signed gopher_uid for the
     // same id is not a session, and is no one here.
-    const me = try adminSession(a, io);
-    try testing.expectEqualStrings("200 OK", status(try ask.admin(a, io, me)));
-    try testing.expectEqualStrings("303 See Other", status(try ask.admin(a, io, try signedUid(a, "1"))));
-}
-
-fn postForm(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
-    return serve(a, io, try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
+    const me = try harness.adminSession(a, io);
+    try testing.expectEqualStrings("200 OK", harness.status(try ask.admin(a, io, me)));
+    try testing.expectEqualStrings("303 See Other", harness.status(try ask.admin(a, io, try harness.signedUid(a, "1"))));
 }
 
 test "route: /admin/backup asks for the password again, and gives nothing without it" {
@@ -1483,37 +1321,37 @@ test "route: /admin/backup asks for the password again, and gives nothing withou
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const admin_backup = @import("admin_backup.zig");
-    const me = try adminSession(a, io);
+    const me = try harness.adminSession(a, io);
     const before = admin_backup.files_archived;
 
     // The session alone: a form, not the archive.
-    const page = try UidSite.ask(a, io, "/admin/backup", me);
-    try testing.expectEqualStrings("200 OK", status(page));
+    const page = try harness.UidSite.ask(a, io, "/admin/backup", me);
+    try testing.expectEqualStrings("200 OK", harness.status(page));
     try testing.expect(std.mem.indexOf(u8, page, "type=\"password\"") != null);
     try testing.expect(std.mem.indexOf(u8, page, "application/x-tar") == null);
     // A wrong password, and none: refused, nothing walked.
     for ([_][]const u8{ "password=wrong", "", "pass=hunter2" }) |body| {
-        const r = try postForm(a, io, "/admin/backup", me, body);
-        try testing.expectEqualStrings("403 Forbidden", status(r));
+        const r = try harness.postForm(a, io, "/admin/backup", me, body);
+        try testing.expectEqualStrings("403 Forbidden", harness.status(r));
         try testing.expect(std.mem.indexOf(u8, r, "application/x-tar") == null);
     }
     try testing.expectEqual(before, admin_backup.files_archived);
     // The right one: the archive, ending with its manifest.
-    const tar = try postForm(a, io, "/admin/backup", me, "password=hunter2");
-    try testing.expectEqualStrings("200 OK", status(tar));
+    const tar = try harness.postForm(a, io, "/admin/backup", me, "password=hunter2");
+    try testing.expectEqualStrings("200 OK", harness.status(tar));
     try testing.expect(std.mem.indexOf(u8, tar, "application/x-tar") != null);
     try testing.expect(std.mem.indexOf(u8, tar, admin_backup.manifest_name) != null);
     // Nobody else gets as far as the form, with the admin's password or not:
     // no identity is sent to log in, and a member who is not the admin is a 404.
-    try testing.expectEqualStrings("303 See Other", status(try postForm(a, io, "/admin/backup", "gopher_uid=1", "password=hunter2")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postForm(a, io, "/admin/backup", "gopher_uid=1", "password=hunter2")));
     try users.setUserName(io, a, "2", "apoorva");
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const other = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
-    try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/backup", other, "password=hunter2")));
+    const other = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postForm(a, io, "/admin/backup", other, "password=hunter2")));
     try testing.expectEqual(@as(usize, 0), admin_backup.files_archived - before - countFiles(tar));
 }
 
@@ -1531,7 +1369,7 @@ test "route: the re-sign's redirect stays on this site" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     const cases = [_][2][]const u8{
@@ -1543,8 +1381,8 @@ test "route: the re-sign's redirect stays on this site" {
     for (cases) |c| {
         // A fresh legacy player each time: a re-sign happens once per id.
         const id = try player.allocate(io, a, "Nikhil");
-        const r = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{ c[0], id }));
-        try testing.expectEqualStrings("303 See Other", status(r));
+        const r = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{ c[0], id }));
+        try testing.expectEqualStrings("303 See Other", harness.status(r));
         try testing.expect(std.mem.indexOf(u8, r, try std.fmt.allocPrint(a, "location: {s}\r\n", .{c[1]})) != null);
     }
 }
@@ -1556,30 +1394,30 @@ test "route: one address may have 3 legacy cookies re-signed an hour, then 429" 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const limits = UidSite.game_limits;
+    const limits = harness.UidSite.game_limits;
 
     var ids: [5][]const u8 = undefined;
     for (&ids) |*id| id.* = try player.allocate(io, a, "Nikhil");
     const from = struct {
         fn get(al: std.mem.Allocator, i: Io, id: []const u8, peer: []const u8) ![]const u8 {
-            return serveFrom(al, i, try std.fmt.allocPrint(al, "GET /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{id}), peer);
+            return harness.serveFrom(al, i, try std.fmt.allocPrint(al, "GET /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{id}), peer);
         }
     };
     for (ids[0..limits.resigns_per_hour]) |id|
-        try testing.expectEqualStrings("303 See Other", status(try from.get(a, io, id, "203.0.113.7")));
+        try testing.expectEqualStrings("303 See Other", harness.status(try from.get(a, io, id, "203.0.113.7")));
     // The sweep's next id: refused, saying why, and not marked, so its owner
     // can still come back.
     const swept = try from.get(a, io, ids[3], "203.0.113.7");
-    try testing.expectEqualStrings("429 Too Many Requests", status(swept));
+    try testing.expectEqualStrings("429 Too Many Requests", harness.status(swept));
     try testing.expect(std.mem.indexOf(u8, swept, "renewed") != null);
-    try testing.expect(setUid(swept) == null);
-    try testing.expect(!UidSite.marked(a, io, ids[3]));
+    try testing.expect(harness.setUid(swept) == null);
+    try testing.expect(!harness.UidSite.marked(a, io, ids[3]));
     // Its owner, from their own address, is re-signed.
-    try testing.expectEqualStrings("303 See Other", status(try from.get(a, io, ids[3], "198.51.100.1")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try from.get(a, io, ids[3], "198.51.100.1")));
     // And an ordinary visit from the swept-out address is untouched.
-    try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, "GET /play HTTP/1.1\r\nHost: x\r\n\r\n", "203.0.113.7")));
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.serveFrom(a, io, "GET /play HTTP/1.1\r\nHost: x\r\n\r\n", "203.0.113.7")));
 }
 
 /// A host's whole log, for /admin/log's test: two boots of request lines.
@@ -1606,21 +1444,21 @@ test "route: /admin/log is the host's whole log as text, by the admin's key only
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try adminSession(a, io);
+    const me = try harness.adminSession(a, io);
 
     // A host with no log of its own says so.
     @import("webbox").host_facts.provideLogs(null);
-    const none = try UidSite.ask(a, io, "/admin/log", me);
-    try testing.expectEqualStrings("200 OK", status(none));
+    const none = try harness.UidSite.ask(a, io, "/admin/log", me);
+    try testing.expectEqualStrings("200 OK", harness.status(none));
     try testing.expect(std.mem.indexOf(u8, none, "content-type: text/plain") != null);
     try testing.expect(std.mem.indexOf(u8, none, "# This host keeps no log of its own") != null);
 
     @import("webbox").host_facts.provideLogs(TestLogs.get);
     defer @import("webbox").host_facts.provideLogs(null);
-    const all = try UidSite.ask(a, io, "/admin/log", me);
-    try testing.expectEqualStrings("200 OK", status(all));
+    const all = try harness.UidSite.ask(a, io, "/admin/log", me);
+    try testing.expectEqualStrings("200 OK", harness.status(all));
     for ([_][]const u8{
         "# the host: commit abc1234\n",
         "# booted 2026-10-13 14:00:00 UTC\n",
@@ -1635,28 +1473,28 @@ test "route: /admin/log is the host's whole log as text, by the admin's key only
         return error.TestExpectedEqual;
     };
     // One request, this boot only: its line and its upload's, no other.
-    const one = try UidSite.ask(a, io, "/admin/log?request=12&boot=this", me);
+    const one = try harness.UidSite.ask(a, io, "/admin/log?request=12&boot=this", me);
     try testing.expect(std.mem.indexOf(u8, one, "request 12: POST") != null);
     try testing.expect(std.mem.indexOf(u8, one, "    upload: 9000") != null);
     try testing.expect(std.mem.indexOf(u8, one, "request 11:") == null);
     try testing.expect(std.mem.indexOf(u8, one, "boot before") == null);
     // By time, both boots: the boot before ended at 13:00, before it.
-    const late = try UidSite.ask(a, io, "/admin/log?since=2026-10-13T14%3A02", me);
+    const late = try harness.UidSite.ask(a, io, "/admin/log?since=2026-10-13T14%3A02", me);
     try testing.expect(std.mem.indexOf(u8, late, "request 12:") != null);
     try testing.expect(std.mem.indexOf(u8, late, "request 11:") == null);
     try testing.expect(std.mem.indexOf(u8, late, "request 900:") == null);
     // By path.
-    const admin_only = try UidSite.ask(a, io, "/admin/log?path=/admin", me);
+    const admin_only = try harness.UidSite.ask(a, io, "/admin/log?path=/admin", me);
     try testing.expect(std.mem.indexOf(u8, admin_only, "request 900:") != null);
     try testing.expect(std.mem.indexOf(u8, admin_only, "request 12:") == null);
     // A filter spelled wrong is the client's, and says what is allowed.
-    const bad = try UidSite.ask(a, io, "/admin/log?since=yesterday", me);
-    try testing.expectEqualStrings("400 Bad Request", status(bad));
+    const bad = try harness.UidSite.ask(a, io, "/admin/log?since=yesterday", me);
+    try testing.expectEqualStrings("400 Bad Request", harness.status(bad));
     try testing.expect(std.mem.indexOf(u8, bad, "boot=this|before|both") != null);
     // GET only.
-    try testing.expectEqualStrings("405 Method Not Allowed", status(try postForm(a, io, "/admin/log", me, "x=1")));
+    try testing.expectEqualStrings("405 Method Not Allowed", harness.status(try harness.postForm(a, io, "/admin/log", me, "x=1")));
     // Without the admin's key: a sign-in for no one, a 404 for a member.
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/admin/log", ""), "RESTART") == null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/admin/log", ""), "RESTART") == null);
 }
 
 test "route families: each request counted under its part of the site (metal-vmm QUEUE 189.5)" {
@@ -1698,24 +1536,24 @@ test "route: /admin/host counts the requests since boot, the slowest, and puts e
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const traffic = @import("webbox").traffic;
     const saved = traffic.global;
     defer traffic.global = saved;
     traffic.global = .{};
-    const me = try adminSession(a, io);
-    _ = try UidSite.ask(a, io, "/chat", me);
-    _ = try UidSite.ask(a, io, "/nope", me);
+    const me = try harness.adminSession(a, io);
+    _ = try harness.UidSite.ask(a, io, "/chat", me);
+    _ = try harness.UidSite.ask(a, io, "/nope", me);
     // No errors yet: none said.
-    const calm = try UidSite.ask(a, io, "/admin/host", me);
+    const calm = try harness.UidSite.ask(a, io, "/admin/host", me);
     try testing.expect(std.mem.indexOf(u8, calm, "Errors since boot") == null);
     try testing.expect(std.mem.indexOf(u8, calm, "<td>requests since boot</td><td>2 requests:") != null);
     try testing.expect(std.mem.indexOf(u8, calm, "<td>by part of the site</td><td>chat 1, site 1</td>") != null);
     try testing.expect(std.mem.indexOf(u8, calm, "<td>the slowest</td>") != null);
     // A 5xx: the page leads with it, ahead of everything else.
     traffic.global.note(.{ .family = "chat", .status = 503, .took_ns = 4 * std.time.ns_per_ms, .target = "/chat/c/1_2/T/send", .at_unix_ms = 1_791_900_127_123, .err = "ReadOnlyFileSystem" });
-    const loud = try UidSite.ask(a, io, "/admin/host", me);
+    const loud = try harness.UidSite.ask(a, io, "/admin/host", me);
     const errors_at = std.mem.indexOf(u8, loud, "<h2>Errors since boot</h2>") orelse return error.TestExpectedEqual;
     try testing.expect(errors_at < std.mem.indexOf(u8, loud, "<h2>The application</h2>").?);
     try testing.expect(std.mem.indexOf(u8, loud, "2026-10-13T14:02:07.123Z /chat/c/1_2/T/send 503 in 4.0 ms (ReadOnlyFileSystem)") != null);
@@ -1728,49 +1566,49 @@ test "route: /admin/secret changes the secret: members log in again, players are
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try adminSession(a, io);
+    const me = try harness.adminSession(a, io);
     const id = try player.allocate(io, a, "Nikhil");
-    const old_uid = try signedUid(a, id); // signed with the secret before the change
+    const old_uid = try harness.signedUid(a, id); // signed with the secret before the change
     const secret_path = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });
 
     // The form; a wrong password and bad days change nothing.
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/admin/secret", me), "type=\"password\"") != null);
-    try testing.expectEqualStrings("403 Forbidden", status(try postForm(a, io, "/admin/secret", me, "password=wrong&days=7")));
-    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/admin/secret", me, "password=hunter2&days=abc")));
-    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/admin/secret", me, "password=hunter2&days=91")));
-    try testing.expectEqualStrings(UidSite.secret, try UidSite.disk.read(io, a, secret_path, .limited(256)));
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/admin/secret", me), "type=\"password\"") != null);
+    try testing.expectEqualStrings("403 Forbidden", harness.status(try harness.postForm(a, io, "/admin/secret", me, "password=wrong&days=7")));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postForm(a, io, "/admin/secret", me, "password=hunter2&days=abc")));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postForm(a, io, "/admin/secret", me, "password=hunter2&days=91")));
+    try testing.expectEqualStrings(harness.UidSite.secret, try harness.UidSite.disk.read(io, a, secret_path, .limited(256)));
     // Nobody but the admin reaches it.
-    try testing.expectEqualStrings("303 See Other", status(try postForm(a, io, "/admin/secret", "gopher_uid=1", "password=hunter2&days=7")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postForm(a, io, "/admin/secret", "gopher_uid=1", "password=hunter2&days=7")));
 
     // The change.
-    const done = try postForm(a, io, "/admin/secret", me, "password=hunter2&days=7");
-    try testing.expectEqualStrings("200 OK", status(done));
-    const new_secret = try UidSite.disk.read(io, a, secret_path, .limited(256));
-    try testing.expect(!std.mem.eql(u8, new_secret, UidSite.secret));
+    const done = try harness.postForm(a, io, "/admin/secret", me, "password=hunter2&days=7");
+    try testing.expectEqualStrings("200 OK", harness.status(done));
+    const new_secret = try harness.UidSite.disk.read(io, a, secret_path, .limited(256));
+    try testing.expect(!std.mem.eql(u8, new_secret, harness.UidSite.secret));
     try testing.expectEqual(@as(usize, 64), new_secret.len);
 
     // The admin's session has ended; the password still logs in.
-    try testing.expectEqualStrings("303 See Other", status(try UidSite.ask(a, io, "/admin", me)));
-    const relogin = try postForm(a, io, "/login/full", "x=y", "name=Steve&password=hunter2&action=login");
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.UidSite.ask(a, io, "/admin", me)));
+    const relogin = try harness.postForm(a, io, "/login/full", "x=y", "name=Steve&password=hunter2&action=login");
     try testing.expect(std.mem.indexOf(u8, relogin, "set-cookie: __Host-gopher_auth=") != null);
 
     // The player's old cookie still names them, on a POST too, and a GET
     // re-signs it with the new secret.
-    try testing.expect(playingAs(try postForm(a, io, "/play", old_uid, ""), "Nikhil"));
-    const renewed = try UidSite.ask(a, io, "/play", old_uid);
-    try testing.expectEqualStrings("303 See Other", status(renewed));
-    const fresh = setUid(renewed) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, nowSecs(io)).?);
-    try testing.expect(playingAs(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{fresh})), "Nikhil"));
+    try testing.expect(harness.playingAs(try harness.postForm(a, io, "/play", old_uid, ""), "Nikhil"));
+    const renewed = try harness.UidSite.ask(a, io, "/play", old_uid);
+    try testing.expectEqualStrings("303 See Other", harness.status(renewed));
+    const fresh = harness.setUid(renewed) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, harness.nowSecs(io)).?);
+    try testing.expect(harness.playingAs(try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{fresh})), "Nikhil"));
 
     // Once the days are over, the old cookie names no one.
-    try UidSite.disk.replace(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret.previous-until" }), "1\n", .{});
-    const late = try UidSite.ask(a, io, "/play", old_uid);
-    try testing.expectEqualStrings("200 OK", status(late));
-    try testing.expect(!playingAs(late, "Nikhil"));
-    try testing.expect(setUid(late) == null);
+    try harness.UidSite.disk.replace(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret.previous-until" }), "1\n", .{});
+    const late = try harness.UidSite.ask(a, io, "/play", old_uid);
+    try testing.expectEqualStrings("200 OK", harness.status(late));
+    try testing.expect(!harness.playingAs(late, "Nikhil"));
+    try testing.expect(harness.setUid(late) == null);
 }
 
 test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-vmm QUEUE 114)" {
@@ -1783,7 +1621,7 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     // The docs page allocates through it, and presence keeps a map in it for
@@ -1794,19 +1632,19 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
 
     const kept = try docs_store.docPath(a, "2", "kept");
-    try UidSite.disk.write(io, a, kept, "# kept\n", .{});
-    const fine = try UidSite.ask(a, io, "/chat/docs/kept.md", member);
-    try testing.expectEqualStrings("200 OK", status(fine));
+    try harness.UidSite.disk.write(io, a, kept, "# kept\n", .{});
+    const fine = try harness.UidSite.ask(a, io, "/chat/docs/kept.md", member);
+    try testing.expectEqualStrings("200 OK", harness.status(fine));
 
     // The same doc, now a link to itself: it cannot be looked at.
     const lost = try docs_store.docPath(a, "2", "lost");
     try std.Io.Dir.cwd().symLink(io, "lost.md", lost, .{});
-    const resp = try UidSite.ask(a, io, "/chat/docs/lost.md", member);
-    try testing.expect(std.mem.indexOf(u8, status(resp), "404") == null);
-    try testing.expect(std.mem.startsWith(u8, status(resp), "5"));
+    const resp = try harness.UidSite.ask(a, io, "/chat/docs/lost.md", member);
+    try testing.expect(std.mem.indexOf(u8, harness.status(resp), "404") == null);
+    try testing.expect(std.mem.startsWith(u8, harness.status(resp), "5"));
 }
 
 /// The host's Io, but every file removal fails: a store whose delete is
@@ -1844,14 +1682,14 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
     const key = try users.setUserAPIKey(io, a, "2");
 
     var vt: Io.VTable = undefined;
@@ -1867,7 +1705,7 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
     _ = route(&req, failing, a, &b) catch {};
     try out.writer.flush();
     try testing.expect(std.mem.indexOf(u8, out.written(), "keyrevoked") == null);
-    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
     // The key is there, and still the key.
     try testing.expectEqualStrings(key, (try users.getUserAPIKey(io, a, "2")).?);
 }
@@ -1883,16 +1721,16 @@ test "route: a release whose removals fail is not answered as done, and the acco
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
-    const data = try std.fs.path.join(a, &.{ UidSite.storage.data_root, "2", "next-session-id.txt" });
-    try UidSite.disk.write(io, a, data, "2\n", .{});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    const data = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, "2", "next-session-id.txt" });
+    try harness.UidSite.disk.write(io, a, data, "2\n", .{});
 
     var vt: Io.VTable = undefined;
     const failing = removalsFail(io, &vt);
@@ -1906,11 +1744,11 @@ test "route: a release whose removals fail is not answered as done, and the acco
     var b = Bus.of(&hub);
     _ = route(&req, failing, a, &b) catch {};
     try out.writer.flush();
-    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
     // The account is there, and still logs in.
     try testing.expect(try users.principalExists(io, a, "2"));
     try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
-    _ = try UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
+    _ = try harness.UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
 }
 
 test "route: a release whose last removal fails leaves an account that can release again, never one gone with its leftovers kept (metal-vmm QUEUE 134(e))" {
@@ -1924,16 +1762,16 @@ test "route: a release whose last removal fails leaves an account that can relea
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
     const private = try std.fs.path.join(a, &.{ users.users_root, "2" });
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "upload-bytes" }), "1\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "upload-bytes" }), "1\n", .{});
 
     var vt: Io.VTable = undefined;
     refuse_under = private;
@@ -1949,14 +1787,14 @@ test "route: a release whose last removal fails leaves an account that can relea
     var b = Bus.of(&hub);
     _ = route(&req, failing, a, &b) catch {};
     try out.writer.flush();
-    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
     // Still an account that logs in, to release again.
     try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
     // And again, the disk willing: released, nothing left.
     refuse_under = "";
-    try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
+    try testing.expect(std.mem.indexOf(u8, try harness.postForm(a, io, "/logout", member, "release=yes"), "500") == null);
     try testing.expect(!try users.principalExists(io, a, "2"));
-    try testing.expect(!try UidSite.disk.has(io, a, private));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, private));
 }
 
 test "route: a release whose removal inside the account fails keeps the password, whatever order the folder is walked in (metal-vmm QUEUE 138(f))" {
@@ -1972,7 +1810,7 @@ test "route: a release whose removal inside the account fails keeps the password
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
@@ -1984,9 +1822,9 @@ test "route: a release whose removal inside the account fails keeps the password
     const others = [_][]const u8{ "name", "api-key", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28" };
     for (others) |refused| {
         try users.setUserPassword(io, a, "2", "hunter2");
-        for (others) |f| try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ account, f }), "x", .{});
+        for (others) |f| try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ account, f }), "x", .{});
         const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-        const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+        const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
 
         var vt: Io.VTable = undefined;
         refuse_named = refused;
@@ -2002,14 +1840,14 @@ test "route: a release whose removal inside the account fails keeps the password
         var b = Bus.of(&hub);
         _ = route(&req, failing, a, &b) catch {};
         try out.writer.flush();
-        try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+        try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
         // Still an account that logs in, to release again.
         try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
         // And again, the disk willing: released, nothing left.
         refuse_named = "";
-        try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
+        try testing.expect(std.mem.indexOf(u8, try harness.postForm(a, io, "/logout", member, "release=yes"), "500") == null);
         try testing.expect(!try users.principalExists(io, a, "2"));
-        try testing.expect(!try UidSite.disk.has(io, a, account));
+        try testing.expect(!try harness.UidSite.disk.has(io, a, account));
     }
 }
 
@@ -2024,13 +1862,13 @@ test "route: an error after a request's body was read is answered 500 too, never
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
     const id = try player.allocate(io, a, "Nikhil");
-    const me = try signedUid(a, id);
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/game/new-session", me, "state")));
-    const s1 = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id, "lynrummy-elm", "sessions", "1" });
+    const me = try harness.signedUid(a, id);
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/game/new-session", me, "state")));
+    const s1 = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id, "lynrummy-elm", "sessions", "1" });
     try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ s1, "actions.dsl" }));
 
     const raw = try std.fmt.allocPrint(a, "POST /game/sessions/1/actions HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 4\r\n\r\nmove", .{me});
@@ -2043,7 +1881,7 @@ test "route: an error after a request's body was read is answered 500 too, never
     var b = Bus.of(&hub);
     try testing.expect(std.meta.isError(route(&req, io, a, &b)));
     try out.writer.flush();
-    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
     // And the writer the router lent the handler is given back.
     try testing.expect(server.out == &out.writer);
 }
@@ -2059,7 +1897,7 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     const meter = mem_meter.useForTest(std.heap.page_allocator); // as above: presence outlives the test
@@ -2067,7 +1905,7 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
     try std.Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "2", "folder"));
 
     const raw = try std.fmt.allocPrint(a, "GET /chat/docs/folder.md HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{member});
@@ -2082,7 +1920,7 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     // and told nothing of it (QUEUE 134(f)): its name is the log's.
     try testing.expect(std.meta.isError(route(&req, io, a, &b)));
     try out.writer.flush();
-    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
     try testing.expect(std.mem.endsWith(u8, out.written(), "\r\n\r\nThe server failed.\n"));
 }
 
@@ -2095,16 +1933,16 @@ test "route: a new topic differing only in case from one there is refused, 409, 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
-    try testing.expectEqualStrings("409 Conflict", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=plans")));
-    try testing.expectEqualStrings("409 Conflict", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=PLANS")));
-    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=New")));
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("409 Conflict", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=plans")));
+    try testing.expectEqualStrings("409 Conflict", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=PLANS")));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=New")));
 }
 
 test "route: a send that would store nothing is refused, 400, and a message is stored as sent (156(b))" {
@@ -2114,21 +1952,21 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     // No markdown field at all; one that is only whitespace.
-    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "cid=x")));
-    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=+%0A+&cid=x")));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "cid=x")));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=+%0A+&cid=x")));
     // A message that began DROP_ON_FLOOR is a message.
-    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=DROP_ON_FLOOR+is+a+phrase&cid=y")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=DROP_ON_FLOOR+is+a+phrase&cid=y")));
     // A code block's indentation stays.
-    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=++++code%0A++++more&cid=z")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=++++code%0A++++more&cid=z")));
     const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
     const msgs = try chat_store.decodeChatFile(a, raw);
     try testing.expectEqual(@as(usize, 3), msgs.len);
@@ -2143,17 +1981,17 @@ test "route: sign-up refuses a name it would have to change, never registering a
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const page = try postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
+    const page = try harness.postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
     try testing.expect(std.mem.indexOf(u8, page, "set-cookie: __Host-gopher_auth=") == null);
     try testing.expect(std.mem.indexOf(u8, page, "Names can use only") != null);
     try testing.expectEqual(@as(?[]const u8, null), try users.findMemberByName(io, a, "Bobx"));
     // Nor logs in as the member the cleaned name would have been.
-    _ = try memberSession(a, io, "1", "Steve");
-    const as_steve = try postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
+    _ = try harness.memberSession(a, io, "1", "Steve");
+    const as_steve = try harness.postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
     try testing.expect(std.mem.indexOf(u8, as_steve, "set-cookie: __Host-gopher_auth=") == null);
 }
 
@@ -2180,27 +2018,27 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     // The pins' folder is a file: the pin cannot be written.
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions" }), "", .{});
-    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
     // The bookmarks' folder is a file: a send is refused before it stores.
     const bookmarks = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions" });
     try std.Io.Dir.cwd().deleteTree(io, bookmarks);
-    try UidSite.disk.write(io, a, bookmarks, "", .{});
-    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
+    try harness.UidSite.disk.write(io, a, bookmarks, "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
     const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
     try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
     // The player row is a file where its folder goes: the login's mirror fails.
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
-    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
 }
 
 test "route: one form decoder: a bad escape or a field sent twice is a 400 on every form, where chat took them and players refused them as a 500 (156(i))" {
@@ -2210,22 +2048,22 @@ test "route: one form decoder: a bad escape or a field sent twice is a 400 on ev
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     for ([_][]const u8{ "markdown=100%zz&cid=x", "markdown=a&markdown=b&cid=x", "markdown=50%&cid=x" }) |bad| {
-        try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, bad)));
+        try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, bad)));
     }
     const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
     try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
-    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/play", "x=y", "name=Ada%zz&next=%2Fgame")));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postForm(a, io, "/play", "x=y", "name=Ada%zz&next=%2Fgame")));
     // A well-formed escape still decodes.
-    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=100%25&cid=y")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=100%25&cid=y")));
 }
 
 test "route: an admin delete of a player there is not says so, 404, where it went back to the roster as if done (156(i))" {
@@ -2235,13 +2073,13 @@ test "route: an admin delete of a player there is not says so, 404, where it wen
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try adminSession(a, io);
-    try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
-    try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
+    const me = try harness.adminSession(a, io);
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
     const id = try player.allocate(io, a, "Nikhil");
-    try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
 }
 
 test "route: a topic that is not there is a 404 that says so, on every tail but send, and never becomes where /chat/default resumes; a channel not the viewer's says why (156(j))" {
@@ -2251,32 +2089,32 @@ test "route: a topic that is not there is a 404 that says so, on every tail but 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
-    const page = try UidSite.ask(a, io, "/chat/c/1_2/Nowhere", steve);
-    try testing.expectEqualStrings("404 Not Found", status(page));
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const page = try harness.UidSite.ask(a, io, "/chat/c/1_2/Nowhere", steve);
+    try testing.expectEqualStrings("404 Not Found", harness.status(page));
     try testing.expect(std.mem.indexOf(u8, page, "Nowhere") != null);
     for ([_][]const u8{ "/chat/c/1_2/Nowhere/raw", "/chat/c/1_2/Nowhere/stream", "/chat/c/1_2/Nowhere/reactions" }) |t|
-        try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, t, steve)));
-    try testing.expectEqualStrings("404 Not Found", status(try postAs(a, io, "/chat/c/1_2/Nowhere/react", steve, "msg=1&emoji=%F0%9F%91%8D")));
+        try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, t, steve)));
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Nowhere/react", steve, "msg=1&emoji=%F0%9F%91%8D")));
     try testing.expect((try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Nowhere")) == null);
     // Another case is the same topic (Steve, 2026-10-02).
-    try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, "/chat/c/1_2/PLANS/raw", steve)));
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat/c/1_2/PLANS/raw", steve)));
     // The resume pointer still names Plans.
     const last = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions", "1_2" });
-    try testing.expectEqualStrings("Plans\n", try UidSite.disk.read(io, a, last, .limited(64)));
+    try testing.expectEqualStrings("Plans\n", try harness.UidSite.disk.read(io, a, last, .limited(64)));
     // A channel the viewer is not in: a page that says why, worded as for one that is not there.
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n", .{});
-    const removed = try UidSite.ask(a, io, "/channel/quiet", steve);
-    const absent = try UidSite.ask(a, io, "/channel/nothere", steve);
-    try testing.expectEqualStrings("404 Not Found", status(removed));
-    try testing.expectEqualStrings("404 Not Found", status(absent));
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n", .{});
+    const removed = try harness.UidSite.ask(a, io, "/channel/quiet", steve);
+    const absent = try harness.UidSite.ask(a, io, "/channel/nothere", steve);
+    try testing.expectEqualStrings("404 Not Found", harness.status(removed));
+    try testing.expectEqualStrings("404 Not Found", harness.status(absent));
     const why = "is not a channel you are a member of";
     try testing.expect(std.mem.indexOf(u8, removed, why) != null and std.mem.indexOf(u8, absent, why) != null);
 }
@@ -2288,21 +2126,21 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const chat_state = @import("chat_state.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
     // /chat, its bookmark on a conversation with no topic.
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-conv" }), "1_2\n", .{});
-    const landed = try UidSite.ask(a, io, "/chat/default", steve);
-    try testing.expectEqualStrings("303 See Other", status(landed));
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-conv" }), "1_2\n", .{});
+    const landed = try harness.UidSite.ask(a, io, "/chat/default", steve);
+    try testing.expectEqualStrings("303 See Other", harness.status(landed));
     try testing.expect(std.mem.indexOf(u8, landed, "location: /chat/c/1_2\r\n") != null);
     // A send to a topic not yet there makes it.
-    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Fresh/send", steve, "markdown=first&cid=x")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Fresh/send", steve, "markdown=first&cid=x")));
     const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Fresh")).?;
     try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
     _ = chat_state;
@@ -2315,20 +2153,20 @@ test "route: a session under its legacy name is moved to __Host-gopher_auth by t
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
     // Signed before the move, as a real legacy session was.
     const now_s: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const before = @min(now_s, http.legacy_issued_before_unix) - 3600;
-    const value = try users.signSession(a, UidSite.secret, "2", before);
+    const value = try users.signSession(a, harness.UidSite.secret, "2", before);
     const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{value});
-    const moved = try UidSite.ask(a, io, "/play", legacy);
-    try testing.expectEqualStrings("303 See Other", status(moved));
+    const moved = try harness.UidSite.ask(a, io, "/play", legacy);
+    try testing.expectEqualStrings("303 See Other", harness.status(moved));
     try testing.expect(std.mem.indexOf(u8, moved, try std.fmt.allocPrint(a, "set-cookie: __Host-gopher_auth={s};", .{value})) != null);
     try testing.expect(std.mem.indexOf(u8, moved, "set-cookie: gopher_auth=; Path=/; Max-Age=0") != null);
     // Under the new name: nothing to move.
-    try testing.expect(!std.mem.startsWith(u8, status(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{value}))), "303"));
+    try testing.expect(!std.mem.startsWith(u8, harness.status(try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{value}))), "303"));
 }
 
 test "route: a signed gopher_uid under its old name is moved to __Host-gopher_uid by the next GET, and still names its player meanwhile (metal-vmm QUEUE 167.5)" {
@@ -2338,25 +2176,25 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
-    const value = try uid_cookie.sign(a, UidSite.secret, id, @min(nowSecs(io), http.legacy_issued_before_unix) - 3600);
+    const value = try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600);
     const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
-    const moved = try UidSite.ask(a, io, "/play", legacy);
-    try testing.expectEqualStrings("303 See Other", status(moved));
-    try testing.expect(setUid(moved) != null);
+    const moved = try harness.UidSite.ask(a, io, "/play", legacy);
+    try testing.expectEqualStrings("303 See Other", harness.status(moved));
+    try testing.expect(harness.setUid(moved) != null);
     // The legacy one cleared in the same answer (metal-vmm QUEUE 170.8): a
     // browser that drops the new one (plain http) is a new visitor, never
     // a loop of 303s.
     try testing.expect(std.mem.indexOf(u8, moved, "set-cookie: gopher_uid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\r\n") != null);
     // A POST is never redirected: the old name still names them there.
-    try testing.expect(playingAs(try postForm(a, io, "/play", legacy, ""), "Nikhil"));
+    try testing.expect(harness.playingAs(try harness.postForm(a, io, "/play", legacy, ""), "Nikhil"));
     // A sibling's plant under the old name, beside the site's own new one,
     // is not read at all.
     const other = try player.allocate(io, a, "Debbie");
-    const planted = try std.fmt.allocPrint(a, "gopher_uid={s}; __Host-gopher_uid={s}", .{ try uid_cookie.sign(a, UidSite.secret, other, nowSecs(io)), value });
-    try testing.expect(playingAs(try UidSite.ask(a, io, "/play", planted), "Nikhil"));
+    const planted = try std.fmt.allocPrint(a, "gopher_uid={s}; __Host-gopher_uid={s}", .{ try uid_cookie.sign(a, harness.UidSite.secret, other, harness.nowSecs(io)), value });
+    try testing.expect(harness.playingAs(try harness.UidSite.ask(a, io, "/play", planted), "Nikhil"));
 }
 
 test "route: a GET re-signs a gopher_uid past half its life, so an active player keeps who they are; a younger one is left alone (Steve, 2026-10-10)" {
@@ -2366,19 +2204,19 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
-    const now = nowSecs(io);
-    const old = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
-    const renewed = try UidSite.ask(a, io, "/play", old);
-    try testing.expectEqualStrings("303 See Other", status(renewed));
-    const fresh = setUid(renewed) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, fresh, now + uid_cookie.lifetime_secs - 3600).?);
+    const now = harness.nowSecs(io);
+    const old = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
+    const renewed = try harness.UidSite.ask(a, io, "/play", old);
+    try testing.expectEqualStrings("303 See Other", harness.status(renewed));
+    const fresh = harness.setUid(renewed) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, fresh, now + uid_cookie.lifetime_secs - 3600).?);
     // A POST is never redirected: the old cookie still names them there.
-    try testing.expect(playingAs(try postForm(a, io, "/play", old, ""), "Nikhil"));
+    try testing.expect(harness.playingAs(try harness.postForm(a, io, "/play", old, ""), "Nikhil"));
     // Young: no re-sign.
-    try testing.expect(setUid(try UidSite.ask(a, io, "/play", try signedUid(a, id))) == null);
+    try testing.expect(harness.setUid(try harness.UidSite.ask(a, io, "/play", try harness.signedUid(a, id))) == null);
 }
 
 test "route: every game write is counted as exactly what it wrote: an annotation compacted, a line trimmed, a puzzle's first move with its meta (metal-vmm QUEUE 157(b))" {
@@ -2388,13 +2226,13 @@ test "route: every game write is counted as exactly what it wrote: an annotation
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const limits = UidSite.game_limits;
+    const limits = harness.UidSite.game_limits;
     const id = try player.allocate(io, a, "Nikhil");
-    const me = try signedUid(a, id);
-    const games = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id });
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/game/new-session", me, "state")));
+    const me = try harness.signedUid(a, id);
+    const games = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id });
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/game/new-session", me, "state")));
     const Write = struct { target: []const u8, body: []const u8, files: []const []const u8 };
     const writes = [_]Write{
         .{ .target = "/game/sessions/1/annotations", .body = "{ \"a\" : 1,\n  \"b\" : \"x y\" }\n\n", .files = &.{"lynrummy-elm/sessions/1/annotations.jsonl"} },
@@ -2404,11 +2242,11 @@ test "route: every game write is counted as exactly what it wrote: an annotation
     };
     for (writes) |w| {
         var before: u64 = 0;
-        for (w.files) |f| before += if (try UidSite.disk.statOrNull(io, a, try std.fs.path.join(a, &.{ games, f }))) |st| st.size else 0;
+        for (w.files) |f| before += if (try harness.UidSite.disk.statOrNull(io, a, try std.fs.path.join(a, &.{ games, f }))) |st| st.size else 0;
         const counted = limits.countedBytes(id) orelse 0;
-        try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, w.target, me, w.body)));
+        try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, w.target, me, w.body)));
         var after: u64 = 0;
-        for (w.files) |f| after += (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, f }))).size;
+        for (w.files) |f| after += (try harness.UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, f }))).size;
         try testing.expectEqual(after - before, limits.countedBytes(id).? - counted);
     }
 }
@@ -2420,15 +2258,15 @@ test "route: the conversation page hands the client the upload caps and the acce
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_upload = @import("chat_upload.zig");
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
-    const page = try UidSite.ask(a, io, "/chat/c/1_2/Plans", steve);
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const page = try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans", steve);
     try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-upload-image-max=\"{d}\"", .{@import("limits.zig").body.upload_image})) != null);
     try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-upload-video-max=\"{d}\"", .{@import("limits.zig").body.upload_video})) != null);
     try testing.expect(std.mem.indexOf(u8, page, "data-upload-accept=\"" ++ chat_upload.accept ++ "\"") != null);
@@ -2446,7 +2284,7 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
@@ -2455,22 +2293,22 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     defer emptied.end();
     const forgot = chat_search.forgetForTest();
     defer forgot.end();
-    const me = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
+    const me = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
     // The word inside curly quotes and a comma, after a word that holds it
     // ("layouts"): the mark is the word the tokenizer reads, which the
     // client's regex once had to guess.
     const long = "x" ** 200;
-    try writeTranscript(a, io, "1_2", "ChitChat", &.{"see layouts, then \u{201C}LAYOUT\u{201D}, here " ++ long});
-    const found = try UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
+    try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"see layouts, then \u{201C}LAYOUT\u{201D}, here " ++ long});
+    const found = try harness.UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
     try testing.expect(std.mem.indexOf(u8, found, "\"before\":\"see layouts, then \u{201C}\",\"mark\":\"LAYOUT\",\"after\":\"\u{201D}, here ") != null);
     try testing.expect(std.mem.indexOf(u8, found, "x\u{2026}\"") != null); // cut, and says so
     try testing.expect(std.mem.indexOf(u8, found, "\"markdown\":") == null); // the excerpt, not the message
-    const words = try UidSite.ask(a, io, "/chat/search/words?prefix=lay", me);
+    const words = try harness.UidSite.ask(a, io, "/chat/search/words?prefix=lay", me);
     try testing.expect(std.mem.indexOf(u8, words, try std.fmt.allocPrint(a, "\"most\":{d}", .{chat_search.most_words})) != null);
     // And the page carries the shortest word a search takes.
-    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", me, "topic=Plans")));
-    const page = try UidSite.ask(a, io, "/chat/c/1_2/Plans", me);
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", me, "topic=Plans")));
+    const page = try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans", me);
     try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-search-min=\"{d}\"", .{@import("search_tokens.zig").min_len})) != null);
 }
 
@@ -2481,7 +2319,7 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
@@ -2490,15 +2328,15 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     defer emptied.end();
     const forgot = chat_search.forgetForTest();
     defer forgot.end();
-    const me = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
+    const me = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
     // Thirty messages of 100 KB, each holding the word: 3 MB whole, past the
     // 2 MiB budget; their excerpts are a few KB.
     const big = "zeppelin " ++ "x" ** (100 << 10);
     var bodies: [30][]const u8 = undefined;
     for (&bodies) |*b| b.* = big;
-    try writeTranscript(a, io, "1_2", "Docs", &bodies);
-    const found = try UidSite.ask(a, io, "/chat/search/messages?word=zeppelin", me);
+    try harness.writeTranscript(a, io, "1_2", "Docs", &bodies);
+    const found = try harness.UidSite.ask(a, io, "/chat/search/messages?word=zeppelin", me);
     try testing.expect(std.mem.indexOf(u8, found, "\"matched\":30") != null);
     try testing.expectEqual(@as(usize, 30), std.mem.count(u8, found, "\"mark\":\"zeppelin\""));
     try testing.expect(found.len < 64 << 10);
@@ -2511,11 +2349,11 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     const reading_list = @import("reading_list.zig");
-    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
@@ -2523,21 +2361,21 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     try docs_store.writeUserDoc(io, a, ada, slug, "what Ada wrote");
     const post = struct {
         fn f(al: std.mem.Allocator, i: Io, c: []const u8, path: []const u8, body: []const u8) ![]const u8 {
-            return serve(al, i, try std.fmt.allocPrint(al, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ path, c, body.len, body }));
+            return harness.serve(al, i, try std.fmt.allocPrint(al, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ path, c, body.len, body }));
         }
     }.f;
 
     const no_body = try post(a, io, cookies, "/chat/docs/save", try std.fmt.allocPrint(a, "slug={s}", .{slug}));
-    try testing.expectEqualStrings("400 Bad Request", status(no_body));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(no_body));
     try testing.expectEqualStrings("what Ada wrote", try docs_store.readUserDoc(io, a, ada, slug));
 
     const gone = try post(a, io, cookies, "/chat/docs/save", "slug=never-made&body=x");
-    try testing.expectEqualStrings("404 Not Found", status(gone));
+    try testing.expectEqualStrings("404 Not Found", harness.status(gone));
 
     // A reading list at its cap: the next save is the client's limit.
     try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, "x" ** reading_list.max_reading_list_bytes, 0);
     const full = try post(a, io, cookies, "/chat/docs/save_to_reading_list", "conv=1_2&sid=s&id=s_1&body=hello");
-    try testing.expectEqualStrings("413 Payload Too Large", status(full));
+    try testing.expectEqualStrings("413 Payload Too Large", harness.status(full));
 }
 
 test "a gallery that cannot read pages/home.txt is a 500 that names it, never a 200 (metal-vmm QUEUE 172, as the home page's)" {
@@ -2549,8 +2387,8 @@ test "a gallery that cannot read pages/home.txt is a 500 that names it, never a 
     const io = threaded.io();
     // The tests run in zig-server/, where there is no pages/home.txt.
     if (Io.Dir.cwd().access(io, "pages/home.txt", .{})) |_| return error.SkipZigTest else |_| {}
-    const got = try get(a, io, "/gallery");
-    try testing.expectEqualStrings("500 Internal Server Error", status(got));
+    const got = try harness.get(a, io, "/gallery");
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(got));
     try testing.expect(std.mem.indexOf(u8, got, "could not be parsed") != null);
 }
 
@@ -2561,12 +2399,12 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const bo = try users.allocateUser(io, a, "Bo");
@@ -2575,7 +2413,7 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     const key = try std.fmt.allocPrint(a, "{s}_{s}", .{ ada, bo });
     const dm = try std.fmt.allocPrint(a, "/chat/c/{s}/scripts", .{key});
     const hello = "markdown=hello";
-    _ = try serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, hello.len, hello }));
+    _ = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, hello.len, hello }));
     // Where the topic's uploads go is a file: the upload cannot be stored.
     const updir = try std.fs.path.join(a, &.{ try chat_store.dmConvDir(a, key), "sessions", "scripts.uploads" });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
@@ -2584,7 +2422,7 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\n" ++ png ++ "\r\n--B--\r\n";
     // The handler's error goes on to the host (site.zig answers it 500 and
     // hands it on to be logged): here, to the test.
-    const got = serve(a, io, try std.fmt.allocPrint(a, "POST {s}/upload HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: multipart/form-data; boundary=B\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
+    const got = harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/upload HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: multipart/form-data; boundary=B\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
     try testing.expect(std.meta.isError(got));
     try testing.expectEqual(before, try users.userUploadBytes(io, a, ada));
 }
@@ -2596,15 +2434,15 @@ test "a release that can release nothing says so, never the page a release that 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     // A member's id in the player cookie and no session (it lapsed): the
     // account is not this cookie's to release.
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
     try player.mirror(io, a, ada, "Ada");
-    const got = try postAs(a, io, "/logout", try signedUid(a, ada), "release=yes");
-    try testing.expectEqualStrings("403 Forbidden", status(got));
+    const got = try harness.postAs(a, io, "/logout", try harness.signedUid(a, ada), "release=yes");
+    try testing.expectEqualStrings("403 Forbidden", harness.status(got));
     try testing.expect(try users.principalExists(io, a, ada));
     // The logout half still happens (its cold review): every identity
     // cookie is cleared, as a logout without a release clears them.
@@ -2618,14 +2456,14 @@ test "a stream is a GET's: a POST to one is 405, its body never read nor held (m
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
-    const got = try postAs(a, io, "/chat/notifications", cookies, "x" ** 100);
-    try testing.expectEqualStrings("405 Method Not Allowed", status(got));
+    const got = try harness.postAs(a, io, "/chat/notifications", cookies, "x" ** 100);
+    try testing.expectEqualStrings("405 Method Not Allowed", harness.status(got));
 }
 
 /// Who `users.currentUser` says a raw request is for.
@@ -2645,25 +2483,25 @@ test "route: a legacy session is read on a POST (never redirected), not read pas
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
-    const before = @min(nowSecs(io), http.legacy_issued_before_unix) - 3600;
-    const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", before)});
+    const before = @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600;
+    const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", before)});
     const post = try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{legacy});
     // A POST: read under the old name, as it was meant.
     try testing.expectEqualStrings("2", try currentId(a, io, post));
-    try testing.expect(!std.mem.startsWith(u8, status(try postForm(a, io, "/play", legacy, "")), "303"));
+    try testing.expect(!std.mem.startsWith(u8, harness.status(try harness.postForm(a, io, "/play", legacy, "")), "303"));
     // Signed after the cutoff: a plant, read as no one, never moved.
-    const late = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", http.legacy_issued_before_unix + 60)});
+    const late = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", http.legacy_issued_before_unix + 60)});
     try testing.expectEqualStrings("", try currentId(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{late})));
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/play", late), "set-cookie: __Host-gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/play", late), "set-cookie: __Host-gopher_auth=") == null);
     // Past the end date: the legacy name is not read at all.
     const saved_clock = http.names_clock_for_test;
     defer http.names_clock_for_test = saved_clock;
     http.names_clock_for_test = http.legacy_names_until_unix;
     try testing.expectEqualStrings("", try currentId(a, io, post));
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/play", legacy), "set-cookie: __Host-gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/play", legacy), "set-cookie: __Host-gopher_auth=") == null);
 }
 
 test "route: a legacy uid signed after the cutoff names no one and is not moved; past the end date no legacy uid is read (metal-vmm QUEUE 176.1, 176.8)" {
@@ -2673,20 +2511,20 @@ test "route: a legacy uid signed after the cutoff names no one and is not moved;
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
-    const late = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, http.legacy_issued_before_unix + 60)});
-    const got = try UidSite.ask(a, io, "/play", late);
-    try testing.expect(!playingAs(got, "Nikhil"));
-    try testing.expect(setUid(got) == null);
-    const ok = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, @min(nowSecs(io), http.legacy_issued_before_unix) - 3600)});
+    const late = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, http.legacy_issued_before_unix + 60)});
+    const got = try harness.UidSite.ask(a, io, "/play", late);
+    try testing.expect(!harness.playingAs(got, "Nikhil"));
+    try testing.expect(harness.setUid(got) == null);
+    const ok = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600)});
     const saved_clock = http.names_clock_for_test;
     defer http.names_clock_for_test = saved_clock;
     http.names_clock_for_test = http.legacy_names_until_unix;
-    const ended = try UidSite.ask(a, io, "/play", ok);
-    try testing.expect(!playingAs(ended, "Nikhil"));
-    try testing.expect(setUid(ended) == null);
+    const ended = try harness.UidSite.ask(a, io, "/play", ok);
+    try testing.expect(!harness.playingAs(ended, "Nikhil"));
+    try testing.expect(harness.setUid(ended) == null);
 }
 
 // ── the script route (metal-vmm QUEUE 200) ──────────────────────────────────
@@ -2707,7 +2545,7 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
@@ -2722,13 +2560,13 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     store.durable_now = scriptDurable;
     defer store.durable_now = null;
 
-    const me = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
+    const me = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
     const key = try users.setUserAPIKey(io, a, "1");
     const debbie_key = try users.setUserAPIKey(io, a, "2");
     const bearer = try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{key});
-    try writeTranscript(a, io, "1_2", "ChitChat", &.{"the zebra crossing"});
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":1,") != null);
+    try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"the zebra crossing"});
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":1,") != null);
 
     const kp = try Ed25519.KeyPair.generateDeterministic(@splat(3));
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -2739,45 +2577,45 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     const body = try script_route.envelope(a, (try kp.sign(signed, null)).toBytes(), signed);
 
     // No key configured: refused, never open.
-    const no_key = try serve(a, io, try scriptRequest(a, bearer, body));
-    try testing.expectEqualStrings("403 Forbidden", status(no_key));
+    const no_key = try harness.serve(a, io, try scriptRequest(a, bearer, body));
+    try testing.expectEqualStrings("403 Forbidden", harness.status(no_key));
     try testing.expect(std.mem.indexOf(u8, no_key, "refused (no_key)") != null);
     // The key set on the admin's page, the password typed again: a wrong
     // one sets nothing.
     const hex = std.fmt.bytesToHex(kp.public_key.toBytes(), .lower);
     for ([_][]const u8{ "nope", "pw" }, [_][]const u8{ "403 Forbidden", "200 OK" }) |pw, want| {
         const form = try std.fmt.allocPrint(a, "public_key={s}&target=test.example&password={s}", .{ &hex, pw });
-        const set = try serve(a, io, try std.fmt.allocPrint(a, "POST /admin/script-key HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ me, form.len, form }));
-        try testing.expectEqualStrings(want, status(set));
-        if (std.mem.eql(u8, pw, "nope")) try testing.expectEqualStrings("403 Forbidden", status(try serve(a, io, try scriptRequest(a, bearer, body))));
+        const set = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST /admin/script-key HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ me, form.len, form }));
+        try testing.expectEqualStrings(want, harness.status(set));
+        if (std.mem.eql(u8, pw, "nope")) try testing.expectEqualStrings("403 Forbidden", harness.status(try harness.serve(a, io, try scriptRequest(a, bearer, body))));
     }
 
     // Numbered before the key was set: refused, so nothing signed before a
     // key is set again (the sequence lost, say) runs after it.
     const early = try script_route.signedBytes(a, "test.example", 1, now + 300, src);
-    const stale = try serve(a, io, try scriptRequest(a, bearer, try script_route.envelope(a, (try kp.sign(early, null)).toBytes(), early)));
-    try testing.expectEqualStrings("409 Conflict", status(stale));
+    const stale = try harness.serve(a, io, try scriptRequest(a, bearer, try script_route.envelope(a, (try kp.sign(early, null)).toBytes(), early)));
+    try testing.expectEqualStrings("409 Conflict", harness.status(stale));
 
     // The first lock: no bearer, a session cookie instead, another's key.
-    try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, try scriptRequest(a, "", body))));
-    try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, try scriptRequest(a, try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{me}), body))));
-    try testing.expectEqualStrings("403 Forbidden", status(try serve(a, io, try scriptRequest(a, try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{debbie_key}), body))));
+    try testing.expectEqualStrings("401 Unauthorized", harness.status(try harness.serve(a, io, try scriptRequest(a, "", body))));
+    try testing.expectEqualStrings("401 Unauthorized", harness.status(try harness.serve(a, io, try scriptRequest(a, try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{me}), body))));
+    try testing.expectEqualStrings("403 Forbidden", harness.status(try harness.serve(a, io, try scriptRequest(a, try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{debbie_key}), body))));
     // The second: the admin's key, with a script signed by another key.
     const other = try Ed25519.KeyPair.generateDeterministic(@splat(4));
-    const forged = try serve(a, io, try scriptRequest(a, bearer, try script_route.envelope(a, (try other.sign(signed, null)).toBytes(), signed)));
-    try testing.expectEqualStrings("403 Forbidden", status(forged));
+    const forged = try harness.serve(a, io, try scriptRequest(a, bearer, try script_route.envelope(a, (try other.sign(signed, null)).toBytes(), signed)));
+    try testing.expectEqualStrings("403 Forbidden", harness.status(forged));
     try testing.expect(std.mem.indexOf(u8, forged, "refused (bad_signature)") != null);
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":1,") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":1,") != null);
 
     // Both: it runs, the topic is gone, and so is it from search.
-    const ran = try serve(a, io, try scriptRequest(a, bearer, body));
-    try testing.expectEqualStrings("200 OK", status(ran));
+    const ran = try harness.serve(a, io, try scriptRequest(a, bearer, body));
+    try testing.expectEqualStrings("200 OK", harness.status(ran));
     try testing.expect(std.mem.indexOf(u8, ran, "deleted\n── effects (1) ──\nremove chat/1_2/sessions/ChitChat.md: ok\n── finished (") != null);
     try testing.expect(std.mem.indexOf(u8, ran, "── memory rebuilt from the store in ") != null);
-    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":0,") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zebra", me), "\"matched\":0,") != null);
     // Sent again: a replay.
-    const again = try serve(a, io, try scriptRequest(a, bearer, body));
-    try testing.expectEqualStrings("409 Conflict", status(again));
+    const again = try harness.serve(a, io, try scriptRequest(a, bearer, body));
+    try testing.expectEqualStrings("409 Conflict", harness.status(again));
     try testing.expect(std.mem.indexOf(u8, again, "refused (replayed)") != null);
 }
 
@@ -2788,7 +2626,7 @@ test "route: a background script is answered at once, stepped by the Site betwee
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
@@ -2798,14 +2636,14 @@ test "route: a background script is answered at once, stepped by the Site betwee
     store.durable_now = scriptDurable;
     defer store.durable_now = null;
 
-    const me = try memberSession(a, io, "1", "Steve");
+    const me = try harness.memberSession(a, io, "1", "Steve");
     const key = try users.setUserAPIKey(io, a, "1");
     const bearer = try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{key});
-    try writeTranscript(a, io, "1_2", "ChitChat", &.{"the zebra crossing"});
+    try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"the zebra crossing"});
     const kp = try Ed25519.KeyPair.generateDeterministic(@splat(5));
     const hex = std.fmt.bytesToHex(kp.public_key.toBytes(), .lower);
     const form = try std.fmt.allocPrint(a, "public_key={s}&target=test.example&password=pw", .{&hex});
-    try testing.expectEqualStrings("200 OK", status(try serve(a, io, try std.fmt.allocPrint(a, "POST /admin/script-key HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ me, form.len, form }))));
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.serve(a, io, try std.fmt.allocPrint(a, "POST /admin/script-key HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ me, form.len, form }))));
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     var seq: u64 = @intCast(now + 60);
     const send = struct {
@@ -2813,7 +2651,7 @@ test "route: a background script is answered at once, stepped by the Site betwee
             n.* += 1;
             const at: i64 = @intCast(@divFloor(Io.Clock.now(.real, i).nanoseconds, std.time.ns_per_s));
             const signed = try script_route.signedBytesIn(al, "test.example", n.*, at + 300, mode, src);
-            return serve(al, i, try scriptRequest(al, b, try script_route.envelope(al, (try k.sign(signed, null)).toBytes(), signed)));
+            return harness.serve(al, i, try scriptRequest(al, b, try script_route.envelope(al, (try k.sign(signed, null)).toBytes(), signed)));
         }
     }.f;
     const reads = "for e in walk(\"chat\", {like = \"*.md\"}) do print(e.path) end\nprint(read(\"chat/1_2/sessions/ChitChat.md\", 0, 5))\n";
@@ -2821,7 +2659,7 @@ test "route: a background script is answered at once, stepped by the Site betwee
 
     // Before any host has stepped one, a background run is refused, not left unrun.
     const unstepped = try send(a, io, kp, bearer, &seq, .background, reads);
-    try testing.expectEqualStrings("501 Not Implemented", status(unstepped));
+    try testing.expectEqualStrings("501 Not Implemented", harness.status(unstepped));
     try testing.expect(std.mem.indexOf(u8, unstepped, "refused (no_background)") != null);
     // A host steps: between, as webbox's hosts call it, with no run going.
     const at: webbox_site.Now = .{ .awake_ns = 0, .unix_s = now };
@@ -2829,30 +2667,30 @@ test "route: a background script is answered at once, stepped by the Site betwee
 
     // Started: answered at once; a second while it runs is refused.
     const first = try send(a, io, kp, bearer, &seq, .background, reads);
-    try testing.expectEqualStrings("202 Accepted", status(first));
+    try testing.expectEqualStrings("202 Accepted", harness.status(first));
     const second = try send(a, io, kp, bearer, &seq, .background, reads);
-    try testing.expectEqualStrings("503 Service Unavailable", status(second));
+    try testing.expectEqualStrings("503 Service Unavailable", harness.status(second));
     try testing.expect(std.mem.indexOf(u8, second, "refused (busy)") != null);
-    try testing.expect(std.mem.indexOf(u8, try serve(a, io, get_status), " running: ") != null);
+    try testing.expect(std.mem.indexOf(u8, try harness.serve(a, io, get_status), " running: ") != null);
     // Killed: its state says so, and a kill with none going is refused.
-    try testing.expectEqualStrings("200 OK", status(try send(a, io, kp, bearer, &seq, .kill, "")));
-    try testing.expect(std.mem.indexOf(u8, try serve(a, io, get_status), " running: ") == null);
-    try testing.expectEqualStrings("409 Conflict", status(try send(a, io, kp, bearer, &seq, .kill, "")));
+    try testing.expectEqualStrings("200 OK", harness.status(try send(a, io, kp, bearer, &seq, .kill, "")));
+    try testing.expect(std.mem.indexOf(u8, try harness.serve(a, io, get_status), " running: ") == null);
+    try testing.expectEqualStrings("409 Conflict", harness.status(try send(a, io, kp, bearer, &seq, .kill, "")));
 
     // Another, stepped between requests to its end, its output read back.
-    try testing.expectEqualStrings("202 Accepted", status(try send(a, io, kp, bearer, &seq, .background, reads)));
+    try testing.expectEqualStrings("202 Accepted", harness.status(try send(a, io, kp, bearer, &seq, .background, reads)));
     var slices: usize = 0;
     while (between(io, at) == .more) : (slices += 1) try testing.expect(slices < 100);
-    const done = try serve(a, io, get_status);
-    try testing.expectEqualStrings("200 OK", status(done));
+    const done = try harness.serve(a, io, get_status);
+    try testing.expectEqualStrings("200 OK", harness.status(done));
     try testing.expect(std.mem.indexOf(u8, done, " finished") != null);
     try testing.expect(std.mem.indexOf(u8, done, "chat/1_2/sessions/ChitChat.md\nMSG_C\n") != null);
     // The status is the admin's only.
-    try testing.expectEqualStrings("401 Unauthorized", status(try serve(a, io, "GET /admin/script HTTP/1.1\r\nHost: x\r\n\r\n")));
+    try testing.expectEqualStrings("401 Unauthorized", harness.status(try harness.serve(a, io, "GET /admin/script HTTP/1.1\r\nHost: x\r\n\r\n")));
 
     // An atomic run: answered whole, as ever.
     const atomic = try send(a, io, kp, bearer, &seq, .atomic, "print(\"hi\")\n");
-    try testing.expectEqualStrings("200 OK", status(atomic));
+    try testing.expectEqualStrings("200 OK", harness.status(atomic));
     try testing.expect(std.mem.indexOf(u8, atomic, "hi\n") != null);
 }
 
@@ -3013,16 +2851,16 @@ test "request edges: every number a request carries, at its type's edges, as a m
     }
 
     // A member, a player, a topic with a message, and an upload in it.
-    var uid_site = try UidSite.init(a, io);
+    var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const steve = try memberSession(a, io, "1", "Steve");
-    _ = try memberSession(a, io, "2", "Debbie");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
     const id = try player.allocate(io, a, "Steve");
-    const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try signedUid(a, id) });
+    const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try harness.signedUid(a, id) });
     const bearer = try users.setUserAPIKey(io, a, "1");
-    try writeTranscript(a, io, "1_2", "ChitChat", &.{"hello"});
+    try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"hello"});
     const chat_store = @import("chat_store.zig");
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.uploads", "a.png" }), "\x89PNG\r\n\x1a\n" ++ "x" ** 1000, .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.uploads", "a.png" }), "\x89PNG\r\n\x1a\n" ++ "x" ** 1000, .{});
 
     const current = ".zig-cache/tmp/request_edges_current";
     var sent: usize = 0;
@@ -3030,7 +2868,7 @@ test "request edges: every number a request carries, at its type's edges, as a m
         const raw = try edgeRequest(a, template, n, cookies, bearer);
         // Where a panic came from: the stack names the site, this the request.
         try Io.Dir.cwd().writeFile(io, .{ .sub_path = current, .data = raw });
-        _ = serve(a, io, raw) catch |e| switch (e) {
+        _ = harness.serve(a, io, raw) catch |e| switch (e) {
             // std refuses some heads itself (a bad Content-Length, say):
             // that is an answer, not a panic.
             error.HttpHeadersInvalid, error.HttpRequestTruncated => {},

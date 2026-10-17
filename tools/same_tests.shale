@@ -1,0 +1,41 @@
+-- **THE SAME TESTS BEFORE AND AFTER A SPLIT** (metal-vmm QUEUE 236's second
+-- judge): every test's name in zig-server/src's router*.zig at two
+-- revisions, the module left out, from Zig's parser (`zig_decls`). The
+-- same names, the same count, or it fails, naming what moved in or out.
+--   shale tools/same_tests.shale before=<rev> after=<rev>
+local before = arg("before", "")
+local after = arg("after", "")
+const tmp = "zig-out/same_tests"
+function names(rev)
+  local listed = must(run({"git", "ls-tree", "--name-only", rev, "zig-server/src/"}, {timeout_ms = 30000, whole = 1048576})).out
+  local got = {}
+  for path in lines(listed) do
+    local base = sub(path, #"zig-server/src/" + 1)
+    if starts_with(base, "router") and ends_with(base, ".zig") then
+      local text = must(run({"git", "show", rev .. ":" .. path}, {timeout_ms = 30000, whole = 16777216})).out
+      local copy = tmp .. "/" .. base
+      replace(copy, text)
+      for d in zig_decls(copy) do
+        if d.kind == "test" then push(got, d.name) end
+      end
+      remove(copy)
+    end
+  end
+  sort(got)
+  return got
+end
+local a = names(before)
+local b = names(after)
+local in_a = {}
+for n in a do in_a[n] = true end
+local in_b = {}
+for n in b do in_b[n] = true end
+local gone = {}
+for n in a do if not has_key(in_b, n) then push(gone, n) end end
+local new = {}
+for n in b do if not has_key(in_a, n) then push(new, n) end end
+print(before .. ": " .. #a .. " tests; " .. after .. ": " .. #b .. " tests")
+for n in gone do print("  gone: " .. n) end
+for n in new do print("  new: " .. n) end
+if #a ~= #b or #gone > 0 or #new > 0 then fail("the tests differ") end
+print("the same " .. #a .. " tests")
