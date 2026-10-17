@@ -6,8 +6,8 @@ sets from their hands. Named for **Lyn** — Steve's aunt (his
 mother's sister), who taught the family to play. For the rules, see
 [`RULES.md`](./RULES.md); for the big-picture design, [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
-It's live in production at https://lynrummy.com — a DigitalOcean droplet running
-the zig server behind Caddy, where family and friends log in and play (solo or
+It's live in production at https://lynrummy.com (served by zig-metal-unikernel;
+see the top-level README, "Where it runs"), where family and friends log in and play (solo or
 against the built-in agent: deal, play, hint, agent-play, replay, resume).
 
 ## Status: mature and parked (2026-07-25)
@@ -86,22 +86,26 @@ is the lingua franca".
 game, `/puzzles` for the gallery). The front-end artifacts (`elm.js`, `puzzle.js`,
 the TS `engine.js` bundle, the solver's `solver.wasm`) are built and `@embedFile`d
 into the binary; `ops/build_elm` / `ops/build_engine_js` /
-`ops/build_lynrummy_wasm` regenerate them. Deploy is the occasional,
-deliberate `ops/deploy`. Run `ops/list` for the full script index.
+`ops/build_lynrummy_wasm` regenerate them. A change reaches the site in
+a zig-metal-unikernel release (its `DEPLOY.md`). Run `ops/list` for the full script index and
+each gate's rough time.
 
-Gates (warm timings; a cold cache roughly doubles them):
+Gates:
 
-- **`ops/check_lynrummy`** (~30s) — the subsystem gate: zig build + a doc-link
-  check + the Elm and TS suites. Use this while working here.
-- **`ops/check`** (~40s) — the full pre-commit gate (both subsystems).
-- **`ops/check_full`** (~2 min) — adds the slow tier: agent self-play across 6
-  seeds + perf benches. Dominated by self-play, which is variable — a single
-  seed can run anywhere from ~3s to ~30s, so the total wanders a fair bit.
+- **`ops/check_lynrummy`** — the subsystem gate: zig build + a doc-link
+  check + the Elm and TS suites + the tutorial gate (`ops/test_tutorial`) +
+  the solver's tests. Use this while working here.
+- **`ops/check`** — the pre-commit gate, across every subsystem. **It does
+  not run `ops/test_tutorial`**, so a change to `/tutorial` needs
+  `ops/check_lynrummy`.
+- **`ops/check_full`** — adds the slow tier: agent self-play across 6
+  seeds + perf benches. Dominated by self-play, whose time varies a lot
+  from seed to seed.
 
 The honest test invariant: conformance drives the *same* codepaths production
 does. The hints and Player Two are gated through the real `solver.wasm`
 artifact plus the TS lowering (`ops/check_solver`: native zig suites, the
-79-puzzle gallery gate, and the cross-language agent wire), and every gallery
+puzzle gallery gate, and the cross-language agent wire), and every gallery
 puzzle must solve from its own stacks — exactly what the Hint button sees.
 
 ## A small glossary

@@ -65,7 +65,10 @@ green). Only the live native windows flex the camera.
   grows a file-scope `var` (see reentrancy below). Wired into `ops/check`.
 
 The Linux exe and the Windows `.scr` are offered to visitors at **`/safari_download`**
-(served by `zig-server/src/downloads.zig` from `downloads/`, populated by `ops/deploy`).
+(served by `zig-server/src/downloads.zig` from `downloads/` in the working directory).
+`ops/deploy`'s Linux path is the only thing that fills `downloads/`, and it does not run
+while metal serves; zig-metal-unikernel's boot image carries `pages/` and `gallery/` only.
+**So on lynrummy.com the two downloads answer 404.**
 
 ## raster.zig must stay reentrant
 

@@ -79,7 +79,7 @@ dialect we actually write here, and `tools/lint.py` runs rules over the AST
 `ops/check_chat`.
 
 The **server** side lives over in `zig-server/src/` — `chat.zig` and its focused
-neighbors (`chat_page.zig`, `chat_sse.zig`, `conv.zig`, `chrome.zig`, `recent.zig`,
+neighbors (`chat_page.zig`, `chat_sse.zig`, `chat_conv.zig`, `chat_chrome.zig`, `recent.zig`,
 `images.zig`, `docs*.zig`, …). `chat/chat_client.py` is a small Python reference
 client for the HTTP API, so other clients (and our backups) have a worked example.
 
@@ -87,7 +87,7 @@ client for the HTTP API, so other clients (and our backups) have a worked exampl
 
 `ops/start`, then open `/chat`. The subsystem gate is `ops/check_chat` (JS syntax +
 the lint pass + the Python client's syntax); the full pre-commit gate is `ops/check`.
-Deploy rides `ops/deploy` — Steve's sign-off only.
+A change reaches the site in a zig-metal-unikernel release (its `DEPLOY.md`).
 
 For the project-level picture (toolchain, the responsive/mobile design, deploy), see
 the repo's top-level [`README.md`](../README.md).

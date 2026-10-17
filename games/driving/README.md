@@ -70,7 +70,7 @@ modes, the fullscreen-by-camera-flex, and the zig-toolchain gotchas — lives in
 ## Running & testing
 
 `ops/start` builds the wasm (`ops/build_safari_wasm`) and launches the server;
-open `/driving`. Deploy rides `ops/deploy` (sign-off only). The original
+open `/driving`. A change reaches the site in a zig-metal-unikernel release (its `DEPLOY.md`). The original
 TypeScript reference still has its own gate — `node test/test_model.ts` (drives the
 real TS model through the full route — continuity, no-loop, the authored invariants
 below) plus `npm run typecheck` — useful for checking the port against the source.

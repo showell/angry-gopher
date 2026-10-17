@@ -86,12 +86,12 @@ silently.
 ## Build & wiring
 
 `ops/build_chess_wasm` builds every toy root to `games/chess/*.wasm`
-(gitignored) and is wired into `ops/start` and `ops/deploy`.
+(gitignored) and is wired into `ops/start` (through `ops/build_embedded`).
+A change reaches the site in a zig-metal-unikernel release (its `DEPLOY.md`).
 `ops/check_chess` is part of `ops/check`. The server route is
 `zig-server/src/chess.zig` (index + both shells + `/chess/code`); the
-`/chess` index wears the generic site top bar (Home · Chat · Blog +
-viewer chip, per the `blog.zig` pattern — viewer resolved, never
-gated). Home-page row lives in `pages/home.txt`; its gallery emblem is
+`/chess` index wears a site top bar (Home · Chat + viewer chip —
+viewer resolved, never gated). Home-page row lives in `pages/home.txt`; its gallery emblem is
 `gallery/chess.svg`, a hand-authored mid-search board in the toys' own
 visual grammar (red retracted branch, green onward hops, knight and
 queen both solid because both toys shipped).

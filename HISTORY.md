@@ -71,5 +71,5 @@ or the essay):
   law.
 - Define the **population** before ranking it (the early "loops" mislabel).
 
-Both apps deploy via `ops/deploy` (which rebuilds + ships the single zig binary).
+Both apps reach the site in a zig-metal-unikernel release (its `DEPLOY.md`).
 Reviving either: read this file, then the README / the essay, then the code.

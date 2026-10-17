@@ -7,29 +7,20 @@ one-time render or hand-authored asset, committed here as content.
 Served by `zig-server/src/gallery.zig` at **`/gallery`** — a hidden-for-now
 preview surface (unlinked, but public): one card per app, in home-page order,
 showing the image if present or a `pending` placeholder otherwise. Images are read
-from this directory at request time and rsync'd by `ops/deploy` (like `pages/`
-and `pages/`), not embedded in the binary.
+from this directory at request time, not embedded in the binary; like
+`pages/`, it ships in each zig-metal-unikernel boot image (`assets.zon`'s
+`.site`).
 
-Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in
-`gallery.zig`:
-
-| slug | app |
-|------|-----|
-| `delivery` | Seattle Delivery |
-| `safari` | Safari Screensaver |
-| `chat` | Chat |
-| `blog` | Blog |
-| `lynrummy` | Play Lyn Rummy |
-| `puzzles` | Lyn Rummy Puzzles |
-| `chess` | Chess Toys |
+Filenames are `<slug>.png` (or `.svg`). `gallery.zig` derives the cards from
+`pages/home.txt`, and each slug is the basename on that app's `image:` line
+there; `grep image: pages/home.txt` lists them.
 
 ## Authoring rules
 
 - **Anything directional faces RIGHT.** Images sit left of the text on the
   home page, so a left-facing subject "walks off" the page. Standing rule.
 - **The image must be honest** — it can't imply a feature the app doesn't
-  have (an early chat.svg had reaction emoji; we have no reactions, so they
-  came out). Stylized is fine; fictional is not.
+  have. Stylized is fine; fictional is not.
 - **Prefer deriving the image from the app's own code** over inventing an
   illustration (see `safari.png` and `delivery.svg` below) — faithful and
   stale-proof by construction. An invented 3D-truck illustration for

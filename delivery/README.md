@@ -107,8 +107,8 @@ neighborhood roles straight off the data — revealed, not imposed.
 - **Run it:** `ops/start`, then open `/delivery`. The bundle is built by
   `ops/build_delivery` (esbuild `*.ts` → `app.js`), the solver by
   `ops/build_delivery_wasm` (`zig/wasm.zig` → `solver.wasm`, committed); both
-  are `@embedFile`'d via `build.zig`; deploy rides `ops/deploy` (Steve's
-  sign-off only).
+  are `@embedFile`'d via `build.zig`; a change reaches the site in
+  a zig-metal-unikernel release (its `DEPLOY.md`).
 - **Typecheck:** `npm --prefix delivery run typecheck` (i.e. `tsc --noEmit -p .`).
   Note the conformance gate (`ops/check`) does not typecheck this directory — run
   the typecheck here when you touch the TypeScript.
