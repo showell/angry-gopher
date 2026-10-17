@@ -10,7 +10,7 @@ zig-metal-unikernel behind Caddy (TLS); see "Where it runs" below. Each app has 
 home for its design intent; this file is the developer/agent map of the
 whole thing.
 
-## Where it runs: on zig-metal-unikernel, since 2026-10-04
+## Where it runs: on zig-metal-unikernel
 
 **lynrummy.com is served by [zig-metal-unikernel](https://github.com/showell/zig-metal-unikernel)**,
 this repo's zig server compiled into a kernel with no operating system under
@@ -26,8 +26,8 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
   rewriting no line;
   its gates judge metal against this repo's Linux build, page by page, and
-  run metal-vmm (test-only). Its `README.md` and
-  `CUTOVER.md` say how a release reaches the droplet.
+  run metal-vmm (test-only). Its `DEPLOY.md` says how a release reaches
+  the droplet, and the way back.
 - **A change to the program reaches the site as a new zig-metal-unikernel image**,
   not through `ops/deploy`. The old Linux droplet still runs Caddy (TLS,
   body caps), which proxies to metal over the private network
@@ -35,7 +35,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   stopped**. `ops/deploy` fails closed: it restarts that server only when
   `~/linux-serves` is on prod (`deploy/README.md`).
 - **The way back is the previous zig-metal-unikernel image** on the same volume
-  (zig-metal-unikernel's `README.md`). Restarting the Linux server (zig-metal-unikernel's `CUTOVER.md`) is
+  (zig-metal-unikernel's `DEPLOY.md`, "The way back"). Restarting the Linux server (zig-metal-unikernel's `CUTOVER.md`) is
   the last resort: its data is a copy frozen at the 2026-10-04 cutover, so
   everything written since would be lost.
 - **Keep `zig-server/src` portable to metal.** Server code reaches the host
@@ -53,6 +53,10 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
 - **Which commit is live:** `https://lynrummy.com/version` reports the running
   build's `commit`; `git tag --points-at <commit>` names its release
   (zig-metal-unikernel's README, "Where it stands", says how to read the rest).
+  Its `version` field is a constant (`home.zig`), so `commit` is the field that
+  names a build. The other fields: `result`, `rejects` (the edge's reject
+  counters), `mem` (the live-byte meter), `login_throttle`, `now_ms`,
+  `started_ms`.
 
 ## The apps
 
@@ -72,7 +76,7 @@ time. If they disagree, `pages/home.txt` is right.
 | **Chess Toys** | `/chess` | Knight's Tour and Eight Queens as watchable, scrubbable backtracking searches — each search narrates onto an event tape, and the sources themselves are exhibited at `/chess/code`. | Zig (WASM) + JS | [`games/chess/README.md`](games/chess/README.md) |
 
 > **The server is the zig implementation in [`zig-server/`](zig-server/)** —
-> see [`SERVER.md`](SERVER.md).
+> see [`zig-server/README.md`](zig-server/README.md).
 
 The rest of this README is for developers and agents working on the code.
 
@@ -82,15 +86,21 @@ The rest of this README is for developers and agents working on the code.
 bash ops/start        # zig server on :9001
 ```
 
+The build needs [zig-webbox](https://github.com/showell/zig-webbox) cloned
+beside this repo (`../zig-webbox`): `zig-server/build.zig.zon` names it, and
+`ops/check_zig` runs its tests too.
+
 `ops/start` is the canonical dev loop: it kills anything on :9001,
-rebuilds the front-end bundles and WASM cores (`ops/build_elm`,
+rebuilds the front-end bundles and WASM cores (`ops/build_embedded` runs
+every builder that `zig-server/assets.zon` names: `ops/build_elm`,
 `ops/build_delivery`, `ops/build_safari_wasm`, `ops/build_chess_wasm`) and
 the zig binary — which embeds them (see `zig-server/build.zig`) — then relaunches
 and waits for the port to respond. Always use it; don't hand-roll
 `zig build run`.
 
-The server needs `GOPHER_CONFIG` pointing at a config file (`data_dir` +
-auth); `ops/start` uses `~/AngryGopher/gopher.conf`. All persistent data
+`GOPHER_CONFIG` names a config file (`data_dir` + auth); unset, the server
+uses repo-relative defaults (`linux_config.zig`). `ops/start` uses
+`~/AngryGopher/gopher.conf`. All persistent data
 lives under that `data_dir`, outside the source tree — the tree is freely
 rm-able without touching data, and vice versa.
 
@@ -167,11 +177,20 @@ Each of these is otherwise learned from a failing build.
 
 The config is a flat `key = value` file (`#` comments). The zig server
 honors exactly **two** keys — everything else (including any `port =`
-line) is ignored. The listen port is `:9001` unless `GOPHER_PORT` says
-otherwise; `GOPHER_BIND` picks the address, and `GOPHER_TRUSTED_PROXY`
-whose `X-Forwarded-For` names the client (default `127.0.0.1`, the
-local Caddy). `zig-server/src/server.zig` names all three, and webbox's
-`linux_host.zig` reads them.
+line) is ignored. The environment variables, all named in
+`zig-server/src/server.zig`:
+
+- `GOPHER_CONFIG`: the config file (above).
+- `GOPHER_PORT`: the listen port, `:9001` unless set.
+- `GOPHER_BIND`: the listen address.
+- `GOPHER_TRUSTED_PROXY`: whose `X-Forwarded-For` names the client
+  (default `127.0.0.1`, the local Caddy).
+- `GOPHER_KEEPALIVE_MS`: how long a quiet SSE stream waits before a ping;
+  for tests.
+- `GOPHER_GAME_FLOOR=off`: turns off the game store's free-space floor, for
+  a test host whose data sits on a full disk.
+
+webbox's `linux_host.zig` reads the first five; `server.zig` reads the last.
 
 ```
 data_dir = /home/steve/AngryGopher/local  # all writable state lives here
@@ -322,10 +341,10 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/driving`, `/safari_download`, `/downloads` | Safari Screensaver + its native-download landing page and artifacts (public) |
 | `/chess` | Chess Toys: `/chess/knight`, `/chess/queens`, sources at `/chess/code` (public) |
 | `/game`, `/puzzles`, `/tutorial` | Lyn Rummy: full game (player name required), puzzle client, beginner tutorial (tutorial public) |
-| `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring (members only) |
+| `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring; `/chat/recent`, `/chat/images`, `/chat/code`, `/chat/links`, `/chat/search`, `/chat/msg/<id>` (members only; `chat.zig`) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
-| `/admin` | The chat roster and API keys; `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script: zig-webbox's `script_route`, its language in zig-webbox's `docs/SHALE.md`; from v32 a `mode=background` run too, answered at once and stepped between requests on both hosts, its state and output on `GET /admin/script`, one at a time, ended by `mode=kill`) and `/admin/script-key`. All hardcoded to uid 1 |
+| `/admin` | The chat roster and API keys (`/admin/apikey`); `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret), `/admin/retire` (retire old topics and users), `/admin/search?key=` (every chat message containing `key`); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script, below) and `/admin/script-key`. All hardcoded to uid 1 |
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |
 | `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
@@ -337,20 +356,39 @@ name, chat requires a full member. `/play` and login set a signed
 `gopher_uid` cookie; members additionally get a signed session cookie,
 `gopher_auth`. An **API key**
 (`Authorization: Bearer`) resolves to its principal exactly like a
-session — read + write as that uid, never admin.
+session — read + write as that uid. uid 1's key is therefore admin, and it
+is the only credential `/admin/script` takes.
+
+### The admin routes, in more detail
+
+- **`/admin/log`** narrows by `since=`, `until=`, `request=`, `path=` and
+  `boot=` (zig-webbox's `admin_log.zig`).
+- **`/admin/retire`** is two steps: a dry run that lists what would go, then
+  a confirm. Like `/admin/backup` and `/admin/secret`, it asks for the
+  password again.
+- **`/admin/search`** reads every transcript the admin can see, with no
+  index, and holds the turn while it does: every other request waits.
+- **`/admin/script`** takes two locks: the admin's API key as
+  `Authorization: Bearer` (a session cookie is not enough), then an Ed25519
+  signature on the envelope, checked against the public key in
+  `{auth_dir}/shale.conf`; with no key there the route refuses. A
+  `mode=background` run is answered at once and stepped between requests on
+  both hosts, one at a time; `GET /admin/script` shows its state and output,
+  and `mode=kill` ends it. The language is zig-webbox's `docs/SHALE.md`; how
+  to sign and send a script is zig-metal-unikernel's `DEPLOY.md`.
 
 ## Layout
 
 | Where | Role |
 |---|---|
-| [`zig-server/`](zig-server/) | **the server (zig)** — every surface (home, login, chat, docs, Lyn Rummy `/game` + `/puzzles`, driving, `/admin`, `/settings`) as per-module handlers in `src/*.zig` over the shared data tree; front-end assets embedded via `build.zig`. See [`SERVER.md`](SERVER.md). |
+| [`zig-server/`](zig-server/) | **the server (zig)** — every surface (home, login, chat, docs, Lyn Rummy `/game` + `/puzzles`, driving, `/admin`, `/settings`) as per-module handlers in `src/*.zig` over the shared data tree; front-end assets embedded via `build.zig`. See [`zig-server/README.md`](zig-server/README.md). |
 | `chat/` | the embedded chat **client** (`chat.js`) + the reference API client / example bot (`chat_client.py`: discover, read, post) |
 | `delivery/` | the Delivery display client (TS) + `delivery/zig/` — the CVRP solver, compiled to `solver.wasm`, gated bit-exact against the retired TS solver (`ops/check_delivery`) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
 | `games/lynrummy/zig/` | the solver — the strategic brain (hints, certificates, Player Two, self-play sim), compiled to `solver.wasm` for the browser |
 | `games/lynrummy/ts/` | the original TypeScript engine, mostly retired — still the DSL/geometry layer (gesture choreography for the zig solver's plays) + the self-play harness |
 | `ops/` | the build / run / test scripts (`ops/list` enumerates them) |
-| `deploy/` | Caddyfile, systemd unit, deploy runbook |
+| `deploy/` | prod's Caddyfile, the Linux fallback's systemd unit and runbook |
 
 The server stays deliberately dumb — URL-keyed file storage plus the
 per-surface handlers — and pushes logic to the client wherever it can.
@@ -371,19 +409,35 @@ loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 
 ## Ops & testing
 
+The gates, cheapest first (`ops/list` gives each one's rough time):
+
+```
+ops/test_docs          Docs gate: doc_xref --all (dead links/paths)
+ops/test_elm           Elm client suite
+ops/test_ts            TS suite
+ops/check_zig          zig server compiles + the lints + the Caddy limits + every unit test, here and zig-webbox's
+ops/check_chat         Chat gate: check_common + test_chat
+ops/check_lynrummy     Lyn Rummy gate: check_common + test_elm + test_ts + test_tutorial + check_solver
+ops/check              Pre-commit gate: check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
+ops/check_full         Milestone gate: ops/check + the heavy conformance suites + agent self-play + benches
+```
+
+`ops/check` does not run `ops/test_tutorial`; `ops/check_lynrummy` does. A
+change to `/tutorial` needs `ops/check_lynrummy` or `ops/test_tutorial`.
+
+Standalone, run after editing their part:
+
+```
+ops/check_markdown     Markdown dialect regression
+ops/check_delivery     Delivery zig-solver conformance: native gold check +
+                       the built solver.wasm driven over every gold shift
+```
+
+The rest:
+
 ```
 ops/start              Start the zig server on :9001 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~35s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
-ops/check_full         Milestone gate: ops/check + the heavy conformance suites + agent self-play + benches
-ops/check_zig          zig server compiles + the lints + the Caddy limits + every unit test, here and zig-webbox's
-ops/check_markdown     Markdown dialect regression (~3s)
-ops/check_delivery     Delivery zig-solver conformance (~30s warm): native
-                       gold check + the built solver.wasm driven over every
-                       gold shift (standalone; run after delivery/ edits)
-ops/test_ts            Fast TS gate (~4s warm)
-ops/test_elm           Fast Elm gate (~4s)
-ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
 ops/deploy             While metal serves: copy prod's watchdog only. The full
                        Linux build + ship runs only with ~/linux-serves on prod
                        (see deploy/README.md)
@@ -398,9 +452,10 @@ consistency checks that bare commands silently skip.
 | Looking for… | Read |
 |---|---|
 | Any one app's design intent | its README — see [The apps](#the-apps) above |
-| The server internals (routing, modules) | [`SERVER.md`](SERVER.md) |
+| The server internals (routing, modules) | [`zig-server/README.md`](zig-server/README.md) |
 | Lyn Rummy rules / architecture | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md), [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
-| Deploy / host setup | [`deploy/README.md`](deploy/README.md) |
+| Releasing to lynrummy.com | zig-metal-unikernel's `DEPLOY.md` |
+| The Linux fallback host, prod's Caddy | [`deploy/README.md`](deploy/README.md) |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 
 Per-file domain knowledge lives in module top-of-file comments. Commit
