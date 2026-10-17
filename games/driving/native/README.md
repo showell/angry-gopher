@@ -66,9 +66,10 @@ green). Only the live native windows flex the camera.
 
 The Linux exe and the Windows `.scr` are offered to visitors at **`/safari_download`**
 (served by `zig-server/src/downloads.zig` from `downloads/` in the working directory).
-`ops/deploy`'s Linux path is the only thing that fills `downloads/`, and it does not run
-while metal serves; zig-metal-unikernel's boot image carries `pages/` and `gallery/` only.
-**So on lynrummy.com the two downloads answer 404.**
+`ops/build_downloads` fills `downloads/` with both. It is one of `zig-server/assets.zon`'s
+`.site` directories, so zig-metal-unikernel's image and judge carry it, and neither can lay
+out a site disk until it has run. The image's release says when lynrummy.com has them
+(`git tag --contains` the commit that added downloads/ to `.site`, in zig-metal-unikernel).
 
 ## raster.zig must stay reentrant
 

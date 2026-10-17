@@ -1,17 +1,16 @@
 //! downloads: free-standing downloadable artifacts at /downloads/<file> — the native
 //! Safari Screensaver builds linked from the /safari_download page: the Linux X11
 //! executable (safari-linux) and the Windows .scr (safari-windows.scr). Both are
-//! built on deploy (ops/build_safari_download + ops/build_safari_windows) and rsync'd
-//! to `downloads/` — NOT @embedFile'd (they're big native binaries, and they ride
-//! alongside the server like gallery/ + pages/ rather than bloating the server
-//! binary they're served BY).
+//! built into `downloads/` by ops/build_downloads, one of assets.zon's `.site`
+//! directories, so a machine's site disk carries them — NOT @embedFile'd (they're
+//! big native binaries, and they ride alongside the server like gallery/ + pages/
+//! rather than bloating the server binary they're served BY).
 //!
 //!   GET /downloads/<file>   one artifact, streamed as an attachment
 //!
 //! Files stream as application/octet-stream + Content-Disposition: attachment, so
 //! the browser saves them rather than trying to render. Locally (ops/start) the
-//! downloads/ dir usually doesn't exist, so the link 404s until a deploy populates
-//! it on the host — the same free-standing-content posture as gallery images.
+//! downloads/ dir exists once ops/build_downloads has run; until then the links 404.
 
 const std = @import("std");
 const Io = @import("host_io").Io;
@@ -21,9 +20,8 @@ const store = @import("webbox").store;
 
 const Request = std.http.Server.Request;
 
-/// downloads_root is the artifact directory. Repo-relative default resolves on
-/// the droplet (systemd WorkingDirectory = the deploy dir, where ops/deploy
-/// rsyncs downloads/); locally it's usually absent, so requests 404.
+/// downloads_root is the artifact directory, relative to the site's root (the
+/// repo's root locally, the site disk on a machine).
 pub var downloads_root: []const u8 = "downloads";
 
 /// handle dispatches /downloads* — `sub` is the path after "/downloads".

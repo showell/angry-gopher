@@ -9,9 +9,10 @@
 // makes one git does not track.
 //
 // `.site`: directories READ AT REQUEST TIME from the site's root (pages/home.txt
-// is the home page, parsed per request; gallery/ its pictures), relative to
-// the repo's root, each copied whole onto a machine's site disk. A file added
-// to one is served everywhere with nothing else to change.
+// is the home page, parsed per request; gallery/ its pictures; downloads/ the
+// native Safari builds, made by ops/build_downloads and not in git), relative
+// to the repo's root, each copied whole onto a machine's site disk. A file
+// added to one is served everywhere with nothing else to change.
 .{
     .embedded = .{
         // The Safari Screensaver (/driving): a zig→WASM core (ops/build_safari_wasm)
@@ -88,5 +89,5 @@
         // Shared brand/avatar assets served from /images/<file> (brand.zig).
         .{ .name = "image_cat_professor", .path = "../images/cat_professor.webp" },
     },
-    .site = .{ "pages", "gallery" },
+    .site = .{ "pages", "gallery", "downloads" },
 }

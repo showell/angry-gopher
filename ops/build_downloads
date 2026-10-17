@@ -1,0 +1,29 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Fill downloads/, the files /downloads/<name> serves (downloads.zig) and the
+# /safari_download page links: the native Safari Screensaver for Linux
+# (safari-linux, X11) and for Windows (safari-windows.scr). downloads/ is one of
+# zig-server/assets.zon's `.site` directories, so every machine's site disk
+# carries it (zig-metal-unikernel's image and judge), and a site disk cannot be
+# laid out until this has run. git does not track it: both are built here.
+#
+# Needs the X11 dev headers (libx11-dev, libxrender-dev) for the Linux build;
+# the Windows one cross-compiles with zig alone.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+"$GOPHER_DIR/ops/build_safari_download"
+"$GOPHER_DIR/ops/build_safari_windows"
+
+BIN="$GOPHER_DIR/games/driving/zig-out/bin"
+OUT="$GOPHER_DIR/downloads"
+# Fresh each time: a file left from an older build would still be served.
+rm -rf "$OUT"
+mkdir -p "$OUT"
+cp "$BIN/safari_x11" "$OUT/safari-linux"
+cp "$BIN/safari.scr" "$OUT/safari-windows.scr"
+ls -l "$OUT"

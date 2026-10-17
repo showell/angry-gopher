@@ -158,11 +158,14 @@ Each of these is otherwise learned from a failing build.
 3. **Zig 0.16.0**, on `PATH`. Every `ops/build_*` script and the server
    itself go through it.
 4. **`libx11-dev` and `libxrender-dev`**, and only for
-   `ops/build_safari_download`. `games/driving/build.zig:61-62` links exactly
-   `X11` and `Xrender`; nothing else in the tree needs a system library.
-   `ops/start` does not build it; `ops/deploy`'s Linux path does, after the
-   front-end bundles and before the server. The error is
+   `ops/build_safari_download` (which `ops/build_downloads` runs).
+   `games/driving/build.zig:61-62` links exactly `X11` and `Xrender`; nothing
+   else in the tree needs a system library. The error is
    `unable to find dynamic system library 'X11'`.
+   **`ops/build_downloads` before a site disk:** `downloads/` is one of
+   `zig-server/assets.zon`'s `.site` directories, built and not in git, and
+   zig-metal-unikernel's image and judge copy every `.site` directory.
+   `ops/start` does not need it (the two download links 404 until it runs).
 5. **The WASM cores before `zig build`.** `zig-server/build.zig` `@embedFile`s
    three artifacts that a fresh clone does not have (they are gitignored) —
    `games/driving/safari.wasm` and `games/chess/{knight,queens}.wasm` — so

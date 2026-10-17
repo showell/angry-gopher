@@ -73,6 +73,9 @@ Available ops commands (run from repo root):
                          /delivery/solver.wasm, embedded by zig build).
                          Run after any delivery/zig/ edit — or just run
                          ops/check_delivery, which rebuilds + conforms it.
+  ops/build_downloads    Fill downloads/ (a .site directory, not in git) with
+                         the native Safari builds, Linux and Windows. Needed
+                         before zig-metal-unikernel lays out a site disk.
   ops/build_safari_wasm  Build the Safari Screensaver's zig core into
                          games/driving/safari.wasm (the /driving game,
                          embedded by zig build). Called by ops/start. Run
