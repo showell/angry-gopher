@@ -70,7 +70,7 @@ const queens_page = shell("Eight Queens",
     \\}
 );
 
-// The launch pad for the toys: the site's generic top bar (Home · Chat · Blog,
+// The launch pad for the toys: the site's generic top bar (Home · Chat,
 // same as home.zig — the way back home) over two cards + the
 // under-the-hood link, styled to match the boards' dark chrome.
 const index_head =
