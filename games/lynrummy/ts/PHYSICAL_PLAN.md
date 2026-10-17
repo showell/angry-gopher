@@ -171,5 +171,6 @@ physical decisions per emitted primitive.
 - `ENGINE_V2.md` — what the solver hands to this layer.
 - `../ARCHITECTURE.md` — repo-level layering and the gesture
   pipeline.
-- `claude-steve/random249.md`, `random250.md`, `random253.md`
-  — design-conversation predecessors (frozen essays).
+- `random249.md`, `random250.md`, `random253.md` in the laptop's
+  essay archive (`claude-steve/`; not in this repo or on the dev box)
+  — design-conversation predecessors.

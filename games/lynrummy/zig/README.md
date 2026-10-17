@@ -63,7 +63,8 @@ single-set carvings. A/B: −21% steps on the quick corpus, −26% on the
 hard corpus's decided rows, 35 of the quick corpus's futile boards
 proven with zero search, no board slower. The puzzle-78 exemplar (7
 tens vs 3 nines + 3 queens force a ten set) is where the lemma was
-mined — probes in claude-steve/random765.md.
+mined (the probes are in the laptop's essay archive, `random765.md`;
+not in this repo or on the dev box).
 
 The solve is a **portfolio**, cheapest prior first:
 
@@ -293,5 +294,5 @@ mine upward from there):
 The mining/grading loop is repeatable: `seed_sweep.zig` →
 `ops/mine_lynrummy_puzzle` → curate → `puzzle_gate` count bump →
 Steve plays it → `ts/tools/replay_puzzle.ts` + `calib.zig` grade it.
-Post-solve analyses live in the essay archive (claude-steve
-random793/random798 for 79/80).
+Post-solve analyses live in the laptop's essay archive (`random793.md`,
+`random798.md`; not in this repo or on the dev box).

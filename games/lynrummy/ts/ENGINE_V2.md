@@ -38,9 +38,9 @@ corresponds to the kitchen-table single-motion act of "I grab
 the AS from `[AS 2S]` and absorb it onto `[AC' AD]`; the
 leftover 2S becomes a singleton." Without this, the engine
 would have to model that as a two-step decompose-then-pull,
-breaking natural 4-step solutions into 5 awkward steps. See
-`claude-steve/random234.md` and `random238.md` for the
-reasoning.
+breaking natural 4-step solutions into 5 awkward steps. The
+reasoning is in the laptop's essay archive (`random234.md`,
+`random238.md`; not in this repo or on the dev box).
 
 ## Files
 
@@ -70,7 +70,7 @@ reasoning.
 | **State-sig dedup (closed list)** | ~22% on hard scenarios | landed |
 | **Position-indexed `fastStateSig`** | ~1.2× faster than string-sig, same dedup decisions | landed |
 | **Card-tracker liveness pruning** | dead-singleton filter at root + per-state singleton-doom | landed |
-| Pair-doom memo | est. 5–15% wall (likely smaller) | deferred — see `random238.md` |
+| Pair-doom memo | est. 5–15% wall (likely smaller) | deferred (essay archive: `random238.md`) |
 | Beam search / Kasparov pruning | est. 5–10× but loses optimality | not pursued |
 | Doomed-singleton predicate | catch root-state futility cheaply | deferred |
 
@@ -116,8 +116,8 @@ to this cap should be justified empirically against
    cases sub-millisecond.
 3. **Pair-doom memo.** Cache per-pair completion-shape work
    across branches. Small win.
-4. **Coroutine-scheduled candidate exploration** —
-   `claude-steve/random236.md`. Niche.
+4. **Coroutine-scheduled candidate exploration** (essay archive:
+   `random236.md`). Niche.
 
 ## Solver design principles
 
@@ -200,20 +200,17 @@ extending shapes per absorber.
 
 ## Pointers
 
-- `claude-steve/random234.md` — the kitchen-table algorithm
-  spec.
-- `claude-steve/random235.md` — `corpus_sid_130` walked
-  through step by step.
-- `claude-steve/random237.md` — manager-with-budget framing →
-  A* derivation.
-- `claude-steve/random238.md` — pair-doom memo design
-  (deferred).
+The laptop's essay archive (`claude-steve/randomNNN.md`; not in this
+repo or on the dev box) holds the design conversations:
 
-## Memory pointers
+- `random234.md` — the kitchen-table algorithm spec.
+- `random235.md` — `corpus_sid_130` walked through step by step.
+- `random237.md` — manager-with-budget framing → A* derivation.
+- `random238.md` — pair-doom memo design (deferred).
 
-- `memory/feedback_earn_and_use_knowledge.md` — doctrine
-  behind probe+executor and three-bucket-extends.
-- `memory/feedback_iteration_order_is_canon.md` — why
-  iteration order is treated as cross-language canon.
-- `memory/feedback_no_side_parameter.md` — splits left/right
-  into separate functions instead of taking a side parameter.
+## Design rules behind the code
+
+- Earn knowledge, then use it: the doctrine behind probe+executor
+  and three-bucket-extends.
+- Iteration order is cross-language canon.
+- Left and right are separate functions, never a side parameter.
