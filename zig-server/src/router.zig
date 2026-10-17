@@ -2919,7 +2919,6 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "counter.zig", .func = "current", .unreachable_because = "a counter file the server wrote" },
     .{ .file = "linux_host.zig", .func = "portFrom", .unreachable_because = "the environment" },
     .{ .file = "linux_fetch.zig", .func = "parseHead", .unreachable_because = "the answer to the application's own fetch, not a request (zig-webbox, metal-vmm QUEUE 228)" },
-    .{ .file = "linux_host.zig", .func = "countAnswers", .unreachable_because = "a keep-alive test's client, counting the host's answers (zig-webbox, metal-vmm QUEUE 213)" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },
     .{ .file = "router.zig", .func = "countFiles", .unreachable_because = "a test's helper" },
     .{ .file = "session_meta.zig", .func = "applyMetaScalar", .unreachable_because = "a meta file the server wrote" },
@@ -2990,6 +2989,8 @@ test "request edges: every number a request carries, at its type's edges, as a m
         var files = src.iterate();
         while (try files.next(io)) |entry| {
             if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".zig")) continue;
+            // A test file is no request's: its helpers are tests' too.
+            if (std.mem.endsWith(u8, entry.name, "_test.zig")) continue;
             const text = try src.readFileAlloc(io, entry.name, a, .limited(4 << 20));
             var lines = std.mem.splitScalar(u8, text, '\n');
             var func: []const u8 = "";
