@@ -1,17 +1,19 @@
 # Deploying Angry Gopher (Lyn Rummy)
 
-> **Since 2026-10-04 lynrummy.com is served by zig-metal-unikernel** (see the
-> top-level README, "Where it runs"). This droplet now runs Caddy, which
-> proxies to metal, and the watchdog; its zig server is stopped. `ops/deploy`
-> fails closed (below): while metal serves it refreshes the watchdog and
-> nothing else. The Linux-host sections are also the way back.
+> **lynrummy.com is served by zig-metal-unikernel** (see the top-level
+> README, "Where it runs"); releasing it is zig-metal-unikernel's
+> `DEPLOY.md`. This droplet runs Caddy, which proxies to metal, and the
+> watchdog; its zig server is stopped. `ops/deploy` fails closed (below):
+> while metal serves it refreshes the watchdog and nothing else. The
+> Linux-host sections are the fallback.
 
-The production host is a DigitalOcean droplet (NYC3, Ubuntu 24.04,
-x86_64). Caddy fronts the **zig server** (see `SERVER.md`) for TLS and a
-body cap; the server listens on `localhost:9001`. (`/admin` is gated by
-the app, to uid 1 (`admin_ui.requireAdmin`), not by the proxy.)
+The prod host is a DigitalOcean droplet (NYC3, Ubuntu 24.04, x86_64).
+Caddy terminates TLS, caps request bodies, and proxies to metal over the
+private network (`deploy/Caddyfile`). When Linux serves, the same Caddy
+fronts the local **zig server** on `localhost:9001` instead. (`/admin` is
+gated by the app, to uid 1 (`admin_ui.requireAdmin`), not by the proxy.)
 
-The host runs **no zig/Go/Node/Elm toolchain** — we build locally and
+When Linux serves, the host runs **no zig/Go/Node/Elm toolchain** — we build locally and
 ship a **single statically linked binary**: the Elm/TS bundles, the
 Safari and chess WASM cores and the puzzle catalogs are baked in at
 compile time (`build.zig` `@embedFile`). The site's own files —
@@ -24,14 +26,14 @@ handles this ordering). See
 
 We ship a **Debug build**, not ReleaseSafe. The server is I/O-bound (static
 JS, small files, small markdown renders) with no hot compute loop, so LLVM's
-optimization passes cost ~72s/deploy and buy ~nothing; Debug builds in ~7s and
-carries the *full* set of runtime safety checks (a superset of ReleaseSafe's).
+optimization passes cost far more build time than Debug's and buy ~nothing
+(unmeasured since the move to metal); Debug carries the *full* set of runtime safety checks (a superset of ReleaseSafe's).
 It's also the mode `ops/start` runs locally, so prod ships what we dogfood. Flip
 `ops/deploy` back to `-Doptimize=ReleaseSafe` only if a CPU-bound path lands.
 
-## A deploy, after the 2026-10-04 cutover
+## A deploy while metal serves
 
-**metal serves lynrummy.com now, and prod's Linux `gopher-server` is stopped by
+**metal serves lynrummy.com, and prod's Linux `gopher-server` is stopped by
 design** — two hosts writing two copies of the data cannot be merged
 (`CUTOVER.md` in zig-metal-unikernel). So:
 
@@ -39,8 +41,8 @@ design** — two hosts writing two copies of the data cannot be merged
   **zig-metal-unikernel image**, built and deployed in the zig-metal-unikernel repo. metal
   serves the content from its own boot image, so `ops/deploy` does NOT ship it
   to prod — shipping it there would ship content nothing serves.
-- **Only the watchdog** still ships to the prod host, which is now the aux box
-  the watchdog runs on.
+- **Only the watchdog** ships to the prod host, the aux box the watchdog
+  runs on.
 
 **`ops/deploy` fails closed** (QUEUE item 109): it builds and restarts the Linux
 server ONLY when prod says, in so many words, that Linux serves — the marker
@@ -55,7 +57,7 @@ cutover removes it; the watchdog reads the same file the same way.
 ops/deploy        # metal serving (marker absent): refreshes the watchdog only
 ```
 
-## When Linux serves (pre-cutover, or a fallback via CUTOVER.md's way back)
+## When Linux serves (the fallback, via CUTOVER.md's way back)
 
 With `~/linux-serves` present on the prod host, `ops/deploy` is the full deploy:
 
@@ -144,8 +146,8 @@ traffic, and nobody read it continuously). One run checks: the local server
 answers `GET /version` (or is stopped, as it should be while metal serves),
 exactly one `zig-server` process when it should be up, free RAM and disk,
 nothing unexpected running as `steve`; and zig-metal-unikernel, when `~/metal-url`
-on the host names it (one line, `http://<metal's private address>`; the
-address stays off the repo): `metal` FAILs when metal's `/version` does not
+on the host names it (one line, `http://<metal's private address>`, the
+address `deploy/Caddyfile` proxies to): `metal` FAILs when metal's `/version` does not
 answer and WARNs when metal runs another commit than this server,
 `metal-clock` WARNs at 2 s and FAILs at 60 s between the two clocks, and
 `metal-uptime` says how long metal has been up (short: a recent restart).
@@ -164,7 +166,7 @@ except to curl the local server and metal's `/version`.
 `python3 deploy/test_watchdog.py` tests the metal checks against two local
 servers, one of them stopped (needs `zig build` first).
 
-## Hardening (applied 2026-05-21)
+## Hardening
 
 - **TLS:** live on `https://lynrummy.com` (Let's Encrypt via Caddy,
   auto-renew); HTTP→HTTPS redirect; HSTS.
@@ -175,19 +177,20 @@ servers, one of them stopped (needs `zig build` first).
   `PermitRootLogin no`). Log in as `steve`.
 - **Auto updates:** `unattended-upgrades` enabled (DO image default).
 - **Firewall:** ufw allows 22/80/443 only.
-- **Backups:** `ops/backup` pulls a timestamped `data_dir` tarball to
-  `~/AngryGopher/backups` on the dev box. Also worth enabling
-  DigitalOcean weekly droplet backups in the control panel for
-  whole-droplet recovery.
+- **Backups:** the live data is on metal, and leaves it only through
+  `GET /admin/backup` on lynrummy.com (zig-metal-unikernel's `DEPLOY.md`).
+  `ops/backup` pulls a timestamped tarball of this host's `data_dir`
+  (`~/AngryGopher/prod`) to `~/AngryGopher/backups` on the dev box; that
+  is the Linux copy, frozen at the 2026-10-04 cutover. DigitalOcean's
+  weekly droplet backups cover whole-droplet recovery of this host.
 - **Account store (`~/Auth`):** the shared account data — `name`, `password`,
   `api-key`, and `next-id.txt` — lives under `~/Auth` (config `auth_dir`,
   default `~/Auth`), deliberately OUTSIDE `data_dir`. So it is **not** in the
   `ops/backup` tarball (back it up separately — it holds credentials), and a
   sibling app can share accounts without reaching into `~/AngryGopher`.
   gopher-private per-user data (upload-bytes) stays under
-  `{data_dir}/users/<id>/`. A fresh host starts already-split; the prod host
-  was migrated 2026-05-29 (the one-shot migration tool has since been removed —
-  pull it from git history if another existing host ever needs it).
+  `{data_dir}/users/<id>/`. A fresh host starts already split. The one-shot
+  tool that split an older host is in git history.
 
 ### Deferred to the guests phase
 

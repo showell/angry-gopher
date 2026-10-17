@@ -2,8 +2,8 @@
 
 The Angry Gopher server, in zig — every surface (home, login, chat, docs, the
 Lyn Rummy `/game` + `/puzzles`, `/driving`, `/admin`, `/settings`) served from
-one statically-linked binary over a shared on-disk data tree. It was ported from
-a Go original (now removed); the repo-root `SERVER.md` has the history.
+one statically-linked binary over a shared on-disk data tree. The code is the
+source of truth for what the server does; this file points.
 
 ## Toolchain
 
@@ -16,38 +16,33 @@ zig **0.16.0** (`zig version`).
 `../../zig-webbox`) does the serving: the portable module `webbox`, which
 the rest of the server imports by name, and its Linux host, the module
 `webbox_linux` (its `linux_host.zig`), which listens on **:9001**,
-runs each accepted connection as its own task on the `std.Io` thread pool (so
-long-lived SSE streams don't starve other connections), and hands each
+runs each accepted connection as its own task on the `std.Io` thread pool,
+and hands each
 request to `router.zig`, which routes by path prefix to the per-surface
 handlers (`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …). The port
 is `GOPHER_PORT` (default 9001); `data_dir` + auth come from
 `GOPHER_CONFIG`. `server.zig` holds what is this application's own about
 that: its name, its variables, the game store's floor, its startup lines.
+Handlers take the turn one at a time (the `turn` lock in webbox's
+`linux_host.zig`), as on metal's single loop.
 
 Front-end assets that live elsewhere in the repo (the Elm/TS bundles, the
 Safari and chess WASM cores, the chat client, the puzzle catalogs) are baked
 in at compile time via `build.zig` `@embedFile`. The site's own files —
 `pages/`, `gallery/`, `downloads/` — are read from the working directory.
 
-```
-ops/start                        # build bundles + zig + run on :9001
-# or, for just /driving:
-ops/build_safari_wasm && cd zig-server && zig build run
-```
-
-Assets that live elsewhere in the repo (Safari's wasm and blitter) are baked in via
-`build.zig` — where cross-package embedding is wired up: `@embedFile` can't
-reach outside its own package dir, so each external asset is declared there as a
-named import.
+`build.zig` is where cross-package embedding is wired up: `@embedFile` can't
+reach outside its own package dir, so each external asset is declared there as
+a named import. `assets.zon` lists every embedded asset and the `ops/` script
+that builds it; `ops/build_embedded` runs those scripts. A fresh clone has
+none of the built assets, so a bare `zig build` fails. Build and run with:
 
 ```
-ops/build_safari_wasm        # from repo root: builds games/driving/safari.wasm
-cd zig-server && zig build run   # serves /driving on http://localhost:9001
+ops/start                        # build every embedded asset + zig + run on :9001
 ```
 
-Port 9001 is where `ops/start` serves locally — it runs this same zig binary
-(the Go original is gone). Each accepted connection runs as its own task on a
-std.Io thread pool, so requests are served concurrently.
+The server was ported from a Go original (`main.go` + `server/*.go`); that tree
+is in git history.
 
 ## The edge's threat model, as deployed
 
@@ -70,8 +65,10 @@ frozen `{id, md, html}` case (arena reset per message) and asserts the output
 still equals the baseline. There is **no external oracle** — `html` is whatever
 our renderer produces, frozen and human-reviewed. Three corpora:
 
-- `~/showell_repos/gopher-gold/gold.jsonl` — the real corpus (~2584 chat
-  messages + docs; private, it embeds real user messages).
+- `~/showell_repos/gopher-gold/gold.jsonl` — the real corpus of chat messages
+  and docs, in a separate private checkout (it embeds real user messages).
+  **When that checkout is absent, the harness prints "cannot read" and
+  checks only the two corpora below, and `ops/check_markdown` still passes.**
 - `adversarial.jsonl` — hand-written hostile corners the real corpus never hit.
 - `dialect.jsonl` — where our dialect deliberately departs from vanilla
   CommonMark: inline markup is **per-line**, so `**`, backticks, and `[...]`
