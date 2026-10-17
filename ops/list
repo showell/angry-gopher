@@ -5,22 +5,24 @@ Available ops commands (run from repo root):
 
   THE GATES   (one server, two subsystems over a shared base)
   -----------------------------------------------------------
-  ops/check              Full pre-commit gate (~35s warm): the common base
+  ops/check              Full pre-commit gate: the common base
                          + BOTH subsystems, each leaf once. Wired to the
                          git pre-commit hook via ops/install-hooks.
-  ops/check_full         Milestone gate (~75s). ops/check + the Lyn Rummy
+  ops/check_full         Milestone gate: ops/check + the Lyn Rummy
                          slow tier (agent self-play + perf benches). Run
                          before pushing BFS-engine / agent / bucket changes.
 
   Subsystem gates — run the one you're working in:
-  ops/check_chat         Chat gate (~6s): common base + chat client lint.
+  ops/check_chat         Chat gate: common base + chat client lint.
                          SKIPS the Lyn Rummy solver + Elm suites.
-  ops/check_lynrummy     Lyn Rummy gate (~30s): common base + Elm + TS
+  ops/check_lynrummy     Lyn Rummy gate: common base + Elm + TS
                          solver. SKIPS the chat lint.
-  ops/check_zig          zig-server gate (~20s): compiles the WHOLE server (the
-                         "binary compiles" floor, the role go build had), runs
-                         the head-access and portable lints, and every zig-server
-                         unit test. Composed by ops/check_common.
+  ops/check_zig          zig-server gate: compiles the WHOLE server, runs the
+                         lints (embedded assets, the webbox library, head
+                         access, portable, store absence), the Caddy limits,
+                         zig fmt, every zig-server unit test and zig-webbox's.
+                         About 8 min (2026-10-17), most of it zig-webbox's
+                         suite; every gate above runs it, through check_common.
   ops/check_markdown     Markdown dialect regression gate (~3s): renders every
                          frozen corpus case with the zig renderer and asserts the
                          output is unchanged. No Go, no goldmark oracle — our
@@ -32,8 +34,7 @@ Available ops commands (run from repo root):
   ops/test_elm           Elm client suite (~5s) — Lyn Rummy.
   ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
   ops/check_solver       Lyn Rummy zig-solver gate (~2s): native unit tests
-                         for the fresh solver in games/lynrummy/zig (the
-                         rethink; TS engine stays production). Composed by
+                         for the solver in games/lynrummy/zig. Composed by
                          ops/check and ops/check_lynrummy.
   ops/check_safari       Safari render cull gate (~1s) — driving. Drives the
                          committed safari.wasm across a full course and asserts
@@ -41,12 +42,13 @@ Available ops commands (run from repo root):
                          reach + projected size) stay live. Composed by ops/check.
   ops/check_delivery     Delivery TS→zig port gate: TS typecheck + zig unit
                          tests + gold_check (all 20 gold shifts re-solved and
-                         compared bit-for-bit against delivery/solver_gold.json).
-                         Standalone for now (not composed by ops/check).
+                         compared bit-for-bit against delivery/solver_gold.json)
+                         + the wasm built and driven. Standalone (not composed
+                         by ops/check).
   ops/test_docs          doc_xref --all (~1s) — common.
   ops/test_css           check_css (~1s) — common. Flag CSS classes defined
-                         in any server/**/*.go <style> block that no Go/JS/
-                         Elm/MD/HTML file outside the block references.
+                         in a zig-server/src/*.zig <style> block that no
+                         JS/Elm/MD/HTML file outside the block references.
   ops/bench              Lyn Rummy perf benches (engine timing trip-wires).
                          Rewrites gold on pass; also run by check_full. Use
                          after engine changes / to re-confirm timing noise.
@@ -104,11 +106,14 @@ Available ops commands (run from repo root):
                          pre-commit hook (sets core.hooksPath).
   ops/list               This screen.
 
-  PRODUCTION (occasional; see deploy/README.md)
+  PRODUCTION (lynrummy.com is zig-metal-unikernel's release: its DEPLOY.md)
   ---------------------------------------------
-  ops/deploy             Build + ship the self-contained binary to the
-                         droplet + restart. Refuses a dirty tree.
-  ops/backup             Pull a timestamped data_dir snapshot from prod.
+  ops/deploy             The Linux fallback (deploy/README.md): build + ship
+                         the binary to prod's Linux host + restart. Refuses a
+                         dirty tree. Not how lynrummy.com is served.
+  ops/backup             Pull the Linux host's data_dir, frozen at the
+                         2026-10-04 cutover. The live data: /admin/backup
+                         (zig-metal-unikernel DEPLOY.md, "Backups").
   ops/list_prod_sessions Print the prod (partner x time) matrix: every
                          conversation + its sessions (discovery). Pick a
                          session id from here. Delegates to

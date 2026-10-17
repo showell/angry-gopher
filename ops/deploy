@@ -22,7 +22,7 @@
 #
 # Host coordinates live in deploy/deploy.conf. One-time host setup
 # (Caddy -> localhost:9001, the systemd unit, gopher.conf) is documented
-# in deploy/README.md. zig listens on :9001 (hardcoded in server.zig) and
+# in deploy/README.md. zig listens on GOPHER_PORT (9001 when unset) and
 # reads data_dir/auth from $GOPHER_CONFIG.
 #
 # **AFTER THE 2026-10-04 CUTOVER, METAL SERVES lynrummy.com** and prod's Linux

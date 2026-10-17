@@ -31,7 +31,8 @@ data_dir (all writable state) and auth_dir (the account store). Create it:
     CONF
 
 Notes:
-  - Only data_dir and auth_dir are honored; the port is hardcoded to :9001.
+  - The file sets only data_dir and auth_dir. The port is GOPHER_PORT's
+    (9001 when unset), and this script serves and waits on 9001.
   - auth_dir defaults to ~/Auth if omitted. data_dir is required.
   - Paths may start with ~/ (expanded to \$HOME) or be absolute. A bare
     \$HOME is NOT expanded — use ~/ or a real absolute path.
