@@ -2903,26 +2903,15 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "admin_retire.zig", .func = "readForm" },
     .{ .file = "log_view.zig", .func = "parseFilter" },
     .{ .file = "script_route.zig", .func = "parse" },
-    .{ .file = "script_route.zig", .func = "lastSequence", .unreachable_because = "a sequence file the server wrote" },
-    .{ .file = "shale_sign.zig", .func = "main", .unreachable_because = "the signer, on the box, not the server" },
-    .{ .file = "shale_fixture.zig", .func = "main", .unreachable_because = "the program Shale's run tests spawn, not the server (zig-webbox, metal-vmm QUEUE 233)" },
-    .{ .file = "shale_jobs.zig", .func = "parseRecord", .unreachable_because = "a job's record its reaper wrote, read by the Linux shale CLI, not the server (zig-webbox, metal-vmm QUEUE 233)" },
-    .{ .file = "shale_sign.zig", .func = "lastFor", .unreachable_because = "the signer, on the box, not the server" },
-    .{ .file = "log_view.zig", .func = "requestAt", .unreachable_because = "the host's own log lines, not a request's" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
-    .{ .file = "bus.zig", .func = "keepaliveSetting", .unreachable_because = "the host's start-up setting, not a request's" },
     .{ .file = "chat.zig", .func = "highestGeneralSession", .unreachable_because = "topic folder names on the disk" },
     .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "readCount", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseLast", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_retire.zig", .func = "allMembers", .unreachable_because = "folder names on the disk" },
-    .{ .file = "counter.zig", .func = "current", .unreachable_because = "a counter file the server wrote" },
-    .{ .file = "linux_host.zig", .func = "portFrom", .unreachable_because = "the environment" },
-    .{ .file = "linux_fetch.zig", .func = "parseHead", .unreachable_because = "the answer to the application's own fetch, not a request (zig-webbox, metal-vmm QUEUE 228)" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },
     .{ .file = "router.zig", .func = "countFiles", .unreachable_because = "a test's helper" },
     .{ .file = "session_meta.zig", .func = "applyMetaScalar", .unreachable_because = "a meta file the server wrote" },
-    .{ .file = "site_secret.zig", .func = "previous", .unreachable_because = "a secret file the server wrote" },
     .{ .file = "storage.zig", .func = "listSessionIDs", .unreachable_because = "folder names on the disk" },
     .{ .file = "stress.zig", .func = "main", .unreachable_because = "the stress tool, not the server" },
     .{ .file = "stress.zig", .func = "chatPairKey", .unreachable_because = "the stress tool, not the server" },
@@ -3006,8 +2995,11 @@ test "request edges: every number a request carries, at its type's edges, as a m
                 if (std.mem.startsWith(u8, t, "//") or in_test) continue;
                 if (std.mem.indexOf(u8, t, "parseInt(") == null) continue;
                 found += 1;
+                // The library's own unreachable sites are its to name.
                 const known = for (edge_sites) |s| {
                     if (std.mem.eql(u8, s.file, entry.name) and std.mem.eql(u8, s.func, func)) break true;
+                } else for (@import("webbox").edge_sites.unreachable_from_requests) |s| {
+                    if (!std.mem.eql(u8, dir, "src") and std.mem.eql(u8, s.file, entry.name) and std.mem.eql(u8, s.func, func)) break true;
                 } else false;
                 if (!known) {
                     std.debug.print("request edges: {s}'s {s} parses a number, and is not in edge_sites: cover it with a request, or say why none reaches it\n", .{ entry.name, func });
