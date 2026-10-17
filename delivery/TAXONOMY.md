@@ -1,6 +1,6 @@
 # Neighborhood Role Taxonomy
 
-The solver (`solver.ts`) is a general capacitated vehicle-router — Clarke–Wright
+The solver (`zig/solver.zig`, ported bit-exact from `solver.ts`) is a general capacitated vehicle-router — Clarke–Wright
 savings, 2-opt/or-opt/exchange, a tote-minute urgency term. It knows nothing about
 Seattle. But *we* do, and a handful of small hints (`geography.ts`) give the general
 algorithm just enough local knowledge to behave the way a real delivery manager
@@ -9,8 +9,10 @@ straight out of the data — they're not imposed, they're revealed.
 
 The evidence below is an **affinity matrix**: across 100 shifts, where each
 neighborhood's totes actually rode. "Loyalty" = the share that went to its dominant
-truck. (Snapshot of the current model — 90 orders, `CARRY_COST` 0.1. Tuning the road
-network or the fleet will shift the exact numbers; the *tiers* are the durable part.)
+truck. **This is a dated snapshot, not re-measured:** it was taken on the TS solver
+under an older model (90 orders a day, and a `CARRY_COST` 0.1 term the code no longer
+has; `ORDERS` in `zig/geography.zig` is the count today). Tuning the road network or the
+fleet shifts the exact numbers; the *tiers* are the durable part.
 
 Trucks are pinned to anchor regions: **T1** West Seattle · **T2** Magnolia ·
 **T3** Ballard · **T4** Green Lake · **T5** Capitol Hill · **T6** Kirkland ·

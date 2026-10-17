@@ -5,7 +5,7 @@ meld figures, two live widgets (drag-the-loose-cards, find-the-chain),
 and a narrated mid-game board. Served by `zig-server/src/tutorial.zig`
 (@embedFile); gated by `ops/test_tutorial` (inside `check_lynrummy`).
 
-Soft-parked since 2026-07-11, content-complete. **Steve owns the
+Soft-parked, content-complete. **Steve owns the
 remaining-gaps list** — don't re-derive it; the one he has named: the
 page doesn't demonstrate playing a card from your hand well, and his
 plan is a real photo (on him).

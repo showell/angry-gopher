@@ -26,7 +26,7 @@ A capacitated vehicle-routing (CVRP) sim: schedule 8 trucks to deliver 100 order
 day across a deliberately not-to-scale, "winking" Seattle (Steve's AmazonFresh
 memory). The algorithmic heart is the **Clarke-Wright savings heuristic** plus local
 search (2-opt / or-opt / exchange / arc-rebalance), all minimizing one **integer
-"pain" cost** (`solver.ts: painOf`) — trig-free, so it's bit-identical across JS
+"pain" cost** (`painOf`, in `delivery/zig/solver.zig` and its reference `delivery/solver.ts`) — trig-free, so it's bit-identical across JS
 engines. An 8-way construction **race** (pruned to 4-way once arc-rebalance subsumed
 the arc-construction axis), keep-min ⇒ never-worse. Regional truck anchoring,
 asymmetric caps (west 14 / east 12). Playback animation + `A`-key step-through of the

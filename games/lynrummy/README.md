@@ -10,10 +10,10 @@ It's live in production at https://lynrummy.com (served by zig-metal-unikernel;
 see the top-level README, "Where it runs"), where family and friends log in and play (solo or
 against the built-in agent: deal, play, hint, agent-play, replay, resume).
 
-## Status: mature and parked (2026-07-25)
+## Status: mature and parked
 
 The game and puzzles are the oldest of the site's subsystems — they work,
-they ship, and as of 2026-07-25 the whole subsystem is **parked** again.
+they ship, and the whole subsystem is **parked**.
 The two big pieces built since the previous park, both live in
 production:
 

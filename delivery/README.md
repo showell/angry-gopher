@@ -26,7 +26,7 @@ frames) as one JSON blob. The zig server just bakes both artifacts into its bina
 (`@embedFile`) and serves a near-empty HTML shell; everything still runs in your
 browser. No server logic, no user data, fully deterministic.
 
-**Status: parked (again).** The algorithm was "declared done" in June 2026: we
+**Status: parked.** The algorithm was "declared done" in June 2026: we
 could no longer construct a day whose hardest routes were *bugs* rather than
 *explicable structure* (a corridor that's simply overloaded, a sacrificial "hero"
 haul, a cascade of hand-offs). When the routes stopped surprising us, we stopped.
@@ -58,7 +58,7 @@ sunset road).
 ### The algorithm, in one breath
 
 Eight trucks, ~100 orders, asymmetric capacities (the west side carries more than
-the east). The solver (`solver.ts`) builds routes with the **Clarke-Wright savings
+the east). The solver (`zig/solver.zig`; `solver.ts` is its port reference) builds routes with the **Clarke-Wright savings
 heuristic**, then improves them with local search (2-opt / or-opt / exchange /
 arc-rebalance). Every move is scored against a single **integer "pain" cost**
 (`painOf`) — and that integer-ness is the one load-bearing trick: the hot path
