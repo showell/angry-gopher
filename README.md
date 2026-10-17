@@ -140,7 +140,8 @@ TypeScript runs two ways, and only one of them is transpiled:
   pinned local devDependency (calling its binary directly skips `npx`'s
   ~1s-per-call resolution tax). The Safari Screensaver is a Zig→WASM core
   plus a JS blitter (`ops/build_safari_wasm`), not transpiled; `HISTORY.md`
-  says where each toy sits on the zig↔TS spectrum and why.
+  says where Safari and Delivery sit on the zig↔TS spectrum and why
+  (Chess Toys is in its own README).
 
 `tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
 the JS that ships. Elm, `tsc`, and `esbuild` are all project-local (run
@@ -374,7 +375,7 @@ is the only credential `/admin/script` takes.
   `{auth_dir}/shale.conf`; with no key there the route refuses. A
   `mode=background` run is answered at once and stepped between requests on
   both hosts, one at a time; `GET /admin/script` shows its state and output,
-  and `mode=kill` ends it. The language is zig-webbox's `docs/SHALE.md`; how
+  and `mode=kill` ends it. The language is zig-webbox's [`SHALE.md`](https://github.com/showell/zig-webbox/blob/master/docs/SHALE.md); how
   to sign and send a script is zig-metal-unikernel's `DEPLOY.md`.
 
 ## Layout
