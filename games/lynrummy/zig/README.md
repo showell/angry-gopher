@@ -13,15 +13,14 @@ flavor-monochromatic paths of length 3+. Solvability depends only on the
 card **multiset**; deriving human-facing moves from a solution is a
 deliberately separate, later layer.
 
-Phases:
+The solver is four layers, each built on the last:
 
-1. **Pure runs only** (`pure_run.zig`) — DONE. Suits decompose; each suit
+1. **Pure runs only** (`pure_run.zig`). Suits decompose; each suit
    is a tiny cyclic cover problem. Mostly here to drive out the
    administrative decisions (encoding, notation, FUTILE-as-an-answer,
    the test pattern).
-2. **+ red-black runs** (`runs.zig`) — DONE. The quantum jump it was
-   expected to be: a chain-growing DFS (grab-the-loneliest-neighbor)
-   thrashed on dense random boards, and the fix was structural — every
+2. **+ red-black runs** (in `solver.zig`). The hard step: a
+   chain-growing DFS (grab-the-loneliest-neighbor) thrashed on dense random boards, and the fix was structural — every
    run edge steps rank+1, so the 13 ranks are a topological order and
    the solver is a **rank sweep**: one pass A→K with a bounded frontier
    of open chains, futile states memoized, and the K→A wrap handled by
@@ -29,13 +28,13 @@ Phases:
    matchings. Load-bearing lemma: any legal run splits into consecutive
    runs of length 3..5, so the sweep only ever builds short chains and
    loses nothing.
-3. **+ sets** (`solver.zig`, evolved from phase 2's `runs.zig`) — DONE.
+3. **+ sets** (`solver.zig`).
    Sets are rank-LOCAL (3–4 cards of one rank), so they slot into the
    sweep's per-rank step rather than changing its shape: the leftover
    cards at a rank may form sets before the rest start fresh chains. In
    the next-map a set is a chain of same-rank links, printed with `=`:
    `KH=KC=KS`.
-4. **Two decks** (`solver.zig` + `suit_first.zig`) — DONE. The two
+4. **Two decks** (`solver.zig` + `suit_first.zig`). The two
    copies of a (suit, rank) are indistinguishable to legality (a run
    can't repeat a value, a set can't repeat a suit), so the search stays
    at (suit, count) level: copy 0 is consumed before copy 1 (WLOG, never
