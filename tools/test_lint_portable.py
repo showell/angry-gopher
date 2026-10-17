@@ -72,20 +72,19 @@ class Clean(unittest.TestCase):
 
     def test_the_real_partition_is_the_hosts_plus_config(self):
         # The set is DERIVED; this pins what it derives today, so a module that
-        # silently falls out of (or into) reach is noticed.
+        # silently falls out of (or into) reach is noticed. Only angry-gopher's
+        # own files: which of zig-webbox's files are portable is webbox's to
+        # say (its src/library_test.zig and portable_test.zig), and a pin of
+        # them here went red on every new webbox Linux file, in a repo no
+        # webbox change tests.
         src = L.zig_source.TREE
         every = {f for f in L.zig_source.listing(src) if f.endswith(".zig")}
-        outside = every - L.closure(src, L.ROOTS)
+        own = set(os.listdir(L.zig_source.APP_SRC))
+        outside = (every - L.closure(src, L.ROOTS)) & own
         self.assertEqual(outside, {
-            "server.zig", "host_io_std.zig", "webbox_linux.zig", "linux_host.zig", "linux_config.zig", "linux_durable.zig", "bind.zig", "stress.zig", "hash_password.zig",
+            "server.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
-            # zig-webbox's two Linux programs for Shale (metal-vmm 199, 200):
-            # the runner and the signer, never in a server.
-            "script_runner.zig", "shale_sign.zig",
-            # Shale's two benches, run by hand (zig-webbox `script-bench`,
-            # `shale-scale`), and the Linux host's fetch (metal-vmm 228).
-            "script_bench.zig", "shale_scale.zig", "linux_fetch.zig",
         })
 
 

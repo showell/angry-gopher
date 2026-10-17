@@ -2905,6 +2905,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "script_route.zig", .func = "parse" },
     .{ .file = "script_route.zig", .func = "lastSequence", .unreachable_because = "a sequence file the server wrote" },
     .{ .file = "shale_sign.zig", .func = "main", .unreachable_because = "the signer, on the box, not the server" },
+    .{ .file = "shale_fixture.zig", .func = "main", .unreachable_because = "the program Shale's run tests spawn, not the server (zig-webbox, metal-vmm QUEUE 233)" },
     .{ .file = "shale_sign.zig", .func = "lastFor", .unreachable_because = "the signer, on the box, not the server" },
     .{ .file = "log_view.zig", .func = "requestAt", .unreachable_because = "the host's own log lines, not a request's" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
