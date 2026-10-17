@@ -25,10 +25,9 @@ cd "$REPO_DIR"
 # copy of the list here had lost delivery/app.js).
 python3 "$REPO_DIR/tools/embedded_assets.py" check
 
-# The `webbox` library is two modules, each the files its root names:
-# `webbox` (zig-webbox's src/webbox.zig, portable; std and one another only)
-# and `webbox_linux` (its src/webbox_linux.zig, the Linux host; also the `webbox`
-# module). Every other file imports the library by name, never by path.
+# The `webbox` library is two modules, `webbox` and `webbox_linux`; its own
+# shape is zig-webbox's to check (src/library_test.zig, in its tests below).
+# Here: every angry-gopher file imports the library by name, never by path.
 # Both lints below read the source through tools/zig_source.py: its test first.
 python3 "$REPO_DIR/tools/zig_source.py"
 echo "==> webbox library lint (its test, then the tree)"
