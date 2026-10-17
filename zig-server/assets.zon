@@ -44,10 +44,6 @@
         // The zig board-bridge solver (ops/build_lynrummy_wasm): the puzzle
         // Hint button's brain — arrangement line in, human move plan out.
         .{ .name = "solver_wasm", .path = "../games/lynrummy/zig/solver.wasm" },
-        // The Lyn Rummy beginner tutorial (/tutorial): a free-standing HTML
-        // document + its self-contained plain-JS client. See tutorial.zig.
-        .{ .name = "tutorial_html", .path = "../games/lynrummy/tutorial/tutorial.html" },
-        .{ .name = "tutorial_js", .path = "../games/lynrummy/tutorial/tutorial.js" },
         // The puzzle catalogs, easiest-first (1-line … 6-line). Concatenated at
         // runtime into the catalog shipped in the page flag (see puzzles.zig).
         .{ .name = "puzzle_cat_1", .path = "../games/lynrummy/conformance/curated_1line_puzzles.dsl" },

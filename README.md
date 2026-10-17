@@ -341,7 +341,7 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/delivery` | Seattle Delivery sim (public) |
 | `/driving`, `/safari_download`, `/downloads` | Safari Screensaver + its native-download landing page and artifacts (public) |
 | `/chess` | Chess Toys: `/chess/knight`, `/chess/queens`, sources at `/chess/code` (public) |
-| `/game`, `/puzzles`, `/tutorial` | Lyn Rummy: full game (player name required), puzzle client, beginner tutorial (tutorial public) |
+| `/game`, `/puzzles` | Lyn Rummy: full game (player name required), puzzle client |
 | `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring; `/chat/recent`, `/chat/images`, `/chat/code`, `/chat/links`, `/chat/search`, `/chat/msg/<id>` (members only; `chat.zig`) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
@@ -418,13 +418,10 @@ ops/test_elm           Elm client suite
 ops/test_ts            TS suite
 ops/check_zig          zig server compiles + the lints + the Caddy limits + every unit test, here and zig-webbox's
 ops/check_chat         Chat gate: check_common + test_chat
-ops/check_lynrummy     Lyn Rummy gate: check_common + test_elm + test_ts + test_tutorial + check_solver
+ops/check_lynrummy     Lyn Rummy gate: check_common + test_elm + test_ts + check_solver
 ops/check              Pre-commit gate: check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
 ops/check_full         Milestone gate: ops/check + the heavy conformance suites + agent self-play + benches
 ```
-
-`ops/check` does not run `ops/test_tutorial`; `ops/check_lynrummy` does. A
-change to `/tutorial` needs `ops/check_lynrummy` or `ops/test_tutorial`.
 
 Standalone, run after editing their part:
 

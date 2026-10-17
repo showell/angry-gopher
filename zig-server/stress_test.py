@@ -88,13 +88,12 @@ def rss_kb():
 def alive():
     """Liveness probe: a normal public GET must return 200.
 
-    It is deliberately a real PAGE (embedded HTML, no identity, no store) and
+    It is deliberately a real PAGE (/play's name form: HTML, no identity) and
     not /version, so that "alive" means "still rendering" rather than "still
-    answering". It was /learn until that page was retired — at which point this
-    returned 404 and would have reported the server dead after every single
-    entry in the crash battery below.
+    answering". A retired page here answers 404 and reports the server dead
+    after every entry in the crash battery below.
     """
-    st, _ = req("GET", "/tutorial")
+    st, _ = req("GET", "/play")
     return st == 200
 
 # ── crash battery ─────────────────────────────────────────────────────────────
@@ -160,8 +159,8 @@ def malformed_query():
 
 def malformed_headers():
     return [
-        ("1000 headers",    lambda: req("GET", "/tutorial", [f"X-{i}: v" for i in range(1000)])),
-        ("100KB header",    lambda: req("GET", "/tutorial", ["X-Big: " + "v" * (100 * 1024)])),
+        ("1000 headers",    lambda: req("GET", "/play", [f"X-{i}: v" for i in range(1000)])),
+        ("100KB header",    lambda: req("GET", "/play", ["X-Big: " + "v" * (100 * 1024)])),
         ("huge cookie",     lambda: req("GET", "/chat", ["Cookie: gopher_auth=" + "z" * 60000])),
         ("bearer no token", lambda: req("GET", "/chat", ["Authorization: Bearer"])),
         ("bearer huge",     lambda: req("GET", "/chat", ["Authorization: Bearer " + "x" * 40000])),

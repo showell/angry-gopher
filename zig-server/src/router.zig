@@ -28,7 +28,6 @@ const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
 const settings = @import("settings.zig");
-const tutorial = @import("tutorial.zig");
 const admin = @import("admin.zig");
 const admin_lynrummy = @import("admin_lynrummy.zig");
 const home = @import("home.zig");
@@ -164,7 +163,7 @@ fn familyOf(path: []const u8) Family {
         if (http.pathUnder(sub, "/docs") != null) return .docs;
         return .chat;
     }
-    for ([_][]const u8{ "/game", "/puzzles", "/driving", "/chess", "/delivery", "/tutorial", "/play" }) |g|
+    for ([_][]const u8{ "/game", "/puzzles", "/driving", "/chess", "/delivery", "/play" }) |g|
         if (http.pathUnder(path, g) != null) return .games;
     return .site;
 }
@@ -265,10 +264,6 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
         try chat.handleChannel(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
-    } else if (http.pathUnder(path, "/tutorial")) |sub| {
-        // Public + ungated: the Lyn Rummy beginner tutorial — its audience
-        // is people who haven't made an account yet.
-        try tutorial.handle(req, alloc, sub);
     } else if (http.pathUnder(path, "/gallery")) |sub| {
         // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
         // images (free-standing content read from gallery/) for the home page.
@@ -415,10 +410,11 @@ test "every embedded asset is kept by the browser and asked about each use: ETag
     defer uid_site.deinit();
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
     const paths = [_][]const u8{
-        "/chat/chat.js",         "/chat/colors.js",         "/tutorial/tutorial.js", "/game/elm.js",
-        "/game/engine.js",       "/game/engine_glue.js",    "/driving/blitter.js",   "/driving/safari.wasm",
-        "/chess/board.js",       "/chess/knight.wasm",      "/chess/queens.wasm",    "/puzzles/puzzle.js",
-        "/puzzles/engine.js",    "/puzzles/engine_glue.js", "/puzzles/solver.wasm",  "/delivery/app.js",
+        "/chat/chat.js",           "/chat/colors.js",      "/game/elm.js",
+        "/game/engine.js",         "/game/engine_glue.js", "/driving/blitter.js",
+        "/driving/safari.wasm",    "/chess/board.js",      "/chess/knight.wasm",
+        "/chess/queens.wasm",      "/puzzles/puzzle.js",   "/puzzles/engine.js",
+        "/puzzles/engine_glue.js", "/puzzles/solver.wasm", "/delivery/app.js",
         "/delivery/solver.wasm",
     };
     for (paths) |path| {
@@ -464,9 +460,8 @@ test "every page names its scripts by their bytes, and a script asked for by its
     try testing.expect(status(sent)[0] == '2' or status(sent)[0] == '3');
 
     const pages = [_][]const u8{
-        dm,          "/chat/recent", "/chat/images", "/chat/code",    "/chat/docs",    "/chat/links",
-        "/game",     "/puzzles",     "/driving",     "/chess/knight", "/chess/queens", "/delivery",
-        "/tutorial",
+        dm,      "/chat/recent", "/chat/images", "/chat/code",    "/chat/docs",    "/chat/links",
+        "/game", "/puzzles",     "/driving",     "/chess/knight", "/chess/queens", "/delivery",
     };
     for (pages) |page| {
         errdefer std.debug.print("page {s}\n", .{page});
@@ -547,9 +542,6 @@ test "route: the table answers, and an unknown path is a 404" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    // A surface with no identity and no store behind it: pure embedded bytes.
-    try testing.expectEqualStrings("200 OK", status(try get(a, io, "/tutorial")));
-
     // The fallthrough. "/drivingX" must NOT reach /driving — http.pathUnder wants a
     // boundary, and this is the case that rule exists for.
     try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/nope")));
@@ -575,7 +567,8 @@ test "route: a query string never changes which arm is taken" {
     const io = threaded.io();
 
     // http.pathOf's whole job: the asset URLs carry their hash, ?h= (http.hashedSrc).
-    try testing.expectEqualStrings("200 OK", status(try get(a, io, "/tutorial?h=0")));
+    try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/nope?h=0")));
+    try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/drivingX?h=0")));
 }
 
 test "route: the game surfaces send a nameless visitor to /play, not into the store" {
@@ -1683,7 +1676,6 @@ test "route families: each request counted under its part of the site (metal-vmm
         .{ "/driving", .games },
         .{ "/chess/knight", .games },
         .{ "/delivery", .games },
-        .{ "/tutorial", .games },
         .{ "/play", .games },
         .{ "/admin/host", .admin },
         .{ "/admin/lynrummy", .admin },
@@ -2832,7 +2824,8 @@ test "route: a background script is answered at once, stepped by the Site betwee
     try testing.expectEqualStrings("501 Not Implemented", status(unstepped));
     try testing.expect(std.mem.indexOf(u8, unstepped, "refused (no_background)") != null);
     // A host steps: between, as webbox's hosts call it, with no run going.
-    try testing.expect(!between(io, now));
+    const at: webbox_site.Now = .{ .awake_ns = 0, .unix_s = now };
+    try testing.expectEqual(webbox_site.Wake.idle, between(io, at));
 
     // Started: answered at once; a second while it runs is refused.
     const first = try send(a, io, kp, bearer, &seq, .background, reads);
@@ -2849,7 +2842,7 @@ test "route: a background script is answered at once, stepped by the Site betwee
     // Another, stepped between requests to its end, its output read back.
     try testing.expectEqualStrings("202 Accepted", status(try send(a, io, kp, bearer, &seq, .background, reads)));
     var slices: usize = 0;
-    while (between(io, now)) : (slices += 1) try testing.expect(slices < 100);
+    while (between(io, at) == .more) : (slices += 1) try testing.expect(slices < 100);
     const done = try serve(a, io, get_status);
     try testing.expectEqualStrings("200 OK", status(done));
     try testing.expect(std.mem.indexOf(u8, done, " finished") != null);
@@ -2923,6 +2916,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "chat_retire.zig", .func = "allMembers", .unreachable_because = "folder names on the disk" },
     .{ .file = "counter.zig", .func = "current", .unreachable_because = "a counter file the server wrote" },
     .{ .file = "linux_host.zig", .func = "portFrom", .unreachable_because = "the environment" },
+    .{ .file = "linux_fetch.zig", .func = "parseHead", .unreachable_because = "the answer to the application's own fetch, not a request (zig-webbox, metal-vmm QUEUE 228)" },
     .{ .file = "linux_host.zig", .func = "countAnswers", .unreachable_because = "a keep-alive test's client, counting the host's answers (zig-webbox, metal-vmm QUEUE 213)" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },
     .{ .file = "router.zig", .func = "countFiles", .unreachable_because = "a test's helper" },

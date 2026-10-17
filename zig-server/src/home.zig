@@ -71,7 +71,7 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, name: []const u8, is_admi
 /// An app row parsed from the DSL: a linked title, a CTA button label, a
 /// description paragraph, and a low-key tech line (primary `lang` + an
 /// interesting `tech` feature). `href` is both the title link and button target.
-pub const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, tutorial: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: []const u8 };
+pub const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: []const u8 };
 
 /// renderHomeBody reads pages/home.txt, parses the mini-DSL, and returns the inner
 /// page body (the `.app-body-wrap` through `</body></html>`). Returns an error on
@@ -80,7 +80,6 @@ pub const App = struct { title: []const u8, href: []const u8, cta: []const u8, l
 /// Grammar (markdown in spirit): a `# Headline` line sets the H1; each app is a
 /// `## Title -> /href` block followed by `cta:`, `lang:`, `tech:`, and `code:`
 /// lines and one or more description lines (joined with spaces, reflowed). An
-/// optional `tutorial:` line adds a "Tutorial" link leading the links line; an
 /// optional `essay:` line adds a "Read more" link after the description; an optional
 /// `install:` line adds an "Install locally" link (to a per-app download page). Blank
 /// lines separate. Any stray text outside a block, a block missing any required
@@ -106,7 +105,6 @@ pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
     var c_lang: []const u8 = "";
     var c_tech: []const u8 = "";
     var c_code: []const u8 = "";
-    var c_tutorial: []const u8 = "";
     var c_essay: []const u8 = "";
     var c_image: []const u8 = "";
     var c_install: []const u8 = "";
@@ -117,7 +115,7 @@ pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0) continue; // blank lines only separate blocks
         if (std.mem.startsWith(u8, line, "## ")) {
-            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_tutorial, c_essay, c_image, c_install, &c_desc);
+            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, c_install, &c_desc);
             const rest = std.mem.trim(u8, line[3..], " ");
             const arrow = std.mem.indexOf(u8, rest, "->") orelse return error.MalformedHome;
             c_title = std.mem.trim(u8, rest[0..arrow], " ");
@@ -126,7 +124,6 @@ pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
             c_lang = "";
             c_tech = "";
             c_code = "";
-            c_tutorial = "";
             c_essay = "";
             c_image = "";
             c_install = "";
@@ -146,9 +143,6 @@ pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
         } else if (std.mem.startsWith(u8, line, "code:")) {
             if (!have) return error.MalformedHome;
             c_code = std.mem.trim(u8, line[5..], " ");
-        } else if (std.mem.startsWith(u8, line, "tutorial:")) {
-            if (!have) return error.MalformedHome;
-            c_tutorial = std.mem.trim(u8, line[9..], " ");
         } else if (std.mem.startsWith(u8, line, "essay:")) {
             if (!have) return error.MalformedHome;
             c_essay = std.mem.trim(u8, line[6..], " ");
@@ -164,7 +158,7 @@ pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
             try c_desc.appendSlice(alloc, line);
         }
     }
-    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_tutorial, c_essay, c_image, c_install, &c_desc);
+    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, c_install, &c_desc);
     if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
     return .{ .headline = headline, .apps = apps };
 }
@@ -185,12 +179,6 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         " target=\"_blank\" rel=\"noopener\">Code on GitHub ↗</a>");
     try out.appendSlice(alloc, "</p>\n<div class=\"app-list\">\n");
     for (apps.items) |a| {
-        // Optional "Tutorial" link, leading the links line (it's the beginner's
-        // on-ramp, so it goes before Read more / Code on GitHub).
-        const tut = if (a.tutorial.len > 0)
-            try std.fmt.allocPrint(alloc, "<a href=\"{s}\">Tutorial →</a>", .{try html.htmlEscape(alloc, a.tutorial)})
-        else
-            "";
         // Optional "Read more" link to the app's essay. It shares a line with the
         // GitHub link (rendered in the template), so this is just the inner anchor.
         const more = if (a.essay.len > 0)
@@ -227,7 +215,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try chips.appendSlice(alloc, "</span>");
         }
         try out.print(alloc,
-            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a>{s}</p><p class="app-feat">{s} {s}</p></div>
+            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a>{s}</p><p class="app-feat">{s} {s}</p></div>
             \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div></div>
             \\
         , .{
@@ -235,7 +223,6 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try html.htmlEscape(alloc, a.href),
             try html.htmlEscape(alloc, a.title),
             try html.htmlEscape(alloc, a.desc),
-            tut,
             more,
             try html.htmlEscape(alloc, a.code),
             dl,
@@ -253,13 +240,13 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
 }
 
 /// pushApp validates a fully-accumulated block and appends it. All fields are
-/// required except `tutorial` (the optional "Tutorial" link), `essay` (the
+/// required except `essay` (the
 /// optional "Read more" link), `image` (the optional app thumbnail), and
 /// `install` (the optional "Install locally" link) — a block missing any of
 /// title/href/cta/lang/tech/code/description is malformed.
-fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, tutorial: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: *std.ArrayList(u8)) !void {
+fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: *std.ArrayList(u8)) !void {
     if (title.len == 0 or href.len == 0 or cta.len == 0 or lang.len == 0 or tech.len == 0 or code.len == 0 or desc.items.len == 0) return error.MalformedHome;
-    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .tutorial = tutorial, .essay = essay, .image = image, .install = install, .desc = try desc.toOwnedSlice(alloc) });
+    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .essay = essay, .image = image, .install = install, .desc = try desc.toOwnedSlice(alloc) });
 }
 
 /// handleVersion serves the JSON build-identity probe. `commit` is the git

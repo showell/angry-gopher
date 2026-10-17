@@ -14,13 +14,8 @@ against the built-in agent: deal, play, hint, agent-play, replay, resume).
 
 The game and puzzles are the oldest of the site's subsystems — they work,
 they ship, and the whole subsystem is **parked**.
-The two big pieces built since the previous park, both live in
-production:
+The big piece built since the previous park, live in production:
 
-- the **beginner tutorial** at `/tutorial` — a public, ungated page in
-  plain HTML+JS (no Elm, no TS, no solver), gated by
-  `ops/test_tutorial`. Content-complete; Steve owns the remaining-gaps
-  list. Standing decisions in [`tutorial/README.md`](./tutorial/README.md).
 - the **zig solver** at [`zig/`](./zig/README.md), which took over the
   thinking: hints, futility certificates, and the Player Two opponent
   all run it (the original TS engine is mostly retired but still does
@@ -36,10 +31,7 @@ not to drive new engineering (for that, go to the code).
 
 ## How it's built
 
-Four parts, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (the tutorial
-is a deliberately separate fifth: `tutorial/tutorial.js` re-ports the rules
-and board gestures from the Elm spec into ~650 lines of dependency-free JS,
-served by its own tiny zig handler):
+Four parts, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md):
 
 - **`zig/`** — the **solver**, and since 2026-07 the production brain: one
   converged pipeline (futility prefilters → local repair → the rank-sweep
@@ -93,11 +85,8 @@ each gate's rough time.
 Gates:
 
 - **`ops/check_lynrummy`** — the subsystem gate: zig build + a doc-link
-  check + the Elm and TS suites + the tutorial gate (`ops/test_tutorial`) +
-  the solver's tests. Use this while working here.
-- **`ops/check`** — the pre-commit gate, across every subsystem. **It does
-  not run `ops/test_tutorial`**, so a change to `/tutorial` needs
-  `ops/check_lynrummy`.
+  check + the Elm and TS suites + the solver's tests. Use this while working here.
+- **`ops/check`** — the pre-commit gate, across every subsystem.
 - **`ops/check_full`** — adds the slow tier: agent self-play across 6
   seeds + perf benches. Dominated by self-play, whose time varies a lot
   from seed to seed.

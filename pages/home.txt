@@ -31,7 +31,6 @@ cta: Match wits with the agent
 lang: Zig (WASM) + Elm + TypeScript
 tech: a rules DSL sent over the wire — a zig solver picks the plays, an Elm UI referees and renders them
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
-tutorial: /tutorial
 Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
 
 ## Lyn Rummy Puzzles -> /puzzles

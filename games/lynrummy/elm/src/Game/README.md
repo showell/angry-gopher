@@ -75,8 +75,8 @@ shared and lives in [`../Lib/`](../Lib/), used by both the game and the puzzle.
 `ops/start` from the repo root rebuilds everything and serves `/game` on `:9001`.
 The front-end is built (`ops/build_elm`, `ops/build_engine_js`) and `@embedFile`'d
 into the binary. While working here, gate with **`ops/check_lynrummy`** (zig
-build + doc-link check + Elm, TS, tutorial and solver suites); `ops/check` is
-the pre-commit gate, and does not run the tutorial gate. A change reaches the
+build + doc-link check + Elm, TS and solver suites); `ops/check` is
+the pre-commit gate. A change reaches the
 site in a zig-metal-unikernel release (its `DEPLOY.md`). Run `ops/list` for the script index.
 
 ## Status: mature and parked
