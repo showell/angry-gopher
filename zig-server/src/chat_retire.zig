@@ -4,9 +4,9 @@
 //! hosts and writes through the Store's own paths, keeping metal's FAT volume
 //! consistent.
 //!
-//! **A DRY RUN THAT LISTS, AND A CONFIRM THAT ACTS.** `plan(.., false)` reports
+//! **A DRY RUN THAT LISTS, AND A CONFIRM THAT ACTS.** `plan(.., .dry_run)` reports
 //! what would go — by kind and name, **never a message body** — and changes
-//! nothing; `plan(.., true)` does the same report and removes as it goes. The
+//! nothing; `plan(.., .apply)` does the same report and removes as it goes. The
 //! two agree: the dry run projects the post-removal state (a reference into a DM
 //! that WOULD be removed reads as dangling), so what it lists is exactly what a
 //! confirm removes, and a second confirm removes nothing.
@@ -71,12 +71,16 @@ pub const Kind = enum {
 
 pub const Item = struct { kind: Kind, name: []const u8 };
 
-/// The engine: what it would remove (always), and — when `apply` — the Io it
-/// removes through. `members_removed` is the count of accounts not kept.
+/// A retire that lists what would go, or one that removes it as it lists.
+pub const Mode = enum { dry_run, apply };
+
+/// The engine: what it would remove (always), and — when its mode is
+/// `apply` — the Io it removes through. `members_removed` is the count of
+/// accounts not kept.
 pub const Plan = struct {
     alloc: Alloc,
     io: Io,
-    apply: bool,
+    mode: Mode,
     items: std.ArrayList(Item) = .empty,
     members_removed: usize = 0,
 
@@ -91,12 +95,12 @@ pub const Plan = struct {
     /// confirm, and the admin's page is the router's 500.
     fn rmFile(self: *Plan, kind: Kind, name: []const u8, path: []const u8) !void {
         try self.record(kind, name);
-        if (self.apply) try store.remove(self.io, self.alloc, path);
+        if (self.mode == .apply) try store.remove(self.io, self.alloc, path);
     }
 
     fn rmTree(self: *Plan, kind: Kind, name: []const u8, path: []const u8) !void {
         try self.record(kind, name);
-        if (self.apply) try store.removeTree(self.io, self.alloc, path);
+        if (self.mode == .apply) try store.removeTree(self.io, self.alloc, path);
     }
 
     /// Count the items of each kind, for the summary line.
@@ -155,14 +159,14 @@ pub fn keepProblem(io: Io, alloc: Alloc, keep: []const []const u8) !?[]const u8 
     return null;
 }
 
-/// Builds (and, when `apply`, carries out) the retirement. The returned Plan's
+/// Builds (and, its mode `apply`, carries out) the retirement. The returned Plan's
 /// `items` and strings are allocated from `alloc`.
-pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
+pub fn plan(io: Io, alloc: Alloc, p: Params, mode: Mode) !Plan {
     if (try keepProblem(io, alloc, p.keep) != null) return error.BadKeepList;
-    var pl = Plan{ .alloc = alloc, .io = io, .apply = apply };
+    var pl = Plan{ .alloc = alloc, .io = io, .mode = mode };
     // **AFTER A RETIRE APPLIES, SEARCH IS BUILT AGAIN WHOLE** (metal-vmm
     // 155(b)): rare, and always right, a failure part way included.
-    defer if (apply) search_index.rebuild(io, alloc);
+    defer if (mode == .apply) search_index.rebuild(io, alloc);
     const cutoff = p.now - @as(i64, p.days) * std.time.s_per_day;
 
     // Phase 1: old topics, in every conversation (DMs and channels alike).
@@ -209,7 +213,7 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
     // of theirs did. A removal refused before it leaves the user listed, and
     // the next confirm finishes the job; refused here, the account stays,
     // still able to log in, and the confirm is an error, never "removed".
-    if (pl.apply) for (removed.ids.items) |id| {
+    if (pl.mode == .apply) for (removed.ids.items) |id| {
         // Its password last within it (`users.removeAccount`, QUEUE 138(f)).
         try users.removeAccount(io, alloc, id);
     };
@@ -244,10 +248,10 @@ fn retireTopic(pl: *Plan, conv_dir: []const u8, key: []const u8, sid: []const u8
     // left goes too.
     for ([_][]const u8{ ".count", ".lastauthor", ".reactions.jsonl" }) |suf| {
         const f = try std.fs.path.join(alloc, &.{ sess, try std.fmt.allocPrint(alloc, "{s}{s}", .{ sid, suf }) });
-        if (pl.apply) try store.remove(pl.io, alloc, f);
+        if (pl.mode == .apply) try store.remove(pl.io, alloc, f);
     }
     const up = try std.fs.path.join(alloc, &.{ sess, try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
-    if (pl.apply) try store.removeTree(pl.io, alloc, up);
+    if (pl.mode == .apply) try store.removeTree(pl.io, alloc, up);
 }
 
 // ── phase 2: users ──────────────────────────────────────────────────────────
@@ -286,7 +290,7 @@ fn retireUser(pl: *Plan, id: []const u8) !void {
     };
     for (locations) |root| {
         const path = try std.fs.path.join(alloc, &.{ root, id });
-        if (pl.apply) try store.removeTree(pl.io, alloc, path);
+        if (pl.mode == .apply) try store.removeTree(pl.io, alloc, path);
     }
 }
 
@@ -301,7 +305,7 @@ fn retireDMs(pl: *Plan, removed: *const UidSet, gone: *UidSet) !void {
         if (!removed.has(pair.a) and !removed.has(pair.b)) continue;
         try pl.record(.dm, e.name);
         try gone.add(alloc, try alloc.dupe(u8, e.name));
-        if (pl.apply) try store.removeTree(pl.io, alloc, try std.fs.path.join(alloc, &.{ chat_store.chat_root, e.name }));
+        if (pl.mode == .apply) try store.removeTree(pl.io, alloc, try std.fs.path.join(alloc, &.{ chat_store.chat_root, e.name }));
     }
 }
 
@@ -349,7 +353,7 @@ fn pruneChannels(pl: *Plan, removed: *const UidSet) !void {
         if (dropped == 0) continue;
         const chan = e.name[0 .. e.name.len - ".channel".len];
         try pl.record(.channel_member, try std.fmt.allocPrint(alloc, "{s} ({d} dropped)", .{ chan, dropped }));
-        if (pl.apply) try store.replace(pl.io, alloc, path, kept.items, .{});
+        if (pl.mode == .apply) try store.replace(pl.io, alloc, path, kept.items, .{});
     }
 }
 
@@ -515,7 +519,7 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
 
     // Dry run: it changes nothing and names the removals.
-    var dry = try plan(io, a, p, false);
+    var dry = try plan(io, a, p, .dry_run);
     try testing.expectEqual(@as(usize, 1), dry.members_removed); // uid 9
     try testing.expectEqual(@as(usize, 2), dry.countOf(.topic)); // oldtopic, oldchan
     try testing.expectEqual(@as(usize, 1), dry.countOf(.dm)); // 1_9
@@ -540,7 +544,7 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expectEqual(@as(usize, 1), (try search_index.ready(io, a).?.messagesFor(a, &dm19_reach, "hello", 10, .{})).matched);
 
     // Confirm: the same report, carried out.
-    var done = try plan(io, a, p, true);
+    var done = try plan(io, a, p, .apply);
     try testing.expectEqual(dry.total(), done.total());
 
     // **SEARCH IS BUILT AGAIN AFTER IT**: the old topic and the gone DM are
@@ -575,7 +579,7 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ user1, "pinned-sessions", "1_2" })));
 
     // A second confirm finds nothing left to do.
-    var again = try plan(io, a, p, true);
+    var again = try plan(io, a, p, .apply);
     try testing.expectEqual(@as(usize, 0), again.total());
     try testing.expectEqual(@as(usize, 0), again.members_removed);
 }
@@ -599,7 +603,7 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
     try store.write(io, a, try sessionPath(a, dm, "recent"), try tx(a, "recent", new_at), .{});
     try store.write(io, a, try sessionPath(a, dm, "stale"), try tx(a, "stale", old_at), .{});
 
-    var dry = try plan(io, a, .{ .days = 30, .keep = &.{}, .now = now }, false);
+    var dry = try plan(io, a, .{ .days = 30, .keep = &.{}, .now = now }, .dry_run);
     // Only the datably-old topic retires; empty, undated and recent all stay.
     // (No accounts, so no user removals.)
     try testing.expectEqual(@as(usize, 1), dry.countOf(.topic));
@@ -646,16 +650,16 @@ test "fs: a confirm whose removals fail is an error, not a report of what went (
     var vt: Io.VTable = undefined;
     refuse_under = "";
     defer refuse_under = ""; // the test's own global, never left pointing into its arena
-    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, true)));
+    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, .apply)));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
 
     // **AUTHORITY GOES LAST**: a removal refused under the user's game data
     // leaves the account, so it is still listed, and the next confirm
     // finishes the job.
     refuse_under = try std.fs.path.join(a, &.{ storage.data_root, "9" });
-    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, true)));
+    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, .apply)));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
-    _ = try plan(io, a, p, true);
+    _ = try plan(io, a, p, .apply);
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ storage.data_root, "9" })));
     try testing.expect(!try store.has(io, a, try chat_store.dmConvDir(a, "1_9")));
@@ -683,7 +687,7 @@ test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm
     try store.makeDir(io, a, name);
 
     const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
-    _ = plan(io, a, p, true) catch {}; // refusing is right; removing her is not
+    _ = plan(io, a, p, .apply) catch {}; // refusing is right; removing her is not
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2" })));
 }
 
@@ -704,8 +708,8 @@ test "fs: a keep name that matches no account refuses the whole plan, the dry ru
     try stage(io, a);
     const typo = Params{ .days = 30, .keep = &.{ "Stve", "apoorva" }, .now = now };
     try testing.expectEqualStrings("The keep list names \"Stve\", which is no account's name.", (try keepProblem(io, a, typo.keep)).?);
-    try testing.expectError(error.BadKeepList, plan(io, a, typo, false));
-    try testing.expectError(error.BadKeepList, plan(io, a, typo, true));
+    try testing.expectError(error.BadKeepList, plan(io, a, typo, .dry_run));
+    try testing.expectError(error.BadKeepList, plan(io, a, typo, .apply));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "1" })));
     // The names as they are pass.
     try testing.expectEqual(@as(?[]const u8, null), try keepProblem(io, a, &.{ "Steve", "apoorva" }));
@@ -729,6 +733,6 @@ test "fs: an account with no name refuses the whole plan, and nothing goes (the 
     try store.remove(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "name" }));
     const p = Params{ .days = 30, .keep = &.{"Steve"}, .now = now };
     try testing.expectEqualStrings("Account 2 has no name; give it one before retiring.", (try keepProblem(io, a, p.keep)).?);
-    try testing.expectError(error.BadKeepList, plan(io, a, p, true));
+    try testing.expectError(error.BadKeepList, plan(io, a, p, .apply));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2" })));
 }

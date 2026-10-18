@@ -50,9 +50,9 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
 
     if (try retire.keepProblem(io, alloc, in.keep)) |why| return form(req, alloc, in, why, .bad_request);
 
-    const confirm = std.mem.eql(u8, (try chat.formField(alloc, sent, "confirm")) orelse "", "1");
-    var pl = try retire.plan(io, alloc, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) }, confirm);
-    return result(req, alloc, in, &pl, confirm);
+    const mode: retire.Mode = if (std.mem.eql(u8, (try chat.formField(alloc, sent, "confirm")) orelse "", "1")) .apply else .dry_run;
+    var pl = try retire.plan(io, alloc, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) }, mode);
+    return result(req, alloc, in, &pl);
 }
 
 // ── the form (the dry run lives below it after a preview) ─────────────────────
@@ -130,7 +130,8 @@ fn form(req: *Request, alloc: Alloc, in: Input, err: []const u8, status: std.htt
 
 // ── the result (dry run → confirm, or confirmed) ──────────────────────────────
 
-fn result(req: *Request, alloc: Alloc, in: Input, pl: *retire.Plan, confirmed: bool) !void {
+fn result(req: *Request, alloc: Alloc, in: Input, pl: *retire.Plan) !void {
+    const confirmed = pl.mode == .apply;
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, if (confirmed) "Retired" else "Preview — nothing removed yet", "");
 
