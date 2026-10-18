@@ -194,6 +194,29 @@ test "route: a send and a reaction store their author's name and uid each where 
     try testing.expect(std.mem.indexOf(u8, line, "\"uid\":\"1\",\"from\":\"Steve\"") != null);
 }
 
+test "route: a message saved to the reading list is found again at the place it was saved from" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const reading_list = @import("reading_list.zig");
+    const docs_store = @import("docs_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const form = "conv=1_2&sid=Plans&id=Plans_3&from=Debbie&at=Jun+22&body=hello&note=later";
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/docs/save_to_reading_list", steve, form)));
+    const refs = try reading_list.parseRefs(a, try docs_store.readUserDoc(io, a, "1", reading_list.reading_list_slug));
+    try testing.expectEqual(@as(usize, 1), refs.len);
+    try testing.expectEqualStrings("1_2", refs[0].conv);
+    try testing.expectEqualStrings("Plans", refs[0].sid);
+    try testing.expectEqualStrings("Plans_3", refs[0].id);
+}
+
 test "route: the conversation page hands the client the upload caps and the accepted types, the server's own, where chat_compose.js kept copies (metal-vmm QUEUE 157(d))" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
