@@ -1,0 +1,172 @@
+-- **EVERY TEST RUNS, AND THE HARNESS IS TESTS' ONLY** (metal-vmm QUEUE 236:
+-- the hole that hid linux_host_test's orphan, zig-webbox bc2402f). In
+-- zig-server: every src/**/*.zig holding a `test` is one of build.zig's test
+-- roots or reached by imports from one; and no file that is not a
+-- `_test.zig` imports router_harness.zig. Read with Zig's parser
+-- (`zig_decls`, `zig_imports`). **Any import enrols** (a file a test root
+-- reaches has its tests run, inside a `test {}` block or not: a planted
+-- failing test in presence.zig, which only chat.zig and others import,
+-- failed `zig build test`), so build.zig's "imports alone don't enroll a
+-- file's tests" is too strong. Not seen: an import nothing uses, which Zig
+-- never analyzes, so its file's tests do not run.
+--   shale tools/test_roots.shale               the tree
+--   shale tools/test_roots.shale self_test=1   its plants first, each must fire
+
+-- The `"src/x.zig"` strings in `text`, in order.
+function srcStrings(text)
+  local out = {}
+  local at = find(text, "\"src/")
+  while at ~= nil do
+    local rest = sub(text, at + 1)
+    local close = find(rest, "\"")
+    push(out, sub(rest, 5, close - 1))
+    text = sub(rest, close + 1)
+    at = find(text, "\"src/")
+  end
+  return out
+end
+
+-- build.zig's test roots, as src/'s files: each `b.addTest(`'s own
+-- `b.path("src/...")`, and the list a loop of them runs over.
+function roots(build)
+  local out = {}
+  local rest = build
+  local at = find(rest, "b.addTest(")
+  while at ~= nil do
+    local near = sub(rest, at, at + 200)
+    local p = find(near, "b.path(\"src/")
+    if p ~= nil then push(out, srcStrings(sub(near, p))[1]) end
+    rest = sub(rest, at + 1)
+    at = find(rest, "b.addTest(")
+  end
+  local list = find(build, "for ([_][]const u8{")
+  if list ~= nil then
+    local tail = sub(build, list)
+    local close = find(tail, "}) |path|")
+    if close ~= nil and contains(sub(tail, close, close + 300), "b.addTest(") then
+      for s in srcStrings(sub(tail, 1, close)) do push(out, s) end
+    end
+  end
+  return out
+end
+
+-- What is wrong in the zig-server-shaped tree at `dir`, a line each.
+function check(dir)
+  local problems = {}
+  local src = dir .. "/src"
+  local files = {}
+  local tests = {}
+  local blocks = {}
+  for p in glob(src .. "/**/*.zig") do
+    local rel = sub(p, #src + 2)
+    push(files, rel)
+    local ranges = {}
+    for d in zig_decls(p) do
+      if d.kind == "test" then
+        tests[rel] = true
+        push(ranges, {first = d.first, last = d.last})
+      end
+    end
+    blocks[rel] = ranges
+  end
+  -- What each file's test blocks import, and what any of it imports.
+  local enrols = {}
+  local imports = {}
+  for rel in files do
+    local inside = {}
+    local all = {}
+    for r in zig_imports(src .. "/" .. rel) do
+      if r.kind == "import" and r.file ~= "module" then
+        local dir_of = ""
+        local slash = nil
+        for i = #rel, 1, -1 do if slash == nil and sub(rel, i, i) == "/" then slash = i end end
+        if slash ~= nil then dir_of = sub(rel, 1, slash) end
+        local target = dir_of .. r.target
+        push(all, target)
+        for b in blocks[rel] do
+          if r.line >= b.first and r.line <= b.last then push(inside, target) end
+        end
+      end
+    end
+    enrols[rel] = inside
+    imports[rel] = all
+  end
+  local reached = {}
+  local todo = roots(read(dir .. "/build.zig"))
+  while #todo > 0 do
+    local f = todo[#todo]
+    todo = take(todo, #todo - 1)
+    if not has_key(reached, f) then
+      reached[f] = true
+      for g in get(imports, f, {}) do push(todo, g) end
+    end
+  end
+  for rel in files do
+    if has_key(tests, rel) and not has_key(reached, rel) then
+      push(problems, rel .. " holds tests that no test root reaches through a `test {}` block: they never run")
+    end
+    if not ends_with(rel, "_test.zig") and rel ~= "router_harness.zig" then
+      for t in imports[rel] do
+        if ends_with(t, "router_harness.zig") then push(problems, rel .. " imports router_harness.zig, and is not a _test.zig: the harness is tests' only") end
+      end
+    end
+  end
+  return problems
+end
+
+function plant(dir, file, body)
+  replace(dir .. "/src/" .. file, body)
+end
+
+if arg("self_test", "") ~= "" then
+  local t = "zig-out/test_roots_plant"
+  if exists(t) then remove_tree(t) end
+  mkdir(t)
+  mkdir(t .. "/src")
+  replace(t .. "/build.zig", [=[
+const router_tests = b.addTest(.{ .root_module = b.createModule(.{
+    .root_source_file = b.path("src/router.zig"),
+}) });
+for ([_][]const u8{ "src/a.zig" }) |path| {
+    const unit = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path(path),
+    }) });
+}
+]=])
+  plant(t, "router.zig", "const harness_free = 1;\ntest {\n    _ = @import(\"r_test.zig\");\n}\n")
+  plant(t, "r_test.zig", "const h = @import(\"router_harness.zig\");\ntest \"r\" {}\n")
+  plant(t, "router_harness.zig", "pub fn f() void {}\n")
+  plant(t, "a.zig", "test \"a\" {}\n")
+  local clean = check(t)
+  if #clean > 0 then fail("the clean plant is not clean: " .. join(clean, "; ")) end
+  local cases = {
+    {"orphan_test.zig", "test \"o\" {}\n", "orphan_test.zig holds tests"},
+    {"b.zig", "const h = @import(\"router_harness.zig\");\n", "b.zig imports router_harness.zig"},
+    {"c.zig", "test \"c\" {}\n", "c.zig holds tests"},
+    {"e.zig", "test \"e\" {}\n", "e.zig holds tests"},
+  }
+  for c in cases do
+    plant(t, c[1], c[2])
+    -- e.zig is imported only by d.zig, which nothing reaches.
+    if c[1] == "e.zig" then plant(t, "d.zig", "const e = @import(\"e.zig\");\n") end
+    local got = check(t)
+    local hit = false
+    for p in got do if contains(p, c[3]) then hit = true end end
+    if not hit then fail("a plant did not fire: " .. c[1] .. " (" .. join(got, "; ") .. ")") end
+    remove(t .. "/src/" .. c[1])
+    if exists(t .. "/src/d.zig") then remove(t .. "/src/d.zig") end
+    plant(t, "router.zig", "const harness_free = 1;\ntest {\n    _ = @import(\"r_test.zig\");\n}\n")
+  end
+  -- An import outside a test block enrols: no problem.
+  plant(t, "router.zig", "const c = @import(\"c.zig\");\ntest {\n    _ = @import(\"r_test.zig\");\n}\n")
+  plant(t, "c.zig", "test \"c\" {}\n")
+  local fine = check(t)
+  if #fine > 0 then fail("an import outside a test block was taken for no enrolment: " .. join(fine, "; ")) end
+  remove_tree(t)
+  print("test roots: its plants fire (a test file nothing imports, one only an unreached file imports, a production import of the harness), and an import outside a test block enrols")
+else
+  local problems = check("zig-server")
+  for p in problems do print("  " .. p) end
+  if #problems > 0 then fail("test roots: " .. #problems .. " problems") end
+  print("test roots: every file holding tests runs, and only tests import the harness")
+end

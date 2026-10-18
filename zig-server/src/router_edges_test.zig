@@ -8,6 +8,20 @@ const mem_meter = @import("webbox").mem_meter;
 const testing = std.testing;
 const harness = @import("router_harness.zig");
 
+// ── request edges (metal-vmm QUEUE 183) ─────────────────────────────────────
+//
+// **EVERY NUMBER A REQUEST CAN CARRY, AT ITS TYPE'S EDGES.** Twice a
+// ReleaseSafe panic in the served kernel came from arithmetic on a number
+// the client chose (v26: a forged cookie's MAC length; v28: Last-Event-ID +
+// 1). Here the whole application, in Debug (every safety check a panic), is
+// sent each edge in every place a request carries a number, as a signed-in
+// member. A panic names its site in the stack it prints; the request it
+// came from is in `.zig-cache/tmp/request_edges_current`.
+//
+// **IT REFUSES TO PASS ON A SITE IT DOES NOT KNOW**: every `parseInt(` in
+// src/ (outside tests) is in `edge_sites`, by file and function, either
+// covered by a request below or said not to be reachable from one, and why.
+
 const edge_numbers = [_][]const u8{
     "0",                    "-1",                   "1",                    "2147483646",                        "2147483647",
     "2147483648",           "-2147483648",          "-2147483649",          "4294967295",                        "4294967296",

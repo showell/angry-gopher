@@ -124,10 +124,11 @@ pub fn build(b: *std.Build) void {
         b.step(tool.step, tool.help).dependOn(&tool_run.step);
     }
 
-    // Unit tests (`zig build test`). Each listed module is a test root; a module
-    // must be in this list for its `test {}` blocks to actually run under the
-    // gate (imports alone don't enroll a file's tests). Pure-logic modules tested
-    // in isolation, so no embedded assets are needed.
+    // Unit tests (`zig build test`). Each listed module is a test root; a file's
+    // `test {}` blocks run when a root reaches it by imports Zig analyzes (an
+    // import nothing uses is never analyzed, so its tests do not run), and
+    // tools/test_roots.shale checks every file holding tests is reached.
+    // Pure-logic modules tested in isolation, so no embedded assets are needed.
     // router.zig's tests call the REAL route table, so they reach handlers that
     // @embedFile assets and read build_options. Its test module therefore needs
     // the same wiring `root` got above — a plain module (the loop below) would

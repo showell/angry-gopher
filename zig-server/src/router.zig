@@ -341,7 +341,6 @@ fn viewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !View
 // The tests are router_*_test.zig's, their harness router_harness.zig's.
 
 const testing = std.testing;
-const harness = @import("router_harness.zig");
 
 // Every file of router.zig's tests, so they run (build.zig's root is this file).
 test {
@@ -427,17 +426,3 @@ test "route families: each request counted under its part of the site (metal-vmm
         }
     }
 }
-
-// ── request edges (metal-vmm QUEUE 183) ─────────────────────────────────────
-//
-// **EVERY NUMBER A REQUEST CAN CARRY, AT ITS TYPE'S EDGES.** Twice a
-// ReleaseSafe panic in the served kernel came from arithmetic on a number
-// the client chose (v26: a forged cookie's MAC length; v28: Last-Event-ID +
-// 1). Here the whole application, in Debug (every safety check a panic), is
-// sent each edge in every place a request carries a number, as a signed-in
-// member. A panic names its site in the stack it prints; the request it
-// came from is in `.zig-cache/tmp/request_edges_current`.
-//
-// **IT REFUSES TO PASS ON A SITE IT DOES NOT KNOW**: every `parseInt(` in
-// src/ (outside tests) is in `edge_sites`, by file and function, either
-// covered by a request below or said not to be reachable from one, and why.
