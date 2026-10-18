@@ -231,3 +231,15 @@ test "encodeChatEvent: dm:true is emitted for a 1:1 conv, omitted for a channel"
     try encodeChatEvent(&ch, a, "2026-06-24T00:00:00Z", "/channel/general/yo", "Claude", "in general", "yo", "", false);
     try std.testing.expect(std.mem.indexOf(u8, ch.items, "\"dm\"") == null);
 }
+
+test "encodeChatEvent: each field under its own name, in the order recent.js reads, an empty one left out" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    const a = arena.allocator();
+    defer arena.deinit();
+    var j: std.ArrayList(u8) = .empty;
+    try encodeChatEvent(&j, a, "2026-06-24T00:00:00Z", "/chat/c/1_3/yo", "Claude", "to Claude", "yo", "hi there", true);
+    try std.testing.expectEqualStrings("{\"kind\":\"chat\",\"at\":\"2026-06-24T00:00:00Z\",\"url\":\"/chat/c/1_3/yo\",\"who\":\"Claude\",\"where\":\"to Claude\",\"topic\":\"yo\",\"excerpt\":\"hi there\",\"dm\":true}", j.items);
+    j = .empty;
+    try encodeChatEvent(&j, a, "2026-06-24T00:00:00Z", "/channel/general/yo", "Claude", "", "yo", "", false);
+    try std.testing.expectEqualStrings("{\"kind\":\"chat\",\"at\":\"2026-06-24T00:00:00Z\",\"url\":\"/channel/general/yo\",\"who\":\"Claude\",\"topic\":\"yo\"}", j.items);
+}
