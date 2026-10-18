@@ -14,6 +14,7 @@
 const std = @import("std");
 const html = @import("webbox").html;
 const http = @import("webbox").http;
+const top_bar = @import("top_bar.zig");
 const Alloc = std.mem.Allocator;
 
 pub const Asset = struct { name: []const u8, body: []const u8 };
@@ -157,28 +158,9 @@ const page_head_b =
     \\       display: flex; flex-direction: column; min-height: 100vh; }
     \\.app-body-wrap { flex: 1; max-width: 820px; margin: 32px auto; padding: 0 24px 60px;
     \\                 width: 100%; box-sizing: border-box; }
-    \\.app-top { background: var(--cc-top-bar-bg, #f0ede4);
-    \\           border-bottom: 1px solid var(--cc-top-bar-border, #c9bfa7);
-    \\           padding: 8px 24px;
-    \\           font-family: sans-serif; display: flex; justify-content: space-between;
-    \\           align-items: baseline;
-    \\           position: sticky; top: 0; z-index: 10; }
-    \\.app-top-home a { color: var(--cc-accent, #000080); text-decoration: none; font-weight: bold; }
-    \\.app-top-home a:hover { text-decoration: underline; }
-    \\.app-top-user { font-size: 13px; color: var(--cc-body-muted-fg, #444); }
-    \\.app-top-user a { color: var(--cc-accent, #000080); }
-    \\.chat-top .chat-top-left { display: flex; align-items: baseline; gap: 14px;
-    \\                           flex-wrap: wrap; min-width: 0; }
-    \\.chat-top-home { color: var(--cc-accent, #000080); text-decoration: none; font-size: 13px; }
-    \\.chat-top-home:hover { text-decoration: underline; }
-    \\.chat-top-title { font-weight: bold; color: var(--cc-accent, #000080); }
-    \\.chat-top-links { font-size: 13px; }
-    \\.chat-top-links a { color: var(--cc-accent, #000080); text-decoration: none; }
-    \\.chat-top-links a:hover { text-decoration: underline; }
-    \\.chat-notify { font-size:13px; color:var(--cc-notify-fg, #1a5fb4); overflow:hidden; text-overflow:ellipsis;
-    \\               white-space:nowrap; min-width:0; }
-    \\.chat-notify a { color:inherit; }
-    \\.chat-notify a:hover { text-decoration:underline; }
+    \\
+++ top_bar.css ++
+    \\
     \\h1 { color: var(--cc-accent, #000080); }
     \\a { color: var(--cc-accent, #000080); }
     \\.muted { color: var(--cc-muted-fg, #888); }
