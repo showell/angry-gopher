@@ -361,3 +361,30 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     try testing.expectEqual(@as(usize, 30), std.mem.count(u8, found, "\"mark\":\"zeppelin\""));
     try testing.expect(found.len < 64 << 10);
 }
+
+test "route: Recent marks a DM's row a DM and a channel's not" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=in+a+dm&cid=x")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/channel/general/Plans/send", steve, "markdown=in+a+channel&cid=y")));
+    const feed = try harness.UidSite.ask(a, io, "/chat/recent", steve);
+    // Each row's object, from its `where` to its end.
+    const dm_at = std.mem.indexOf(u8, feed, "\"where\":\"to Debbie\"").?;
+    const ch_at = std.mem.indexOf(u8, feed, "\"where\":\"in general\"").?;
+    const dm_row = feed[dm_at .. dm_at + std.mem.indexOfScalar(u8, feed[dm_at..], '}').?];
+    const ch_row = feed[ch_at .. ch_at + std.mem.indexOfScalar(u8, feed[ch_at..], '}').?];
+    try testing.expect(std.mem.indexOf(u8, dm_row, "\"dm\":true") != null);
+    try testing.expect(std.mem.indexOf(u8, ch_row, "\"dm\"") == null);
+}
