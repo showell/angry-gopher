@@ -1,0 +1,560 @@
+-- **POKA-YOKE LINT: NOTHING THE ROUTE TABLE REACHES MAY REACH FOR THE HOST.**
+-- Read with Zig's own parser and tokenizer (`zig_decls`, `zig_imports`,
+-- `zig_tokens`): a string or a comment is never code, an import split over
+-- lines is one, a brace in a literal counts for nothing (metal-vmm QUEUE
+-- 238; the Python it replaced read Zig as lines of text).
+--
+-- `zig-server/src/router.zig` is WHAT THIS SITE SERVES, kept apart from how a
+-- Linux process starts (webbox's `linux_host.zig`, which `server.zig` calls),
+-- so that a host that is not Linux can call it: zig-metal-unikernel boots it
+-- on a machine with no operating system. That works only if every module the
+-- route table reaches stays off the host, and one that does not FAILS TO
+-- COMPILE there. This lint works that set out from the imports, from
+-- router.zig and from webbox.zig (the library an application imports, which
+-- the metal port carries whole), and checks every file in it. It follows a
+-- file's imports by path (from the importing file's own folder, as Zig does)
+-- and the `webbox` and `shale` modules (to webbox.zig, shale.zig). The three
+-- trees, zig-server's, zig-webbox's and shale's, are read as one folder: they
+-- hold no file of the same name. A module outside the set (server.zig, the
+-- libraries' Linux halves, the stress harness, the markdown tools) is
+-- host-side by definition and is not checked; there is no list of
+-- exemptions to fall out of date.
+--
+-- THE LIBRARY'S EDGES, inside the set:
+--   THE LINUX HALF   `@import("webbox_linux")` or `@import("shale_linux")`, or
+--                    a file of one by path (linux_host.zig, bind.zig,
+--                    linux_config.zig, webbox_linux.zig, shale_linux.zig):
+--                    the host itself. Not followed.
+--   BY ITS FILES     an application's file importing a file of the library by
+--                    path: it imports the module (`@import("webbox").http`).
+--                    One file belongs to one module, and the metal port hands
+--                    the library to the kernel as a module of its own.
+--
+-- WHAT IT FORBIDS, inside the set and outside tests (a `test` block, and a
+-- private top-level declaration only tests, or other such, use: Zig compiles
+-- a declaration only where it is used, so one only tests use is never in
+-- the route table's build; a `pub` one may be used from another file):
+--   THE HOST'S SEAM  `std.Io.Dir`, `.Clock`, `.Mutex`, `.Group` and a bare
+--                    `std.Io` (the old `const Io = std.Io;` too), and
+--                    `@import("std").Io`: every file takes its `Io` from the
+--                    `host_io` module, the one file each build chooses.
+--   THE STORE'S SEAM `Io.Dir.cwd(` anywhere but store.zig: the Store keeps
+--                    FAT's rules on every host (zig-metal-unikernel QUEUE 54).
+--   THE HOST ITSELF  `std.Io.Threaded`, `std.Io.net`, the host allocators
+--                    (`std.heap.page_allocator`, `c_allocator`,
+--                    `raw_c_allocator`, `smp_allocator`), `std.process`,
+--                    `std.posix`, `std.Thread`, `std.os.`, `std.c.`, the
+--                    clock shortcuts in `std.time`, `std.crypto.random`, the
+--                    old `std.fs` but `std.fs.path`, `std.debug.print`, and
+--                    the password hashers' `strHash(`, which takes a real
+--                    `std.Io`.
+-- WHAT IT ALLOWS: `std.Io.Reader`, `.Writer`, `.Limit`, through `std.` or
+-- through `@import("std")`; `std.fs.path`; anything in a test.
+--
+-- WHAT IT CANNOT SEE: a std function that takes a real `std.Io` compiles on
+-- Linux when handed our `io`, because there the alias IS std.Io; nor an
+-- import through a name (`const s = @import("std"); s.heap...`). The
+-- bare-metal build (zig-metal-unikernel's `zig build gopher`) sees them all;
+-- this is its fast, local subset. Every rule was a compile error there
+-- first.
+--
+-- From the folder that holds the repos (run by ops/check_zig):
+--   shale angry-gopher/tools/lint_portable.shale              the tree
+--   shale angry-gopher/tools/lint_portable.shale self_test=1  its plants, each must fire
+
+const repo = arg("repo", "angry-gopher")
+
+-- The roots, the modules that are files here, and the Linux halves.
+const roots = {"router.zig", "webbox.zig"}
+const module_files = {webbox = "webbox.zig", shale = "shale.zig"}
+const host_modules = {webbox_linux = true, shale_linux = true}
+const host_only = {["webbox_linux.zig"] = true, ["linux_host.zig"] = true, ["bind.zig"] = true, ["linux_config.zig"] = true, ["shale_linux.zig"] = true}
+const store = "store.zig"
+-- The libraries' trees, after the application's, by module.
+const library_modules = {"webbox", "shale"}
+
+-- The trees, read as one folder: where `rel` is, the first that has it.
+function at(dirs, rel)
+  for d in dirs do
+    if exists(d .. "/" .. rel) then return d .. "/" .. rel end
+  end
+  return nil
+end
+
+-- Which of the trees `rel` is in: 1 the application's, 2 webbox's, 3
+-- shale's (the order `trees` gives them); 0, none.
+function which(dirs, rel)
+  for k = 1, #dirs do
+    if exists(dirs[k] .. "/" .. rel) then return k end
+  end
+  return 0
+end
+
+function base(rel)
+  local parts = split(rel, "/")
+  return parts[#parts]
+end
+
+-- `rel`'s folder, with its slash ("" at the top).
+function folder(rel)
+  local parts = split(rel, "/")
+  if #parts == 1 then return "" end
+  return join(take(parts, #parts - 1), "/") .. "/"
+end
+
+-- A path with its `.` and `..` parts worked out; nil past the top.
+function normal(rel)
+  local out = {}
+  for p in split(rel, "/") do
+    if p == ".." then
+      if #out == 0 then return nil end
+      out = take(out, #out - 1)
+    elseif p ~= "." and p ~= "" then
+      push(out, p)
+    end
+  end
+  return join(out, "/")
+end
+
+function contains_name(names, name)
+  for n in names do if n == name then return true end end
+  return false
+end
+
+function in_tests(tests, line)
+  for t in tests do
+    if line >= t.first and line <= t.last then return true end
+  end
+  return false
+end
+
+function sub_list(l, from)
+  local out = {}
+  for i = from, #l do push(out, l[i]) end
+  return out
+end
+
+-- **A FILE AS THE LINT READS IT**: which of its lines are tests' (a `test`
+-- block, and a private top-level declaration only tests or other such use,
+-- found by `uses` till nothing more is), and its imports.
+function reading(path)
+  local decls = zig_decls(path)
+  local only = {}
+  local changed = true
+  while changed do
+    changed = false
+    for a = 1, #decls do
+      local d = decls[a]
+      if d.kind ~= "test" and d.visibility ~= "pub" and not has_key(only, d.name) and (d.kind == "fn" or d.kind == "const" or d.kind == "var") then
+        local by_tests = false
+        local elsewhere = false
+        for b = 1, #decls do
+          local e = decls[b]
+          if a ~= b and contains_name(e.uses, d.name) then
+            if e.kind == "test" or has_key(only, e.name) then by_tests = true else elsewhere = true end
+          end
+        end
+        if by_tests and not elsewhere then
+          only[d.name] = true
+          changed = true
+        end
+      end
+    end
+  end
+  local tests = {}
+  for d in decls do
+    if d.kind == "test" or (d.kind ~= "test" and has_key(only, d.name)) then push(tests, {first = d.first, last = d.last}) end
+  end
+  -- An import behind `is_test` on its line (`if (@import("builtin").is_test)
+  -- return @import("gate_test.zig")...`) is a test's: outside a test build
+  -- the condition is false at compile time, and Zig never analyzes it.
+  local toks = zig_tokens(path)
+  local guarded = {}
+  local test_line = -1
+  for t in toks do
+    if t.text == "is_test" then test_line = t.line end
+    if t.text == "@import" and t.line == test_line then guarded["" .. t.line] = true end
+  end
+  return {tests = tests, imports = zig_imports(path), toks = toks, guarded = guarded}
+end
+
+
+
+-- What `rel`'s served code imports that is a file here: by path, from its
+-- folder; the `webbox` and `shale` modules as their roots.
+function deps(dirs, rel, r)
+  local out = {}
+  for i in r.imports do
+    if i.kind == "import" and not in_tests(r.tests, i.line) and not has_key(r.guarded, "" .. i.line) then
+      if i.file == "module" then
+        if has_key(module_files, i.target) then push(out, module_files[i.target]) end
+      else
+        local d = normal(folder(rel) .. i.target)
+        if d ~= nil then push(out, d) end
+      end
+    end
+  end
+  return out
+end
+
+-- **THE SET**: every file reachable from the roots, the roots included. A
+-- dangling import is Zig's error to report, not this lint's; the Linux half
+-- is a finding (`findings`), not followed.
+function closure(dirs, from, readings)
+  for r in from do
+    if at(dirs, r) == nil then fail("the root " .. r .. " is not in " .. join(dirs, ", ")) end
+  end
+  local seen = {}
+  local order = {}
+  local todo = {}
+  for r in from do push(todo, r) end
+  while #todo > 0 do
+    local rel = todo[1]
+    todo = sub_list(todo, 2)
+    local path = at(dirs, rel)
+    if path ~= nil and not has_key(seen, rel) then
+      seen[rel] = true
+      push(order, rel)
+      readings[rel] = reading(path)
+      for d in deps(dirs, rel, readings[rel]) do
+        if not has_key(host_only, base(d)) and not has_key(seen, d) then push(todo, d) end
+      end
+    end
+  end
+  return sort(order)
+end
+
+
+-- **THE RULES**, each over the tokens from `i`: the tokens it takes and
+-- the word its advice names, or nil.
+function texts(toks, i, n)
+  local out = {}
+  for k = i, i + n - 1 do
+    if k > #toks then push(out, "") else push(out, toks[k].text) end
+  end
+  return out
+end
+
+function is_one(t, set)
+  for s in set do if t == s then return true end end
+  return false
+end
+
+const host_seam = "take it from host_io (const Io = @import(\"host_io\").Io;): the build chooses the host there"
+const rules = {
+  {name = "std.Io.X", advice = "spell it Io.{0}, with Io from host_io: the build chooses the host there"},
+  {name = "std.Io bare", advice = host_seam},
+  {name = "@import(\"std\").Io", advice = host_seam},
+  {name = "std.Io.Threaded/net", advice = "std.Io.{0} is the host's thread pool / sockets"},
+  {name = "std.heap host", advice = "std.heap.{0} is a host allocator — take an allocator from the host instead"},
+  {name = "std.process/posix/Thread", advice = "std.{0} is the host"},
+  {name = "std.os.", advice = "std.os is the host"},
+  {name = "std.c.", advice = "std.c is libc"},
+  {name = "std.time clock", advice = "std.time.{0} reads the host clock — use Io.Clock.now(.real, io)"},
+  {name = "std.crypto.random", advice = "std.crypto.random is a getrandom syscall — take io.random"},
+  {name = "std.fs old", advice = "std.fs.{0} is the old host file API — use Io.Dir"},
+  {name = "std.debug.print", advice = "std.debug.print writes the host's stderr"},
+  {name = "strHash", advice = "strHash takes a real std.Io — draw the salt with io.random and call strHashWithSalt"},
+}
+const cwd_rule = 14
+const cwd_advice = "the disk is the Store's: call store.zig (read, write, list, stat...) — it keeps FAT's rules on every host"
+
+-- Rule `k` at the tokens `t` (texts, from where it may start): the
+-- tokens it takes and the word its advice names, or nil.
+function rule_at(k, t)
+  if k == 1 then
+    if t[1] == "std" and t[2] == "." and t[3] == "Io" and t[4] == "." and is_one(t[5], {"Dir", "Clock", "Mutex", "Group"}) then return {5, t[5]} end
+  elseif k == 2 then
+    if t[1] == "std" and t[2] == "." and t[3] == "Io" and t[4] ~= "." then return {3, ""} end
+  elseif k == 3 then
+    if t[1] == "@import" and t[2] == "(" and t[3] == "\"std\"" and t[4] == ")" and t[5] == "." and t[6] == "Io" then
+    if t[7] == "." and is_one(t[8], {"Reader", "Writer", "Limit"}) then return nil end
+    return {6, ""}
+    end
+  elseif k == 4 then
+    if t[1] == "std" and t[2] == "." and t[3] == "Io" and t[4] == "." and is_one(t[5], {"Threaded", "net"}) then return {5, t[5]} end
+  elseif k == 5 then
+    if t[1] == "std" and t[2] == "." and t[3] == "heap" and t[4] == "." and is_one(t[5], {"page_allocator", "c_allocator", "raw_c_allocator", "smp_allocator"}) then return {5, t[5]} end
+  elseif k == 6 then
+    if t[1] == "std" and t[2] == "." and is_one(t[3], {"process", "posix", "Thread"}) then return {3, t[3]} end
+  elseif k == 7 then
+    if t[1] == "std" and t[2] == "." and t[3] == "os" and t[4] == "." then return {4, ""} end
+  elseif k == 8 then
+    if t[1] == "std" and t[2] == "." and t[3] == "c" and t[4] == "." then return {4, ""} end
+  elseif k == 9 then
+    if t[1] == "std" and t[2] == "." and t[3] == "time" and t[4] == "." and is_one(t[5], {"timestamp", "milliTimestamp", "microTimestamp", "nanoTimestamp", "Timer", "Instant"}) then return {5, t[5]} end
+  elseif k == 10 then
+    if t[1] == "std" and t[2] == "." and t[3] == "crypto" and t[4] == "." and t[5] == "random" then return {5, ""} end
+  elseif k == 11 then
+    if t[1] == "std" and t[2] == "." and t[3] == "fs" and t[4] == "." and t[5] ~= "" and t[5] ~= "path" then return {5, t[5]} end
+  elseif k == 12 then
+    if t[1] == "std" and t[2] == "." and t[3] == "debug" and t[4] == "." and t[5] == "print" then return {5, ""} end
+  elseif k == 13 then
+    if is_one(t[1], {"bcrypt", "scrypt", "argon2"}) and t[2] == "." and t[3] == "strHash" and t[4] == "(" then return {4, ""} end
+    if t[1] == "pwhash" and t[2] == "." and t[3] ~= "" and t[4] == "." and t[5] == "strHash" and t[6] == "(" then return {6, ""} end
+  elseif k == 14 then
+    if t[1] == "Io" and t[2] == "." and t[3] == "Dir" and t[4] == "." and t[5] == "cwd" and t[6] == "(" then return {6, ""} end
+  end
+  return nil
+end
+
+-- The tokens a rule can start on: a cheap filter before the rules.
+const starts = {std = true, ["@import"] = true, bcrypt = true, scrypt = true, argon2 = true, pwhash = true, Io = true}
+
+-- **THE FINDINGS**, `{file, line, text, advice}`, file by file: the Linux
+-- half and the library's files by path first (line 0), then each rule's
+-- matches line by line, in the rules' order.
+function findings(dirs, from)
+  local readings = {}
+  local set = closure(dirs, from, readings)
+  local found = {}
+  for rel in set do
+    local r = readings[rel]
+    for i in r.imports do
+      if i.kind == "import" and i.file == "module" and has_key(host_modules, i.target) then
+        push(found, {file = rel, line = 0, text = "@import(\"" .. i.target .. "\")", advice = i.target .. " is the library's Linux half: only a Linux main imports it"})
+      end
+    end
+    for i in r.imports do
+      if i.kind == "import" and i.file ~= "module" then
+        local d = normal(folder(rel) .. i.target)
+        if d ~= nil and has_key(host_only, base(d)) then
+          push(found, {file = rel, line = 0, text = "@import(\"" .. i.target .. "\")", advice = base(d) .. " is the library's Linux half: only a Linux main reaches it, through the webbox_linux module"})
+        elseif d ~= nil and which(dirs, rel) == 1 and which(dirs, d) > 1 then
+          local module = library_modules[which(dirs, d) - 1]
+          local tail = ""
+          if d ~= module_files[module] then tail = "." .. sub(base(d), 1, #base(d) - 4) end
+          push(found, {file = rel, line = 0, text = "@import(\"" .. i.target .. "\")", advice = "import the library as its module: @import(\"" .. module .. "\")" .. tail})
+        end
+      end
+    end
+    local toks = r.toks
+    local last = #rules
+    if rel ~= store then last = cwd_rule end
+    local hits = {}
+    for k = 1, last do
+      local advice0 = cwd_advice
+      if k <= #rules then advice0 = rules[k].advice end
+      local i = 1
+      while i <= #toks do
+        local tok = toks[i]
+        local took = 1
+        if has_key(starts, tok.text) and not in_tests(r.tests, tok.line) then
+          local m = rule_at(k, texts(toks, i, 8))
+          if m ~= nil then
+            local advice = advice0
+            if contains(advice, "{0}") then
+              local parts = split(advice, "{0}")
+              advice = join(parts, m[2])
+            end
+            push(hits, {file = rel, line = tok.line, rule = k, at = i, text = join(texts(toks, i, m[1]), ""), advice = advice})
+            took = m[1]
+          end
+        end
+        i = i + took
+      end
+    end
+    sort(hits, {"line", "rule", "at"})
+    for h in hits do push(found, {file = h.file, line = h.line, text = h.text, advice = h.advice}) end
+  end
+  return {set = set, found = found}
+end
+
+function trees()
+  return {repo .. "/zig-server/src", "zig-webbox/src", "shale/src"}
+end
+
+-- ── The plants: one tree a case, each finding (or none) as it must be. ──
+
+const plants = repo .. "/zig-out/lint_portable_plant"
+
+-- The plant's three trees, as the real one's: a name `webbox:x.zig` or
+-- `shale:x.zig` is that library's file; any other the application's.
+function tree(files)
+  if exists(plants) then remove_tree(plants) end
+  mkdir(plants)
+  local dirs = {plants .. "/app", plants .. "/webbox", plants .. "/shale"}
+  for d in dirs do mkdir(d) end
+  for name in keys(files) do
+    local dir = dirs[1]
+    local rel = name
+    if starts_with(name, "webbox:") then dir = dirs[2] rel = sub(name, 8) end
+    if starts_with(name, "shale:") then dir = dirs[3] rel = sub(name, 7) end
+    local f = folder(rel)
+    if f ~= "" and not exists(dir .. "/" .. sub(f, 1, #f - 1)) then mkdir(dir .. "/" .. sub(f, 1, #f - 1)) end
+    replace(dir .. "/" .. rel, files[name])
+  end
+  return dirs
+end
+
+-- router.zig importing each of `extra`'s files, and those files.
+function with_router(extra)
+  local files = {["router.zig"] = "const std = @import(\"std\");\nconst Io = @import(\"host_io\").Io;\n"}
+  local n = 0
+  for name in keys(extra) do
+    files["router.zig"] = files["router.zig"] .. "const _" .. n .. " = @import(\"" .. name .. "\");\n"
+    files[name] = extra[name]
+    n = n + 1
+  end
+  return files
+end
+
+function said(found)
+  local out = {}
+  for f in found do push(out, f.file .. ":" .. f.line .. ":" .. f.text) end
+  return join(out, " | ")
+end
+
+function expect_from(what, files, want, from)
+  if arg("trace", "") ~= "" then print("plant: " .. what) end
+  local got = said(findings(tree(files), from).found)
+  if got ~= want then fail(what .. ": want [" .. want .. "], got [" .. got .. "]") end
+end
+
+function expect_set_from(what, files, want, from)
+  local got = join(findings(tree(files), from).set, ",")
+  if got ~= want then fail(what .. ": want the set [" .. want .. "], got [" .. got .. "]") end
+end
+
+function expect(what, files, want)
+  expect_from(what, files, want, {"router.zig"})
+end
+
+function expect_set(what, files, want)
+  expect_set_from(what, files, want, {"router.zig"})
+end
+
+function self_test()
+  local n = 0
+  -- The host's seam.
+  for ns in {"Dir", "Clock", "Mutex", "Group"} do
+    expect("std.Io." .. ns, with_router({["a.zig"] = "const x = std.Io." .. ns .. ";\n"}), "a.zig:1:std.Io." .. ns)
+    n = n + 1
+  end
+  expect("a bare std.Io in a signature", with_router({["a.zig"] = "pub fn f(io: std.Io) void { _ = io; }\n"}), "a.zig:1:std.Io")
+  expect("the old alias, however spaced", with_router({["a.zig"] = "const  Io  =  std.Io ;\n"}), "a.zig:1:std.Io")
+  expect("std.Io .Reader is not bare", with_router({["a.zig"] = "const R = std.Io .Reader;\n"}), "")
+  expect("Reader, Writer and Limit", with_router({["a.zig"] = "const R = std.Io.Reader;\nconst W = std.Io.Writer;\nconst L = std.Io.Limit;\n"}), "")
+  expect("std's Io through the import", with_router({["a.zig"] = "const Io = @import(\"std\").Io;\n"}), "a.zig:1:@import(\"std\").Io")
+  expect("std's Io through the import, spaced", with_router({["a.zig"] = "const d = @import( \"std\" ).Io.Dir;\n"}), "a.zig:1:@import(\"std\").Io")
+  expect("the import's Writer", with_router({["a.zig"] = "const W = @import(\"std\").Io.Writer;\n"}), "")
+  n = n + 9
+  -- The host itself, a case a rule (and its alternatives).
+  local cases = {
+    {"std.Io.Threaded", "var t = std.Io.Threaded.init(a, .{});"},
+    {"std.Io.net", "const net = std.Io.net;"},
+    {"std.heap.page_allocator", "const a = std.heap.page_allocator;"},
+    {"std.heap.c_allocator", "const a = std.heap.c_allocator;"},
+    {"std.heap.raw_c_allocator", "const a = std.heap.raw_c_allocator;"},
+    {"std.heap.smp_allocator", "const a = std.heap.smp_allocator;"},
+    {"std.process", "fn f(env: std.process.Environ.Map) void {}"},
+    {"std.posix", "const fd = std.posix.STDOUT_FILENO;"},
+    {"std.Thread", "const t = std.Thread.spawn;"},
+    {"std.os.", "const x = std.os.linux;"},
+    {"std.c.", "const x = std.c.malloc;"},
+    {"std.time.timestamp", "const t = std.time.timestamp();"},
+    {"std.time.milliTimestamp", "const t = std.time.milliTimestamp();"},
+    {"std.time.nanoTimestamp", "const t = std.time.nanoTimestamp();"},
+    {"std.time.Timer", "var t = std.time.Timer.start();"},
+    {"std.time.Instant", "const t = std.time.Instant.now();"},
+    {"std.crypto.random", "fn f() void { std.crypto.random.bytes(&buf); }"},
+    {"std.fs.cwd", "const d = std.fs.cwd();"},
+    {"std.fs.File", "const F = std.fs.File;"},
+    {"std.debug.print", "fn f() void { std.debug.print(\"x\", .{}); }"},
+    {"bcrypt.strHash(", "fn f() void { return bcrypt.strHash(pw, opts, out, io); }"},
+    {"pwhash.argon2.strHash(", "fn f() void { _ = std.crypto.pwhash.argon2.strHash(pw, opts, out, io); }"},
+  }
+  for c in cases do
+    expect(c[1], with_router({["a.zig"] = c[2] .. "\n"}), "a.zig:1:" .. c[1])
+    n = n + 1
+  end
+  expect("strHashWithSalt", with_router({["a.zig"] = "fn f() void { return bcrypt.strHashWithSalt(pw, opts, out, salt); }\n"}), "")
+  expect("std.fs.path", with_router({["a.zig"] = "const p = std.fs.path.join(a, &.{\"x\"});\n"}), "")
+  expect("the portable allocators", with_router({["a.zig"] = "var fba = std.heap.FixedBufferAllocator.init(&buf);\nvar arena = std.heap.ArenaAllocator.init(a);\n"}), "")
+  expect("std.time's constants", with_router({["a.zig"] = "const s = std.time.ns_per_s;\n"}), "")
+  expect("a finding's line", with_router({["a.zig"] = "const ok = 1;\nconst ok2 = 2;\nconst a = std.heap.page_allocator;\n"}), "a.zig:3:std.heap.page_allocator")
+  expect("two on a line", with_router({["a.zig"] = "fn f(io: std.Io) void { _ = std.heap.page_allocator; }\n"}), "a.zig:1:std.Io | a.zig:1:std.heap.page_allocator")
+  -- What the text reading took for code: a string and a comment.
+  expect("std.Io in a string and a comment", with_router({["a.zig"] = "const s = \"std.Io and std.heap.page_allocator\";\n// std.Io.Dir in a comment\n/// std.process in a doc comment\nconst m = \\\\ std.posix in a multi-line string\n;\n"}), "")
+  expect("a rule split over lines", with_router({["a.zig"] = "const a = std\n    .heap\n    .page_allocator;\n"}), "a.zig:1:std.heap.page_allocator")
+  n = n + 8
+  -- Reach.
+  expect("an unreached file", {["router.zig"] = "\n", ["host.zig"] = "const a = std.heap.page_allocator;\n"}, "")
+  expect("three imports deep", {["router.zig"] = "const a = @import(\"a.zig\");\n", ["a.zig"] = "const b = @import(\"b.zig\");\n", ["b.zig"] = "const c = @import(\"c.zig\");\n", ["c.zig"] = "const x = std.heap.page_allocator;\n"}, "c.zig:1:std.heap.page_allocator")
+  expect_set("a cycle ends", {["router.zig"] = "const a = @import(\"a.zig\");\n", ["a.zig"] = "const b = @import(\"b.zig\");\n", ["b.zig"] = "const a = @import(\"a.zig\");\nconst r = @import(\"router.zig\");\n"}, "a.zig,b.zig,router.zig")
+  local lib = {["router.zig"] = "\n", ["webbox:webbox.zig"] = "pub const only = @import(\"only.zig\");\n", ["webbox:only.zig"] = "const a = std.heap.page_allocator;\n"}
+  expect_from("a file only the library reaches", lib, "only.zig:1:std.heap.page_allocator", roots)
+  expect("unseen from the route table alone", lib, "")
+  expect_set("an import split over lines", {["router.zig"] = "const a = @import(\n    \"a.zig\",\n);\n", ["a.zig"] = "\n"}, "a.zig,router.zig")
+  local harness = {
+    ["router.zig"] = "const harness = @import(\"harness.zig\");\npub fn route() void {}\ntest \"t\" {\n    harness.serve();\n}\ntest {\n    _ = @import(\"r_test.zig\");\n}\n",
+    ["harness.zig"] = "pub fn serve() void {\n    const a = std.heap.page_allocator;\n    _ = a;\n}\n",
+    ["r_test.zig"] = "const h = @import(\"harness.zig\");\ntest \"u\" {\n    h.serve();\n}\n",
+  }
+  expect_set("what only tests import is not followed", harness, "router.zig")
+  harness["router.zig"] = "const harness = @import(\"harness.zig\");\npub fn route() void {\n    harness.serve();\n}\n"
+  expect_set("a served import is followed", harness, "harness.zig,router.zig")
+  expect("a brace in a character literal", {["router.zig"] = "test \"x\" {\n    if (c == '{') {}\n}\nconst p = std.heap.page_allocator;\n"}, "router.zig:4:std.heap.page_allocator")
+  expect("a // in a string", {["router.zig"] = "const u = \"http://x\"; const p = std.heap.page_allocator;\n"}, "router.zig:1:std.heap.page_allocator")
+  expect_set_from("the library naming a Linux file: not followed", {["router.zig"] = "\n", ["webbox:webbox.zig"] = "pub const linux_host = @import(\"linux_host.zig\");\n", ["webbox:linux_host.zig"] = "var t = std.Io.Threaded.init(a, .{});\n"}, "router.zig,webbox.zig", roots)
+  expect_from("the library naming a Linux file: a finding", {["router.zig"] = "\n", ["webbox:webbox.zig"] = "pub const linux_host = @import(\"linux_host.zig\");\n", ["webbox:linux_host.zig"] = "var t = std.Io.Threaded.init(a, .{});\n"}, "webbox.zig:0:@import(\"linux_host.zig\")", roots)
+  expect_from("the route table reaching the Linux half", {["router.zig"] = "const h = @import(\"linux_host.zig\");\n", ["webbox:webbox.zig"] = "\n", ["webbox:linux_host.zig"] = "var t = std.Io.Threaded.init(a, .{});\n"}, "router.zig:0:@import(\"linux_host.zig\")", roots)
+  expect_from("the Linux module", {["router.zig"] = "const space = @import(\"webbox_linux\").linux_host.freeSpaceAt(\"x\");\n", ["webbox:webbox.zig"] = "\n"}, "router.zig:0:@import(\"webbox_linux\")", roots)
+  expect("the webbox module, followed", {["router.zig"] = "const http = @import(\"webbox\").http;\n", ["webbox:webbox.zig"] = "pub const http = @import(\"http.zig\");\n", ["webbox:http.zig"] = "const p = std.heap.page_allocator;\n"}, "http.zig:1:std.heap.page_allocator")
+  local by_path = findings(tree({["router.zig"] = "const http = @import(\"http.zig\");\nconst w = @import(\"webbox.zig\");\n", ["webbox:webbox.zig"] = "pub const http = @import(\"http.zig\");\n", ["webbox:http.zig"] = "const edge = @import(\"edge.zig\");\n", ["webbox:edge.zig"] = "\n"}), roots).found
+  if said(by_path) ~= "router.zig:0:@import(\"http.zig\") | router.zig:0:@import(\"webbox.zig\")" then fail("a library file by path: " .. said(by_path)) end
+  if not contains(by_path[1].advice, "@import(\"webbox\").http") then fail("a library file by path's advice: " .. by_path[1].advice) end
+  expect_from("a Linux file by ./", {["router.zig"] = "const h = @import(\"./linux_host.zig\");\n", ["webbox:webbox.zig"] = "\n", ["webbox:linux_host.zig"] = "\n"}, "router.zig:0:@import(\"./linux_host.zig\")", roots)
+  if attempt(findings, tree({["router.zig"] = "\n"}), roots).ok then fail("a missing library root was not loud") end
+  if attempt(findings, tree({["server.zig"] = "\n"}), {"router.zig"}).ok then fail("a missing route table was not loud") end
+  expect_set("named modules are not followed", {["router.zig"] = "const std = @import(\"std\");\nconst o = @import(\"build_options\");\n"}, "router.zig")
+  expect_set("a dangling import", {["router.zig"] = "const g = @import(\"gone.zig\");\n"}, "router.zig")
+  expect_set("an import in a comment", {["router.zig"] = "// const h = @import(\"host.zig\");\n", ["host.zig"] = "const a = std.heap.page_allocator;\n"}, "router.zig")
+  expect("the router itself", {["router.zig"] = "const a = std.heap.page_allocator;\n"}, "router.zig:1:std.heap.page_allocator")
+  -- The Python read imports from the tree's top: a file in a folder's own imports went unread.
+  expect("an import from a folder's file is its folder's", {["router.zig"] = "const s = @import(\"script/script.zig\");\n", ["script/script.zig"] = "const lex = @import(\"lex.zig\");\n", ["script/lex.zig"] = "const a = std.heap.page_allocator;\n"}, "script/lex.zig:1:std.heap.page_allocator")
+  expect_from("a library's file importing its sibling by path", {["router.zig"] = "const s = @import(\"shale\");\n", ["webbox:webbox.zig"] = "\n", ["shale:shale.zig"] = "pub const script = @import(\"script/script.zig\");\n", ["shale:script/script.zig"] = "pub const cli = @import(\"cli.zig\");\n", ["shale:script/cli.zig"] = "const script = @import(\"script.zig\");\n"}, "", roots)
+  expect_set("an import behind is_test is a test's", {["router.zig"] = "const a = @import(\"a.zig\");\n", ["a.zig"] = "pub fn run() void {\n    if (@import(\"builtin\").is_test) return @import(\"gate_test.zig\").run();\n}\n", ["gate_test.zig"] = "pub fn run() void { std.debug.print(\"x\", .{}); }\n"}, "a.zig,router.zig")
+  n = n + 26
+  -- Exemptions.
+  expect("a test block", with_router({["a.zig"] = "const ok = 1;\ntest \"uses the host\" {\n    var t = std.Io.Threaded.init(std.heap.page_allocator, .{});\n    defer t.deinit();\n}\n"}), "")
+  expect("after a test block", with_router({["a.zig"] = "test \"x\" {\n    const a = std.heap.page_allocator;\n}\nconst b = std.heap.page_allocator;\n"}), "a.zig:4:std.heap.page_allocator")
+  expect("a brace in a string in a test", with_router({["a.zig"] = "test \"json\" {\n    const s = \"}\";\n    const a = std.heap.page_allocator;\n}\n"}), "")
+  expect("an escaped quote", with_router({["a.zig"] = "test \"esc\" {\n    const s = \"a \\\" } b\";\n    const a = std.heap.page_allocator;\n}\nconst c = std.heap.page_allocator;\n"}), "a.zig:5:std.heap.page_allocator")
+  expect("nested braces in a test", with_router({["a.zig"] = "test \"nested\" {\n    if (true) {\n        for (xs) |x| { _ = x; }\n    }\n    const a = std.heap.page_allocator;\n}\nconst b = std.heap.page_allocator;\n"}), "a.zig:7:std.heap.page_allocator")
+  expect("a function named test...", with_router({["a.zig"] = "fn testHelper() void { _ = std.heap.page_allocator; }\n"}), "a.zig:1:std.heap.page_allocator")
+  expect("a continuation line starting test", with_router({["a.zig"] = "const x = base +\n    testValue;\nconst a = std.heap.page_allocator;\n"}), "a.zig:3:std.heap.page_allocator")
+  expect("comments", with_router({["a.zig"] = "//! std.process is the host\n// std.heap.page_allocator is mmap\n/// std.Io.Dir is the seam\nconst x = 1; // std.posix, in a trailing comment\n"}), "")
+  n = n + 8
+  -- The Store's seam.
+  local cwd = "fn f(io: Io) !void { try Io.Dir.cwd().writeFile(io, .{ .sub_path = \"x\", .data = \"\" }); }\n"
+  expect("Io.Dir.cwd( beside the store", with_router({["a.zig"] = "pub " .. cwd}), "a.zig:1:Io.Dir.cwd(")
+  expect("the store itself may", with_router({["store.zig"] = "pub " .. cwd}), "")
+  expect("an unreached module", {["router.zig"] = "\n", ["bench.zig"] = "pub " .. cwd}, "")
+  expect("in a test block", with_router({["a.zig"] = "test \"x\" {\n    try Io.Dir.cwd().writeFile(io, .{ .sub_path = \"x\", .data = \"\" });\n}\n"}), "")
+  expect("a helper only tests use, and its own helper", with_router({["a.zig"] = "fn lower(io: Io) !void { try Io.Dir.cwd().deleteFile(io, \"x\"); }\nconst Fixture = struct {\n    io: Io,\n    fn seed(self: *Fixture) !void {\n        try Io.Dir.cwd().writeFile(self.io, .{ .sub_path = \"x\", .data = \"\" });\n        try lower(self.io);\n    }\n};\ntest \"uses the fixture\" {\n    var f = Fixture{ .io = io };\n    try f.seed();\n}\n"}), "")
+  expect("a helper the code uses too", with_router({["a.zig"] = "fn helper(io: Io) !void { try Io.Dir.cwd().deleteFile(io, \"x\"); }\npub fn serve(io: Io) !void { try helper(io); }\ntest \"and a test\" { try helper(io); }\n"}), "a.zig:1:Io.Dir.cwd(")
+  expect("a helper nothing uses", with_router({["a.zig"] = cwd}), "a.zig:1:Io.Dir.cwd(")
+  expect("a pub helper only this file's tests use", with_router({["a.zig"] = "pub " .. cwd .. "test \"x\" { try f(io); }\n"}), "a.zig:1:Io.Dir.cwd(")
+  expect("a host helper only tests use", with_router({["a.zig"] = "fn hostHelper() void { const a = std.heap.page_allocator; _ = a; }\ntest \"x\" { hostHelper(); }\npub fn serve() void { const a = std.heap.page_allocator; _ = a; }\n"}), "a.zig:3:std.heap.page_allocator")
+  n = n + 9
+  remove_tree(plants)
+  return n
+end
+
+if arg("self_test", "") ~= "" then
+  local n = self_test()
+  print("portable lint: its " .. n .. " plants come out as they must (each rule fires, each exemption holds, a string or a comment is no code)")
+elseif arg("list", "") ~= "" then
+  -- The set and the findings, a line each: what a comparison reads.
+  local r = findings(trees(), roots)
+  for f in r.set do print("module " .. f) end
+  for f in r.found do print("finding " .. f.file .. ":" .. f.line .. ": " .. f.text .. " — " .. f.advice) end
+else
+  local r = findings(trees(), roots)
+  if #r.found > 0 then
+    for f in r.found do print("  " .. f.file .. ":" .. f.line .. ": " .. f.text .. " — " .. f.advice) end
+    fail("portable lint: the route table reaches the host here, which will not compile on a machine with no operating system (see tools/lint_portable.shale for what is allowed and why)")
+  end
+  print("portable lint: the " .. #r.set .. " modules the route table and the webbox library reach stay off the host")
+end
