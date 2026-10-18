@@ -142,8 +142,9 @@ pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: 
     var m = Manifest{};
     const buf = try alloc.alloc(u8, piece);
     var t = Tar{ .w = w };
+    const b: Backup = .{ .io = io, .alloc = alloc, .t = &t, .buf = buf, .skipped = &skipped, .m = &m };
     for ([_][2][]const u8{ .{ "data", data }, .{ "auth", auth } }) |root| {
-        try walk(io, alloc, &t, root[1], root[0], buf, &skipped, &m, true);
+        try walk(b, root[1], root[0], .root);
     }
     if (skipped.items.len > 0) {
         try t.file("backup-skipped.txt", skipped.items);
@@ -202,63 +203,71 @@ fn digest(bytes: []const u8) [Sha256.digest_length]u8 {
     return out;
 }
 
+/// One archive's walk: where it writes, the buffer it reads files through,
+/// the skips it names and the manifest it keeps.
+const Backup = struct { io: Io, alloc: Alloc, t: *Tar, buf: []u8, skipped: *std.ArrayList(u8), m: *Manifest };
+
+/// Where a walk is: at a root, whose failure fails the backup, or inside
+/// one, where a failure is a named skip.
+const Where = enum { root, inside };
+
 /// Writes `dir` (on this host) as `name` (in the archive) and everything
 /// under it, in name order, each file into the manifest as it goes.
-fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: []u8, skipped: *std.ArrayList(u8), m: *Manifest, root: bool) !void {
+fn walk(b: Backup, dir: []const u8, name: []const u8, where: Where) !void {
     // **WHAT IS NOT TAKEN IS NAMED** (metal-vmm QUEUE 104): a folder inside
     // that cannot be looked at, or anything neither a file nor a folder, goes
     // in backup-skipped.txt with why. A root is not a skip: one not there yet
     // is left out unsaid, and one that cannot be looked at fails the backup
     // (QUEUE 110, `checkRoots`).
     // absent-ok: a folder inside the tree that cannot be looked at is a named skip, in backup-skipped.txt (QUEUE 104, 110).
-    const st = (if (root) try rootStat(io, alloc, dir) else store.statOrNull(io, alloc, dir) catch |e| {
-        try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
+    const st = (if (where == .root) try rootStat(b.io, b.alloc, dir) else store.statOrNull(b.io, b.alloc, dir) catch |e| {
+        try b.skipped.print(b.alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
         return;
     }) orelse return;
     // Listed before the folder goes in: one that stats and cannot be listed
     // is a named skip too (QUEUE 118), and a root that cannot be is a failed
     // backup, which `checkRoots` asked before the answer began.
     // absent-ok: a folder inside that cannot be listed is a named skip, in backup-skipped.txt (QUEUE 118).
-    const entries = (if (root) try store.list(io, alloc, dir) else store.list(io, alloc, dir) catch |e| {
-        try skipped.print(alloc, "{s}/ (cannot be listed: {s})\n", .{ name, @errorName(e) });
+    const entries = (if (where == .root) try store.list(b.io, b.alloc, dir) else store.list(b.io, b.alloc, dir) catch |e| {
+        try b.skipped.print(b.alloc, "{s}/ (cannot be listed: {s})\n", .{ name, @errorName(e) });
         return;
     });
-    if (!try t.folder(name, mtimeOf(st))) {
-        try skipped.print(alloc, "{s}/\n", .{name});
+    if (!try b.t.folder(name, mtimeOf(st))) {
+        try b.skipped.print(b.alloc, "{s}/\n", .{name});
         return;
     }
     std.mem.sort(store.Entry, entries, {}, byName);
     for (entries) |e| {
-        const host_path = try std.fs.path.join(alloc, &.{ dir, e.name });
-        const arc_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ name, e.name });
+        const host_path = try std.fs.path.join(b.alloc, &.{ dir, e.name });
+        const arc_path = try std.fmt.allocPrint(b.alloc, "{s}/{s}", .{ name, e.name });
         switch (e.kind) {
-            .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m, false),
+            .directory => try walk(b, host_path, arc_path, .inside),
             .file => {
                 // absent-ok: a file inside that cannot be looked at is a named skip (backup-skipped.txt), not a failed backup (QUEUE 110).
-                const fst = store.stat(io, alloc, host_path) catch |err| {
-                    try skipped.print(alloc, "{s} (cannot be looked at: {s})\n", .{ arc_path, @errorName(err) });
+                const fst = store.stat(b.io, b.alloc, host_path) catch |err| {
+                    try b.skipped.print(b.alloc, "{s} (cannot be looked at: {s})\n", .{ arc_path, @errorName(err) });
                     continue;
                 };
                 if (!ustar.fits(arc_path)) {
-                    try skipped.print(alloc, "{s}\n", .{arc_path});
+                    try b.skipped.print(b.alloc, "{s}\n", .{arc_path});
                     continue;
                 }
-                try t.header(arc_path, fst.size, mtimeOf(fst), '0');
+                try b.t.header(arc_path, fst.size, mtimeOf(fst), '0');
                 var h = Sha256.init(.{});
                 var at: u64 = 0;
                 while (at < fst.size) {
-                    const want: usize = @intCast(@min(buf.len, fst.size - at));
-                    const n = try store.readAt(io, alloc, host_path, at, buf[0..want]);
+                    const want: usize = @intCast(@min(b.buf.len, fst.size - at));
+                    const n = try store.readAt(b.io, b.alloc, host_path, at, b.buf[0..want]);
                     if (n == 0) return error.FileShrank; // the header promised more
-                    h.update(buf[0..n]);
-                    try t.w.writeAll(buf[0..n]);
+                    h.update(b.buf[0..n]);
+                    try b.t.w.writeAll(b.buf[0..n]);
                     at += n;
                 }
-                try t.pad(fst.size);
-                try m.add(alloc, arc_path, fst.size, h.finalResult());
+                try b.t.pad(fst.size);
+                try b.m.add(b.alloc, arc_path, fst.size, h.finalResult());
                 files_archived += 1;
             },
-            .other => try skipped.print(alloc, "{s} (neither a file nor a folder)\n", .{arc_path}),
+            .other => try b.skipped.print(b.alloc, "{s} (neither a file nor a folder)\n", .{arc_path}),
         }
     }
 }
@@ -487,4 +496,31 @@ test "fs: a folder inside that stats and cannot be listed is a named skip, and t
     try std.testing.expect(manifest);
     try std.testing.expect(skipped != null);
     try std.testing.expect(std.mem.indexOf(u8, skipped.?, "data/shut/") != null);
+}
+
+test "fs: a folder that cannot be listed fails the walk at a root and is a named skip inside one (the root's case, should it turn after checkRoots)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try store.write(io, a, try std.fs.path.join(a, &.{ base, "shut", "inside" }), "x", .{});
+    const shut = try std.fs.path.joinZ(a, &.{ base, "shut" });
+    _ = std.os.linux.chmod(shut, 0);
+    defer _ = std.os.linux.chmod(shut, 0o755);
+    // Root reads past a folder's permissions: there is nothing to test.
+    if (store.list(io, a, shut)) |_| return error.SkipZigTest else |_| {}
+    var out: std.Io.Writer.Allocating = .init(a);
+    var t = Tar{ .w = &out.writer };
+    var skipped: std.ArrayList(u8) = .empty;
+    var m = Manifest{};
+    const b: Backup = .{ .io = io, .alloc = a, .t = &t, .buf = try a.alloc(u8, piece), .skipped = &skipped, .m = &m };
+    try std.testing.expect(std.meta.isError(walk(b, shut, "data", .root)));
+    try std.testing.expectEqual(@as(usize, 0), skipped.items.len);
+    try walk(b, shut, "data/shut", .inside);
+    try std.testing.expect(std.mem.indexOf(u8, skipped.items, "data/shut/ (cannot be listed") != null);
 }
