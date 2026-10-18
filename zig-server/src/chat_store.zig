@@ -124,9 +124,9 @@ pub const Stream = struct {
 /// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
-pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8) !Stream {
-    const path = try sessionMdPath(alloc, conv_dir, sid);
-    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: Topic) !Stream {
+    const path = try sessionMdPath(alloc, topic.dir, topic.sid);
+    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
 
     // A session nobody has written to is genuinely empty; a session that will
     // not read is not, and showing it as empty is how a transcript looks lost.

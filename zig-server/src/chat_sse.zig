@@ -42,13 +42,13 @@ const Request = std.http.Server.Request;
 /// **THE BODY IS DELIMITED BY THE CONNECTION CLOSING**, not chunked: the host
 /// writes each live frame as it is, long after this handler has returned, and
 /// there is no chunk framing for it to carry on.
-pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
+pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: store.Topic, uid: []const u8) !void {
     // A stream is a GET's (metal-vmm QUEUE 176.3).
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const since = try sse.readResume(req, alloc);
     const viewer = try users.getUserName(io, alloc, uid);
 
-    const stream = try store.openStream(io, alloc, bus, conv_dir, conv_key, sid);
+    const stream = try store.openStream(io, alloc, bus, topic);
     // This handler owns the subscriber until the host takes it.
     var held = bus.hold(stream.sub);
     defer held.release();
@@ -56,7 +56,7 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     var hbuf: [4096]u8 = undefined;
     var body = sse.respond(req, &hbuf) catch return;
 
-    const rest = backlogFrom(stream.backlog, sid, since);
+    const rest = backlogFrom(stream.backlog, topic.sid, since);
     {
         const pre = try std.fmt.allocPrint(alloc, "event: backlog-size\ndata: {d}\n\n", .{rest.len});
         sse.push(&body, pre) catch return;
@@ -66,8 +66,8 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     for (rest, first..) |m, i| {
         // Its index from its id, as the live stream's: a refused block before
         // it keeps its number (chat_store.countBlocks).
-        const index = store.indexOf(m.id, sid) orelse i;
-        const frame = try emitWire(alloc, index, m.from, m.date, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), "");
+        const index = store.indexOf(m.id, topic.sid) orelse i;
+        const frame = try emitWire(alloc, .{ .index = index, .from = m.from, .at = m.date, .markdown = m.markdown, .id = m.id, .cid = "" }, std.mem.eql(u8, m.from, viewer));
         sse.push(&body, frame) catch return;
     }
 
@@ -110,29 +110,29 @@ fn liveFrame(alloc: Alloc, raw: []const u8, viewer: []const u8) ![]const u8 {
     const parsed = try std.json.parseFromSlice(BusMsg, alloc, raw, .{});
     defer parsed.deinit();
     const m = parsed.value;
-    return emitWire(alloc, m.index, m.from, m.at, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), m.cid);
+    return emitWire(alloc, m, std.mem.eql(u8, m.from, viewer));
 }
 
 /// emitWire builds one SSE message event:
 /// `id: <index>` then a `data:` line of JSON. `html` is rendered from `markdown`
 /// via the markdown port; `mine` is viewer-relative; `cid` is included only when
 /// non-empty.
-fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []const u8, id: []const u8, mine: bool, cid: []const u8) ![]const u8 {
-    const rendered = try markdown.render(alloc, md);
-    if (cid.len > 0) {
+fn emitWire(alloc: Alloc, m: BusMsg, mine: bool) ![]const u8 {
+    const rendered = try markdown.render(alloc, m.markdown);
+    if (m.cid.len > 0) {
         return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"mine\":{},\"cid\":{f}}}\n\n", .{
-            index,                       index,
-            std.json.fmt(from, .{}),     std.json.fmt(at, .{}),
-            std.json.fmt(rendered, .{}), std.json.fmt(md, .{}),
-            std.json.fmt(id, .{}),       mine,
-            std.json.fmt(cid, .{}),
+            m.index,                     m.index,
+            std.json.fmt(m.from, .{}),   std.json.fmt(m.at, .{}),
+            std.json.fmt(rendered, .{}), std.json.fmt(m.markdown, .{}),
+            std.json.fmt(m.id, .{}),     mine,
+            std.json.fmt(m.cid, .{}),
         });
     }
     return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"mine\":{}}}\n\n", .{
-        index,                       index,
-        std.json.fmt(from, .{}),     std.json.fmt(at, .{}),
-        std.json.fmt(rendered, .{}), std.json.fmt(md, .{}),
-        std.json.fmt(id, .{}),       mine,
+        m.index,                     m.index,
+        std.json.fmt(m.from, .{}),   std.json.fmt(m.at, .{}),
+        std.json.fmt(rendered, .{}), std.json.fmt(m.markdown, .{}),
+        std.json.fmt(m.id, .{}),     mine,
     });
 }
 
@@ -208,7 +208,7 @@ test "emitWire frames id/index/mine, round-trips JSON-escaped fields, and omits 
     const a = arena.allocator();
 
     // a name with a double-quote exercises JSON escaping on the wire
-    const frame = try emitWire(a, 7, "A\"B", "2pm", "hi", "MSG_1", true, "");
+    const frame = try emitWire(a, .{ .index = 7, .from = "A\"B", .at = "2pm", .markdown = "hi", .id = "MSG_1", .cid = "" }, true);
     try testing.expect(std.mem.startsWith(u8, frame, "id: 7\n")); // SSE id = index
     try testing.expect(std.mem.endsWith(u8, frame, "\n\n"));
 
@@ -224,7 +224,7 @@ test "emitWire frames id/index/mine, round-trips JSON-escaped fields, and omits 
     try testing.expect(p.value.cid == null); // empty cid omitted
 
     // a non-empty cid is included
-    const frame2 = try emitWire(a, 8, "Steve", "3pm", "yo", "MSG_2", false, "c-9");
+    const frame2 = try emitWire(a, .{ .index = 8, .from = "Steve", .at = "3pm", .markdown = "yo", .id = "MSG_2", .cid = "c-9" }, false);
     const p2 = try parseWire(WireView, a, frame2);
     defer p2.deinit();
     try testing.expect(!p2.value.mine);

@@ -289,7 +289,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     }
     if (segs.next() != null) return http.notFound(req); // the rest take no further segment
     if (std.mem.eql(u8, tail, "stream")) {
-        try chat_sse.streamTranscript(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid);
+        try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, uid);
     } else if (std.mem.eql(u8, tail, "send")) {
         try sendMessage(req, io, alloc, bus, topic, uid);
     } else if (std.mem.eql(u8, tail, "upload")) {
