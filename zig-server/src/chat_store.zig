@@ -76,10 +76,6 @@ const bus_mod = @import("webbox").bus;
 
 const Bus = bus_mod.Bus;
 
-
-
-
-
 const search_index = @import("search_index.zig");
 
 /// chat_root is {data_dir}/chat. roots.point overrides this at startup; the

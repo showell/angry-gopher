@@ -62,9 +62,7 @@ const http = @import("webbox").http;
 
 const store = @import("webbox").store;
 
-
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
-
 
 const site_secret = @import("webbox").site_secret;
 
