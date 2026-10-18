@@ -62,7 +62,7 @@ single-set carvings. A/B: −21% steps on the quick corpus, −26% on the
 hard corpus's decided rows, 35 of the quick corpus's futile boards
 proven with zero search, no board slower. The puzzle-78 exemplar (7
 tens vs 3 nines + 3 queens force a ten set) is where the lemma was
-mined (the probes are in the laptop's essay archive, `random765.md`;
+mined (the probes are in the laptop's essay archive, `claude-steve/random765.md`;
 not in this repo or on the dev box).
 
 The solve is a **portfolio**, cheapest prior first:
@@ -203,10 +203,10 @@ Files:
   (`ops/mine_lynrummy_puzzle`): the sweep scout plays a seed range
   through `sim.playGame` and reports each game's hardest solved probe;
   the miner prints the winning board as a curated-catalog block.
-  Appending to `conformance/curated_sim_puzzles.dsl` stays a human
+  Appending to `../conformance/curated_sim_puzzles.dsl` stays a human
   act; bump the count pin in `../puzzle_gate.zig` after.
 - `calib.zig` — the human-vs-solver grading ritual for mined puzzles:
-  paste the wire lines from `ts/tools/replay_puzzle.ts` (which replays
+  paste the wire lines from `../ts/tools/replay_puzzle.ts` (which replays
   a puzzle session's gesture log) and it grades both lines with
   `reportKept` + `distill`.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
@@ -292,6 +292,6 @@ mine upward from there):
 
 The mining/grading loop is repeatable: `seed_sweep.zig` →
 `ops/mine_lynrummy_puzzle` → curate → `puzzle_gate` count bump →
-Steve plays it → `ts/tools/replay_puzzle.ts` + `calib.zig` grade it.
-Post-solve analyses live in the laptop's essay archive (`random793.md`,
-`random798.md`; not in this repo or on the dev box).
+Steve plays it → `../ts/tools/replay_puzzle.ts` + `calib.zig` grade it.
+Post-solve analyses live in the laptop's essay archive (`claude-steve/random793.md`,
+`claude-steve/random798.md`; not in this repo or on the dev box).

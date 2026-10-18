@@ -6,7 +6,7 @@ geometry + render core from [`../wasm/`](../wasm/) (wired in as the `safari` mod
 [`../build.zig`](../build.zig)) and only replaces the two things a browser gave for
 free: the pixel fill and the window.
 
-- **Browser:** zig core → draw-command buffer → `wasm/blitter.js` fills polygons on a
+- **Browser:** zig core → draw-command buffer → `../wasm/blitter.js` fills polygons on a
   `<canvas>` (GPU-accelerated).
 - **Native:** *same* zig core → *same* draw-command buffer → `raster.zig` fills pixels
   in software → a thin per-OS shim puts that pixel buffer on screen and feeds keys back.

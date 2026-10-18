@@ -1,8 +1,8 @@
 # Deploying Angry Gopher (Lyn Rummy)
 
 > **lynrummy.com is served by zig-metal-unikernel** (see the top-level
-> README, "Where it runs"); releasing it is zig-metal-unikernel's
-> `DEPLOY.md`. This droplet runs Caddy, which proxies to metal, and the
+> README, "Where it runs"); releasing it is
+> zig-metal-unikernel's `DEPLOY.md`. This droplet runs Caddy, which proxies to metal, and the
 > watchdog; its zig server is stopped. `ops/deploy` fails closed (below):
 > while metal serves it refreshes the watchdog and nothing else. The
 > Linux-host sections are the fallback.
@@ -185,7 +185,7 @@ servers, one of them stopped (needs `zig build` first).
   weekly droplet backups (control panel) are worth enabling for
   whole-droplet recovery of this host.
 - **Account store (`~/Auth`):** the shared account data — `name`, `password`,
-  `api-key`, and `next-id.txt` — lives under `~/Auth` (config `auth_dir`,
+  `api-key`, and `~/Auth/next-id.txt` — lives under `~/Auth` (config `auth_dir`,
   default `~/Auth`), deliberately OUTSIDE `data_dir`. So it is **not** in the
   `ops/backup` tarball (back it up separately — it holds credentials), and a
   sibling app can share accounts without reaching into `~/AngryGopher`.

@@ -18,10 +18,10 @@ on the far side of that line.
 |---|---|---|
 | the clock | `Io.Clock.now(.real, io)` | the `io` value |
 | randomness | `io.random(buf)` — OS-seeded CSPRNG | the `io` value |
-| every data file it keeps | `store.zig` (`read`, `write`, `stat`, `readAt`, …), taking `io` | the `io` value's disk |
+| every data file it keeps | zig-webbox's `store.zig` (`read`, `write`, `stat`, `readAt`, …), taking `io` | the `io` value's disk |
 | a live stream (SSE) | `bus.zig` — the app describes a `Kept`; the host serves it | `Hub`/`Bus` |
 | where its data lives | `roots.zig` — six roots from two directories | the host's `main` |
-| a request's inputs | `http.zig` — `target`, `header`, `cookie`, `queryValue` (OWNED copies) | `std.http.Server.Request` |
+| a request's inputs | zig-webbox's `http.zig` — `target`, `header`, `cookie`, `queryValue` (OWNED copies) | `std.http.Server.Request` |
 | a request's outputs | `req.respond(...)` directly, plus `http.notFound`/`redirect` | `std.http.Server.Request` |
 | a log line | — (none; the host logs) | the host |
 
@@ -35,7 +35,7 @@ Three things carry the whole seam:
   why clock and random, which a note might expect to find reached around the
   seam, are already inside it: `Io.Clock.now` and `io.random` are the seam.
 
-- **The Store** (`store.zig`). Every file the application keeps goes through
+- **The Store** (zig-webbox's `store.zig`). Every file the application keeps goes through
   it, and it enforces **FAT's rules on every host** (names, case-folding, the
   folder-entry ceiling) so Linux cannot quietly accept what the volume will
   refuse.
@@ -55,7 +55,7 @@ the host-specific part is confined to the host's entry point.
 ## What is still reached around the seam
 
 - **The response half of HTTP.** The *input* half is already behind the seam:
-  `http.zig` holds the only code allowed to touch `req.head.*`, enforced by
+  zig-webbox's `http.zig` holds the only code allowed to touch `req.head.*`, enforced by
   `tools/lint_head_access.py`, so a head value can never dangle past the body
   read. The *output* half is not: **many of the site's files call
   `req.respond(...)` on `std.http.Server.Request` directly**, with their own
@@ -68,7 +68,7 @@ the host-specific part is confined to the host's entry point.
 
 - **Nothing else of substance.** These go *through* the seam, not around
   it:
-  - **uploads** — served by `store.zig`'s `stat`/`readAt` (the Range path
+  - **uploads** — served by the `stat`/`readAt` of zig-webbox's `store.zig` (the Range path
     reads positionally through the Store), not a direct host read;
   - **sessions** — the secret is read through the Store; signing and verifying
     are pure (`users.zig`), so no host call;
@@ -85,10 +85,10 @@ the host-specific part is confined to the host's entry point.
 
 ## The next subtraction, if it is taken
 
-Pull `req.respond` behind `http.zig`, the way `req.head` is: give `http.zig`
+Pull `req.respond` behind zig-webbox's `http.zig`, the way `req.head` is: give `http.zig`
 success responses to match its error ones (`ok`, `json`, `html`, … beside
 `notFound` and `redirect`), move every handler's `req.respond(...)` to them,
-and add a lint beside `lint_head_access.py` that lets only `http.zig` call
+and add a lint beside `lint_head_access.py` that lets only zig-webbox's `http.zig` call
 `req.respond`. The application's dependency on `std.http.Server` would then be
 `http.zig`'s small surface. It moves calls, not logic, so zig-metal-unikernel's
 chat judge (`probe/judge_gopher.py`), which compares every page from metal and

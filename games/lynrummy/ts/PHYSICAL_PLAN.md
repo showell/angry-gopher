@@ -155,11 +155,11 @@ physical decisions per emitted primitive.
 
 ## DSL fixtures + per-step overlap checks
 
-- `conformance/scenarios/verb_to_primitives_corpus.dsl` (94
+- `../conformance/scenarios/verb_to_primitives_corpus.dsl` (94
   scenarios) and `verb_to_primitives.dsl` (8 hand-authored)
   exercise per-verb expansion via `moveToPrimitives` (which
   calls `expandVerb` with empty `pendingHand`).
-- `conformance/scenarios/physical_plan_corpus.dsl` exercises
+- `../conformance/scenarios/physical_plan_corpus.dsl` exercises
   the integration layer — `getPrimitivesForLogicalPlay` with hand cards +
   multi-verb plans, including R1/R3 cases.
 - All runners assert `findViolation == null` after every
@@ -171,6 +171,6 @@ physical decisions per emitted primitive.
 - `ENGINE_V2.md` — what the solver hands to this layer.
 - `../ARCHITECTURE.md` — repo-level layering and the gesture
   pipeline.
-- `random249.md`, `random250.md`, `random253.md` in the laptop's
+- `claude-steve/random249.md`, `claude-steve/random250.md`, `claude-steve/random253.md` in the laptop's
   essay archive (`claude-steve/`; not in this repo or on the dev box)
   — design-conversation predecessors.

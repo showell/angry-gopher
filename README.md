@@ -26,7 +26,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
   rewriting no line;
   its gates judge metal against this repo's Linux build, page by page, and
-  run metal-vmm (test-only). Its `DEPLOY.md` says how a release reaches
+  run metal-vmm (test-only). zig-metal-unikernel's `DEPLOY.md` says how a release reaches
   the droplet, and the way back.
 - **A change to the program reaches the site as a new zig-metal-unikernel image**,
   not through `ops/deploy`. The old Linux droplet still runs Caddy (TLS,
@@ -204,7 +204,7 @@ auth_dir = /home/steve/Auth               # account store; defaults to ~/Auth
 `data_dir` holds four trees: `{data_dir}/lynrummy`, `/chat`, `/users`,
 `/players` (`roots.zig` points them all).
 `auth_dir` is the shared account store — one directory per uid
-(`{auth_dir}/<id>/{name,password,api-key}`) plus `next-id.txt` for
+(`{auth_dir}/<id>/{name,password,api-key}`) plus `{auth_dir}/next-id.txt` for
 allocation. One uid is the same person across every surface. With the
 config above, `~/Auth/1` resolves to **Steve (uid 1)**, so a browser hits
 `/chat` as Steve rather than getting bounced to `/login/full`.

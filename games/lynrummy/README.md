@@ -75,7 +75,7 @@ is the lingua franca".
 ## Building & running
 
 `ops/start` rebuilds everything and serves on `:9001` (open `/game` for a full
-game, `/puzzles` for the gallery). The front-end artifacts (`elm.js`, `puzzle.js`,
+game, `/puzzles` for the gallery). The front-end artifacts (`elm/elm.js`, `elm/puzzle.js`,
 the TS `engine.js` bundle, the solver's `solver.wasm`) are built and `@embedFile`d
 into the binary; `ops/build_elm` / `ops/build_engine_js` /
 `ops/build_lynrummy_wasm` regenerate them. A change reaches the site in
