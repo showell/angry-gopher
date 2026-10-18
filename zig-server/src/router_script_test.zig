@@ -38,7 +38,7 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     const forgot = chat_search.forgetForTest();
     defer forgot.end();
     const store = @import("webbox").store;
-    const script_route = @import("webbox").script_route;
+    const script_route = @import("shale").script_route;
     const Ed25519 = std.crypto.sign.Ed25519;
     store.durable_now = scriptDurable;
     defer store.durable_now = null;
@@ -114,7 +114,7 @@ test "route: a background script is answered at once, stepped by the Site betwee
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const store = @import("webbox").store;
-    const script_route = @import("webbox").script_route;
+    const script_route = @import("shale").script_route;
     const Ed25519 = std.crypto.sign.Ed25519;
     store.durable_now = scriptDurable;
     defer store.durable_now = null;

@@ -20,9 +20,9 @@ Available ops commands (run from repo root):
   ops/check_zig          zig-server gate: compiles the WHOLE server, runs the
                          lints (embedded assets, the webbox library, head
                          access, portable, store absence), the Caddy limits,
-                         zig fmt, every zig-server unit test and zig-webbox's.
-                         About 8 min (2026-10-17), most of it zig-webbox's
-                         suite; every gate above runs it, through check_common.
+                         zig fmt, every zig-server unit test, zig-webbox's and
+                         shale's. About 8 min (2026-10-17), most of it the
+                         libraries' suites; every gate above runs it, through check_common.
   ops/check_markdown     Markdown dialect regression gate (~3s): renders every
                          frozen corpus case with the zig renderer and asserts the
                          output is unchanged. No Go, no goldmark oracle — our

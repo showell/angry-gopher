@@ -125,14 +125,20 @@ test "request edges: every number a request carries, at its type's edges, as a m
     defer meter.restore();
 
     // **EVERY SITE IS KNOWN**: read from the source as it stands, this
-    // application's and the library's (zig-webbox's).
-    // Every folder, read as Zig by the library's own reading (webbox's
-    // edge_sites.parseSites, Zig's tokenizer), so a site in a sub-folder
+    // application's and the libraries' (zig-webbox's and Shale's), each
+    // library's own unreachable sites its to name.
+    // Every folder, read as Zig by webbox's own reading
+    // (edge_sites.parseSites, Zig's tokenizer), so a site in a sub-folder
     // (Shale's script/) or after an `inline fn` is seen.
     const library_sites = @import("webbox").edge_sites;
+    const Folder = struct { dir: []const u8, unreachable_sites: []const library_sites.Site };
     var listed_seen = [_]bool{false} ** edge_sites.len;
-    for ([_][]const u8{ "src", @import("build_options").webbox_src }) |dir| {
-        var src = try Io.Dir.cwd().openDir(io, dir, .{ .iterate = true });
+    for ([_]Folder{
+        .{ .dir = "src", .unreachable_sites = &.{} },
+        .{ .dir = @import("build_options").webbox_src, .unreachable_sites = &library_sites.unreachable_from_requests },
+        .{ .dir = @import("build_options").shale_src, .unreachable_sites = &@import("shale").edge_sites.unreachable_from_requests },
+    }) |folder| {
+        var src = try Io.Dir.cwd().openDir(io, folder.dir, .{ .iterate = true });
         defer src.close(io);
         var files = try src.walk(a);
         defer files.deinit();
@@ -149,8 +155,8 @@ test "request edges: every number a request carries, at its type's edges, as a m
                         break true;
                     }
                 } else false;
-                // The library's own unreachable sites are its to name.
-                const library = !std.mem.eql(u8, dir, "src") and for (library_sites.unreachable_from_requests) |s| {
+                // A library's own unreachable sites are its to name.
+                const library = for (folder.unreachable_sites) |s| {
                     if (std.mem.eql(u8, s.file, path) and std.mem.eql(u8, s.func, parse_at.func)) break true;
                 } else false;
                 if (!own and !library) {

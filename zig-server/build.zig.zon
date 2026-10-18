@@ -1,5 +1,6 @@
 .{
-    // angry-gopher's server, an application of the `webbox` library.
+    // angry-gopher's server, an application of the `webbox` library, with
+    // Shale for its signed admin scripts.
     .name = .angry_gopher,
     .version = "0.1.0",
     .fingerprint = 0xc485d60137dc1e9a,
@@ -10,5 +11,8 @@
         // of angry-gopher (../../zig-webbox from here), modules `webbox`,
         // `webbox_linux` and `host_io`.
         .webbox = .{ .path = "../../zig-webbox" },
+        // Shale, the script language for the site's own data: the `shale`
+        // checkout (../../shale from here), module `shale`.
+        .shale = .{ .path = "../../shale" },
     },
 }

@@ -4,7 +4,7 @@
 //! **TWO LOCKS, BOTH REQUIRED.** The admin's API key as `Authorization:
 //! Bearer` (the key /admin/host takes; a session cookie is not enough, so no
 //! page can drive this route), then the envelope's Ed25519 signature,
-//! checked by webbox's script_route.zig against the public key in
+//! checked by Shale's script_route.zig against the public key in
 //! `{auth}/shale.conf`. With no key configured the route refuses.
 //!
 //! **THE ANSWER IS ONE PLAIN-TEXT RESPONSE**: 200 for any run that started,
@@ -38,8 +38,9 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const webbox = @import("webbox");
 const http = webbox.http;
-const script = webbox.script;
-const script_route = webbox.script_route;
+const shale = @import("shale");
+const script = shale.script;
+const script_route = shale.script_route;
 const users = @import("users.zig");
 const limits = @import("limits.zig");
 const app_start = @import("app_start.zig");

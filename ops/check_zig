@@ -34,11 +34,11 @@ echo "==> webbox library lint (its test, then the tree)"
 python3 "$REPO_DIR/tools/lint_webbox_library.py" --self-test
 python3 "$REPO_DIR/tools/lint_webbox_library.py"
 
-# The docs' cited paths and names, this repo's (zig-webbox's
+# The docs' cited paths and names, this repo's (shale's
 # tools/doc_check.shale, by its own `zig build doc-check`; a few seconds).
 echo "==> doc check (this repo's docs)"
 docs_out="$(mktemp)"
-(cd "$REPO_DIR/../zig-webbox" && env -u ZIG_PROGRESS zig build doc-check -- only=angry-gopher > "$docs_out" 2>&1) \
+(cd "$REPO_DIR/../shale" && env -u ZIG_PROGRESS zig build doc-check -- only=angry-gopher > "$docs_out" 2>&1) \
     || { grep -E 'gone |ambiguous |names gone |findings' "$docs_out" | head -9; rm -f "$docs_out"; exit 1; }
 rm -f "$docs_out"
 
@@ -89,7 +89,9 @@ zig fmt --check src build.zig || { echo "Error: the files above are not as zig f
 t0=$SECONDS
 zig build           # compile the whole server
 zig build test      # run the unit tests
-# The library's tests are its own build's, not zig-server's: the server builds
-# against the sibling checkout (build.zig.zon's ../../zig-webbox), so they run here.
+# The libraries' tests are their own builds', not zig-server's: the server
+# builds against the sibling checkouts (build.zig.zon's ../../zig-webbox and
+# ../../shale), so they run here.
 (cd "$REPO_DIR/../zig-webbox" && zig build test)
-echo "zig-server build + unit tests, and zig-webbox's unit tests, passed in $((SECONDS - t0))s."
+(cd "$REPO_DIR/../shale" && zig build test)
+echo "zig-server build + unit tests, and zig-webbox's and shale's unit tests, passed in $((SECONDS - t0))s."

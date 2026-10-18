@@ -51,7 +51,7 @@ pub const body = struct {
     /// larger kind, and a margin for the multipart framing around it.
     pub const upload_any = upload_video + (1 << 20);
 
-    /// A signed script (webbox's script_route.zig): its envelope's two
+    /// A signed script (Shale's script_route.zig): its envelope's two
     /// header lines and the script, at most the script's own budget.
     /// (admin_script.zig holds it to those two at compile time.)
     pub const script = 64 * 1024 + 512;

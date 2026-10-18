@@ -13,16 +13,18 @@ This lint computes that set from the import graph, starting at router.zig and
 at webbox.zig (the library an application built on this server imports, which
 the metal port carries too, whether or not this site's routes reach a file of
 it), and checks every file in it. It follows a file's imports by path and its
-import of the `webbox` module (to webbox.zig). A module outside the set
-(server.zig, the library's Linux half `webbox_linux`, the stress harness, the
+imports of the `webbox` and `shale` modules (to webbox.zig, shale.zig). A
+module outside the set (server.zig, the libraries' Linux halves
+`webbox_linux` and `shale_linux`, the stress harness, the
 markdown tools) is host-side by definition and is not checked. There is no
 hardcoded list of exemptions to fall out of date.
 
 THE LIBRARY'S EDGES, inside the set:
 
-  THE LINUX HALF     `@import("webbox_linux")`, or a file of it by path
-                     (linux_host.zig, bind.zig, linux_config.zig,
-                     webbox_linux.zig): the host itself.
+  THE LINUX HALF     `@import("webbox_linux")` or `@import("shale_linux")`,
+                     or a file of one by path (linux_host.zig, bind.zig,
+                     linux_config.zig, webbox_linux.zig, shale_linux.zig):
+                     the host itself.
   BY ITS FILES       an application's file importing a file of the library
                      by path (`@import("http.zig")`, `@import("webbox.zig")`):
                      it imports the `webbox` module (`@import("webbox").http`).
@@ -94,17 +96,20 @@ import zig_source  # noqa: E402  the one reading of a source file the lints shar
 
 ROOT_MODULE = "router.zig"
 # The roots the real tree is checked from: the route table, and the webbox
-# library. Both must be there.
+# library. Both must be there. Shale's portable half is reached from the
+# route table (`@import("shale")`).
 LIBRARY_ROOT = "webbox.zig"
+SHALE_ROOT = "shale.zig"
 ROOTS = (ROOT_MODULE, LIBRARY_ROOT)
 # The named modules a portable file may import that are files here, and the
 # file each is: the closure follows them.
-MODULE_FILES = {"webbox": LIBRARY_ROOT}
-# The library's Linux half, its own module (`webbox_linux`), and its files: a
-# site served as a Linux process, which only a Linux `main` imports. Any
-# portable file reaching one is a finding; the closure stops there.
-HOST_MODULES = frozenset({"webbox_linux"})
-HOST_ONLY = frozenset({"webbox_linux.zig", "linux_host.zig", "bind.zig", "linux_config.zig"})
+MODULE_FILES = {"webbox": LIBRARY_ROOT, "shale": SHALE_ROOT}
+# The libraries' Linux halves, their own modules (`webbox_linux`,
+# `shale_linux`), and their files: a site served as a Linux process, which
+# only a Linux `main` imports. Any portable file reaching one is a finding;
+# the closure stops there.
+HOST_MODULES = frozenset({"webbox_linux", "shale_linux"})
+HOST_ONLY = frozenset({"webbox_linux.zig", "linux_host.zig", "bind.zig", "linux_config.zig", "shale_linux.zig"})
 
 
 # (pattern, advice). Checked in order; one finding per match.
@@ -236,18 +241,23 @@ def test_only_lines(lines, tests):
 
 
 def library_files(src_dir: str):
-    """The library's portable files: webbox.zig and the files it names. Empty
+    """The libraries' portable files: each module's root (webbox.zig,
+    shale.zig) and the files it names, each with its module and root. Empty
     in a tree without a library."""
-    path = zig_source.at(src_dir, LIBRARY_ROOT)
-    if not os.path.isfile(path):
-        return set()
-    with open(path, encoding="utf-8") as f:
-        return {LIBRARY_ROOT} | set(zig_source.imports(f.read()))
+    files = {}
+    for module, root in MODULE_FILES.items():
+        path = zig_source.at(src_dir, root)
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            for name in [root] + zig_source.imports(f.read()):
+                files.setdefault(name, (module, root))
+    return files
 
 
 def deps_of(text):
     """What a file imports that is a file here: by path, and the `webbox`
-    module as webbox.zig."""
+    and `shale` modules as their roots."""
     return zig_source.imports(text) + [MODULE_FILES[m] for m in zig_source.modules(text) if m in MODULE_FILES]
 
 
@@ -264,7 +274,8 @@ def served(text):
 
 def closure(src_dir: str, root=ROOT_MODULE):
     """Every local .zig file reachable from `root` (a name, or several) by
-    @import, the roots included: by path, and through the `webbox` module.
+    @import, the roots included: by path, and through the `webbox` and
+    `shale` modules.
 
     Other named modules (`@import("std")`, `@import("build_options")`) and
     embedded assets are not files in src_dir (a folder, or several read as
@@ -311,8 +322,9 @@ def scan(src_dir: str, root=ROOT_MODULE):
                 found.append((name, 0, f'@import("{dep}")',
                               f"{base} is the library's Linux half: only a Linux main reaches it, through the webbox_linux module"))
             elif name not in library and base in library:
+                module, root = library[base]
                 found.append((name, 0, f'@import("{dep}")',
-                              f'import the library as its module: @import("webbox"){"" if base == LIBRARY_ROOT else "." + base[:-4]}'))
+                              f'import the library as its module: @import("{module}"){"" if base == root else "." + base[:-4]}'))
         with open(zig_source.at(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)

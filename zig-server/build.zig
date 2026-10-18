@@ -33,6 +33,11 @@ pub fn build(b: *std.Build) void {
     root.addImport("host_io", host_io);
     root.addImport("webbox", webbox);
     root.addImport("webbox_linux", webbox_linux);
+    // **SHALE** (the `shale` checkout), its scripts on the site's own data:
+    // `shale`, portable, built on the same `webbox` and `host_io`.
+    const shale_dep = b.dependency("shale", .{ .target = target, .optimize = optimize });
+    const shale = shale_dep.module("shale");
+    root.addImport("shale", shale);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -139,16 +144,18 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     // The request-edge harness reads every number parse in the source, the
-    // library's too: where zig-webbox's sources are.
+    // libraries' too: where zig-webbox's and Shale's sources are.
     const router_opts = b.addOptions();
     router_opts.addOption([]const u8, "commit", "dev");
     router_opts.addOption(bool, "fake_leak", false);
     router_opts.addOption([]const u8, "webbox_src", webbox_dep.builder.pathFromRoot("src"));
+    router_opts.addOption([]const u8, "shale_src", shale_dep.builder.pathFromRoot("src"));
     router_tests.root_module.addImport("build_options", router_opts.createModule());
     // roots.zig's test reads what the library's store.setBases assigns.
     const webbox_store_source = webbox_dep.path("src/store.zig");
     router_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     router_tests.root_module.addImport("webbox", webbox);
+    router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
@@ -165,6 +172,7 @@ pub fn build(b: *std.Build) void {
         // A file of the application reaches the library as its modules.
         unit.root_module.addImport("webbox", webbox);
         unit.root_module.addImport("webbox_linux", webbox_linux);
+        unit.root_module.addImport("shale", shale);
         unit.root_module.addImport("host_io", host_io);
         unit.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
         test_step.dependOn(&b.addRunArtifact(unit).step);
