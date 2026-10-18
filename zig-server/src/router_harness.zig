@@ -110,6 +110,7 @@ pub const UidSite = struct {
 
     pub fn marked(a: std.mem.Allocator, io: Io, id: []const u8) bool {
         const p = std.fs.path.join(a, &.{ player.player_root, id, "signed" }) catch return false;
+        // absent-ok: a test's look at its own temporary folder; a failure there fails the test's expect.
         return disk.has(io, a, p) catch false;
     }
 };
