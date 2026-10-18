@@ -420,3 +420,28 @@ test "fs: a first move for a session the page did not offer counts nothing again
     try std.testing.expect((try game_limits.admit(io, a, "p1", null, false, game_limits.max_bytes)) == null);
     for (0..game_limits.max_sessions) |_| try std.testing.expect((try game_limits.admit(io, a, "p1", null, true, 0)) == null);
 }
+
+test "fs: a session made counts one against its player; its lines, and a puzzle's later moves, count none" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
+    const forgot = game_limits.forgetForTest();
+    defer forgot.end();
+    const payer = Payer{ .id = "p1", .client = null };
+    const made = try makeGameSession(io, a, payer, "the meta");
+    try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
+    for (0..3) |_| try std.testing.expect(try appendGameLine(io, a, payer, made.id, .actions, "a line") == null);
+    try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
+    const offered = try nextPuzzleSessionID(io, a, "p1");
+    try std.testing.expect(try appendPuzzleMove(io, a, payer, offered, 0, "first", "puzzle meta") == .done);
+    try std.testing.expectEqual(@as(?u32, 2), game_limits.countedSessions("p1"));
+    try std.testing.expect(try appendPuzzleMove(io, a, payer, offered, 0, "second", null) == .done);
+    try std.testing.expectEqual(@as(?u32, 2), game_limits.countedSessions("p1"));
+}

@@ -165,6 +165,13 @@ pub fn countedBytes(id: []const u8) ?u64 {
     return null;
 }
 
+/// The sessions counted for `id` so far, or null when nothing is: for a
+/// test that holds `admit`'s `new_session` to the writes that make one.
+pub fn countedSessions(id: []const u8) ?u32 {
+    for (&table) |*u| if (u.len != 0 and std.mem.eql(u8, u.id[0..u.len], id)) return u.sessions;
+    return null;
+}
+
 /// **FOR A TEST: NOTHING KEPT NOW, AND NOTHING AFTER** (`defer forgot.end()`;
 /// 157(e)).
 pub fn forgetForTest() Forgot {
