@@ -380,7 +380,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // Where a plain form post goes back to, made before the store (177.1):
     // made after, an allocation that failed was a 500 for a stored message.
     const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
-    _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic.sid, from_name, uid, md, cid);
+    _ = try store.appendMessage(io, alloc, bus, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
     return sendDone(req, is_async, back);
 }
 
@@ -434,7 +434,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     // where it answered 500 for a topic made, and a retry met 409. A bookmark
     // to a topic not made is never followed (resolveSessionForUser).
     if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
-    _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic, from_name, uid, "hi", "");
+    _ = try store.appendMessage(io, alloc, bus, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic }, .{ .name = from_name, .id = uid }, "hi", "");
 
     if (conv.persistsCursor()) {
         // Announce the new topic where the partner already watches (best-effort).
@@ -447,7 +447,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
                 // closes the connection; a retry then meets the duplicate
                 // check above and says the topic already exists, which is true
                 // and is a great deal more use than silence.
-                _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, gen, from_name, uid, note, "");
+                _ = try store.appendMessage(io, alloc, bus, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = gen }, .{ .name = from_name, .id = uid }, note, "");
             }
         }
     }
