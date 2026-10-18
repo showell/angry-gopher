@@ -19,6 +19,7 @@ const http = @import("webbox").http;
 const storage = @import("storage.zig");
 const game_limits = @import("game_limits.zig");
 const player = @import("player.zig");
+const pointer_transport = @import("pointer_transport.zig");
 
 const puzzle_js = @embedFile("puzzle_js");
 
@@ -228,32 +229,9 @@ const page_post =
     \\  // Pointer transport: pointerdown captures the pointer; move/up are
     \\  // forwarded to Elm. Capture set synchronously (no Elm round-trip) so
     \\  // fast taps aren't missed; only the active pointer is forwarded.
-    \\  (function () {
-    \\    var captureEl = document.documentElement;
-    \\    var tracked = null;
-    \\    function sample(e) {
-    \\      return { x: Math.round(e.clientX), y: Math.round(e.clientY), t: Math.floor(e.timeStamp) };
-    \\    }
-    \\    document.addEventListener("pointerdown", function (e) {
-    \\      tracked = e.pointerId;
-    \\      // Capture touch/pen so a finger-drag survives the card re-rendering
-    \\      // mid-drag. Mouse needs no capture (document sees every move) and
-    \\      // capturing a mouse pointer can interfere with button clicks.
-    \\      if (e.pointerType !== "mouse") {
-    \\        try { captureEl.setPointerCapture(e.pointerId); } catch (err) {}
-    \\      }
-    \\    });
-    \\    document.addEventListener("pointermove", function (e) {
-    \\      if (e.pointerId === tracked) app.ports.pointerMoved.send(sample(e));
-    \\    });
-    \\    function end(e) {
-    \\      if (e.pointerId !== tracked) return;
-    \\      tracked = null;
-    \\      app.ports.pointerUp.send(sample(e));
-    \\    }
-    \\    document.addEventListener("pointerup", end);
-    \\    document.addEventListener("pointercancel", end);
-    \\  })();
+    \\
+++ pointer_transport.js ++
+    \\
     \\</script>
     \\</body></html>
 ;
