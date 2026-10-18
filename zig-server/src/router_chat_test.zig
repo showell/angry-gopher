@@ -167,6 +167,33 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     _ = chat_state;
 }
 
+test "route: a send and a reaction store their author's name and uid each where it goes, never the one for the other" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const chat_count = @import("chat_count.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
+    const dir = try chat_store.dmConvDir(a, "1_2");
+    const msgs = try chat_store.decodeChatFile(a, (try chat_store.rawSession(io, a, dir, "Plans")).?);
+    try testing.expectEqualStrings("Steve", msgs[msgs.len - 1].from);
+    try testing.expectEqualStrings("1", (try chat_count.lastMessage(io, a, dir, "Plans")).?.uid);
+    const n = try std.fmt.allocPrint(a, "msg={d}&emoji=%F0%9F%91%8D", .{msgs.len});
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/react", steve, n)));
+    const line = try chat_store.readReactions(io, a, dir, "Plans");
+    try testing.expect(std.mem.indexOf(u8, line, "\"uid\":\"1\",\"from\":\"Steve\"") != null);
+}
+
 test "route: the conversation page hands the client the upload caps and the accepted types, the server's own, where chat_compose.js kept copies (metal-vmm QUEUE 157(d))" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

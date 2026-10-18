@@ -253,7 +253,7 @@ test "the fan-out's surfaces fail one at a time, each said: a member's images th
     try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "2", "images.md" }));
     const before = fanout_failures;
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    _ = try appendMessage(f.io, a, &f.bus, meta, f.dir, "1_2", "topic", "Tester", "1", "<img src=\"/x.png\">\n\n```\ncode\n```", "");
+    _ = try appendMessage(f.io, a, &f.bus, meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
     try testing.expectEqual(before + 1, fanout_failures);
     try testing.expect(std.mem.startsWith(u8, fanout_last, "images for member 2, "));
     const code = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "2", "code.md" });

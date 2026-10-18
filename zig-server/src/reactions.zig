@@ -54,7 +54,7 @@ pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []c
     const on = std.mem.eql(u8, on_s, "1");
 
     const from_name = try users.getUserName(io, alloc, uid);
-    _ = store.appendReaction(io, alloc, bus, conv_dir, conv_key, sid, msg_num, uid, from_name, emoji, on) catch |e| switch (e) {
+    _ = store.appendReaction(io, alloc, bus, .{ .dir = conv_dir, .key = conv_key, .sid = sid }, msg_num, .{ .name = from_name, .id = uid }, emoji, on) catch |e| switch (e) {
         error.NoSuchMessage => return badRequest(req, "react: no such message\n"),
         else => return e,
     };

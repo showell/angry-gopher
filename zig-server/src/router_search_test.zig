@@ -159,7 +159,7 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     var hub = Hub.init(io, a);
     var bus = Bus.of(&hub);
     const meta = chat_store.ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    _ = try chat_store.appendMessage(io, a, &bus, meta, try chat_store.dmConvDir(a, "1_2"), "1_2", "ChitChat", "Steve", "1", "zeppelins, tonight", "");
+    _ = try chat_store.appendMessage(io, a, &bus, meta, .{ .dir = try chat_store.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight", "");
     chat_search.forgetAll();
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
 
@@ -246,7 +246,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
             try body.appendSlice(a, vocabulary[rand.uintLessThan(usize, vocabulary.len)]);
         }
         const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, pl[0] });
-        const m = try chat_store.appendMessage(io, a, &bus, meta, dir, pl[0], pl[1], "Someone", "1", body.items, "");
+        const m = try chat_store.appendMessage(io, a, &bus, meta, .{ .dir = dir, .key = pl[0], .sid = pl[1] }, .{ .name = "Someone", .id = "1" }, body.items, "");
         const base = if (channel) try std.fmt.allocPrint(a, "/channel/{s}", .{pl[0]["channels/".len..]}) else try std.fmt.allocPrint(a, "/chat/c/{s}", .{pl[0]});
         try holds.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ base, pl[1], m.id }), body.items);
         _ = n;

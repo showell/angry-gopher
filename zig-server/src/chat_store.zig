@@ -142,18 +142,18 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
 /// one turn, so no other handler's openStream can double- or zero-count it. Returns
 /// the stored message (id + server-stamped date). NO render here: the blob
 /// carries raw markdown; each stream renders per-viewer.
-pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
+pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Topic, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
     // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
     // refuses such a block on every read, so it would go out live and be gone
     // on reload. A nameless member (a release cut short) cannot post.
-    if (from_name.len == 0) return error.NoAuthor;
-    const path = try sessionMdPath(alloc, conv_dir, sid);
+    if (from.name.len == 0) return error.NoAuthor;
+    const path = try sessionMdPath(alloc, topic.dir, topic.sid);
 
-    const index = try messageCount(io, alloc, conv_dir, sid);
+    const index = try messageCount(io, alloc, topic.dir, topic.sid);
 
-    const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ sid, index + 1 });
+    const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
-    const msg = ChatMessage{ .id = id, .from = from_name, .date = at, .markdown = markdown };
+    const msg = ChatMessage{ .id = id, .from = from.name, .date = at, .markdown = markdown };
 
     const stored = try chatStoredForm(alloc, index, msg);
     // **THE ECHO IS MADE BEFORE THE STORE** (metal-vmm QUEUE 177.1): the live
@@ -161,21 +161,21 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // (void) publish. A live publish that failed after the append answered
     // success with no echo on the sender's stream, whose client then sent the
     // message again: a duplicate.
-    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
-    const live_blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
+    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
+    const live_blob = try busBlob(alloc, index, from.name, at, id, cid, markdown);
     // **NO `.lastauthor`** (zig-metal-unikernel 153(1)): the `.count` carries the
     // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
     // A crash between the append and this leaves a count whose size is not the
     // transcript's — in either order — so messageCount refuses it and recounts.
     // The size check is the protection, not the ordering.
-    writeCount(io, alloc, conv_dir, sid, index + 1, new_size, .{
+    writeCount(io, alloc, topic.dir, topic.sid, index + 1, new_size, .{
         .offset = new_size - stored.len,
-        .uid = from_id,
+        .uid = from.id,
     });
     // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
     // takes the message, or drops itself whole if it cannot.
-    search_index.noteAppend(io, conv_dir, sid, msg);
+    search_index.noteAppend(io, topic.dir, topic.sid, msg);
 
     // **STORED IS DONE** (metal-vmm QUEUE 172): from here nothing fails the
     // send, which a client would answer by sending the message again. The
@@ -186,7 +186,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
     // session's first message. Best-effort; inside the same handler's turn.
-    fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg, from_id, index);
+    fanoutCrossPage(io, alloc, bus, meta, topic.key, topic.sid, msg, from.id, index);
 
     return msg;
 }
@@ -213,16 +213,16 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// `{"reaction":<line>}` so the transcript stream can tell it from a message
 /// blob. Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is checked
 /// against the transcript's real count. Returns the stored line.
-pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, msg_num: usize, uid: []const u8, from_name: []const u8, emoji: []const u8, on: bool) ![]const u8 {
-    const count = try messageCount(io, alloc, conv_dir, sid);
+pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: Topic, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
+    const count = try messageCount(io, alloc, topic.dir, topic.sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
 
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
-    const line = try reactionLine(alloc, msg_num, uid, from_name, emoji, on, at);
+    const line = try reactionLine(alloc, msg_num, from.id, from.name, emoji, on, at);
     // The echo made before the store, as a message's (177.1).
-    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
     const live_blob = try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line});
-    _ = try store.append(io, alloc, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
+    _ = try store.append(io, alloc, try reactionsPath(alloc, topic.dir, topic.sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
 
     // Stored is done (as for a message): the live publish cannot fail.
     bus.publish(live_key, live_blob);
@@ -249,6 +249,13 @@ test "reactionLine is one JSON object with the six fields, strings escaped" {
         line,
     );
 }
+
+/// A topic as the store finds it: its conversation's folder, the
+/// conversation's bus key, and the session's id.
+pub const Topic = struct { dir: []const u8, key: []const u8, sid: []const u8 };
+
+/// Who writes: the display name stored with the message, and the uid.
+pub const Author = struct { name: []const u8, id: []const u8 };
 
 /// ConvKind discriminates the conversation shapes for the fanout (DM "where"
 /// names the other party; channel "where" names the channel).
@@ -310,7 +317,7 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
 
     const dir = try dmConvDir(a, "1_2");
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-    _ = try appendMessage(io, a, &bus, meta, dir, "1_2", "topic", "Tester", "1", "hello world", "");
+    _ = try appendMessage(io, a, &bus, meta, .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world", "");
 
     const msgs = try decodeChatFile(a, (try rawSession(io, a, dir, "topic")).?);
     try testing.expectEqual(@as(usize, 1), msgs.len);
@@ -352,7 +359,7 @@ pub const CountFixture = struct {
 
     pub fn send(self: *CountFixture, text: []const u8) !ChatMessage {
         const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-        return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, self.dir, "1_2", "topic", "Tester", "1", text, "");
+        return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
     }
 
     pub fn decoded(self: *CountFixture) !usize {
@@ -377,7 +384,7 @@ test "a send that answers an error stored nothing, and one that stored answers s
     while (fail_at < 400) : (fail_at += 1) {
         var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
         const before = try messageCount(f.io, a, f.dir, "topic");
-        const sent = appendMessage(f.io, failing.allocator(), &f.bus, meta, f.dir, "1_2", "topic", "Tester", "1", text, "");
+        const sent = appendMessage(f.io, failing.allocator(), &f.bus, meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
         const after = try messageCount(f.io, a, f.dir, "topic");
         if (sent) |m| {
             try testing.expectEqual(before + 1, after);
@@ -425,7 +432,7 @@ test "a reaction that answers an error stored nothing, and one that answers succ
     while (fail_at < 100) : (fail_at += 1) {
         var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
         const before = (try readReactions(f.io, a, f.dir, "topic")).len;
-        const got = appendReaction(f.io, failing.allocator(), &f.bus, f.dir, "1_2", "topic", 1, "1", "Tester", "👍", true);
+        const got = appendReaction(f.io, failing.allocator(), &f.bus, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
         const after = (try readReactions(f.io, a, f.dir, "topic")).len;
         if (got) |_| {
             if (!echoed(live, "\"reaction\"")) {

@@ -452,9 +452,9 @@ test "count: a reaction is checked against the count" {
     for (0..2) |_| _ = try f.send("x");
     const io = f.io;
     const a = f.arena.allocator();
-    _ = try appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 2, "1", "Tester", "+1", true);
-    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 3, "1", "Tester", "+1", true));
-    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 0, "1", "Tester", "+1", true));
+    _ = try appendReaction(io, a, &f.bus, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 2, .{ .name = "Tester", .id = "1" }, "+1", true);
+    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 3, .{ .name = "Tester", .id = "1" }, "+1", true));
+    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 0, .{ .name = "Tester", .id = "1" }, "+1", true));
 }
 
 test "count: an empty conversation has none, and its first message is number one" {

@@ -359,7 +359,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
 
     const topic = "general";
     const msg = try std.fmt.allocPrint(alloc, "Hi, this is an automated message from {s}. Please say hello and {s} will get back to you soon.", .{ host_name, host_name });
-    _ = try store.appendMessage(io, alloc, bus, meta, dir, pair, topic, host_name, host_uid, msg, "");
+    _ = try store.appendMessage(io, alloc, bus, meta, .{ .dir = dir, .key = pair, .sid = topic }, .{ .name = host_name, .id = host_uid }, msg, "");
 
     // The new member has no last-conv bookmark yet — land their /chat here.
     try chat_state.setUserLastSession(io, alloc, new_uid, pair, topic);

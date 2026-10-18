@@ -202,7 +202,7 @@ test "a refused block keeps its number: a recount counts blocks, so no id is giv
     defer f.deinit();
     const a = f.arena.allocator();
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-    try testing.expectError(error.NoAuthor, appendMessage(f.io, a, &f.bus, meta, f.dir, "1_2", "topic", "", "1", "hi", ""));
+    try testing.expectError(error.NoAuthor, appendMessage(f.io, a, &f.bus, meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "", .id = "1" }, "hi", ""));
     // As one written before: t_2 has no author, and the sidecar is gone.
     _ = try f.send("one");
     const md = try sessionMdPath(a, f.dir, "topic");
