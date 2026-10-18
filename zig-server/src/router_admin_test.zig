@@ -332,3 +332,26 @@ test "route: an admin delete of a player there is not says so, 404, where it wen
     const id = try player.allocate(io, a, "Nikhil");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
 }
+
+test "route: a retire's preview removes nothing, and its confirm removes what the preview listed" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const me = try harness.adminSession(a, io);
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const preview = try harness.postForm(a, io, "/admin/retire", me, "password=hunter2&days=30&keep=Steve");
+    try testing.expectEqualStrings("200 OK", harness.status(preview));
+    try testing.expect(std.mem.indexOf(u8, preview, "nothing removed yet") != null);
+    try testing.expect(try users.findMemberByName(io, a, "Debbie") != null);
+    const done = try harness.postForm(a, io, "/admin/retire", me, "password=hunter2&days=30&keep=Steve&confirm=1");
+    try testing.expectEqualStrings("200 OK", harness.status(done));
+    try testing.expect(try users.findMemberByName(io, a, "Debbie") == null);
+    try testing.expect(try users.findMemberByName(io, a, "Steve") != null);
+}
