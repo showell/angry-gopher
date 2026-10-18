@@ -251,6 +251,17 @@ def deps_of(text):
     return zig_source.imports(text) + [MODULE_FILES[m] for m in zig_source.modules(text) if m in MODULE_FILES]
 
 
+def served(text):
+    """`text` with its test lines blanked: a `test {}` block, and a private
+    declaration only tests use. What a test imports (a harness, a test file)
+    is not served, so it is not followed (metal-vmm QUEUE 236: router.zig's
+    tests and their harness, split out of it)."""
+    lines = text.splitlines(keepends=True)
+    tests = test_lines(lines)
+    tests |= test_only_lines(lines, tests)
+    return "".join("\n" if n in tests else line for n, line in enumerate(lines, 1))
+
+
 def closure(src_dir: str, root=ROOT_MODULE):
     """Every local .zig file reachable from `root` (a name, or several) by
     @import, the roots included: by path, and through the `webbox` module.
@@ -275,7 +286,7 @@ def closure(src_dir: str, root=ROOT_MODULE):
             continue  # a dangling import is zig's error to report, not ours
         seen.add(name)
         with open(path, encoding="utf-8") as f:
-            for dep in deps_of(f.read()):
+            for dep in deps_of(served(f.read())):
                 if os.path.basename(dep) in HOST_ONLY:
                     continue  # the Linux half: a finding (scan), not followed
                 if dep not in seen:

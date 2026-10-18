@@ -81,7 +81,9 @@ class Clean(unittest.TestCase):
         every = {f for f in L.zig_source.listing(src) if f.endswith(".zig")}
         own = set(os.listdir(L.zig_source.APP_SRC))
         outside = (every - L.closure(src, L.ROOTS)) & own
-        self.assertEqual(outside, {
+        # router.zig's tests and their harness only tests import (QUEUE 236).
+        tests_only = {f for f in outside if f.startswith("router_") and (f.endswith("_test.zig") or f == "router_harness.zig")}
+        self.assertEqual(outside - tests_only, {
             "server.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
@@ -241,6 +243,24 @@ class Reach(unittest.TestCase):
         with Tree(files) as t:
             self.assertEqual(L.closure(t.dir), {"router.zig", "a.zig"})
             self.assertEqual([name for name, _, _, _ in t.scan()], ["a.zig"])
+
+    def test_what_only_a_test_imports_is_not_followed(self):
+        # A test's harness is not served (router.zig's split, metal-vmm QUEUE
+        # 236): imported from a `test {}` block, or by a private declaration
+        # only tests use, it is not in the closure, nor what it imports.
+        files = {
+            "router.zig": 'const harness = @import("harness.zig");\npub fn route() void {}\ntest "t" {\n    harness.serve();\n}\ntest {\n    _ = @import("r_test.zig");\n}\n',
+            "harness.zig": "pub fn serve() void {\n    const a = std.heap.page_allocator;\n    _ = a;\n}\n",
+            "r_test.zig": 'const h = @import("harness.zig");\ntest "u" {\n    h.serve();\n}\n',
+        }
+        with Tree(files) as t:
+            self.assertEqual(L.closure(t.dir), {"router.zig"})
+            self.assertEqual(t.scan(), [])
+        # A served declaration's import is followed as ever.
+        files["router.zig"] = 'const harness = @import("harness.zig");\npub fn route() void {\n    harness.serve();\n}\n'
+        with Tree(files) as t:
+            self.assertEqual(L.closure(t.dir), {"router.zig", "harness.zig"})
+            self.assertEqual([name for name, _, _, _ in t.scan()], ["harness.zig"])
 
     def test_a_brace_in_a_character_literal_does_not_hold_a_test_open(self):
         files = {"router.zig": (
