@@ -17,6 +17,7 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const store = @import("webbox").store;
+const isSafeName = @import("served_name.zig").isSafeName;
 
 const Request = std.http.Server.Request;
 
@@ -42,16 +43,4 @@ fn serve(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
         .value = try std.fmt.allocPrint(alloc, "attachment; filename=\"{s}\"", .{name}),
     };
     try req.respond(bytes, .{ .extra_headers = &.{ http.octet_ct, disposition } });
-}
-
-/// isSafeName allows only `[A-Za-z0-9._-]` — no path separators, so no traversal
-/// (a `.` is fine; a `..` segment needs a `/` to escape, which is rejected).
-fn isSafeName(name: []const u8) bool {
-    if (name.len == 0) return false;
-    for (name) |c| {
-        const ok = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
-            (c >= '0' and c <= '9') or c == '.' or c == '_' or c == '-';
-        if (!ok) return false;
-    }
-    return true;
 }

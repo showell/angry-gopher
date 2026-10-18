@@ -18,6 +18,7 @@ const http = @import("webbox").http;
 const html = @import("webbox").html;
 const home = @import("home.zig");
 const store = @import("webbox").store;
+const isSafeName = @import("served_name.zig").isSafeName;
 
 const Request = std.http.Server.Request;
 
@@ -129,18 +130,6 @@ fn imageContentType(name: []const u8) ?std.http.Header {
     if (std.mem.endsWith(u8, name, ".png")) return http.png_ct;
     if (std.mem.endsWith(u8, name, ".svg")) return http.svg_ct;
     return null;
-}
-
-/// isSafeName allows only `[A-Za-z0-9._-]` — no path separators, so no traversal
-/// (a `.` is fine; a `..` segment needs a `/` to escape, which is rejected).
-fn isSafeName(name: []const u8) bool {
-    if (name.len == 0) return false;
-    for (name) |c| {
-        const ok = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
-            (c >= '0' and c <= '9') or c == '.' or c == '_' or c == '-';
-        if (!ok) return false;
-    }
-    return true;
 }
 
 // ── markup ──────────────────────────────────────────────────────────────────
