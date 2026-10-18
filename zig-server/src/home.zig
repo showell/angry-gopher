@@ -204,7 +204,8 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     }
     // The resume footer is hard-coded (Steve's call): the PDF link has no DSL row.
     try out.appendSlice(alloc, "</div>\n<p style=\"margin-top:28px;font-size:13px;color:#888\">" ++
-        "<a href=\"/steve-resume\">Resume for Steve Howell</a> · <a href=\"/steve-resume.pdf\">PDF</a></p>\n" ++
+        "<a href=\"/steve-resume\">Resume for Steve Howell</a> · <a href=\"/steve-resume.pdf\">PDF</a>" ++
+        " · <a href=\"/llms.txt\">llms.txt</a></p>\n" ++
         "</div></body></html>");
     return out.toOwnedSlice(alloc);
 }

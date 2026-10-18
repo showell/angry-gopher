@@ -31,6 +31,7 @@ const settings = @import("settings.zig");
 const admin = @import("admin.zig");
 const admin_lynrummy = @import("admin_lynrummy.zig");
 const home = @import("home.zig");
+const llms_txt = @import("llms_txt.zig");
 const gallery = @import("gallery.zig");
 const downloads = @import("downloads.zig");
 const resume_page = @import("resume_page.zig");
@@ -298,6 +299,9 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     } else if (std.mem.eql(u8, path, "/steve-resume.pdf")) {
         // The pre-generated static PDF of the same page (ops/build_resume_pdf).
         try resume_page.handlePdf(req, io, alloc);
+    } else if (std.mem.eql(u8, path, "/llms.txt")) {
+        // The apps described for a language model, from pages/home.txt.
+        try llms_txt.handle(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/version")) {
         try home.handleVersion(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/debug/mem")) {

@@ -424,6 +424,20 @@ test "a gallery that cannot read pages/home.txt is a 500 that names it, never a 
     try testing.expect(std.mem.indexOf(u8, got, "could not be parsed") != null);
 }
 
+test "an llms.txt that cannot read pages/home.txt is a 500 that names it, never an empty list served" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    // The tests run in zig-server/, where there is no pages/home.txt.
+    if (Io.Dir.cwd().access(io, "pages/home.txt", .{})) |_| return error.SkipZigTest else |_| {}
+    const got = try harness.get(a, io, "/llms.txt");
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(got));
+    try testing.expect(std.mem.indexOf(u8, got, "pages/home.txt could not be parsed: FileNotFound") != null);
+}
+
 test "an upload that cannot be stored gives its bytes back to the allowance: the quota is never spent on a file that is not there (metal-vmm QUEUE 172)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
