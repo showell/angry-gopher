@@ -1,11 +1,14 @@
 -- **THE SAME TESTS BEFORE AND AFTER A SPLIT** (metal-vmm QUEUE 236's second
 -- judge): every test's name in zig-server/src's router*.zig at two
 -- revisions, the module left out, from Zig's parser (`zig_decls`). The
--- same names, the same count, or it fails, naming what moved in or out.
+-- same names, the same count, or it fails, naming what moved in or out. A
+-- `test {}` with no name (a file's enrolment block) is counted apart: the
+-- runner counts it as a test, and a split adds one.
 --   shale tools/same_tests.shale before=<rev> after=<rev>
 local before = arg("before", "")
 local after = arg("after", "")
 const tmp = "zig-out/same_tests"
+const unnamed = {}
 function names(rev)
   local listed = must(run({"git", "ls-tree", "--name-only", rev, "zig-server/src/"}, {timeout_ms = 30000, whole = 1048576})).out
   local got = {}
@@ -16,7 +19,8 @@ function names(rev)
       local copy = tmp .. "/" .. base
       replace(copy, text)
       for d in zig_decls(copy) do
-        if d.kind == "test" then push(got, d.name) end
+        if d.kind == "test" and d.name_form ~= "none" then push(got, d.name) end
+        if d.kind == "test" and d.name_form == "none" then unnamed[rev] = get(unnamed, rev, 0) + 1 end
       end
       remove(copy)
     end
@@ -34,7 +38,7 @@ local gone = {}
 for n in a do if not has_key(in_b, n) then push(gone, n) end end
 local new = {}
 for n in b do if not has_key(in_a, n) then push(new, n) end end
-print(before .. ": " .. #a .. " tests; " .. after .. ": " .. #b .. " tests")
+print(before .. ": " .. #a .. " tests (and " .. get(unnamed, before, 0) .. " unnamed); " .. after .. ": " .. #b .. " tests (and " .. get(unnamed, after, 0) .. " unnamed)")
 for n in gone do print("  gone: " .. n) end
 for n in new do print("  new: " .. n) end
 if #a ~= #b or #gone > 0 or #new > 0 then fail("the tests differ") end
