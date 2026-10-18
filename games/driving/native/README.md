@@ -20,7 +20,7 @@ modes and the threading pipeline in detail. This README is the map.
 | file | role |
 |---|---|
 | `raster.zig` | the software rasterizer — consumes the shared `paint.zig` draw buffer (all tags + sky/grass background + sun glow/disc + the camera roll the browser did with `ctx.rotate`) and writes `0x00RRGGBB` pixels. No canvas, no allocator. Supersamples (`SS` knob) then box-downsamples, recovering the anti-aliasing the canvas gave free. |
-| `main.zig` | the headless PNG harness — drives the full route and dumps one frame per segment to `snap/native/segNN.png`. A deterministic, argless perceptual contact sheet (**not** a strict gold), and the target that builds on a bare headless box. |
+| `main.zig` | the headless PNG harness — drives the full route and dumps one frame per segment to `snap/native/seg<NN>.png`. A deterministic, argless perceptual contact sheet (**not** a strict gold), and the target that builds on a bare headless box. |
 | `png.zig` | a zero-dependency PNG encoder (stored deflate) for the harness. |
 | `x11.zig` | the Linux / WSLg live window: aliases an `XImage` onto raster's framebuffer (the pixel format *is* an X11 32-bit TrueColor pixel — zero conversion), `XPutImage`s each frame, `XRender`-scales for fullscreen. |
 | `win32.zig` | the Windows window and the `.scr` screensaver. GDI `StretchDIBits` of a top-down BI_RGB DIB (again, raster's pixel *is* the DIB DWORD — no conversion). Runs a frame-parallel render pipeline and the `.scr` command-line modes. See its header comment. |

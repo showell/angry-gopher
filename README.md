@@ -145,7 +145,7 @@ TypeScript runs two ways, and only one of them is transpiled:
 
 `tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
 the JS that ships. Elm, `tsc`, and `esbuild` are all project-local (run
-from each package's `node_modules/.bin`), so a fresh checkout needs
+from each package's `<package>/node_modules/.bin`), so a fresh checkout needs
 `npm install` in **four** places: `games/lynrummy/elm/`,
 `games/lynrummy/ts/`, `delivery/`, and `games/driving/`.
 
