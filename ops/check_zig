@@ -34,6 +34,14 @@ echo "==> webbox library lint (its test, then the tree)"
 python3 "$REPO_DIR/tools/lint_webbox_library.py" --self-test
 python3 "$REPO_DIR/tools/lint_webbox_library.py"
 
+# The docs' cited paths and names, this repo's (zig-webbox's
+# tools/doc_check.shale, by its own `zig build doc-check`; a few seconds).
+echo "==> doc check (this repo's docs)"
+docs_out="$(mktemp)"
+(cd "$REPO_DIR/../zig-webbox" && env -u ZIG_PROGRESS zig build doc-check -- only=angry-gopher > "$docs_out" 2>&1) \
+    || { grep -E 'gone |ambiguous |names gone |findings' "$docs_out" | head -9; rm -f "$docs_out"; exit 1; }
+rm -f "$docs_out"
+
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
 # confined to http.zig, whose accessors return OWNED copies — so a head value can
 # never dangle past the body read that invalidates it (the empty/wrong-author bug).
