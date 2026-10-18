@@ -69,7 +69,7 @@ python3 "$REPO_DIR/tools/check_caddy_limits.py"
 # first, each must fire.
 echo "==> test roots (its plants, then the tree)"
 (cd "$REPO_DIR" && shale tools/test_roots.shale self_test=1)
-(cd "$REPO_DIR" && shale --budget arena_bytes=2000000000 --budget steps=50000000 tools/test_roots.shale)
+(cd "$REPO_DIR" && shale tools/test_roots.shale)
 
 cd "$REPO_DIR/zig-server"
 
