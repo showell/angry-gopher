@@ -122,7 +122,7 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
         const dir = try store.dmConvDir(alloc, conv);
         const base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv});
         const where = try std.fmt.allocPrint(alloc, "to {s}", .{u.name});
-        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, true);
+        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, .dm);
     }
 
     // Channels the viewer is a member of.
@@ -130,7 +130,7 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
         const dir = try store.channelConvDir(alloc, name);
         const base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
         const where = try std.fmt.allocPrint(alloc, "in {s}", .{name});
-        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, false);
+        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, .channel);
     }
 
     // The viewer's own docs.
@@ -156,19 +156,19 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
 /// gatherConvSessions appends a chat row for each session in one conv: its last
 /// message, when it was sent and by whom, and a one-line excerpt of it.
 /// `base`/`where` are the conv's pre-resolved URL base and per-viewer context
-/// label; `dm` flags a 1:1 conv (vs a channel) for the wire.
+/// label; `kind` says a 1:1 conv from a channel, for the wire.
 ///
 /// **NEITHER A STAT NOR A TRANSCRIPT READ.** Both were per-session costs that
 /// grew with the conversation: this page used to read and decode every
 /// transcript in full to take the last message of each. `store.lastMessage`
 /// answers from the session's sidecar, and the date it carries is the message's
 /// own — which is also the order, so there is no mtime to stat for.
-fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, dm: bool) !void {
+fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, kind: store.ConvKind) !void {
     for (try store.listSessions(io, alloc, dir)) |sid| {
         const url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
         const last = (try store.lastMessage(io, alloc, dir, sid)) orelse {
             // A session nobody has written to yet: it still belongs on the page.
-            try byFileTime(io, alloc, items, dir, sid, url, where, dm);
+            try byFileTime(io, alloc, items, dir, sid, url, where, kind);
             continue;
         };
         const at = timefmt.unixFromRFC3339(last.date) orelse {
@@ -176,7 +176,7 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
             // transcript written by something other than this server. Ordering
             // it at the epoch would bury it, and shipping its empty date to
             // the client renders as "NaNd", so it falls back to the file.
-            try byFileTime(io, alloc, items, dir, sid, url, where, dm);
+            try byFileTime(io, alloc, items, dir, sid, url, where, kind);
             continue;
         };
         try items.append(alloc, .{
@@ -190,7 +190,7 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
             .where = where,
             .topic = sid,
             .excerpt = try feed.recentExcerpt(alloc, last.markdown),
-            .dm = dm,
+            .dm = kind == .dm,
         });
     }
 }
@@ -221,7 +221,7 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
 /// byFileTime appends a row ordered by the session file's own mtime, with no
 /// excerpt: for a session with no messages, and for one whose last message
 /// carries no date this server can read.
-fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, dm: bool) !void {
+fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, kind: store.ConvKind) !void {
     const path = try store.sessionMdPath(alloc, dir, sid);
     const st = (try disk.statOrNull(io, alloc, path)) orelse return;
     const secs = fileSeconds(st.mtime);
@@ -232,7 +232,7 @@ fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []co
         .url = url,
         .where = where,
         .topic = sid,
-        .dm = dm,
+        .dm = kind == .dm,
     });
 }
 
@@ -276,7 +276,7 @@ test "fs: a session with no messages, written at an odd second, shows the even s
     f.close(io);
 
     var items: std.ArrayList(RecentItem) = .empty;
-    try byFileTime(io, a, &items, dir, "empty", "/chat/c/1_2/empty", "to Bob", true);
+    try byFileTime(io, a, &items, dir, "empty", "/chat/c/1_2/empty", "to Bob", .dm);
     try testing.expectEqual(@as(usize, 1), items.items.len);
     try testing.expectEqualStrings(try timefmt.formatRFC3339UTC(a, 1790000000), items.items[0].at);
     try testing.expectEqual(@as(i96, 1790000000) * std.time.ns_per_s, items.items[0].at_ns);
