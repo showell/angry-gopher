@@ -778,3 +778,25 @@ test "hostileReason: memory that runs out is an error, never \"not hostile\" (me
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     try std.testing.expectError(error.OutOfMemory, hostileReason(failing.allocator(), "some **bold** text and a [link](http://x.com)"));
 }
+
+test "a MSG_ reference becomes its link in a paragraph, a heading and reflowed prose, never inside a link's label" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const link = "<a href=\"#msg-plans_3\" class=\"msg-ref\">MSG_plans_3</a>";
+    for ([_][]const u8{ "see MSG_plans_3 now", "# about MSG_plans_3" }) |md| {
+        try std.testing.expect(std.mem.indexOf(u8, try render(a, md), link) != null);
+    }
+    try std.testing.expect(std.mem.indexOf(u8, try renderTrustedReflow(a, "see\nMSG_plans_3 now"), link) != null);
+    try std.testing.expect(std.mem.indexOf(u8, try render(a, "[about MSG_plans_3](https://example.org)"), "msg-ref") == null);
+}
+
+test "trusted rendering keeps a line break a line break; its reflow joins the lines" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try std.testing.expect(std.mem.indexOf(u8, try renderTrusted(a, "one\ntwo"), "<br") != null);
+    const joined = try renderTrustedReflow(a, "one\ntwo");
+    try std.testing.expect(std.mem.indexOf(u8, joined, "<br") == null);
+    try std.testing.expect(std.mem.indexOf(u8, joined, "one two") != null);
+}
