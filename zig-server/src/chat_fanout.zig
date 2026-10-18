@@ -188,7 +188,7 @@ const Fan = struct {
         const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
         const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
         var rj: std.ArrayList(u8) = .empty;
-        try recent_feed.encodeChatEvent(&rj, f.alloc, f.msg.date, f.rec_url, who, where, f.sid, try f.excerpt, f.meta.kind == .dm);
+        try recent_feed.encodeChatEvent(&rj, f.alloc, .{ .at = f.msg.date, .url = f.rec_url, .who = who, .where = where, .topic = f.sid, .excerpt = try f.excerpt, .dm = f.meta.kind == .dm });
         f.bus.publish(try recentBusKey(f.alloc, uid), rj.items);
     }
 

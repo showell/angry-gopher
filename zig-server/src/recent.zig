@@ -102,7 +102,7 @@ fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !voi
 /// recent_feed encoder so the backlog and the live fanout emit one shape.
 fn encodeEvent(j: *std.ArrayList(u8), alloc: Alloc, it: RecentItem) !void {
     switch (it.kind) {
-        .chat => try feed.encodeChatEvent(j, alloc, it.at, it.url, it.who, it.where, it.topic, it.excerpt, it.dm),
+        .chat => try feed.encodeChatEvent(j, alloc, .{ .at = it.at, .url = it.url, .who = it.who, .where = it.where, .topic = it.topic, .excerpt = it.excerpt, .dm = it.dm }),
         .doc => try feed.encodeDocEvent(j, alloc, it.at, it.who, it.slug, it.title),
     }
 }

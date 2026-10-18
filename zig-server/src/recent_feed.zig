@@ -14,17 +14,24 @@ const fence = @import("markdown_fence.zig");
 /// recentExcerptCap bounds an excerpt's length on the wire (in codepoints).
 pub const recent_excerpt_cap = 350;
 
-/// encodeChatEvent writes one chat recentEvent object into `j`. `dm` flags a
-/// 1:1 conversation (vs a channel) so the client can label an incoming DM as
-/// "(DM)" rather than the misleading "message to <me>"; emitted only when true.
-pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, url: []const u8, who: []const u8, where: []const u8, topic: []const u8, excerpt: []const u8, dm: bool) !void {
-    try j.print(alloc, "{{\"kind\":\"chat\",\"at\":{f}", .{std.json.fmt(at, .{})});
-    try appendField(j, alloc, "url", url);
-    try appendField(j, alloc, "who", who);
-    try appendField(j, alloc, "where", where);
-    try appendField(j, alloc, "topic", topic);
-    try appendField(j, alloc, "excerpt", excerpt);
-    if (dm) try j.appendSlice(alloc, ",\"dm\":true");
+/// One chat recentEvent's fields. `dm` flags a 1:1 conversation (vs a
+/// channel) so the client can label an incoming DM as "(DM)" rather than
+/// the misleading "message to <me>"; emitted only when true.
+pub const ChatEvent = struct {
+    at: []const u8,
+    url: []const u8,
+    who: []const u8,
+    where: []const u8,
+    topic: []const u8,
+    excerpt: []const u8,
+    dm: bool,
+};
+
+/// encodeChatEvent writes one chat recentEvent object into `j`.
+pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, e: ChatEvent) !void {
+    try j.print(alloc, "{{\"kind\":\"chat\",\"at\":{f}", .{std.json.fmt(e.at, .{})});
+    inline for (.{ "url", "who", "where", "topic", "excerpt" }) |name| try appendField(j, alloc, name, @field(e, name));
+    if (e.dm) try j.appendSlice(alloc, ",\"dm\":true");
     try j.append(alloc, '}');
 }
 
@@ -224,11 +231,11 @@ test "encodeChatEvent: dm:true is emitted for a 1:1 conv, omitted for a channel"
     defer arena.deinit();
 
     var dm: std.ArrayList(u8) = .empty;
-    try encodeChatEvent(&dm, a, "2026-06-24T00:00:00Z", "/chat/c/1_3/yo", "Claude", "to Claude", "yo", "", true);
+    try encodeChatEvent(&dm, a, .{ .at = "2026-06-24T00:00:00Z", .url = "/chat/c/1_3/yo", .who = "Claude", .where = "to Claude", .topic = "yo", .excerpt = "", .dm = true });
     try std.testing.expect(std.mem.indexOf(u8, dm.items, "\"dm\":true") != null);
 
     var ch: std.ArrayList(u8) = .empty;
-    try encodeChatEvent(&ch, a, "2026-06-24T00:00:00Z", "/channel/general/yo", "Claude", "in general", "yo", "", false);
+    try encodeChatEvent(&ch, a, .{ .at = "2026-06-24T00:00:00Z", .url = "/channel/general/yo", .who = "Claude", .where = "in general", .topic = "yo", .excerpt = "", .dm = false });
     try std.testing.expect(std.mem.indexOf(u8, ch.items, "\"dm\"") == null);
 }
 
@@ -237,9 +244,9 @@ test "encodeChatEvent: each field under its own name, in the order recent.js rea
     const a = arena.allocator();
     defer arena.deinit();
     var j: std.ArrayList(u8) = .empty;
-    try encodeChatEvent(&j, a, "2026-06-24T00:00:00Z", "/chat/c/1_3/yo", "Claude", "to Claude", "yo", "hi there", true);
+    try encodeChatEvent(&j, a, .{ .at = "2026-06-24T00:00:00Z", .url = "/chat/c/1_3/yo", .who = "Claude", .where = "to Claude", .topic = "yo", .excerpt = "hi there", .dm = true });
     try std.testing.expectEqualStrings("{\"kind\":\"chat\",\"at\":\"2026-06-24T00:00:00Z\",\"url\":\"/chat/c/1_3/yo\",\"who\":\"Claude\",\"where\":\"to Claude\",\"topic\":\"yo\",\"excerpt\":\"hi there\",\"dm\":true}", j.items);
     j = .empty;
-    try encodeChatEvent(&j, a, "2026-06-24T00:00:00Z", "/channel/general/yo", "Claude", "", "yo", "", false);
+    try encodeChatEvent(&j, a, .{ .at = "2026-06-24T00:00:00Z", .url = "/channel/general/yo", .who = "Claude", .where = "", .topic = "yo", .excerpt = "", .dm = false });
     try std.testing.expectEqualStrings("{\"kind\":\"chat\",\"at\":\"2026-06-24T00:00:00Z\",\"url\":\"/channel/general/yo\",\"who\":\"Claude\",\"topic\":\"yo\"}", j.items);
 }
