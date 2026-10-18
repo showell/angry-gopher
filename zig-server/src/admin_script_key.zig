@@ -65,7 +65,7 @@ fn form(req: *Request, io: Io, alloc: Alloc, err: []const u8, status: std.http.S
     try b.print(alloc,
         \\<p>The public key that signed scripts are checked against, and the name they must be signed for.
         \\{s}</p>
-        \\<p>On the box: <code>zig build shale-sign -- keygen</code> once, then <code>pubkey</code> prints the key.
+        \\<p>On the box, in the shale checkout: <code>zig build shale-sign -- keygen</code> once, then <code>pubkey</code> prints the key.
         \\The private key never leaves the box.</p>
         \\
     , .{if (now_set) "A key is set; this replaces it." else "No key is set: the script route refuses every request."});

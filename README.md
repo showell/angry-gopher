@@ -20,7 +20,9 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   tested here, on Linux, as always (`ops/start`, `ops/check`).
 - **The library is [zig-webbox](https://github.com/showell/zig-webbox)**, a
   sibling checkout (`../zig-webbox`): the serving, the store, the cookies.
-  This repo's server is an application of it, as Dog Park is.
+  This repo's server is an application of it, as Dog Park is. Its signed
+  admin scripts are **[Shale](https://github.com/showell/shale)**'s, another
+  sibling (`../shale`).
 - **zig-metal-unikernel is the machine.** Its build compiles `zig-server/src` and
   zig-webbox from their sibling checkouts as they are, and hands them metal's
   own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
@@ -86,9 +88,10 @@ The rest of this README is for developers and agents working on the code.
 bash ops/start        # zig server on :9001
 ```
 
-The build needs [zig-webbox](https://github.com/showell/zig-webbox) cloned
-beside this repo (`../zig-webbox`): `zig-server/build.zig.zon` names it, and
-`ops/check_zig` runs its tests too.
+The build needs [zig-webbox](https://github.com/showell/zig-webbox) and
+[shale](https://github.com/showell/shale) cloned beside this repo
+(`../zig-webbox`, `../shale`): `zig-server/build.zig.zon` names both, and
+`ops/check_zig` runs their tests too.
 
 `ops/start` is the canonical dev loop: it kills anything on :9001,
 rebuilds the front-end bundles and WASM cores (`ops/build_embedded` runs
@@ -378,7 +381,7 @@ is the only credential `/admin/script` takes.
   `{auth_dir}/shale.conf`; with no key there the route refuses. A
   `mode=background` run is answered at once and stepped between requests on
   both hosts, one at a time; `GET /admin/script` shows its state and output,
-  and `mode=kill` ends it. The language is zig-webbox's [`SHALE.md`](https://github.com/showell/zig-webbox/blob/master/docs/SHALE.md); how
+  and `mode=kill` ends it. The language is shale's [`SHALE.md`](https://github.com/showell/shale/blob/master/docs/SHALE.md); how
   to sign and send a script is zig-metal-unikernel's `DEPLOY.md`.
 
 ## Layout
