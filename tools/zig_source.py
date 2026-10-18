@@ -51,6 +51,14 @@ def listing(src):
     dirs = (src,) if isinstance(src, str) else tuple(src)
     return sorted({n for d in dirs for n in os.listdir(d)})
 
+
+def listing_all(src):
+    """Every file in `src` and the folders under it, by its path from the
+    folder (`script/lex.zig`): a folder, or several read as one."""
+    dirs = (src,) if isinstance(src, str) else tuple(src)
+    return sorted({os.path.relpath(os.path.join(folder, n), d)
+                   for d in dirs for folder, _, names in os.walk(d) for n in names})
+
 _IMPORT = re.compile(r'@import\(\s*"([^"]+\.zig)"\s*,?\s*\)')
 _MODULE = re.compile(r'@import\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,?\s*\)')
 _EMBED = re.compile(r'@embedFile\(\s*"([^"]+)"\s*,?\s*\)')

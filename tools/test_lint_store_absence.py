@@ -131,6 +131,18 @@ class Fires(unittest.TestCase):
         """)) as t:
             self.assertEqual(t.lines(), [("a.zig", 3)])
 
+    def test_a_named_error_handed_to_a_function_that_makes_a_value(self):
+        with Tree(one("""\
+            fn quiet(e: anyerror) u8 {
+                _ = e;
+                return 0;
+            }
+            fn f() u8 {
+                return store.read(io, a, p, .unlimited) catch |e| return quiet(e);
+            }
+        """)) as t:
+            self.assertEqual(t.lines(), [("a.zig", 7)])
+
     def test_a_named_error_made_a_value(self):
         for handler in ["|e| { log(e); return null; }", "|err| return null", "|e| switch (e) { else => \"\" }",
                         "|e| blk: { _ = e; break :blk 0; }"]:
@@ -329,6 +341,20 @@ class Holds(unittest.TestCase):
                     error.FileNotFound => "",
                     else => return e,
                 };
+            }
+        """)) as t:
+            self.assertEqual(t.lines(), [])
+
+    def test_a_named_error_handed_to_a_function_that_fails(self):
+        # Shale's `return storeFailed(run, pos, b, rel, e)`: another error.
+        with Tree(one("""\
+            const Error = error{Stopped};
+            fn failed(e: anyerror) Error {
+                _ = e;
+                return error.Stopped;
+            }
+            fn f() Error![]u8 {
+                return store.read(io, a, p, .unlimited) catch |e| return failed(e);
             }
         """)) as t:
             self.assertEqual(t.lines(), [])

@@ -55,7 +55,7 @@ comptime {
 }
 
 /// **A RUN FITS IN ABOUT A SECOND OF THE TURN ON THE DROPLET** (metal-vmm
-/// QUEUE 200). Measured (zig-webbox's runner, ReleaseSafe, natively, which
+/// QUEUE 200). Measured (Shale's runner, then in zig-webbox, ReleaseSafe, natively, which
 /// is the guest's arithmetic): at Shale's defaults the steps are cheap, 5M
 /// in 45 ms, and the step budget stops a read- or listing-heavy script
 /// first; 1,000 replaces were 142 ms on Linux's page cache. On metal the

@@ -9,8 +9,8 @@ user their allowance again. Each was a read whose error was caught into a
 value, so a disk that failed looked exactly like a file that was not there.
 
 WHAT IT REFUSES, in every file of the tree the lints judge (zig_source.TREE:
-the application's zig-server/src and the library's zig-webbox/src, read as
-one folder) but the library's store.zig, and outside `test {}` blocks and
+the application's zig-server/src and the libraries' zig-webbox/src and
+shale/src, read as one folder) but the library's store.zig, and outside `test {}` blocks and
 the helpers only tests use: a call of one of the store's reads (`read`, `readOrEmpty`, `readOrNull`, `readAt`, `stat`, `statOrNull`,
 `has`, `list`), under whatever name the file gives store.zig, or of any
 function that reads the store, directly or through others (`readers`,
@@ -130,13 +130,23 @@ def handler_of(rest: str) -> str:
     return rest[:at]
 
 
+# **A FUNCTION THAT FAILS**: its return type a bare error set (`Error`,
+# `anyerror`, `error{...}`), so `return f(..., e)` hands the failure on as
+# another error: Shale's `storeFailed`, which stops the run naming it. Read
+# from every file `scan` reads, into `failing`.
+FAILS = re.compile(r"\bfn\s+([A-Za-z_]\w*)\s*\((?:[^()]|\([^()]*\))*\)\s*(?:Error|anyerror|error\s*\{[^}]*\})\s*\{")
+failing = set()
+
+
 def passes_on(handler: str, name: str) -> bool:
     """Whether a handler hands its named error on: `return e`, an arm that
-    is `=> e` or `=> return e`, or `e` itself."""
+    is `=> e` or `=> return e`, `e` itself, or `return f(..., e, ...)` of a
+    function that fails (`failing`)."""
     e = re.escape(name)
     return bool(re.search(r"\breturn\s+" + e + r"\b", handler) or
                 re.search(r"=>\s*" + e + r"\s*(?:[,}]|$)", handler) or
-                handler.strip() == name)
+                handler.strip() == name or
+                any(re.search(r"\breturn\s+" + re.escape(f) + r"\s*\([^;]*\b" + e + r"\b", handler) for f in failing))
 
 
 # What the store itself reads as "not there" (store.zig's readOrNull,
@@ -474,10 +484,13 @@ def scan(src):
     """Findings as (file, line, text), in file then line order, from `src`: a
     folder, or several read as one (zig_source.TREE)."""
     files = {}
-    for name in zig_source.listing(src):
+    # Every folder down: Shale's interpreter is in shale's src/script/.
+    for name in zig_source.listing_all(src):
         if name.endswith(".zig"):
             with open(zig_source.at(src, name), encoding="utf-8") as f:
                 files[name] = f.readlines()
+    failing.clear()
+    failing.update(m.group(1) for lines in files.values() for m in FAILS.finditer("".join(lines)))
     reading = readers(files)
     found = []
     for name, lines in files.items():
