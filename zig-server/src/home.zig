@@ -101,68 +101,34 @@ pub fn parseHomeText(alloc: Alloc, src: []const u8) !Parsed {
     var headline: []const u8 = "";
     var apps: std.ArrayList(App) = .empty;
 
-    // The block currently being accumulated. `have` is false until the first `##`.
-    var have = false;
-    var c_title: []const u8 = "";
-    var c_href: []const u8 = "";
-    var c_cta: []const u8 = "";
-    var c_lang: []const u8 = "";
-    var c_tech: []const u8 = "";
-    var c_code: []const u8 = "";
-    var c_essay: []const u8 = "";
-    var c_image: []const u8 = "";
-    var c_install: []const u8 = "";
-    var c_desc: std.ArrayList(u8) = .empty;
+    // The block being read: none until the first `##`.
+    var block: ?Draft = null;
 
     var it = std.mem.splitScalar(u8, src, '\n');
     while (it.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0) continue; // blank lines only separate blocks
         if (std.mem.startsWith(u8, line, "## ")) {
-            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, c_install, &c_desc);
+            if (block) |*d| try pushApp(alloc, &apps, d);
             const rest = std.mem.trim(u8, line[3..], " ");
             const arrow = std.mem.indexOf(u8, rest, "->") orelse return error.MalformedHome;
-            c_title = std.mem.trim(u8, rest[0..arrow], " ");
-            c_href = std.mem.trim(u8, rest[arrow + 2 ..], " ");
-            c_cta = "";
-            c_lang = "";
-            c_tech = "";
-            c_code = "";
-            c_essay = "";
-            c_image = "";
-            c_install = "";
-            c_desc = .empty;
-            have = true;
+            block = .{ .title = std.mem.trim(u8, rest[0..arrow], " "), .href = std.mem.trim(u8, rest[arrow + 2 ..], " ") };
         } else if (std.mem.startsWith(u8, line, "# ")) {
             headline = std.mem.trim(u8, line[2..], " ");
-        } else if (std.mem.startsWith(u8, line, "cta:")) {
-            if (!have) return error.MalformedHome;
-            c_cta = std.mem.trim(u8, line[4..], " ");
-        } else if (std.mem.startsWith(u8, line, "lang:")) {
-            if (!have) return error.MalformedHome;
-            c_lang = std.mem.trim(u8, line[5..], " ");
-        } else if (std.mem.startsWith(u8, line, "tech:")) {
-            if (!have) return error.MalformedHome;
-            c_tech = std.mem.trim(u8, line[5..], " ");
-        } else if (std.mem.startsWith(u8, line, "code:")) {
-            if (!have) return error.MalformedHome;
-            c_code = std.mem.trim(u8, line[5..], " ");
-        } else if (std.mem.startsWith(u8, line, "essay:")) {
-            if (!have) return error.MalformedHome;
-            c_essay = std.mem.trim(u8, line[6..], " ");
-        } else if (std.mem.startsWith(u8, line, "image:")) {
-            if (!have) return error.MalformedHome;
-            c_image = std.mem.trim(u8, line[6..], " ");
-        } else if (std.mem.startsWith(u8, line, "install:")) {
-            if (!have) return error.MalformedHome;
-            c_install = std.mem.trim(u8, line[8..], " ");
-        } else {
-            if (!have) return error.MalformedHome; // stray prose outside any app block
-            if (c_desc.items.len != 0) try c_desc.append(alloc, ' ');
-            try c_desc.appendSlice(alloc, line);
+        } else field: {
+            // A field line or prose: either is a block's, so stray outside one.
+            const d = if (block) |*d| d else return error.MalformedHome;
+            inline for (field_lines) |name| {
+                if (std.mem.startsWith(u8, line, name ++ ":")) {
+                    @field(d, name) = std.mem.trim(u8, line[name.len + 1 ..], " ");
+                    break :field;
+                }
+            }
+            if (d.desc.items.len != 0) try d.desc.append(alloc, ' ');
+            try d.desc.appendSlice(alloc, line);
         }
     }
-    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, c_install, &c_desc);
+    if (block) |*d| try pushApp(alloc, &apps, d);
     if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
     return .{ .headline = headline, .apps = apps };
 }
@@ -248,10 +214,28 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
 /// optional "Read more" link), `image` (the optional app thumbnail), and
 /// `install` (the optional "Install locally" link) — a block missing any of
 /// title/href/cta/lang/tech/code/description is malformed.
-fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: *std.ArrayList(u8)) !void {
-    if (title.len == 0 or href.len == 0 or cta.len == 0 or lang.len == 0 or tech.len == 0 or code.len == 0 or desc.items.len == 0) return error.MalformedHome;
-    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .essay = essay, .image = image, .install = install, .desc = try desc.toOwnedSlice(alloc) });
+fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), d: *Draft) !void {
+    if (d.title.len == 0 or d.href.len == 0 or d.cta.len == 0 or d.lang.len == 0 or d.tech.len == 0 or d.code.len == 0 or d.desc.items.len == 0) return error.MalformedHome;
+    try apps.append(alloc, .{ .title = d.title, .href = d.href, .cta = d.cta, .lang = d.lang, .tech = d.tech, .code = d.code, .essay = d.essay, .image = d.image, .install = d.install, .desc = try d.desc.toOwnedSlice(alloc) });
 }
+
+/// An app block as it is read: `##` gives its title and link, its field
+/// lines the rest, its other lines the description.
+const Draft = struct {
+    title: []const u8,
+    href: []const u8,
+    cta: []const u8 = "",
+    lang: []const u8 = "",
+    tech: []const u8 = "",
+    code: []const u8 = "",
+    essay: []const u8 = "",
+    image: []const u8 = "",
+    install: []const u8 = "",
+    desc: std.ArrayList(u8) = .empty,
+};
+
+/// A block's `name:` lines, each the `Draft` field of that name.
+const field_lines = [_][]const u8{ "cta", "lang", "tech", "code", "essay", "image", "install" };
 
 /// handleVersion serves the JSON build-identity probe. `commit` is the git
 /// short-hash baked in at build time (ops/deploy passes -Dcommit=...); it reads
