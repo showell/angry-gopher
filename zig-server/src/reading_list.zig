@@ -383,6 +383,23 @@ test "parseRefs: recovers DM + channel locations from jump URLs" {
     try testing.expectEqualStrings("general1_3", refs[1].id);
 }
 
+test "an entry composed for a location is read back as that location, a DM's and a channel's" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    for ([_]Ref{
+        .{ .conv = "1_2", .sid = "2026-05-28", .id = "2026-05-28_5" },
+        .{ .conv = "General", .sid = "general1", .id = "general1_3" },
+    }) |want| {
+        const entry = try composeEntry(a, "a note", "Steve", "Jun 22", try jumpURL(a, want.conv, want.sid, want.id), "the body");
+        const refs = try parseRefs(a, entry);
+        try testing.expectEqual(@as(usize, 1), refs.len);
+        try testing.expectEqualStrings(want.conv, refs[0].conv);
+        try testing.expectEqualStrings(want.sid, refs[0].sid);
+        try testing.expectEqualStrings(want.id, refs[0].id);
+    }
+}
+
 test "parseRefs: lenient — skips malformed/partial URLs, empty doc → none" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
