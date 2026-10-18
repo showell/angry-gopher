@@ -93,8 +93,11 @@ pub const App = struct { title: []const u8, href: []const u8, cta: []const u8, l
 pub const Parsed = struct { headline: []const u8, apps: std.ArrayList(App) };
 
 pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
-    const src = try store.read(io, alloc, "pages/home.txt", .unlimited);
+    return parseHomeText(alloc, try store.read(io, alloc, "pages/home.txt", .unlimited));
+}
 
+/// The DSL's text, parsed (the grammar is `renderHomeBody`'s comment).
+pub fn parseHomeText(alloc: Alloc, src: []const u8) !Parsed {
     var headline: []const u8 = "";
     var apps: std.ArrayList(App) = .empty;
 
@@ -416,3 +419,60 @@ const head_style =
     \\</head><body>
     \\
 ;
+
+test "home: a block's fields, the optional ones, and a description joined across its lines" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const p = try parseHomeText(a,
+        \\# Apps here
+        \\
+        \\## Lyn Rummy -> /game
+        \\cta: Play
+        \\lang: Elm
+        \\tech: a solver
+        \\code: https://example.org/code
+        \\A card game,
+        \\  for two.
+        \\essay: /essays/lyn
+        \\
+        \\## Chat -> /chat
+        \\cta: Talk
+        \\lang: Zig
+        \\tech: SSE
+        \\code: https://example.org/chat
+        \\image: /img/chat.png
+        \\install: /downloads/chat
+        \\Messages.
+    );
+    try std.testing.expectEqualStrings("Apps here", p.headline);
+    try std.testing.expectEqual(@as(usize, 2), p.apps.items.len);
+    const g = p.apps.items[0];
+    try std.testing.expectEqualStrings("Lyn Rummy", g.title);
+    try std.testing.expectEqualStrings("/game", g.href);
+    try std.testing.expectEqualStrings("Play|Elm|a solver|https://example.org/code|/essays/lyn||", try std.mem.join(a, "|", &.{ g.cta, g.lang, g.tech, g.code, g.essay, g.image, g.install }));
+    try std.testing.expectEqualStrings("A card game, for two.", g.desc);
+    const c = p.apps.items[1];
+    try std.testing.expectEqualStrings("|/img/chat.png|/downloads/chat", try std.mem.join(a, "|", &.{ c.essay, c.image, c.install }));
+    try std.testing.expectEqualStrings("Messages.", c.desc);
+}
+
+test "home: a missing required field, prose outside a block, a title with no arrow, no headline or no app: each MalformedHome" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const whole = "## T -> /t\ncta: C\nlang: L\ntech: X\ncode: K\nWords.\n";
+    _ = try parseHomeText(a, "# H\n" ++ whole);
+    // Each required field left out, one at a time.
+    for ([_][]const u8{ "cta: C\n", "lang: L\n", "tech: X\n", "code: K\n", "Words.\n" }) |line| {
+        const without = try std.mem.replaceOwned(u8, a, whole, line, "");
+        try std.testing.expectError(error.MalformedHome, parseHomeText(a, try std.mem.concat(a, u8, &.{ "# H\n", without })));
+    }
+    for ([_][]const u8{
+        "# H\nstray\n" ++ whole, // prose before any block
+        "# H\ncta: C\n" ++ whole, // a field before any block
+        "# H\n## T /t\ncta: C\nlang: L\ntech: X\ncode: K\nWords.\n", // no arrow
+        whole, // no headline
+        "# H\n", // no app
+    }) |src| try std.testing.expectError(error.MalformedHome, parseHomeText(a, src));
+}
