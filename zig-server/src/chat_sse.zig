@@ -216,6 +216,8 @@ test "emitWire frames id/index/mine, round-trips JSON-escaped fields, and omits 
     defer p.deinit();
     try testing.expectEqual(@as(usize, 7), p.value.index);
     try testing.expectEqualStrings("A\"B", p.value.from); // escaping round-trips
+    try testing.expectEqualStrings("2pm", p.value.at);
+    try testing.expect(std.mem.indexOf(u8, p.value.html, "hi") != null);
     try testing.expectEqualStrings("hi", p.value.markdown); // raw markdown preserved
     try testing.expectEqualStrings("MSG_1", p.value.id);
     try testing.expect(p.value.mine);
