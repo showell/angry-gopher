@@ -259,3 +259,26 @@ test "a stream is a GET's: a POST to one is 405, its body never read nor held (m
     const got = try harness.postAs(a, io, "/chat/notifications", cookies, "x" ** 100);
     try testing.expectEqualStrings("405 Method Not Allowed", harness.status(got));
 }
+
+test "route: pin puts a topic in the viewer's Pinned group and unpin takes it out" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_state = @import("chat_state.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
+    const pinned = try chat_state.pinnedSessions(io, a, "1", "1_2");
+    try testing.expectEqual(@as(usize, 1), pinned.len);
+    try testing.expectEqualStrings("Plans", pinned[0]);
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
+    try testing.expectEqual(@as(usize, 0), (try chat_state.pinnedSessions(io, a, "1", "1_2")).len);
+}
