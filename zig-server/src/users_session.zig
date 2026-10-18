@@ -16,7 +16,6 @@ const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
 const site_secret = @import("webbox").site_secret;
 const testing = std.testing;
-const roots = @import("roots.zig");
 const users = @import("users.zig");
 const setUserPassword = users.setUserPassword;
 const readAuthFile = users.readAuthFile;

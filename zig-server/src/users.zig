@@ -62,11 +62,9 @@ const http = @import("webbox").http;
 
 const store = @import("webbox").store;
 
-const uid_cookie = @import("uid_cookie.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 
-const b64 = std.base64.url_safe_no_pad;
 
 const site_secret = @import("webbox").site_secret;
 

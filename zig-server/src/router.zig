@@ -81,8 +81,6 @@ pub const host_facts = struct {
 };
 const webbox_site = @import("webbox").site;
 const app_start = @import("app_start.zig");
-const roots = @import("roots.zig");
-const search_index = @import("search_index.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");
