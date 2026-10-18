@@ -40,9 +40,9 @@ pub const max_reading_list_bytes: usize = 1 << 20;
 /// jumpURL is the unambiguous deep link to a saved message — the same shape
 /// chatMsgLookup redirects to, but built from the conv we already know instead of
 /// re-derived. DM: /chat/c/<conv>/<sid>#msg-<id>; channel: /channel/<name>/<sid>#msg-<id>.
-pub fn jumpURL(alloc: Alloc, conv: []const u8, sid: []const u8, id: []const u8) ![]u8 {
-    const base = try store.convKeyBaseURL(alloc, conv);
-    return std.fmt.allocPrint(alloc, "{s}/{s}#msg-{s}", .{ base, sid, id });
+pub fn jumpURL(alloc: Alloc, ref: Ref) ![]u8 {
+    const base = try store.convKeyBaseURL(alloc, ref.conv);
+    return std.fmt.allocPrint(alloc, "{s}/{s}#msg-{s}", .{ base, ref.sid, ref.id });
 }
 
 /// composeEntry renders one reading-list block. Pure (no IO): the handler feeds
@@ -64,8 +64,8 @@ pub fn composeEntry(alloc: Alloc, note: []const u8, from: []const u8, when: []co
 
 /// save composes the entry and appends it to the saver's reading-list doc. The
 /// only IO step; everything testable is in composeEntry / jumpURL above.
-pub fn save(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, sid: []const u8, id: []const u8, from: []const u8, when: []const u8, body: []const u8, note: []const u8) !void {
-    const url = try jumpURL(alloc, conv, sid, id);
+pub fn save(io: Io, alloc: Alloc, uid: []const u8, ref: Ref, from: []const u8, when: []const u8, body: []const u8, note: []const u8) !void {
+    const url = try jumpURL(alloc, ref);
     const entry = try composeEntry(alloc, note, from, when, url, body);
     try docs_store.appendToUserDoc(io, alloc, uid, reading_list_slug, entry, max_reading_list_bytes);
 }
@@ -354,8 +354,8 @@ test "jumpURL: DM and channel shapes" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    try testing.expectEqualStrings("/chat/c/1_2/2026-05-28#msg-2026-05-28_5", try jumpURL(a, "1_2", "2026-05-28", "2026-05-28_5"));
-    try testing.expectEqualStrings("/channel/General/topic1#msg-topic1_3", try jumpURL(a, "General", "topic1", "topic1_3"));
+    try testing.expectEqualStrings("/chat/c/1_2/2026-05-28#msg-2026-05-28_5", try jumpURL(a, .{ .conv = "1_2", .sid = "2026-05-28", .id = "2026-05-28_5" }));
+    try testing.expectEqualStrings("/channel/General/topic1#msg-topic1_3", try jumpURL(a, .{ .conv = "General", .sid = "topic1", .id = "topic1_3" }));
 }
 
 test "parseRefs: recovers DM + channel locations from jump URLs" {
@@ -391,7 +391,7 @@ test "an entry composed for a location is read back as that location, a DM's and
         .{ .conv = "1_2", .sid = "2026-05-28", .id = "2026-05-28_5" },
         .{ .conv = "General", .sid = "general1", .id = "general1_3" },
     }) |want| {
-        const entry = try composeEntry(a, "a note", "Steve", "Jun 22", try jumpURL(a, want.conv, want.sid, want.id), "the body");
+        const entry = try composeEntry(a, "a note", "Steve", "Jun 22", try jumpURL(a, want), "the body");
         const refs = try parseRefs(a, entry);
         try testing.expectEqual(@as(usize, 1), refs.len);
         try testing.expectEqualStrings(want.conv, refs[0].conv);

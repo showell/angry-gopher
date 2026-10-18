@@ -326,7 +326,7 @@ fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []
     }
     // A reading list at its cap is the client's limit (413); any other
     // failure goes on to the host's log (metal-vmm QUEUE 172).
-    reading_list.save(io, alloc, uid, conv, sid, id, from, at, msg_body, note) catch |e| switch (e) {
+    reading_list.save(io, alloc, uid, .{ .conv = conv, .sid = sid, .id = id }, from, at, msg_body, note) catch |e| switch (e) {
         error.DocTooLarge => return req.respond("not saved: the reading list is full\n", .{ .status = .payload_too_large }),
         else => return e,
     };
