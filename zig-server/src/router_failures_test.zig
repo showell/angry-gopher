@@ -1,0 +1,482 @@
+//! router.zig's tests: the store-failure class: a failure is a 500, never silence or a lie.
+
+const std = @import("std");
+const Io = @import("host_io").Io;
+const player = @import("player.zig");
+const users = @import("users.zig");
+const uid_cookie = @import("uid_cookie.zig");
+const streams = @import("webbox").bus;
+const Bus = streams.Bus;
+const Hub = streams.Hub;
+const mem_meter = @import("webbox").mem_meter;
+const testing = std.testing;
+const harness = @import("router_harness.zig");
+const router = @import("router.zig");
+
+test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-vmm QUEUE 114)" {
+    // A 404 says "no such doc", and an API client's next save may then
+    // replace one that is there (QUEUE 105's pattern, through a wrapper:
+    // docs_store.docExists).
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const docs_store = @import("docs_store.zig");
+    // The docs page allocates through it, and presence keeps a map in it for
+    // the life of the process: an arena freed at the test's end would leave
+    // the next test that marks someone active a map in freed memory.
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+
+    const kept = try docs_store.docPath(a, "2", "kept");
+    try harness.UidSite.disk.write(io, a, kept, "# kept\n", .{});
+    const fine = try harness.UidSite.ask(a, io, "/chat/docs/kept.md", member);
+    try testing.expectEqualStrings("200 OK", harness.status(fine));
+
+    // The same doc, now a link to itself: it cannot be looked at.
+    const lost = try docs_store.docPath(a, "2", "lost");
+    try std.Io.Dir.cwd().symLink(io, "lost.md", lost, .{});
+    const resp = try harness.UidSite.ask(a, io, "/chat/docs/lost.md", member);
+    try testing.expect(std.mem.indexOf(u8, harness.status(resp), "404") == null);
+    try testing.expect(std.mem.startsWith(u8, harness.status(resp), "5"));
+}
+
+/// The host's Io, but every file removal fails: a store whose delete is
+/// refused, while reads and writes go on (metal-vmm QUEUE 129).
+/// Refused only under paths holding this, when it is set (QUEUE 134(e)).
+var refuse_under: []const u8 = "";
+
+/// Or, when set, a file of this name wherever it is, by a full path or by
+/// the name alone as std's deleteTree asks (QUEUE 138(f)).
+var refuse_named: []const u8 = "";
+
+fn removalsFail(io: Io, vt: *Io.VTable) Io {
+    const refused = struct {
+        // Not std's failingDirDeleteFile, which answers FileNotFound: that
+        // is "already gone", which a revoke rightly takes as done.
+        fn deleteFile(userdata: ?*anyopaque, dir: Io.Dir, sub_path: []const u8) Io.Dir.DeleteFileError!void {
+            const named = refuse_named.len > 0 and std.mem.eql(u8, std.fs.path.basename(sub_path), refuse_named);
+            const under = refuse_named.len == 0 and std.mem.indexOf(u8, sub_path, refuse_under) != null;
+            if (!named and !under) return real.?.dirDeleteFile(userdata, dir, sub_path);
+            return error.AccessDenied;
+        }
+        var real: ?*const Io.VTable = null;
+    };
+    refused.real = io.vtable;
+    vt.* = io.vtable.*;
+    vt.dirDeleteFile = refused.deleteFile;
+    return .{ .userdata = io.userdata, .vtable = vt };
+}
+
+test "route: a key revoke whose removal fails is not answered as revoked, and the key is still there to say so (metal-vmm QUEUE 129)" {
+    // `clearUserAPIKey` was `store.remove(...) catch {}`, and /settings/apikey
+    // then redirected to `?keyrevoked=1`: the member told their key was gone
+    // while it went on authenticating.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    const key = try users.setUserAPIKey(io, a, "2");
+
+    var vt: Io.VTable = undefined;
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /settings/apikey HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nrevoke=1", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = router.route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.indexOf(u8, out.written(), "keyrevoked") == null);
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
+    // The key is there, and still the key.
+    try testing.expectEqualStrings(key, (try users.getUserAPIKey(io, a, "2")).?);
+}
+
+test "route: a release whose removals fail is not answered as done, and the account is still there (metal-vmm QUEUE 129)" {
+    // Logout's release ran `deleteUserData(...) catch {}`, then deleted the
+    // record (each removal itself `catch {}`), then said "logged out": a
+    // refused removal left the account logging in, or its data kept, while
+    // its member was told both were gone.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    const data = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, "2", "next-session-id.txt" });
+    try harness.UidSite.disk.write(io, a, data, "2\n", .{});
+
+    var vt: Io.VTable = undefined;
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = router.route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
+    // The account is there, and still logs in.
+    try testing.expect(try users.principalExists(io, a, "2"));
+    try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
+    _ = try harness.UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
+}
+
+test "route: a release whose last removal fails leaves an account that can release again, never one gone with its leftovers kept (metal-vmm QUEUE 134(e))" {
+    // The account record went first (auth_root: its password), then its
+    // private state (users_root). A failure there answered 500 for an
+    // account already released: nobody could log in to try again, and the
+    // folder stayed. Authority goes last, as the retire's does.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    const private = try std.fs.path.join(a, &.{ users.users_root, "2" });
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "upload-bytes" }), "1\n", .{});
+
+    var vt: Io.VTable = undefined;
+    refuse_under = private;
+    defer refuse_under = "";
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = router.route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
+    // Still an account that logs in, to release again.
+    try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
+    // And again, the disk willing: released, nothing left.
+    refuse_under = "";
+    try testing.expect(std.mem.indexOf(u8, try harness.postForm(a, io, "/logout", member, "release=yes"), "500") == null);
+    try testing.expect(!try users.principalExists(io, a, "2"));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, private));
+}
+
+test "route: a release whose removal inside the account fails keeps the password, whatever order the folder is walked in (metal-vmm QUEUE 138(f))" {
+    // The account's folder (auth_root/<id>) went by std's deleteTree, in the
+    // order the folder was read: the password could go before a file whose
+    // removal then failed, and the account was gone with its leftovers kept.
+    // Each of the account's other files is refused in turn: the password
+    // goes last, so it is there every time. (QUEUE 134(e)'s test refused all
+    // of users_root, which depended on how std's deleteTree walks.)
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
+
+    const account = try std.fs.path.join(a, &.{ users.auth_root, "2" });
+    // Thirty files besides it: whatever order a folder is read in, the
+    // password is last of them one time in thirty-one, so the walk that
+    // removed it before a refused file is seen.
+    const others = [_][]const u8{ "name", "api-key", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28" };
+    for (others) |refused| {
+        try users.setUserPassword(io, a, "2", "hunter2");
+        for (others) |f| try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ account, f }), "x", .{});
+        const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+        const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+
+        var vt: Io.VTable = undefined;
+        refuse_named = refused;
+        defer refuse_named = "";
+        const failing = removalsFail(io, &vt);
+        const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+        var reader: std.Io.Reader = .fixed(raw);
+        var out: std.Io.Writer.Allocating = .init(a);
+        var server = std.http.Server.init(&reader, &out.writer);
+        var req = try server.receiveHead();
+        req.head.keep_alive = false;
+        var hub = Hub.init(failing, a);
+        var b = Bus.of(&hub);
+        _ = router.route(&req, failing, a, &b) catch {};
+        try out.writer.flush();
+        try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
+        // Still an account that logs in, to release again.
+        try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
+        // And again, the disk willing: released, nothing left.
+        refuse_named = "";
+        try testing.expect(std.mem.indexOf(u8, try harness.postForm(a, io, "/logout", member, "release=yes"), "500") == null);
+        try testing.expect(!try users.principalExists(io, a, "2"));
+        try testing.expect(!try harness.UidSite.disk.has(io, a, account));
+    }
+}
+
+test "route: an error after a request's body was read is answered 500 too, never with silence (metal-vmm QUEUE 127(b))" {
+    // Reading the body moves the reader past `received_head`, so that state
+    // cannot say whether a head went out: a move whose append fails, after
+    // its body was read, was answered with nothing. Here the session's
+    // actions.dsl is a folder: the session is there, and the append fails.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+
+    const id = try player.allocate(io, a, "Nikhil");
+    const me = try harness.signedUid(a, id);
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/game/new-session", me, "state")));
+    const s1 = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id, "lynrummy-elm", "sessions", "1" });
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ s1, "actions.dsl" }));
+
+    const raw = try std.fmt.allocPrint(a, "POST /game/sessions/1/actions HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 4\r\n\r\nmove", .{me});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    try testing.expect(std.meta.isError(router.route(&req, io, a, &b)));
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
+    // And the writer the router lent the handler is given back.
+    try testing.expect(server.out == &out.writer);
+}
+
+test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE 123)" {
+    // On metal, `GET /puzzles -> ReadFailed` reached the console and the
+    // client got nothing (the box's durable sweep, seed 173): an error that
+    // escapes a handler was dropped by the host. Here a doc that is a
+    // folder: it is there, and reading it fails.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const docs_store = @import("docs_store.zig");
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // as above: presence outlives the test
+    defer meter.restore();
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    try std.Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "2", "folder"));
+
+    const raw = try std.fmt.allocPrint(a, "GET /chat/docs/folder.md HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    // The error still goes to the host, to log; the client is told first,
+    // and told nothing of it (QUEUE 134(f)): its name is the log's.
+    try testing.expect(std.meta.isError(router.route(&req, io, a, &b)));
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
+    try testing.expect(std.mem.endsWith(u8, out.written(), "\r\n\r\nThe server failed.\n"));
+}
+
+/// A POST whose handler fails: the answer it was given (route answers the
+/// failure, then hands the error on to the host, to log).
+fn postFailing(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
+    const raw = try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body });
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    try testing.expect(std.meta.isError(router.route(&req, io, a, &b)));
+    try out.writer.flush();
+    return out.written();
+}
+
+test "route: a pin, a bookmark or the login mirror that will not write is a 500, never a quiet success (156(g))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // The pins' folder is a file: the pin cannot be written.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
+    // The bookmarks' folder is a file: a send is refused before it stores.
+    const bookmarks = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions" });
+    try std.Io.Dir.cwd().deleteTree(io, bookmarks);
+    try harness.UidSite.disk.write(io, a, bookmarks, "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    // The player row is a file where its folder goes: the login's mirror fails.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
+}
+
+test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gone is 404; a full reading list is 413, never 'save failed' 500 (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const docs_store = @import("docs_store.zig");
+    const reading_list = @import("reading_list.zig");
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const slug = try docs_store.createUserDoc(io, a, ada, "Notes");
+    try docs_store.writeUserDoc(io, a, ada, slug, "what Ada wrote");
+    const post = struct {
+        fn f(al: std.mem.Allocator, i: Io, c: []const u8, path: []const u8, body: []const u8) ![]const u8 {
+            return harness.serve(al, i, try std.fmt.allocPrint(al, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ path, c, body.len, body }));
+        }
+    }.f;
+
+    const no_body = try post(a, io, cookies, "/chat/docs/save", try std.fmt.allocPrint(a, "slug={s}", .{slug}));
+    try testing.expectEqualStrings("400 Bad Request", harness.status(no_body));
+    try testing.expectEqualStrings("what Ada wrote", try docs_store.readUserDoc(io, a, ada, slug));
+
+    const gone = try post(a, io, cookies, "/chat/docs/save", "slug=never-made&body=x");
+    try testing.expectEqualStrings("404 Not Found", harness.status(gone));
+
+    // A reading list at its cap: the next save is the client's limit.
+    try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, "x" ** reading_list.max_reading_list_bytes, 0);
+    const full = try post(a, io, cookies, "/chat/docs/save_to_reading_list", "conv=1_2&sid=s&id=s_1&body=hello");
+    try testing.expectEqualStrings("413 Payload Too Large", harness.status(full));
+}
+
+test "a gallery that cannot read pages/home.txt is a 500 that names it, never a 200 (metal-vmm QUEUE 172, as the home page's)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    // The tests run in zig-server/, where there is no pages/home.txt.
+    if (Io.Dir.cwd().access(io, "pages/home.txt", .{})) |_| return error.SkipZigTest else |_| {}
+    const got = try harness.get(a, io, "/gallery");
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(got));
+    try testing.expect(std.mem.indexOf(u8, got, "could not be parsed") != null);
+}
+
+test "an upload that cannot be stored gives its bytes back to the allowance: the quota is never spent on a file that is not there (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const bo = try users.allocateUser(io, a, "Bo");
+    try users.setUserPassword(io, a, bo, "a password for Bo");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const key = try std.fmt.allocPrint(a, "{s}_{s}", .{ ada, bo });
+    const dm = try std.fmt.allocPrint(a, "/chat/c/{s}/scripts", .{key});
+    const hello = "markdown=hello";
+    _ = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, hello.len, hello }));
+    // Where the topic's uploads go is a file: the upload cannot be stored.
+    const updir = try std.fs.path.join(a, &.{ try chat_store.dmConvDir(a, key), "sessions", "scripts.uploads" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
+    const before = try users.userUploadBytes(io, a, ada);
+    const png = "\x89PNG\r\n\x1a\n" ++ "\x00" ** 64;
+    const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\n" ++ png ++ "\r\n--B--\r\n";
+    // The handler's error goes on to the host (site.zig answers it 500 and
+    // hands it on to be logged): here, to the test.
+    const got = harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/upload HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: multipart/form-data; boundary=B\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
+    try testing.expect(std.meta.isError(got));
+    try testing.expectEqual(before, try users.userUploadBytes(io, a, ada));
+}
+
+test "a release that can release nothing says so, never the page a release that deleted gets (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    // A member's id in the player cookie and no session (it lapsed): the
+    // account is not this cookie's to release.
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    try player.mirror(io, a, ada, "Ada");
+    const got = try harness.postAs(a, io, "/logout", try harness.signedUid(a, ada), "release=yes");
+    try testing.expectEqualStrings("403 Forbidden", harness.status(got));
+    try testing.expect(try users.principalExists(io, a, ada));
+    // The logout half still happens (its cold review): every identity
+    // cookie is cleared, as a logout without a release clears them.
+    try testing.expect(std.mem.indexOf(u8, got, uid_cookie.cookie_name ++ "=; Path=/; Max-Age=0") != null);
+}
