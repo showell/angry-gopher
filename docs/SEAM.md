@@ -5,7 +5,7 @@ machine with no operating system. The only thing that differs between the two
 is what sits under a small, named seam. This file says where that seam is,
 and what still reaches around it.
 
-The test that the seam holds is already a lint: `tools/lint_portable.py`
+The test that the seam holds is already a lint: `tools/lint_portable.shale`
 (run by `ops/check_zig`) walks `router.zig`'s imports — everything this site
 serves — and fails if any of it reaches for the host. So "the application
 reaches for nothing host-specific" is not an aspiration here; it compiles, or
