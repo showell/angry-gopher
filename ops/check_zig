@@ -28,7 +28,7 @@ python3 "$REPO_DIR/tools/embedded_assets.py" check
 # The `webbox` library is two modules, `webbox` and `webbox_linux`; its own
 # shape is zig-webbox's to check (src/library_test.zig, in its tests below).
 # Here: every angry-gopher file imports the library by name, never by path.
-# Both lints below read the source through tools/zig_source.py: its test first.
+# The Python lints below read the source through tools/zig_source.py: its test first.
 python3 "$REPO_DIR/tools/zig_source.py"
 echo "==> webbox library lint (its test, then the tree)"
 python3 "$REPO_DIR/tools/lint_webbox_library.py" --self-test
@@ -52,11 +52,14 @@ python3 "$REPO_DIR/tools/lint_head_access.py"
 # router.zig is what this site serves, and zig-metal-unikernel calls it from a machine
 # with no operating system — where a host dependency is not a slower path but a
 # compile error. The set it checks is DERIVED from router.zig's imports, so
-# there is no exemption list to rot. Its own tests run first: a lint that never
-# fires looks exactly like a clean tree.
-echo "==> portable lint (its tests, then the tree)"
-python3 "$REPO_DIR/tools/test_lint_portable.py"
-python3 "$REPO_DIR/tools/lint_portable.py"
+# there is no exemption list to rot. It reads Zig's own tokens and imports, so
+# a string or a comment is never code (metal-vmm QUEUE 238). Its plants run
+# first: a lint that never fires looks exactly like a clean tree. Run from the
+# folder holding the repos: it reads zig-webbox and shale beside this one.
+echo "==> portable lint (its plants, then the tree)"
+portable_budget=(--budget steps=500000000 --budget arena_bytes=1073741824)
+(cd "$REPO_DIR/.." && shale "${portable_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_portable.shale" repo="$(basename "$REPO_DIR")" self_test=1)
+(cd "$REPO_DIR/.." && shale "${portable_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_portable.shale" repo="$(basename "$REPO_DIR")")
 
 # Poka-yoke lint: a read of the store whose failure is caught into a value
 # ("", 0, null, [], a skip) makes a disk that failed look like a file that is

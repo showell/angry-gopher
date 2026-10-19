@@ -116,6 +116,85 @@ def embeds(text):
     return _EMBED.findall(_code_text(text))
 
 
+def test_lines(lines):
+    """The 1-based line numbers inside a `test {}` block.
+
+    Braces inside string and character literals, and in a multi-line
+    `\\\\` string, are not counted (zig_source.blank), so a test whose body
+    prints "{" or compares a character with '{' does not end early.
+    """
+    inside, depth, out = False, 0, set()
+    for n, line in enumerate(lines, 1):
+        c = code(line)
+        if not inside and depth == 0 and re.match(r"\s*test\b", c):
+            inside = True
+        if inside:
+            out.add(n)
+        for ch in blank(line):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth <= 0:
+                    depth = 0
+                    inside = False
+    return out
+
+
+TOP_DECL = re.compile(r"^(?:(pub)\s+)?(?:inline\s+)?(?:fn\s+([A-Za-z_]\w*)\s*\(|(?:const|var)\s+([A-Za-z_]\w*)\b)")
+
+
+def test_only_lines(lines, tests):
+    """The 1-based lines of private top-level declarations that only tests
+    use: a test fixture or helper written outside a `test {}` block.
+
+    A declaration is test-only when its name appears, outside its own body,
+    on at least one test line (or in another test-only declaration), and
+    nowhere else. Found by repeating until nothing more is found. One that
+    nothing names is checked like any other, and so is a `pub` one: another
+    file may name it.
+    """
+    decls = []  # (name, first, last)
+    depth, current = 0, None
+    for n, line in enumerate(lines, 1):
+        c = code(line)
+        if depth == 0 and n not in tests:
+            m = TOP_DECL.match(c)
+            if m and not m.group(1):
+                current = [m.group(2) or m.group(3), n, n]
+        for ch in blank(line):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth = max(0, depth - 1)
+        if current:
+            current[2] = n
+            if depth == 0 and (c.rstrip().endswith(";") or c.rstrip().endswith("}")):
+                decls.append(tuple(current))
+                current = None
+    only = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, first, last in decls:
+            if (first, last) in only:
+                continue
+            word = re.compile(r"\b" + re.escape(name) + r"\b")
+            used_elsewhere, used_by_tests = False, False
+            for n, line in enumerate(lines, 1):
+                if first <= n <= last or not word.search(code(line)):
+                    continue
+                if n in tests or any(a <= n <= b for a, b in only):
+                    used_by_tests = True
+                else:
+                    used_elsewhere = True
+                    break
+            if used_by_tests and not used_elsewhere:
+                only.add((first, last))
+                changed = True
+    return {n for a, b in only for n in range(a, b + 1)}
+
+
 def _self_test():
     assert code('const u = "http://x"; // a comment\n') == 'const u = "http://x"; '
     assert code("const c = '/'; // x") == "const c = '/'; "
@@ -126,6 +205,16 @@ def _self_test():
     assert imports('// const a = @import("users.zig");\n') == []
     assert imports('const s = "@import(\\"x.zig\\")";\n') == []
     assert embeds('const j = @embedFile("chat.js");\n') == ["chat.js"]
+    def lines(text):
+        return text.splitlines(keepends=True)
+    block = lines('const ok = 1;\ntest "x" {\n    const s = "}";\n    if (c == \'{\') {}\n    if (true) {\n        for (xs) |x| { _ = x; }\n    }\n}\nconst b = 2;\n')
+    assert test_lines(block) == {2, 3, 4, 5, 6, 7, 8}
+    assert test_lines(lines('test "esc" {\n    const s = "a \\" } b";\n}\nconst c = 1;\n')) == {1, 2, 3}
+    assert test_lines(lines('fn testHelper() void {}\nconst x = base +\n    testValue;\n')) == set()
+    helpers = lines('fn lower() void {}\nconst Fixture = struct {\n    fn seed() void { lower(); }\n};\nfn shared() void {}\npub fn serve() void { shared(); }\npub fn open() void {}\nfn unused() void {}\ntest "x" {\n    Fixture.seed();\n    shared();\n    open();\n}\n')
+    tests = test_lines(helpers)
+    assert tests == {9, 10, 11, 12, 13}
+    assert test_only_lines(helpers, tests) == {1, 2, 3, 4}  # not shared (code uses it), open (pub), unused
     assert modules('const std = @import("std");\nconst w = @import(\n    "webbox",\n).http;\nconst u = @import("users.zig");\n') == ["std", "webbox"]
 
 

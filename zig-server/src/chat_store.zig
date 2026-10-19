@@ -327,7 +327,7 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
 
 /// A store over a throwaway directory, for the count tests below. The test
 /// makes the Io and hands it in: the host's thread pool may only be named inside
-/// a `test {}` block (tools/lint_portable.py).
+/// a `test {}` block (tools/lint_portable.shale).
 pub const CountFixture = struct {
     arena: std.heap.ArenaAllocator,
     tmp: testing.TmpDir,

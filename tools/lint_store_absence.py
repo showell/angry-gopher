@@ -60,7 +60,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lint_portable import test_lines, test_only_lines  # noqa: E402
+from zig_source import test_lines, test_only_lines  # noqa: E402
 import zig_source  # noqa: E402  the tree the lints judge: the application's and the library's
 
 STORE = "store.zig"

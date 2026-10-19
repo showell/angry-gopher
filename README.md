@@ -42,7 +42,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   everything written since would be lost.
 - **Keep `zig-server/src` portable to metal.** Server code reaches the host
   only through the seam in [`docs/SEAM.md`](docs/SEAM.md);
-  `tools/lint_portable.py` (run by `ops/check_zig`) fails a change that
+  `tools/lint_portable.shale` (run by `ops/check_zig`) fails a change that
   reaches around it. A change ships only after zig-metal-unikernel's gates pass on
   it.
 - **The two hosts are one machine, by contract** (zig-metal-unikernel `HOST.md`,
