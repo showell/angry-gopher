@@ -31,14 +31,8 @@ const std = @import("std");
 const safari = @import("safari");
 const raster = @import("raster.zig");
 
-const c = @cImport({
-    @cInclude("X11/Xlib.h");
-    @cInclude("X11/keysym.h");
-    @cInclude("X11/extensions/Xrender.h");
-    @cInclude("X11/Xatom.h");
-    @cInclude("unistd.h");
-    @cInclude("time.h");
-});
+// X11's headers, translated by build.zig from native/x11_c.h.
+const c = @import("c");
 
 const FRAME_NS: u64 = 16_666_000; // 60 fps budget
 const MAX_SCALE: f64 = 2.5; // don't blow the render past this — beyond it we centre + letterbox rather than soften

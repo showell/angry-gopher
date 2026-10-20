@@ -54,10 +54,12 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path("native/x11.zig"),
                 .target = target,
                 .optimize = optimize,
-                .link_libc = true, // @cImport(Xlib) needs libc
+                .link_libc = true, // Xlib needs libc
             }),
         });
         win.root_module.addImport("safari", safari_mod);
+        const x11_c = b.addTranslateC(.{ .root_source_file = b.path("native/x11_c.h"), .target = target, .optimize = optimize });
+        win.root_module.addImport("c", x11_c.createModule());
         win.root_module.linkSystemLibrary("X11", .{});
         win.root_module.linkSystemLibrary("Xrender", .{}); // the scaled fullscreen blit (needs libxrender-dev)
         b.installArtifact(win);
@@ -67,7 +69,7 @@ pub fn build(b: *std.Build) void {
     // CROSS-compiled to x86_64-windows — we build it from the Linux box, so it needs its own
     // safari module compiled for that target (the native-host safari_mod above won't do). No
     // SDK/libc: it links the bundled system import libs (user32/gdi32/kernel32) and declares
-    // the GUI surface inline. subsystem=.Windows suppresses the console window.
+    // the GUI surface inline. subsystem=.windows suppresses the console window.
     const want_win32 = b.option(bool, "win32", "cross-build the Windows .exe (x86_64-windows)") orelse false;
     if (want_win32) {
         const win_target = b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu });
@@ -84,7 +86,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
-        w32.subsystem = .Windows;
+        w32.subsystem = .windows;
         w32.root_module.addImport("safari", win_safari);
         w32.root_module.linkSystemLibrary("user32", .{});
         w32.root_module.linkSystemLibrary("gdi32", .{});
