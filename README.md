@@ -114,7 +114,7 @@ packages are pinned by each directory's committed `package-lock.json`:
 
 | Tool | Version | Builds | Install |
 |---|---|---|---|
-| **Zig** | 0.16.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
+| **Zig** | 0.17.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` |
 | **TypeScript** | 6.0.3 | the Delivery display client + the Lyn Rummy DSL/geometry layer and test harnesses (both solvers are zig; each `.ts` solver stays as the port reference) | `npm install` in `delivery/`, `games/lynrummy/ts/` and `games/driving/` |
 | **Node** | 22.18 or later | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
@@ -158,7 +158,7 @@ Each of these is otherwise learned from a failing build.
 
 1. **Node 22.18 or later**, for the node-side TS above.
 2. **`npm install` in all four package directories.**
-3. **Zig 0.16.0**, on `PATH`. Every `ops/build_*` script and the server
+3. **Zig 0.17.0**, on `PATH`. Every `ops/build_*` script and the server
    itself go through it.
 4. **`libx11-dev` and `libxrender-dev`**, and only for
    `ops/build_safari_download` (which `ops/build_downloads` runs).

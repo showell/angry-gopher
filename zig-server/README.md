@@ -7,7 +7,7 @@ source of truth for what the server does; this file points.
 
 ## Toolchain
 
-zig **0.16.0** (`zig version`).
+zig **0.17.0** (`zig version`).
 
 ## Server (`src/server.zig`)
 

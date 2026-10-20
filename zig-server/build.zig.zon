@@ -4,7 +4,7 @@
     .name = .angry_gopher,
     .version = "0.1.0",
     .fingerprint = 0xc485d60137dc1e9a,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .paths = .{ "build.zig", "build.zig.zon", "src" },
     .dependencies = .{
         // The web-server-in-a-box library: zig-webbox, a sibling checkout
