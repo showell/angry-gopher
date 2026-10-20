@@ -75,7 +75,7 @@ pub fn build(b: *std.Build) void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Build and run the zig server");
     run_step.dependOn(&run_cmd.step);
@@ -115,7 +115,7 @@ pub fn build(b: *std.Build) void {
     // is, and run by name: `zig build search-bench`, and so on.
     const Tool = struct { step: []const u8, path: []const u8, optimize: std.builtin.OptimizeMode, help: []const u8 };
     for ([_]Tool{
-        .{ .step = "search-bench", .path = "src/search_bench.zig", .optimize = .ReleaseFast, .help = "Measure what search's index costs to build (src/search_bench.zig)" },
+        .{ .step = "search-bench", .path = "src/search_bench.zig", .optimize = .fast, .help = "Measure what search's index costs to build (src/search_bench.zig)" },
         .{ .step = "markdown-bench", .path = "src/markdown_bench.zig", .optimize = optimize, .help = "Render a corpus and report the slowest messages (src/markdown_bench.zig)" },
         .{ .step = "markdown-probe", .path = "src/markdown_hostile_probe.zig", .optimize = optimize, .help = "Check the renderer stays linear on hostile shapes (src/markdown_hostile_probe.zig)" },
         .{ .step = "markdown-regression", .path = "src/markdown_regression_test.zig", .optimize = optimize, .help = "Render the corpora and compare with the gold (ops/check_markdown; -- --rebaseline rewrites it)" },
@@ -125,7 +125,7 @@ pub fn build(b: *std.Build) void {
         tool_mod.addImport("host_io", host_io);
         const tool_exe = b.addExecutable(.{ .name = tool.step, .root_module = tool_mod });
         const tool_run = b.addRunArtifact(tool_exe);
-        if (b.args) |args| tool_run.addArgs(args);
+        tool_run.addPassthruArgs();
         b.step(tool.step, tool.help).dependOn(&tool_run.step);
     }
 
@@ -148,8 +148,8 @@ pub fn build(b: *std.Build) void {
     const router_opts = b.addOptions();
     router_opts.addOption([]const u8, "commit", "dev");
     router_opts.addOption(bool, "fake_leak", false);
-    router_opts.addOption([]const u8, "webbox_src", webbox_dep.builder.pathFromRoot("src"));
-    router_opts.addOption([]const u8, "shale_src", shale_dep.builder.pathFromRoot("src"));
+    router_opts.addOption([]const u8, "webbox_src", pathFromRoot(webbox_dep.builder, "src"));
+    router_opts.addOption([]const u8, "shale_src", pathFromRoot(shale_dep.builder, "src"));
     router_tests.root_module.addImport("build_options", router_opts.createModule());
     // roots.zig's test reads what the library's store.setBases assigns.
     const webbox_store_source = webbox_dep.path("src/store.zig");
@@ -177,4 +177,16 @@ pub fn build(b: *std.Build) void {
         unit.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }
+}
+
+/// `builder`'s build root as an absolute path: 0.17's `b.root` may hold a
+/// relative one, and these paths are handed to other processes and builds.
+fn rootOf(builder: *std.Build) []const u8 {
+    return builder.root.root_dir.handle.realPathFileAlloc(builder.graph.io, builder.root.subPathOrDot(), builder.allocator) catch |e|
+        std.debug.panic("the build root {f}: {t}", .{ builder.root, e });
+}
+
+/// `sub` under this build's root, absolute (0.17 removed `b.pathFromRoot`).
+fn pathFromRoot(b: *std.Build, sub: []const u8) []const u8 {
+    return b.pathJoin(&.{ rootOf(b), sub });
 }

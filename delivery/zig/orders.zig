@@ -50,7 +50,7 @@ pub const ALL_HOUSES = blk: {
 pub const Demand = struct {
     nbhds: [geo.N_NBHD]u8 = undefined, // neighborhood ids, first-appearance order
     houses: [geo.N_NBHD][geo.MAX_HOUSES]u8 = undefined,
-    counts: [geo.N_NBHD]u8 = [_]u8{0} ** geo.N_NBHD,
+    counts: [geo.N_NBHD]u8 = @splat(0),
     len: u8 = 0,
 
     pub fn housesOf(self: *const Demand, slot: usize) []const u8 {
@@ -72,7 +72,7 @@ pub fn chooseOrders(seed: u32, count: u16) Demand {
     }
 
     var demand = Demand{};
-    var slot_of = [_]u8{0xff} ** geo.N_NBHD;
+    var slot_of: [geo.N_NBHD]u8 = @splat(0xff);
     for (0..n) |k| {
         const h = ALL_HOUSES[idx[k]];
         if (slot_of[h.nbhd] == 0xff) {

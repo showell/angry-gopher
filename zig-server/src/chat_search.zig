@@ -269,7 +269,7 @@ test "an excerpt is cut on a character's edge, never inside one, and says where 
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const e = "\u{00E9}" ** 60; // 120 bytes, two a character
+    const e = repeated("\u{00E9}", 60); // 120 bytes, two a character
     const ex = try excerptOf(a, e ++ " word " ++ e, "word");
     try testing.expectEqualStrings("word", ex.mark);
     try testing.expect(std.unicode.utf8ValidateSlice(ex.before) and std.unicode.utf8ValidateSlice(ex.after));
@@ -290,7 +290,7 @@ test "an excerpt of a word that begins with a stray continuation byte never star
     const ex = try excerptOf(a, "\x80\x80ab rest", "\x80\x80ab");
     try testing.expectEqualStrings("", ex.before);
     try testing.expectEqualStrings("\x80\x80ab", ex.mark);
-    const mid = try excerptOf(a, "x" ** 100 ++ " \x80\x80ab", "\x80\x80ab");
+    const mid = try excerptOf(a, &@as([100]u8, @splat('x')) ++ " \x80\x80ab", "\x80\x80ab");
     try testing.expectEqualStrings("\x80\x80ab", mid.mark);
 }
 
@@ -327,9 +327,9 @@ test "an excerpt: a match excerpt_pad bytes in keeps all before it, one byte fur
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const at = "b" ** (excerpt_pad - 1) ++ " ";
+    const at = &@as([excerpt_pad - 1]u8, @splat('b')) ++ " ";
     try testing.expectEqualStrings(at, (try excerptOf(a, at ++ "word", "word")).before);
-    const past = "b" ** excerpt_pad ++ " ";
+    const past = &@as([excerpt_pad]u8, @splat('b')) ++ " ";
     try testing.expectEqualStrings("\u{2026}" ++ past[1..], (try excerptOf(a, past ++ "word", "word")).before);
 }
 
@@ -337,8 +337,19 @@ test "an excerpt: excerpt_pad bytes after the match are kept whole, one byte mor
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const at = " " ++ "b" ** (excerpt_pad - 1);
+    const at = " " ++ &@as([excerpt_pad - 1]u8, @splat('b'));
     try testing.expectEqualStrings(at, (try excerptOf(a, "word" ++ at, "word")).after);
-    const past = " " ++ "b" ** excerpt_pad;
+    const past = " " ++ &@as([excerpt_pad]u8, @splat('b'));
     try testing.expectEqualStrings(past[0..excerpt_pad] ++ "\u{2026}", (try excerptOf(a, "word" ++ past, "word")).after);
+}
+
+/// `s` repeated `n` times, built at comptime (Zig 0.17 removed `s ** n`).
+fn repeated(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    const out = comptime blk: {
+        var a: [s.len * n]u8 = undefined;
+        @setEvalBranchQuota(1000 + n);
+        for (0..n) |i| @memcpy(a[i * s.len ..][0..s.len], s);
+        break :blk a;
+    };
+    return &out;
 }

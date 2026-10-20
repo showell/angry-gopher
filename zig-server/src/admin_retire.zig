@@ -140,8 +140,8 @@ fn result(req: *Request, alloc: Alloc, in: Input, pl: *retire.Plan) !void {
 
     // Counts by kind, then the names under each. Names only, never a body.
     try b.appendSlice(alloc, "<table><tr><th>What</th><th class=\"n\">Count</th></tr>");
-    inline for (std.meta.fields(retire.Kind)) |f| {
-        const kind: retire.Kind = @enumFromInt(f.value);
+    inline for (@typeInfo(retire.Kind).@"enum".field_values) |value| {
+        const kind: retire.Kind = @fromBackingInt(@intCast(value));
         const n = pl.countOf(kind);
         if (n != 0) try b.print(alloc, "<tr><td>{s}</td><td class=\"n\">{d}</td></tr>", .{ kind.label(), n });
     }

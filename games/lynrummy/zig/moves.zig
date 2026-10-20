@@ -643,7 +643,7 @@ fn agreement(d: *const Distiller) u32 {
             }
             continue;
         }
-        for (s[0 .. s.len -| 1], s[1..]) |a, b| {
+        for (s[0..s.len -| 1], s[1..]) |a, b| {
             if (d.c2[a] == b) score += 1;
         }
     }

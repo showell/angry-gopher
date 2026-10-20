@@ -71,7 +71,7 @@ fn shuffle(cards: []card.Card, state: *u32) void {
 /// deal's identity.
 fn remainingCards() [81]card.Card {
     const ts_to_zig_suit = [4]u2{ 2, 1, 3, 0 }; // C,D,S,H -> zig H,D,C,S codes
-    var on_board = [_]bool{false} ** graph.N;
+    var on_board: [graph.N]bool = @splat(false);
     const arr = arrangement.parse(OPENING_BOARD) catch unreachable;
     for (arr.cards[0..arr.nCards()]) |c|
         on_board[@as(usize, c.suit) * 13 + c.rank] = true;
@@ -364,7 +364,7 @@ fn appendSingle(a: *arrangement.Arrangement, c: card.Card) void {
 /// (suit, rank) multiset level to match.
 fn coverToArrangement(cards: []const card.Card, next: *const [graph.SLOTS]u8) arrangement.Arrangement {
     const counts = card.buildCounts(cards) catch unreachable;
-    var present = [_]bool{false} ** graph.SLOTS;
+    var present: [graph.SLOTS]bool = @splat(false);
     for (0..4) |s| {
         for (0..13) |r| {
             const base: u8 = @intCast(s * 13 + r);
@@ -372,7 +372,7 @@ fn coverToArrangement(cards: []const card.Card, next: *const [graph.SLOTS]u8) ar
             if (counts[s][r] == 2) present[base + 52] = true;
         }
     }
-    var incoming = [_]bool{false} ** graph.SLOTS;
+    var incoming: [graph.SLOTS]bool = @splat(false);
     for (0..graph.SLOTS) |i| {
         if (next[i] != graph.NONE) incoming[next[i]] = true;
     }
@@ -493,9 +493,9 @@ pub fn main() !void {
         p(
             "  probes={d} (solved={d} unknown={d}, first_turn={d}) steps={d} (solved={d} futile={d} unknown={d}) max_steps={d}@turn{d}\n",
             .{
-                res.stats.probe_calls,  res.stats.probes_solved, res.stats.probe_unknowns,
-                res.stats.first_unknown_turn, res.stats.steps,   res.stats.steps_solved,
-                res.stats.steps_futile, res.stats.steps_unknown, res.stats.max_steps,
+                res.stats.probe_calls,        res.stats.probes_solved, res.stats.probe_unknowns,
+                res.stats.first_unknown_turn, res.stats.steps,         res.stats.steps_solved,
+                res.stats.steps_futile,       res.stats.steps_unknown, res.stats.max_steps,
                 res.stats.max_steps_turn,
             },
         );

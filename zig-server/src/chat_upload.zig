@@ -577,7 +577,7 @@ test "a stream whose file ends before its length is cut, never ended as whole: n
     defer threaded.deinit();
     const io = threaded.io();
     const path = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "clip.webm" });
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "x" ** 1000 });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = &@as([1000]u8, @splat('x')) });
 
     var reader: std.Io.Reader = .fixed("GET /u/clip.webm HTTP/1.1\r\nHost: x\r\n\r\n");
     var out: std.Io.Writer.Allocating = .init(a);

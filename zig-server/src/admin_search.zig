@@ -93,7 +93,7 @@ pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
             };
             for (msgs) |m| {
                 r.messages += 1;
-                const at = std.ascii.indexOfIgnoreCase(m.markdown, key) orelse continue;
+                const at = std.ascii.findIgnoreCase(m.markdown, key) orelse continue;
                 r.matched += 1;
                 if (hits.items.len == max_listed) continue;
                 try hits.append(alloc, .{

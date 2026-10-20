@@ -33,7 +33,7 @@ fn buildGraph() Graph {
         .{ 1, 2 },   .{ 2, 1 },   .{ 2, -1 }, .{ 1, -2 },
         .{ -1, -2 }, .{ -2, -1 }, .{ -2, 1 }, .{ -1, 2 },
     };
-    var g: Graph = .{ .nbrs = undefined, .count = [_]u8{0} ** 64 };
+    var g: Graph = .{ .nbrs = undefined, .count = @splat(0) };
     for (0..64) |sq| {
         const r: i8 = @intCast(sq / 8);
         const c: i8 = @intCast(sq % 8);
@@ -124,14 +124,14 @@ pub export fn init(start_sq: u32) void {
 // tour, extending forward from the current head, can never enter it — no
 // path of empty squares connects the head to it. Stronger and colder than a
 // dead-end mark; where both hold the host paints this one.
-var impossible: [64]u8 = [_]u8{0} ** 64;
+var impossible: [64]u8 = @splat(0);
 
 /// computeImpossible floods (BFS) from the head knight through empty squares;
 /// empty squares the flood never reaches are unreachable. At a literal dead
 /// end (head has no empty neighbor) every empty square is, announcing the
 /// imminent backtrack. Called by the substrate's computeOverlays.
 pub fn computeImpossible() void {
-    impossible = [_]u8{0} ** 64;
+    impossible = @splat(0);
     if (tape.on_board == 0 or tape.on_board == 64) return;
     var head: u8 = 0;
     for (tape.board, 0..) |n, sq| {

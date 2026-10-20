@@ -200,9 +200,9 @@ pub fn main(init: std.process.Init) !void {
         // GETs must be 200; POSTs succeed with any non-error status (a save 204,
         // a create 303). A 4xx/5xx — or a GET that isn't 200 (e.g. a silent
         // 303-to-login) — means we're not exercising what we think.
-        const sane = if (s.method == .POST) @intFromEnum(st) < 400 else st == .ok;
+        const sane = if (s.method == .POST) @backingInt(st) < 400 else st == .ok;
         if (!sane) {
-            try out.print("ERROR  {s}: unexpected status {d}\n", .{ s.label, @intFromEnum(st) });
+            try out.print("ERROR  {s}: unexpected status {d}\n", .{ s.label, @backingInt(st) });
             try out.flush();
             std.process.exit(2);
         }

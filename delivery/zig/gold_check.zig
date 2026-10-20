@@ -102,15 +102,15 @@ pub fn main() !void {
 
     const raw = std.Io.Dir.cwd().readFileAlloc(io, "delivery/solver_gold.json", alloc, .unlimited) catch
         std.Io.Dir.cwd().readFileAlloc(io, "../solver_gold.json", alloc, .unlimited) catch {
-            std.debug.print("cannot read delivery/solver_gold.json (run from the repo root)\n", .{});
-            std.process.exit(2);
-        };
+        std.debug.print("cannot read delivery/solver_gold.json (run from the repo root)\n", .{});
+        std.process.exit(2);
+    };
 
     const raw_frames = std.Io.Dir.cwd().readFileAlloc(io, "delivery/solver_frames_gold.json", alloc, .unlimited) catch
         std.Io.Dir.cwd().readFileAlloc(io, "../solver_frames_gold.json", alloc, .unlimited) catch {
-            std.debug.print("cannot read delivery/solver_frames_gold.json (run from the repo root)\n", .{});
-            std.process.exit(2);
-        };
+        std.debug.print("cannot read delivery/solver_frames_gold.json (run from the repo root)\n", .{});
+        std.process.exit(2);
+    };
 
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
@@ -154,7 +154,7 @@ pub fn main() !void {
         const gm = o.get("minutes").?.integer;
         if (ga != zedges[i].a or gb != zedges[i].b or gm != zedges[i].minutes) {
             fail("edge[{d}] gold {s}-{s} {d}min vs zig {s}-{s} {d}min", .{
-                i,                        o.get("a").?.string,      o.get("b").?.string, gm,
+                i,                       o.get("a").?.string,     o.get("b").?.string, gm,
                 geo.nameOf(zedges[i].a), geo.nameOf(zedges[i].b), zedges[i].minutes,
             });
         }

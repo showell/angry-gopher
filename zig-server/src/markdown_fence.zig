@@ -86,13 +86,13 @@ test "parseOpen reads the full marker run, not just three" {
 
 test "parseOpen caps the nesting depth" {
     // A level-8 opener (max_run chars) is still a fence...
-    const ok = "~" ** max_run;
+    const ok = &@as([max_run]u8, @splat('~'));
     try testing.expect(parseOpen(ok) != null);
     try testing.expectEqual(@as(usize, max_run), parseOpen(ok).?.count);
     // ...but one char deeper is treated as ordinary text, not a fence.
-    const over = "~" ** (max_run + 1);
+    const over = &@as([max_run + 1]u8, @splat('~'));
     try testing.expect(parseOpen(over) == null);
-    try testing.expect(parseOpen("`" ** (max_run + 5)) == null);
+    try testing.expect(parseOpen(&@as([max_run + 5]u8, @splat('`'))) == null);
 }
 
 test "isClose is length-aware: a shorter run can't close a longer fence" {

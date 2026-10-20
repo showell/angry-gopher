@@ -12,7 +12,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.resolveTargetQuery(.{}); // native host
-    const optimize: std.builtin.OptimizeMode = .ReleaseFast;
+    const optimize: std.builtin.OptimizeMode = .fast;
 
     const safari_mod = b.createModule(.{
         .root_source_file = b.path("wasm/safari.zig"),

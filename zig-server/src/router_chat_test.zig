@@ -256,7 +256,7 @@ test "a stream is a GET's: a POST to one is 405, its body never read nor held (m
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
-    const got = try harness.postAs(a, io, "/chat/notifications", cookies, "x" ** 100);
+    const got = try harness.postAs(a, io, "/chat/notifications", cookies, &@as([100]u8, @splat('x')));
     try testing.expectEqualStrings("405 Method Not Allowed", harness.status(got));
 }
 

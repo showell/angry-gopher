@@ -142,8 +142,8 @@ fn smallComponent(board: Board) ?u64 {
             const r = graph.rankOf(cur);
             const su = graph.suitOf(cur);
             const nb = [9]u8{
-                graph.succ[cur].pure, graph.succ[cur].rb[0], graph.succ[cur].rb[1],
-                graph.pred[cur].pure, graph.pred[cur].rb[0], graph.pred[cur].rb[1],
+                graph.succ[cur].pure,    graph.succ[cur].rb[0],   graph.succ[cur].rb[1],
+                graph.pred[cur].pure,    graph.pred[cur].rb[0],   graph.pred[cur].rb[1],
                 ((su + 1) % 4) * 13 + r, ((su + 2) % 4) * 13 + r, ((su + 3) % 4) * 13 + r,
             };
             for (nb) |x| {
@@ -1069,7 +1069,7 @@ const Sweeper = struct {
         var chains: [MAX_OPEN]u16 = @splat(0);
         for (self.open[0..self.open_n], 0..) |c, i| {
             chains[i] = (@as(u16, c.suit) << 9) |
-                (@as(u16, @intFromEnum(c.flavor)) << 7) |
+                (@as(u16, @backingInt(c.flavor)) << 7) |
                 (@as(u16, c.len) << 4) |
                 @as(u16, @intCast(c.m_idx + 1));
         }
@@ -1125,7 +1125,7 @@ const edgeFlavor = graph.edgeFlavor;
 /// chain length ≥ 3, no set repeating a suit (the two-deck load-bearing
 /// rule), every board card in exactly one chain.
 pub fn verify(board: Board, sol: *const Solution) bool {
-    var indeg = [_]u8{0} ** graph.SLOTS;
+    var indeg: [graph.SLOTS]u8 = @splat(0);
     for (0..graph.SLOTS) |i| {
         const c: u8 = @intCast(i);
         const n = sol.next[i];
@@ -1175,7 +1175,7 @@ pub fn verify(board: Board, sol: *const Solution) bool {
 /// second-deck copies carry their ' mark:
 /// "3H>4S>5H | 9C>TC'>JC | KH=KC=KS".
 pub fn format(board: Board, sol: *const Solution, buf: []u8) []const u8 {
-    var indeg = [_]u8{0} ** graph.SLOTS;
+    var indeg: [graph.SLOTS]u8 = @splat(0);
     for (0..graph.SLOTS) |i| {
         if (sol.next[i] != graph.NONE) indeg[sol.next[i]] = 1;
     }
@@ -1321,7 +1321,7 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     try std.testing.expectEqual(@as(u16, 37), rep.kept_edges);
     try std.testing.expectEqual(@as(u64, 0), steps_used);
     var fates = [3]u8{ 0, 0, 0 };
-    for (0..arr.n_stacks) |i| fates[@intFromEnum(rep.fate[i])] += 1;
+    for (0..arr.n_stacks) |i| fates[@backingInt(rep.fate[i])] += 1;
     try std.testing.expectEqual([3]u8{ 12, 3, 2 }, fates);
     // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
     // confirmed — survives intact, as it did under min-break.

@@ -131,7 +131,7 @@ pub fn buildSubstrate() Substrate {
     // adj in edge order, both directions — the TS pushes a->b then b->a per edge.
     const Adj = struct { to: u8, w: i64 };
     var adj: [N][16]Adj = undefined;
-    var adj_len = [_]usize{0} ** N;
+    var adj_len: [N]usize = @splat(0);
     for (es) |e| {
         adj[e.a][adj_len[e.a]] = .{ .to = e.b, .w = e.minutes };
         adj_len[e.a] += 1;
@@ -146,7 +146,7 @@ pub fn buildSubstrate() Substrate {
         @memset(dist, INF);
         @memset(back, -1);
         dist[s] = 0;
-        var done = [_]bool{false} ** N;
+        var done: [N]bool = @splat(false);
         for (0..N) |_| {
             var u: i16 = -1;
             var best: i64 = INF;

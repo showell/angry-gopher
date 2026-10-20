@@ -304,7 +304,7 @@ test "isSafeID accepts account and local spellings, rejects traversal" {
     try testing.expect(!isSafeID(".."));
     try testing.expect(!isSafeID("a/b"));
     try testing.expect(!isSafeID("p-1"));
-    try testing.expect(!isSafeID("a" ** 25));
+    try testing.expect(!isSafeID(&@as([25]u8, @splat('a'))));
 }
 
 test "sanitizeNext keeps internal paths and refuses an open redirect" {

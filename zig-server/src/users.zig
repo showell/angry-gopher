@@ -451,7 +451,7 @@ test "fs: a password that cannot be read, or a stored hash that is no hash, is a
     try testing.expect(std.meta.isError(checkUserPassword(io, a, "100", "hunter2")));
     // A hash torn or overwritten: no bcrypt string.
     try setUserName(io, a, "101", "Other");
-    try store.write(io, a, try std.fs.path.join(a, &.{ auth_root, "101", "password" }), "$2b$12$" ++ "!" ** 53, .{ .private = true });
+    try store.write(io, a, try std.fs.path.join(a, &.{ auth_root, "101", "password" }), "$2b$12$" ++ &@as([53]u8, @splat('!')), .{ .private = true });
     try testing.expect(std.meta.isError(checkUserPassword(io, a, "101", "hunter2")));
 }
 

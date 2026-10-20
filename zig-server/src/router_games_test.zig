@@ -76,7 +76,7 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ games, "filler" }), filler, .{});
 
     // 99 bytes and its newline: exactly to the bound. Then one byte more is refused.
-    const line = "y" ** 99;
+    const line = &@as([99]u8, @splat('y'));
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/game/sessions/1/actions", me, line)));
     const over = try harness.postAs(a, io, "/game/sessions/1/actions", me, "z");
     try testing.expectEqualStrings("507 Insufficient Storage", harness.status(over));

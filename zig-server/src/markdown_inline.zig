@@ -279,7 +279,7 @@ fn flanking(text: []const u8, s: usize, e: usize) Flank {
 /// open/close marker nodes around the matched spans.
 fn processEmphasis(inl: *Inline, a: std.mem.Allocator, budget: *Budget) void {
     // openers_bottom[len % 3][char], char: '*' = 0, '_' = 1. null = stack bottom.
-    var openers_bottom = [_][2]?u32{.{ null, null }} ** 3;
+    var openers_bottom: [3][2]?u32 = @splat(.{ null, null });
 
     var closer = inl.dhead;
     while (closer) |ci| {

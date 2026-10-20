@@ -207,8 +207,8 @@ test "a password past 72 bytes is pre-hashed, not cut" {
     // bcrypt itself reads only 72 bytes. With silently_truncate_password=false,
     // std pre-hashes a longer password instead — so two passwords that differ
     // only AFTER byte 72 must not be interchangeable.
-    const long_a = "a" ** 72 ++ "tail-one";
-    const long_b = "a" ** 72 ++ "tail-two";
+    const long_a = &@as([72]u8, @splat('a')) ++ "tail-one";
+    const long_b = &@as([72]u8, @splat('a')) ++ "tail-two";
     var out: [crypt_len]u8 = undefined;
     const h = try hashPasswordWithSalt(long_a, &out, try saltOf(legacy_hash));
     try std.testing.expect(try verifyPassword(h, long_a));
@@ -221,5 +221,5 @@ test "verifyPassword refuses what is not a hash: never admitted, and an error, n
     try std.testing.expectError(unreadable, verifyPassword("not a hash at all", "not a hash at all"));
     try std.testing.expectError(unreadable, verifyPassword(legacy_hash[0..59], legacy_password)); // truncated
     // The right length and prefix, but garbage inside.
-    try std.testing.expectError(unreadable, verifyPassword("$2a$10$" ++ "!" ** 53, legacy_password));
+    try std.testing.expectError(unreadable, verifyPassword("$2a$10$" ++ &@as([53]u8, @splat('!')), legacy_password));
 }

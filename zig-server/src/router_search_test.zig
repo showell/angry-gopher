@@ -318,7 +318,7 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     // The word inside curly quotes and a comma, after a word that holds it
     // ("layouts"): the mark is the word the tokenizer reads, which the
     // client's regex once had to guess.
-    const long = "x" ** 200;
+    const long = &@as([200]u8, @splat('x'));
     try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"see layouts, then \u{201C}LAYOUT\u{201D}, here " ++ long});
     const found = try harness.UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
     try testing.expect(std.mem.indexOf(u8, found, "\"before\":\"see layouts, then \u{201C}\",\"mark\":\"LAYOUT\",\"after\":\"\u{201D}, here ") != null);
@@ -352,7 +352,7 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     _ = try harness.memberSession(a, io, "2", "Debbie");
     // Thirty messages of 100 KB, each holding the word: 3 MB whole, past the
     // 2 MiB budget; their excerpts are a few KB.
-    const big = "zeppelin " ++ "x" ** (100 << 10);
+    const big = "zeppelin " ++ &@as([100 << 10]u8, @splat('x'));
     var bodies: [30][]const u8 = undefined;
     for (&bodies) |*b| b.* = big;
     try harness.writeTranscript(a, io, "1_2", "Docs", &bodies);

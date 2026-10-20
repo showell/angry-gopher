@@ -86,7 +86,7 @@ test "validateUserName collapses whitespace, requires alnum, rejects punctuation
         "x;y", //                semicolon
         "path/name", //          slash
         "'' ''", //              punctuation but no letter/digit
-        "a" ** 41, //            41 bytes, over the 40 cap
+        &@as([41]u8, @splat('a')), //            41 bytes, over the 40 cap
     };
     for (cases) |raw| {
         const r = try validateUserName(a, raw);

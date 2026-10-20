@@ -81,20 +81,20 @@ pub const TRUCK_CAPS = [TRUCKS]u8{ 14, 14, 14, 14, 14, 12, 12, 12 };
 pub const MAX_CAP: u8 = 14;
 
 pub const TRUCK_ANCHORS = [TRUCKS]u8{
-    id("West Seattle"), id("Magnolia"),  id("Ballard"),  id("Green Lake"),
+    id("West Seattle"), id("Magnolia"), id("Ballard"),  id("Green Lake"),
     id("Capitol Hill"), id("Kirkland"), id("Issaquah"), id("Mercer S"),
 };
 
 pub const DEFER_LAST = [_]u8{ id("Bellevue"), id("Medina") };
 
 pub const I5_EXITS = blk: {
-    var set = [_]bool{false} ** N_NODES;
+    var set: [N_NODES]bool = @splat(false);
     for ([_]u8{ id("Exit 1"), id("Exit 2"), id("Exit 3"), id("Exit 4"), id("Exit 5"), id("Exit 6"), id("5/520") }) |x| set[x] = true;
     break :blk set;
 };
 
 pub const ARC_EXEMPT = blk: {
-    var set = [_]bool{false} ** N_NODES;
+    var set: [N_NODES]bool = @splat(false);
     for ([_]u8{ id("West Seattle"), id("Magnolia"), id("Kirkland"), id("Issaquah"), id("Mercer S"), id("U-District") }) |x| set[x] = true;
     break :blk set;
 };

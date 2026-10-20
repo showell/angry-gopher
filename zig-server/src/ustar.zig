@@ -90,15 +90,15 @@ const testing = std.testing;
 test "a long path goes in ustar's prefix, split at a slash, and one too long does not fit" {
     const short = split("data/chat/1_2/sessions/topic.md").?;
     try testing.expectEqualStrings("", short.prefix);
-    const long = split("data/chat/1_2/sessions/" ++ "t" ** 90 ++ ".md").?;
+    const long = split("data/chat/1_2/sessions/" ++ &@as([90]u8, @splat('t')) ++ ".md").?;
     try testing.expectEqualStrings("data/chat/1_2/sessions", long.prefix);
-    try testing.expect(split("data/" ++ "x" ** 101) == null);
-    try testing.expect(split("p" ** 160 ++ "/name") == null);
+    try testing.expect(split("data/" ++ &@as([101]u8, @splat('x'))) == null);
+    try testing.expect(split(&@as([160]u8, @splat('p')) ++ "/name") == null);
 }
 
 test "a topic's download, at the longest topic name, reads back whole through zig's tar reader" {
     // chat_store.validSessionID allows 80 characters.
-    const sid = "a" ** 80;
+    const sid = &@as([80]u8, @splat('a'));
     const paths = [_][]const u8{
         sid ++ "/" ++ sid ++ ".md",
         sid ++ "/" ++ sid ++ ".reactions.jsonl",
@@ -126,40 +126,40 @@ test "a topic's download, at the longest topic name, reads back whole through zi
 }
 
 test "a path no ustar header can hold is refused, not cut" {
-    try testing.expectError(error.NameTooLong, header("x" ** 120, 0, 0, '0'));
+    try testing.expectError(error.NameTooLong, header(&@as([120]u8, @splat('x')), 0, 0, '0'));
 }
 
 const max_name = 100;
 const max_prefix = 155;
 
 test "ustar.split: a path of 100 bytes is all name, 101 needs a prefix" {
-    const at = split("n" ** max_name).?;
+    const at = split(&@as([max_name]u8, @splat('n'))).?;
     try testing.expectEqualStrings("", at.prefix);
     try testing.expectEqual(max_name, at.name.len);
-    try testing.expect(split("n" ** (max_name + 1)) == null); // no slash to split at
-    const past = split("d/" ++ "n" ** (max_name - 1)).?; // 101 bytes, with a slash
+    try testing.expect(split(&@as([max_name + 1]u8, @splat('n'))) == null); // no slash to split at
+    const past = split("d/" ++ &@as([max_name - 1]u8, @splat('n'))).?; // 101 bytes, with a slash
     try testing.expectEqualStrings("d", past.prefix);
     try testing.expectEqual(max_name - 1, past.name.len);
 }
 
 test "ustar.split: a name of 100 bytes after the slash fits, 101 does not" {
-    try testing.expectEqual(max_name, split("d/" ++ "n" ** max_name).?.name.len);
-    try testing.expect(split("d/" ++ "n" ** (max_name + 1)) == null);
+    try testing.expectEqual(max_name, split("d/" ++ &@as([max_name]u8, @splat('n'))).?.name.len);
+    try testing.expect(split("d/" ++ &@as([max_name + 1]u8, @splat('n'))) == null);
 }
 
 test "ustar.split: a slash at index 155 leaves a prefix of 155, at 156 one too long" {
-    const at = split("p" ** max_prefix ++ "/n").?;
+    const at = split(&@as([max_prefix]u8, @splat('p')) ++ "/n").?;
     try testing.expectEqual(max_prefix, at.prefix.len);
     try testing.expectEqualStrings("n", at.name);
-    try testing.expect(split("p" ** (max_prefix + 1) ++ "/n") == null);
+    try testing.expect(split(&@as([max_prefix + 1]u8, @splat('p')) ++ "/n") == null);
 }
 
 test "ustar.split: a path of 256 bytes fits, 257 does not, and the 256 reads back whole" {
-    const longest = "p" ** max_prefix ++ "/" ++ "n" ** max_name;
+    const longest = &@as([max_prefix]u8, @splat('p')) ++ "/" ++ &@as([max_name]u8, @splat('n'));
     try testing.expectEqual(256, longest.len);
     try testing.expect(fits(longest));
-    try testing.expect(!fits("p" ** max_prefix ++ "/" ++ "n" ** (max_name + 1)));
-    try testing.expect(!fits("p" ** (max_prefix + 1) ++ "/" ++ "n" ** max_name));
+    try testing.expect(!fits(&@as([max_prefix]u8, @splat('p')) ++ "/" ++ &@as([max_name + 1]u8, @splat('n'))));
+    try testing.expect(!fits(&@as([max_prefix + 1]u8, @splat('p')) ++ "/" ++ &@as([max_name]u8, @splat('n'))));
 
     var tar: [512 + 512 + 1024]u8 = @splat(0);
     tar[0..512].* = try header(longest, 2, 0, '0');
@@ -172,6 +172,6 @@ test "ustar.split: a path of 256 bytes fits, 257 does not, and the 256 reads bac
 }
 
 test "ustar.split: a slash at the end leaves no name and does not fit; one byte after it does" {
-    try testing.expect(split("p" ** (max_name + 1) ++ "/") == null);
-    try testing.expectEqualStrings("n", split("p" ** (max_name + 1) ++ "/n").?.name);
+    try testing.expect(split(&@as([max_name + 1]u8, @splat('p')) ++ "/") == null);
+    try testing.expectEqualStrings("n", split(&@as([max_name + 1]u8, @splat('p')) ++ "/n").?.name);
 }

@@ -339,7 +339,7 @@ fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, write
     var i: usize = 0;
     while (i < n) : (i += 1) {
         // A line long enough that two writes at one offset overlap.
-        const line = std.fmt.bufPrint(&buf, "{d}-{d}) {s}", .{ writer, i, "x" ** 1500 }) catch return;
+        const line = std.fmt.bufPrint(&buf, "{d}-{d}) {s}", .{ writer, i, &@as([1500]u8, @splat('x')) }) catch return;
         const dir = sessionDir(alloc, user_id, session_id) catch return;
         const path = join(alloc, &.{ dir, "actions.dsl" }) catch return;
         test_turn.lockUncancelable(io);
@@ -376,7 +376,7 @@ test "fs: appends to one session from many writers at once, each in the host's t
     var lines: usize = 0;
     var it = std.mem.splitScalar(u8, std.mem.trimEnd(u8, body, "\n"), '\n');
     while (it.next()) |line| {
-        try testing.expect(std.mem.endsWith(u8, line, "x" ** 1500)); // whole, not overwritten
+        try testing.expect(std.mem.endsWith(u8, line, &@as([1500]u8, @splat('x')))); // whole, not overwritten
         lines += 1;
     }
     try testing.expectEqual(@as(usize, writers * each), lines);

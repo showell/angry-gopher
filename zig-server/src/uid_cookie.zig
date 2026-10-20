@@ -319,10 +319,10 @@ test "ids the cookie may carry" {
     for ([_][]const u8{ "1", "12", "p1", "p123" }) |ok| try testing.expect(validId(ok));
     for ([_][]const u8{ "", "p", "P3", "p3x", "x", "1.2", "../1", "p-1", "0", "007", "p0", "p007", "+7" }) |bad| try testing.expect(!validId(bad));
     // Twenty digits at most, with or without the p: the edge, both sides.
-    try testing.expect(validId("9" ** 20));
-    try testing.expect(validId("p" ++ "9" ** 20));
-    try testing.expect(!validId("9" ** 21));
-    try testing.expect(!validId("p" ++ "9" ** 21));
+    try testing.expect(validId(&@as([20]u8, @splat('9'))));
+    try testing.expect(validId("p" ++ &@as([20]u8, @splat('9'))));
+    try testing.expect(!validId(&@as([21]u8, @splat('9'))));
+    try testing.expect(!validId("p" ++ &@as([21]u8, @splat('9'))));
 }
 
 test "a value signed rightly over an id the cookie may not carry names no one" {
@@ -332,7 +332,7 @@ test "a value signed rightly over an id the cookie may not carry names no one" {
     defer arena.deinit();
     const a = arena.allocator();
     const secret = "a secret of thirty-two bytes or more, for tests";
-    for ([_][]const u8{ "x", "p3x", "P3", "p", "9" ** 21 }) |bad| {
+    for ([_][]const u8{ "x", "p3x", "P3", "p", &@as([21]u8, @splat('9')) }) |bad| {
         const v = try sign(a, secret, bad, 1_790_000_000);
         try testing.expect(verify(secret, v, 1_790_000_000) == null);
     }

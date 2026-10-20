@@ -36,9 +36,9 @@ pub fn Substrate(comptime Toy: type) type {
         // ---------- the display (what the board shows) ----------
 
         pub var cur: u32 = 0; // events [0..cur) are applied to the board
-        pub var board: [64]i8 = [_]i8{-1} ** 64; // move number per square, -1 = empty
+        pub var board: [64]i8 = @splat(-1); // move number per square, -1 = empty
         pub var on_board: u32 = 0; // pieces currently shown (= next move number)
-        pub var tried: [64]u32 = [_]u32{0} ** 64; // events touching each square in [0..cur)
+        pub var tried: [64]u32 = @splat(0); // events touching each square in [0..cur)
 
         // ---------- machine-facing state (lives at the tape's end) ----------
 
@@ -72,8 +72,8 @@ pub fn Substrate(comptime Toy: type) type {
         pub fn reset() callconv(.c) void {
             tape_len = 0;
             cur = 0;
-            board = [_]i8{-1} ** 64;
-            tried = [_]u32{0} ** 64;
+            board = @splat(-1);
+            tried = @splat(0);
             on_board = 0;
             started = false;
             solved = false;
@@ -133,7 +133,7 @@ pub fn Substrate(comptime Toy: type) type {
         // were explored and found barren, and it was pulled off — and no
         // piece has come back since. Marked only at retraction (discovery),
         // never predictively; removal cascades accumulate marks.
-        pub var dead_end: [64]u8 = [_]u8{0} ** 64;
+        pub var dead_end: [64]u8 = @splat(0);
 
         /// computeOverlays refreshes both display overlays — the substrate's
         /// dead_end mask and the toy's "impossible right now" mask. Both are
@@ -184,10 +184,10 @@ pub fn Substrate(comptime Toy: type) type {
 /// one list of what the JS host may call.
 pub fn exportAbi(comptime S: type) void {
     inline for (.{
-        "reset",         "stepForward", "stepBack",  "boardPtr",
-        "computeOverlays", "deadEndPtr", "piecesOnBoard", "targetCount",
-        "cursor",        "tapeLen",     "bestDepth", "isStarted",
-        "isSolved",      "isExhausted",
+        "reset",           "stepForward", "stepBack",      "boardPtr",
+        "computeOverlays", "deadEndPtr",  "piecesOnBoard", "targetCount",
+        "cursor",          "tapeLen",     "bestDepth",     "isStarted",
+        "isSolved",        "isExhausted",
     }) |name| {
         @export(&@field(S, name), .{ .name = name });
     }

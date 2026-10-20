@@ -116,13 +116,13 @@ pub export fn init(sq: u32) void {
 // column, or diagonal with a queen on the display board, so no queen can live
 // there right now. (The n-queens constraint ignores blocking, so whole lines
 // are marked.) Same meaning as the knight's mask: provably unplaceable now.
-var impossible: [64]u8 = [_]u8{0} ** 64;
+var impossible: [64]u8 = @splat(0);
 
 /// computeImpossible recomputes the attacked mask from the DISPLAY board — a
 /// pure function of the shown position, exact under scrubbing. Called by the
 /// substrate's computeOverlays.
 pub fn computeImpossible() void {
-    impossible = [_]u8{0} ** 64;
+    impossible = @splat(0);
     for (tape.board, 0..) |n, q| {
         if (n < 0) continue;
         const qr: i32 = @intCast(q / 8);
@@ -149,7 +149,7 @@ const Adj = struct {
 
 fn buildAdj() Adj {
     @setEvalBranchQuota(500_000);
-    var a: Adj = .{ .at = undefined, .count = [_]u8{0} ** 64 };
+    var a: Adj = .{ .at = undefined, .count = @splat(0) };
     for (0..64) |sq| {
         const r: i32 = @intCast(sq / 8);
         const c: i32 = @intCast(sq % 8);

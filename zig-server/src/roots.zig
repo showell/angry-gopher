@@ -79,7 +79,7 @@ const all = .{
 const Values = blk: {
     var types: [all.len]type = undefined;
     for (all, 0..) |e, i| types[i] = @TypeOf(@field(e[1], e[2]));
-    break :blk std.meta.Tuple(&types);
+    break :blk @Tuple(&types);
 };
 
 /// Every root as it stood: `restore` puts each back, in one call.

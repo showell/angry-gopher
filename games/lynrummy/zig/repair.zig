@@ -337,7 +337,7 @@ fn appendSingleton(arr: *arrangement.Arrangement, c: card.Card) void {
 
 fn toNext(arr: *const arrangement.Arrangement) [graph.SLOTS]u8 {
     var next: [graph.SLOTS]u8 = @splat(graph.NONE);
-    var used_base = [_]bool{false} ** graph.N;
+    var used_base: [graph.N]bool = @splat(false);
     var slots: [card.MAX_CARDS]u8 = undefined;
     for (arr.cards[0..arr.nCards()], 0..) |c, i| {
         const base = @as(u8, c.suit) * 13 + c.rank;

@@ -143,7 +143,7 @@ test "solvable boards get verified all-pure-run partitions" {
 test "the full deck is solvable, once and twice over" {
     var counts: card.Counts = undefined;
     for ([_]u8{ 1, 2 }) |copies| {
-        counts = .{.{copies} ** 13} ** 4;
+        counts = @splat(@splat(copies));
         const sol = solve(&counts) orelse return error.TestUnexpectedResult;
         try std.testing.expect(verify(&counts, &sol));
     }

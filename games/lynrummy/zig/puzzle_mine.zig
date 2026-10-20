@@ -52,7 +52,7 @@ pub fn main() !void {
     // Cover dressing is copy-blind; a published board needs DISTINCT
     // physical copies (two bare 5♣ would confuse the UI and the
     // player). First occurrence wears no mark, the twin wears one.
-    var seen = [_]bool{false} ** 52;
+    var seen: [52]bool = @splat(false);
     for (arr.cards[0..arr.nCards()]) |*c| {
         const base = @as(usize, c.suit) * 13 + c.rank;
         c.deck = @intFromBool(seen[base]);

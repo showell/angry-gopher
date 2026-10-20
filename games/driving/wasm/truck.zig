@@ -234,9 +234,9 @@ pub fn drawBody(w: *const world.World, ch: *const render.Chain, pose: render.Pos
     // lower cab floor, up the step to the higher trailer floor.
     inline for (.{ xl, xr }) |x| {
         const side = [_]geom.Vec3{
-            p3(w, ch, pose, d, a0, x, TRAILER_BOTTOM),  p3(w, ch, pose, d, a0, x, HEIGHT),
-            p3(w, ch, pose, d, a_roof, x, HEIGHT),      p3(w, ch, pose, d, a2, x, HEIGHT / 2.0),
-            p3(w, ch, pose, d, a2, x, CAB_BOTTOM),      p3(w, ch, pose, d, a1, x, CAB_BOTTOM),
+            p3(w, ch, pose, d, a0, x, TRAILER_BOTTOM), p3(w, ch, pose, d, a0, x, HEIGHT),
+            p3(w, ch, pose, d, a_roof, x, HEIGHT),     p3(w, ch, pose, d, a2, x, HEIGHT / 2.0),
+            p3(w, ch, pose, d, a2, x, CAB_BOTTOM),     p3(w, ch, pose, d, a1, x, CAB_BOTTOM),
             p3(w, ch, pose, d, a1, x, TRAILER_BOTTOM),
         };
         addFace(&faces, &nf, SIDE, &side);
@@ -246,12 +246,12 @@ pub fn drawBody(w: *const world.World, ch: *const render.Chain, pose: render.Pos
         p3(w, ch, pose, d, a0, xr, HEIGHT),         p3(w, ch, pose, d, a0, xl, HEIGHT),
     });
     addFace(&faces, &nf, ROOF, &[_]geom.Vec3{ // flush roof
-        p3(w, ch, pose, d, a0, xl, HEIGHT),    p3(w, ch, pose, d, a0, xr, HEIGHT),
+        p3(w, ch, pose, d, a0, xl, HEIGHT),     p3(w, ch, pose, d, a0, xr, HEIGHT),
         p3(w, ch, pose, d, a_roof, xr, HEIGHT), p3(w, ch, pose, d, a_roof, xl, HEIGHT),
     });
     addFace(&faces, &nf, BODY, &[_]geom.Vec3{ // windshield
-        p3(w, ch, pose, d, a_roof, xl, HEIGHT),     p3(w, ch, pose, d, a_roof, xr, HEIGHT),
-        p3(w, ch, pose, d, a2, xr, HEIGHT / 2.0),   p3(w, ch, pose, d, a2, xl, HEIGHT / 2.0),
+        p3(w, ch, pose, d, a_roof, xl, HEIGHT),   p3(w, ch, pose, d, a_roof, xr, HEIGHT),
+        p3(w, ch, pose, d, a2, xr, HEIGHT / 2.0), p3(w, ch, pose, d, a2, xl, HEIGHT / 2.0),
     });
     addFace(&faces, &nf, BODY, &[_]geom.Vec3{ // cab nose
         p3(w, ch, pose, d, a2, xl, HEIGHT / 2.0), p3(w, ch, pose, d, a2, xr, HEIGHT / 2.0),

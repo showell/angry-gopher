@@ -14,8 +14,16 @@ pub const Grad = struct {
     kind: u8,
     s0: Stop,
     s1: Stop,
-    ax: f32, ay: f32, bx: f32, by: f32, // linear endpoints
-    cx: f32, cy: f32, ux: f32, uy: f32, vx: f32, vy: f32, // radial centre + axis vectors
+    ax: f32,
+    ay: f32,
+    bx: f32,
+    by: f32, // linear endpoints
+    cx: f32,
+    cy: f32,
+    ux: f32,
+    uy: f32,
+    vx: f32,
+    vy: f32, // radial centre + axis vectors
 };
 pub const Poly = struct { color: u32, grad: ?Grad = null, pts: []const Pt };
 

@@ -599,6 +599,6 @@ test "the session and uid cookies are __Host- ones: Secure, Path=/, no Domain, s
         try std.testing.expect(std.mem.startsWith(u8, c, "__Host-"));
         try std.testing.expect(std.mem.indexOf(u8, c, "; Path=/;") != null);
         try std.testing.expect(std.mem.indexOf(u8, c, "Secure") != null);
-        try std.testing.expect(std.ascii.indexOfIgnoreCase(c, "domain") == null);
+        try std.testing.expect(std.ascii.findIgnoreCase(c, "domain") == null);
     }
 }

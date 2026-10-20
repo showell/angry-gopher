@@ -405,7 +405,7 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     try testing.expectEqualStrings("404 Not Found", harness.status(gone));
 
     // A reading list at its cap: the next save is the client's limit.
-    try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, "x" ** reading_list.max_reading_list_bytes, 0);
+    try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, &@as([reading_list.max_reading_list_bytes]u8, @splat('x')), 0);
     const full = try post(a, io, cookies, "/chat/docs/save_to_reading_list", "conv=1_2&sid=s&id=s_1&body=hello");
     try testing.expectEqualStrings("413 Payload Too Large", harness.status(full));
 }
@@ -464,7 +464,7 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     const updir = try std.fs.path.join(a, &.{ try chat_store.dmConvDir(a, key), "sessions", "scripts.uploads" });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
     const before = try users.userUploadBytes(io, a, ada);
-    const png = "\x89PNG\r\n\x1a\n" ++ "\x00" ** 64;
+    const png = "\x89PNG\r\n\x1a\n" ++ repeated("\x00", 64);
     const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\n" ++ png ++ "\r\n--B--\r\n";
     // The handler's error goes on to the host (site.zig answers it 500 and
     // hands it on to be logged): here, to the test.
@@ -493,4 +493,15 @@ test "a release that can release nothing says so, never the page a release that 
     // The logout half still happens (its cold review): every identity
     // cookie is cleared, as a logout without a release clears them.
     try testing.expect(std.mem.indexOf(u8, got, uid_cookie.cookie_name ++ "=; Path=/; Max-Age=0") != null);
+}
+
+/// `s` repeated `n` times, built at comptime (Zig 0.17 removed `s ** n`).
+fn repeated(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    const out = comptime blk: {
+        var a: [s.len * n]u8 = undefined;
+        @setEvalBranchQuota(1000 + n);
+        for (0..n) |i| @memcpy(a[i * s.len ..][0..s.len], s);
+        break :blk a;
+    };
+    return &out;
 }

@@ -166,10 +166,10 @@ pub fn painOf(sub: *const Substrate, stops: []const Stop) i64 {
     var buf: [MAX_PATH_NODES]u8 = undefined;
     const nodes = pathNodes(sub, stops, &buf);
 
-    var counts = [_]i32{0} ** geo.N_NODES;
+    var counts: [geo.N_NODES]i32 = @splat(0);
     for (stops) |s| counts[s.nbhd] += s.nh;
 
-    var delivered = [_]bool{false} ** geo.N_NODES;
+    var delivered: [geo.N_NODES]bool = @splat(false);
     var pain: i64 = 0;
     var aboard: i64 = loadOf(stops);
     for (1..nodes.len) |i| {
@@ -203,13 +203,13 @@ pub fn breakdown(sub: *const Substrate, stops: []const Stop) Breakdown {
 
     // Houses per neighborhood, concatenated in stop order (TS housesByNbhd).
     var houses: [geo.N_NODES][geo.MAX_HOUSES]u8 = undefined;
-    var counts = [_]u8{0} ** geo.N_NODES;
+    var counts: [geo.N_NODES]u8 = @splat(0);
     for (stops) |s| {
         @memcpy(houses[s.nbhd][counts[s.nbhd] .. counts[s.nbhd] + s.nh], s.hs());
         counts[s.nbhd] += s.nh;
     }
 
-    var delivered = [_]bool{false} ** geo.N_NODES;
+    var delivered: [geo.N_NODES]bool = @splat(false);
     var travel: i64 = 0;
     var local: f64 = 0;
     for (1..nodes.len) |i| {
@@ -361,7 +361,7 @@ fn bestJoin(sub: *const Substrate, a: []const Stop, b: []const Stop) Route {
 }
 
 const ANCHOR_SLOT = blk: {
-    var slots = [_]u8{NO_PIN} ** geo.N_NODES;
+    var slots: [geo.N_NODES]u8 = @splat(NO_PIN);
     for (geo.TRUCK_ANCHORS, 0..) |a, slot| slots[a] = slot;
     break :blk slots;
 };
@@ -863,7 +863,7 @@ fn cheapestInsert(sub: *const Substrate, route: []const Stop, add: Stop) Route {
 /// One stop per neighborhood, first occurrence keeps the slot (TS coalesceStops).
 fn coalesceStops(route: []const Stop) Route {
     var out = Route{};
-    var at = [_]u8{0xff} ** geo.N_NODES;
+    var at: [geo.N_NODES]u8 = @splat(0xff);
     for (route) |s| {
         if (at[s.nbhd] != 0xff) {
             const e = &out.stops[at[s.nbhd]];
@@ -920,14 +920,14 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
 
         for (0..N_SLOTS) |t| {
             if (by_slot[t].len == 0) continue;
-            var delivered = [_]bool{false} ** geo.N_NODES;
+            var delivered: [geo.N_NODES]bool = @splat(false);
             for (by_slot[t].slice()) |s| delivered[s.nbhd] = true;
             var pbuf: [MAX_PATH_NODES]u8 = undefined;
             const nodes = pathNodes(sub, by_slot[t].slice(), &pbuf);
             // threaded = insertion-order set of pass-through neighborhoods.
             var threaded: [MAX_PATH_NODES]u8 = undefined;
             var tlen: usize = 0;
-            var seen = [_]bool{false} ** geo.N_NODES;
+            var seen: [geo.N_NODES]bool = @splat(false);
             for (nodes) |node| {
                 if (node != geo.FC and !delivered[node] and !seen[node]) {
                     seen[node] = true;
@@ -1235,7 +1235,7 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route, rec: ?*Recorder
                         const arc = groups.group(g);
                         if (@as(i32, @intCast(arc.len)) < need or arc.len >= F.nh) continue;
                         if (loadOf(under.slice()) + @as(i32, @intCast(arc.len)) > cap_under) continue;
-                        var in_arc = [_]bool{false} ** geo.MAX_HOUSES;
+                        var in_arc: [geo.MAX_HOUSES]bool = @splat(false);
                         for (arc) |h| {
                             for (F.hs(), 0..) |fh, k| {
                                 if (fh == h) in_arc[k] = true;
@@ -1528,7 +1528,7 @@ fn splitPass(sub: *const Substrate, routes: *Routes, rec: ?*Recorder) void {
                         const S = subsets.subset(ssi);
                         const bs = routes.r[b].slice();
                         if (loadOf(bs) + @as(i32, @intCast(S.len)) > capOf(bs)) continue;
-                        var in_s = [_]bool{false} ** geo.MAX_HOUSES;
+                        var in_s: [geo.MAX_HOUSES]bool = @splat(false);
                         for (S) |h| {
                             for (stop.hs(), 0..) |sh, k| {
                                 if (sh == h) in_s[k] = true;
@@ -1608,7 +1608,7 @@ fn tidySplitHouses(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
     var nbhd_order: [geo.N_NODES]u8 = undefined;
     var nlen: usize = 0;
     var slots: [geo.N_NODES][N_SLOTS]u8 = undefined;
-    var slots_n = [_]u8{0} ** geo.N_NODES;
+    var slots_n: [geo.N_NODES]u8 = @splat(0);
     for (0..N_SLOTS) |i| {
         for (by_slot[i].slice()) |s| {
             if (s.nh == 0) continue;
@@ -1724,7 +1724,7 @@ pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split
     var all = Routes{};
     customers(demand, &all);
 
-    var in_defer = [_]bool{false} ** geo.N_NODES;
+    var in_defer: [geo.N_NODES]bool = @splat(false);
     in_defer[geo.id("Bellevue")] = true;
     if (defer_medina) in_defer[geo.id("Medina")] = true;
 
@@ -1768,7 +1768,7 @@ pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split
 
     // Slot assignment: anchored routes own their slots; leftovers fill idle
     // slots biggest-first, spilling across slots with room if none fits whole.
-    var by_slot = [_]Route{Route{}} ** N_SLOTS;
+    var by_slot: [N_SLOTS]Route = @splat(Route{});
     var leftover = Routes{};
     for (0..routes.len) |i| {
         const r = routes.r[i];

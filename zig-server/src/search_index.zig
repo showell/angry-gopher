@@ -188,7 +188,7 @@ fn holds(markdown: []const u8, word: []const u8) bool {
 /// (chat_search's excerpt), so the mark is the word the index counted.
 pub fn wordAt(markdown: []const u8, word: []const u8) ?usize {
     // Most messages do not hold it even as a substring: a quick no.
-    if (std.ascii.indexOfIgnoreCase(markdown, word) == null) return null;
+    if (std.ascii.findIgnoreCase(markdown, word) == null) return null;
     var it = tokens.words(markdown);
     while (it.next()) |w| {
         if (w.len == word.len and std.ascii.eqlIgnoreCase(w, word)) return @intFromPtr(w.ptr) - @intFromPtr(markdown.ptr);
@@ -689,7 +689,7 @@ test "a block read in place is what the decoder makes of it (155's review)" {
 test "messages for a word stop at a byte budget, every one still counted (the box's review of 155, 1)" {
     var idx = Index.init(testing.allocator);
     defer idx.deinit();
-    const long = "word " ++ "x" ** 995;
+    const long = "word " ++ &@as([995]u8, @splat('x'));
     for (0..3) |i| {
         var buf: [16]u8 = undefined;
         try idx.add("c/1_2", "t", msg(try std.fmt.bufPrint(&buf, "t_{d}", .{i + 1}), long));
@@ -707,7 +707,7 @@ test "messages for a word stop at a byte budget, every one still counted (the bo
 test "a word too long to ask for is never suggested (the box's review of 155, 2)" {
     var idx = Index.init(testing.allocator);
     defer idx.deinit();
-    try idx.add("c/1_2", "t", msg("t_1", "a" ** (tokens.max_word + 1) ++ " " ++ "a" ** tokens.max_word));
+    try idx.add("c/1_2", "t", msg("t_1", &@as([tokens.max_word + 1]u8, @splat('a')) ++ " " ++ &@as([tokens.max_word]u8, @splat('a'))));
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
@@ -725,7 +725,7 @@ test "the budget is charged what the JSON costs, not the raw bytes (the review o
     var idx = Index.init(testing.allocator);
     defer idx.deinit();
     // Two messages of 1000 raw bytes, nearly all control bytes: 6000 each.
-    const hostile = "word " ++ "\x01" ** 995;
+    const hostile = "word " ++ repeated("\x01", 995);
     try idx.add("c/1_2", "t", msg("t_1", hostile));
     try idx.add("c/1_2", "t", msg("t_2", hostile));
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -770,7 +770,7 @@ test "a conversation past what the index holds is unreadable once, and a message
     try the.?.add("c/1_2", "t", msg("t_1", "a word"));
     // Past the limit: unreadable in it, once, whatever lands after, in that
     // topic or a later one.
-    try testing.expectError(error.ConversationTooBig, the.?.add("c/1_2", "t", msg("t_2", "x" ** 80)));
+    try testing.expectError(error.ConversationTooBig, the.?.add("c/1_2", "t", msg("t_2", &@as([80]u8, @splat('x')))));
     try testing.expectError(error.ConversationTooBig, the.?.add("c/1_2", "u", msg("u_1", "y")));
     try testing.expectEqual(@as(u32, 1), the.?.convs.getPtr("c/1_2").?.unreadable);
     // A message landing there: the index stands (it was dropped, and built
@@ -801,4 +801,15 @@ test "the index holds at most its total of text: past it, the conversation a mes
     try testing.expectEqual(@as(u32, 1), idx.convs.getPtr("c/1_4").?.unreadable);
     try testing.expectEqual(@as(u64, 3 * len), idx.text_bytes);
     try testing.expectEqual(@as(usize, 3), idx.stats.messages);
+}
+
+/// `s` repeated `n` times, built at comptime (Zig 0.17 removed `s ** n`).
+fn repeated(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    const out = comptime blk: {
+        var a: [s.len * n]u8 = undefined;
+        @setEvalBranchQuota(1000 + n);
+        for (0..n) |i| @memcpy(a[i * s.len ..][0..s.len], s);
+        break :blk a;
+    };
+    return &out;
 }
