@@ -86,6 +86,17 @@
         .{ .name = "chat_js_styles", .path = "../chat/styles.js" },
         .{ .name = "chat_js_images", .path = "../chat/images.js" },
         .{ .name = "chat_js_code", .path = "../chat/code.js" },
+        // Shale's landing page and tutorial (/shale/, shale_page.zig): the
+        // sibling shale checkout's `zig build web`, the language compiled to
+        // WebAssembly, copied in by ops/build_shale_web.
+        .{ .name = "shale_learn_html", .path = "../learn_shale/learn.html", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_tutorial_html", .path = "../learn_shale/tutorial.html", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_lessons_js", .path = "../learn_shale/lessons.js", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_run_view_js", .path = "../learn_shale/run_view.js", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_highlight_js", .path = "../learn_shale/highlight.js", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_js", .path = "../learn_shale/shale.js", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_wasm", .path = "../learn_shale/shale.wasm", .built_by = "ops/build_shale_web" },
+        .{ .name = "shale_card_svg", .path = "../learn_shale/card.svg", .built_by = "ops/build_shale_web" },
         // Shared brand/avatar assets served from /images/<file> (brand.zig).
         .{ .name = "image_cat_professor", .path = "../images/cat_professor.webp" },
     },

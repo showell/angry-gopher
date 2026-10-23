@@ -36,6 +36,7 @@ const gallery = @import("gallery.zig");
 const downloads = @import("downloads.zig");
 const resume_page = @import("resume_page.zig");
 const safari_download = @import("safari_download.zig");
+const shale_page = @import("shale_page.zig");
 const login = @import("login.zig");
 const player = @import("player.zig");
 const brand = @import("brand.zig");
@@ -253,6 +254,10 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
         // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
         // is resolved for the index's top-bar chip, never gated.
         try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
+    } else if (http.pathUnder(path, "/shale")) |sub| {
+        // Public + ungated: Shale's landing page and its in-browser tutorial
+        // (shale_page.zig), static files from the shale checkout's build.
+        try shale_page.handle(req, sub);
     } else if (http.pathUnder(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub, client);
     } else if (http.pathUnder(path, "/game")) |sub| {

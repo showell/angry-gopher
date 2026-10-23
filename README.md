@@ -70,6 +70,7 @@ time. If they disagree, `pages/home.txt` is right.
 
 | App | Path | What it is | Stack | README |
 |---|---|---|---|---|
+| **Shale** | `/shale/` | A landing page for Shale, the scripting language for agents, and its tutorial: fifteen lessons whose scripts run in the browser, building a small blog's files. The pages and the wasm build are the sibling shale checkout's `zig build web`, copied by `ops/build_shale_web` into `learn_shale/` (not in git). | Zig (WASM) + JS | shale's [`README.md`](https://github.com/showell/shale) |
 | **Safari Screensaver** | `/driving` | A self-driving first-person motorcycle ride down a winding road, drawn from rider-relative coordinates. A Zig core (compiled to WebAssembly) computes the geometry; a tiny JS blitter fills the polygons. | Zig (WASM) + JS | [`games/driving/README.md`](games/driving/README.md) |
 | **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily; a multi-page app still mostly rendered on the front end. | JavaScript + Zig | [`chat/README.md`](chat/README.md) |
 | **Seattle Delivery** | `/delivery` | A CVRP route-planning sim — eight trucks fan out across a not-to-scale Seattle. Watch a hand-built Clarke-Wright solver think. A Zig solver (compiled to WASM) plans the routes; the TS client draws and animates them. | Zig (WASM) + TS | [`delivery/README.md`](delivery/README.md) |
@@ -114,7 +115,7 @@ packages are pinned by each directory's committed `package-lock.json`:
 
 | Tool | Version | Builds | Install |
 |---|---|---|---|
-| **Zig** | 0.17.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
+| **Zig** | 0.17.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) + Shale's browser build, from the sibling shale checkout (`ops/build_shale_web` → `learn_shale/`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` |
 | **TypeScript** | 6.0.3 | the Delivery display client + the Lyn Rummy DSL/geometry layer and test harnesses (both solvers are zig; each `.ts` solver stays as the port reference) | `npm install` in `delivery/`, `games/lynrummy/ts/` and `games/driving/` |
 | **Node** | 22.18 or later | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
@@ -344,6 +345,7 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | Path | What |
 |---|---|
 | `/` | Home / launch pad (public; viewer resolved for the top bar, never gated) |
+| `/shale/` | Shale's landing page and in-browser tutorial (public; `shale_page.zig`) |
 | `/delivery` | Seattle Delivery sim (public) |
 | `/driving`, `/safari_download`, `/downloads` | Safari Screensaver + its native-download landing page and artifacts (public) |
 | `/chess` | Chess Toys: `/chess/knight`, `/chess/queens`, sources at `/chess/code` (public) |

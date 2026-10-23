@@ -1,5 +1,13 @@
 # Explore apps built by Steve and Claude (2026)
 
+## Shale -> /shale/
+image: /shale/card.svg
+cta: Learn Shale
+lang: Zig (WASM) + JavaScript
+tech: the Shale interpreter compiled to WebAssembly; each lesson's scripts run against an in-memory project in the browser
+code: https://github.com/showell/shale
+A scripting language for agents, built by agents, for the everyday work on a project's files: finding, reading, renaming, editing. Fifteen short lessons build a small blog a script at a time, right in your browser.
+
 ## Safari Screensaver -> /driving
 image: /gallery/safari.png
 cta: Take a Drive

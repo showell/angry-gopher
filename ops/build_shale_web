@@ -1,0 +1,31 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Builds Shale's browser pages (the sibling shale checkout's `zig build web`:
+# the language compiled to WebAssembly over an in-memory tree) and copies what
+# /shale serves into learn_shale/: the landing page, the tutorial, their
+# scripts, the wasm module and the picture. A build output, gitignored;
+# zig-server embeds it (assets.zon) and serves it at /shale/ (shale_page.zig).
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+SHALE_DIR="${SHALE_DIR:-$(dirname "$GOPHER_DIR")/shale}"
+OUT="$GOPHER_DIR/learn_shale"
+
+if [ ! -f "$SHALE_DIR/build.zig" ]; then
+    echo "build_shale_web: no shale checkout at '$SHALE_DIR' (SHALE_DIR names another)" >&2
+    exit 1
+fi
+
+(cd "$SHALE_DIR" && zig build web)
+mkdir -p "$OUT"
+for f in learn.html tutorial.html lessons.js run_view.js highlight.js shale.js shale.wasm card.svg; do
+    cp "$SHALE_DIR/zig-out/web/$f" "$OUT/$f"
+done
+
+dirty=""
+git -C "$SHALE_DIR" diff --quiet HEAD -- web src build.zig || dirty="+dirty"
+echo "built $OUT from shale $(git -C "$SHALE_DIR" rev-parse --short HEAD)$dirty"
