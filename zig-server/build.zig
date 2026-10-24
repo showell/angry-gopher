@@ -38,6 +38,10 @@ pub fn build(b: *std.Build) void {
     const shale_dep = b.dependency("shale", .{ .target = target, .optimize = optimize });
     const shale = shale_dep.module("shale");
     root.addImport("shale", shale);
+    // **CODEX CHAT** (the `cobble-webbox` checkout), served under
+    // /codex-chat: `codex_chat`, portable, on the same `webbox` and `host_io`.
+    const codex_chat = b.dependency("cobble_webbox", .{ .target = target, .optimize = optimize }).module("codex_chat");
+    root.addImport("codex_chat", codex_chat);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -156,6 +160,7 @@ pub fn build(b: *std.Build) void {
     router_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     router_tests.root_module.addImport("webbox", webbox);
     router_tests.root_module.addImport("shale", shale);
+    router_tests.root_module.addImport("codex_chat", codex_chat);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });

@@ -11,6 +11,7 @@ const Io = @import("host_io").Io;
 const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
+const codex_chat = @import("codex_chat");
 
 /// What the setup did, for the host to say in its own log.
 pub const StartReport = struct {
@@ -20,6 +21,9 @@ pub const StartReport = struct {
     /// the first search builds it, in that request.
     search: ?search_index.Stats,
     search_ms: i64,
+    /// Codex Chat's start: where its files are, and why it is not serving
+    /// them ("" while it is).
+    codex_chat: codex_chat.StartReport,
 };
 
 /// **WHAT THE SETUP DID, IN WORDS**, a line each, for a host to say in its
@@ -29,6 +33,9 @@ pub fn describeStart(r: StartReport, w: *std.Io.Writer) std.Io.Writer.Error!void
     if (r.search) |st| {
         try w.print("search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, r.search_ms });
     } else try w.print("search index: not built ({s}); the first search builds it\n", .{if (search_index.failed_with) |e| @errorName(e) else "unknown"});
+    if (r.codex_chat.problem.len > 0) {
+        try w.print("codex chat: NOT serving its files under {s}/codex-chat: {s}\n", .{ r.codex_chat.files, r.codex_chat.problem });
+    } else try w.print("codex chat: its files under {s}/codex-chat\n", .{r.codex_chat.files});
 }
 
 pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartReport {
@@ -54,7 +61,10 @@ pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartRe
         break :blk search_index.buildAll(io, pass.allocator());
     };
     const search_ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
-    return .{ .backfilled = backfilled, .search = search, .search_ms = search_ms };
+    // Codex Chat: its heap's region and its state, from its files under the
+    // same data root (codex-chat/, beside chat/).
+    const codex = try codex_chat.setup(io, base, host_roots);
+    return .{ .backfilled = backfilled, .search = search, .search_ms = search_ms, .codex_chat = codex };
 }
 
 /// **MEMORY MADE THE STORE'S AGAIN** (metal-vmm QUEUE 200): after something
@@ -62,9 +72,10 @@ pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartRe
 /// state it holds that comes from the store is rebuilt the way start-up
 /// builds it, so nothing in memory disagrees with what is on the disk:
 /// every chat session's last-message record (written where missing), the
-/// search index (built again from every transcript), and the two caches
+/// search index (built again from every transcript), the two caches
 /// that are filled as they are used (game_limits' usage, measured again on
-/// each player's next write; reading_list's lists, read again). Nothing
+/// each player's next write; reading_list's lists, read again), and Codex
+/// Chat's state (read again from its files under codex-chat/). Nothing
 /// else this server holds is the store's (presence, the throttles and the
 /// counts are its own).
 pub const Refresh = struct {
@@ -87,6 +98,7 @@ pub fn refresh(io: Io, base: std.mem.Allocator) Refresh {
     };
     @import("game_limits.zig").forgetUsage();
     @import("reading_list.zig").forgetCache();
+    codex_chat.refresh();
     const ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
     return .{ .backfilled = backfilled, .search = search, .ms = ms };
 }

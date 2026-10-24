@@ -27,6 +27,7 @@ const chess = @import("chess.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
+const codex_chat = @import("codex_chat");
 const settings = @import("settings.zig");
 const admin = @import("admin.zig");
 const admin_lynrummy = @import("admin_lynrummy.zig");
@@ -155,6 +156,8 @@ pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
 
 fn familyOf(path: []const u8) Family {
     if (http.pathUnder(path, "/admin") != null) return .admin;
+    if (http.pathUnder(path, codex_chat.prefix)) |sub|
+        return if (std.mem.eql(u8, sub, "/api/chat/events")) .streams else .chat;
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
         // As routeBodyLimit reads an upload: `.../upload/` is the upload.
@@ -187,6 +190,7 @@ fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !
 /// within its path's. Only the upload's is past `body_rule.before_turn_most`.
 fn routeBodyLimit(path: []const u8) u64 {
     const caps = request_limits.body;
+    if (http.pathUnder(path, codex_chat.prefix) != null) return codex_chat.bodyLimit(path);
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
         // chat.zig's segments skip empty ones: `.../upload/` is the upload.
@@ -266,6 +270,12 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
         try chat.handle(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/channel")) |sub| {
         try chat.handleChannel(req, io, alloc, bus, sub);
+    } else if (http.pathUnder(path, codex_chat.prefix) != null) {
+        // Public + ungated: Codex Chat (cobble-webbox's codex_chat), its own
+        // names claimed first come first served with no password, and its
+        // own files under codex-chat/ beside chat's. It takes the whole
+        // path and its own prefix off.
+        try codex_chat.routes(req, io, alloc, bus);
     } else if (http.pathUnder(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/gallery")) |sub| {
