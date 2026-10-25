@@ -40,8 +40,12 @@ pub fn build(b: *std.Build) void {
     root.addImport("shale", shale);
     // **CODEX CHAT** (the `cobble-webbox` checkout), served under
     // /codex-chat: `codex_chat`, portable, on the same `webbox` and `host_io`.
-    const codex_chat = b.dependency("cobble_webbox", .{ .target = target, .optimize = optimize }).module("codex_chat");
+    const cobble = b.dependency("cobble_webbox", .{ .target = target, .optimize = optimize });
+    const codex_chat = cobble.module("codex_chat");
     root.addImport("codex_chat", codex_chat);
+    // /uo: `uo_town`, Damian's UO town (TownWatch), the same way.
+    const uo_town = cobble.module("uo_town");
+    root.addImport("uo_town", uo_town);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -161,6 +165,7 @@ pub fn build(b: *std.Build) void {
     router_tests.root_module.addImport("webbox", webbox);
     router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("codex_chat", codex_chat);
+    router_tests.root_module.addImport("uo_town", uo_town);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });

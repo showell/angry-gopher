@@ -28,6 +28,7 @@ const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
 const codex_chat = @import("codex_chat");
+const uo_town = @import("uo_town");
 const settings = @import("settings.zig");
 const admin = @import("admin.zig");
 const admin_lynrummy = @import("admin_lynrummy.zig");
@@ -143,9 +144,7 @@ const App = struct {
     pub const StartReport = app_start.StartReport;
     pub const bodyLimit = routeBodyLimit;
     pub const uploader = uploaderOf;
-    /// A slice of the operator's background script, between requests
-    /// (admin_script.zig, metal-vmm QUEUE 222).
-    pub const between = @import("admin_script.zig").between;
+    pub const between = betweenRequests;
 };
 
 /// **WHICH PART OF THE SITE A REQUEST IS FOR** (metal-vmm QUEUE 189.5), as
@@ -154,8 +153,20 @@ const App = struct {
 /// them (the home page, sign-in, assets).
 pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
 
+/// **BETWEEN REQUESTS**: a slice of the operator's background script
+/// (admin_script.zig, metal-vmm QUEUE 222), which goes first while it has
+/// more; and the UO town's tick, a quarter second apart, whose wake is the
+/// host's otherwise.
+fn betweenRequests(io: Io, now: webbox_site.Now, bus: *streams.Bus) webbox_site.Wake {
+    const more = @import("admin_script.zig").between(io, now.unix_s);
+    const town = uo_town.between(io, now, bus);
+    return if (more) .more else town;
+}
+
 fn familyOf(path: []const u8) Family {
     if (http.pathUnder(path, "/admin") != null) return .admin;
+    if (http.pathUnder(path, uo_town.prefix)) |sub|
+        return if (std.mem.eql(u8, sub, "/town/events")) .streams else .games;
     if (http.pathUnder(path, codex_chat.prefix)) |sub|
         return if (std.mem.eql(u8, sub, "/api/chat/events")) .streams else .chat;
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
@@ -191,6 +202,7 @@ fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !
 fn routeBodyLimit(path: []const u8) u64 {
     const caps = request_limits.body;
     if (http.pathUnder(path, codex_chat.prefix) != null) return codex_chat.bodyLimit(path);
+    if (http.pathUnder(path, uo_town.prefix) != null) return uo_town.bodyLimit(path);
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
         // chat.zig's segments skip empty ones: `.../upload/` is the upload.
@@ -276,6 +288,10 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
         // own files under codex-chat/ beside chat's. It takes the whole
         // path and its own prefix off.
         try codex_chat.routes(req, io, alloc, bus);
+    } else if (http.pathUnder(path, uo_town.prefix) != null) {
+        // Public + ungated: Damian's UO town (cobble-webbox's uo_town), its
+        // five seats held by tokens it gives; it takes the whole path.
+        try uo_town.routes(req, io, alloc, bus);
     } else if (http.pathUnder(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/gallery")) |sub| {

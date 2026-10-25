@@ -12,6 +12,7 @@ const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
 const codex_chat = @import("codex_chat");
+const uo_town = @import("uo_town");
 
 /// What the setup did, for the host to say in its own log.
 pub const StartReport = struct {
@@ -24,6 +25,7 @@ pub const StartReport = struct {
     /// Codex Chat's start: where its files are, and why it is not serving
     /// them ("" while it is).
     codex_chat: codex_chat.StartReport,
+    uo_town: uo_town.StartReport,
 };
 
 /// **WHAT THE SETUP DID, IN WORDS**, a line each, for a host to say in its
@@ -36,6 +38,9 @@ pub fn describeStart(r: StartReport, w: *std.Io.Writer) std.Io.Writer.Error!void
     if (r.codex_chat.problem.len > 0) {
         try w.print("codex chat: NOT serving its files under {s}/codex-chat: {s}\n", .{ r.codex_chat.files, r.codex_chat.problem });
     } else try w.print("codex chat: its files under {s}/codex-chat\n", .{r.codex_chat.files});
+    if (r.uo_town.problem.len > 0) {
+        try w.print("uo town: NOT serving: {s}\n", .{r.uo_town.problem});
+    } else try w.print("uo town: at /uo/town/, paused until a watcher starts its day\n", .{});
 }
 
 pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartReport {
@@ -64,7 +69,9 @@ pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartRe
     // Codex Chat: its heap's region and its state, from its files under the
     // same data root (codex-chat/, beside chat/).
     const codex = try codex_chat.setup(io, base, host_roots);
-    return .{ .backfilled = backfilled, .search = search, .search_ms = search_ms, .codex_chat = codex };
+    // Damian's UO town: its Codex heap's region (128 MB) and the town built.
+    const town = try uo_town.setup(io, base, host_roots);
+    return .{ .backfilled = backfilled, .search = search, .search_ms = search_ms, .codex_chat = codex, .uo_town = town };
 }
 
 /// **MEMORY MADE THE STORE'S AGAIN** (metal-vmm QUEUE 200): after something

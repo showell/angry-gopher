@@ -67,7 +67,7 @@ const repo = arg("repo", "angry-gopher")
 
 -- The roots, the modules that are files here, and the Linux halves.
 const roots = {"router.zig", "webbox.zig"}
-const module_files = {webbox = "webbox.zig", shale = "shale.zig", codex_chat = "chat_app.zig"}
+const module_files = {webbox = "webbox.zig", shale = "shale.zig", codex_chat = "chat_app.zig", uo_town = "uo_app.zig"}
 const host_modules = {webbox_linux = true, shale_linux = true}
 const host_only = {["webbox_linux.zig"] = true, ["linux_host.zig"] = true, ["bind.zig"] = true, ["linux_config.zig"] = true, ["shale_linux.zig"] = true}
 const store = "store.zig"
@@ -505,6 +505,7 @@ function self_test()
   expect_from("the Linux module", {["router.zig"] = "const space = @import(\"webbox_linux\").linux_host.freeSpaceAt(\"x\");\n", ["webbox:webbox.zig"] = "\n"}, "router.zig:0:@import(\"webbox_linux\")", roots)
   expect("the webbox module, followed", {["router.zig"] = "const http = @import(\"webbox\").http;\n", ["webbox:webbox.zig"] = "pub const http = @import(\"http.zig\");\n", ["webbox:http.zig"] = "const p = std.heap.page_allocator;\n"}, "http.zig:1:std.heap.page_allocator")
   expect("the codex_chat module, followed into what it imports", {["router.zig"] = "const c = @import(\"codex_chat\");\n", ["codex_chat:chat_app.zig"] = "const g = @import(\"gen/chat.zig\");\n", ["codex_chat:gen/chat.zig"] = "const p = std.heap.page_allocator;\n"}, "gen/chat.zig:1:std.heap.page_allocator")
+  expect("the uo_town module (cobble-webbox's tree, as codex_chat's), followed into what it imports", {["router.zig"] = "const t = @import(\"uo_town\");\n", ["codex_chat:uo_app.zig"] = "const g = @import(\"gen/uo_watch.zig\");\n", ["codex_chat:gen/uo_watch.zig"] = "const p = std.heap.page_allocator;\n"}, "gen/uo_watch.zig:1:std.heap.page_allocator")
   local by_path = findings(tree({["router.zig"] = "const http = @import(\"http.zig\");\nconst w = @import(\"webbox.zig\");\n", ["webbox:webbox.zig"] = "pub const http = @import(\"http.zig\");\n", ["webbox:http.zig"] = "const edge = @import(\"edge.zig\");\n", ["webbox:edge.zig"] = "\n"}), roots).found
   if said(by_path) ~= "router.zig:0:@import(\"http.zig\") | router.zig:0:@import(\"webbox.zig\")" then fail("a library file by path: " .. said(by_path)) end
   if not contains(by_path[1].advice, "@import(\"webbox\").http") then fail("a library file by path's advice: " .. by_path[1].advice) end
@@ -519,7 +520,7 @@ function self_test()
   expect("an import from a folder's file is its folder's", {["router.zig"] = "const s = @import(\"script/script.zig\");\n", ["script/script.zig"] = "const lex = @import(\"lex.zig\");\n", ["script/lex.zig"] = "const a = std.heap.page_allocator;\n"}, "script/lex.zig:1:std.heap.page_allocator")
   expect_from("a library's file importing its sibling by path", {["router.zig"] = "const s = @import(\"shale\");\n", ["webbox:webbox.zig"] = "\n", ["shale:shale.zig"] = "pub const script = @import(\"script/script.zig\");\n", ["shale:script/script.zig"] = "pub const cli = @import(\"cli.zig\");\n", ["shale:script/cli.zig"] = "const script = @import(\"script.zig\");\n"}, "", roots)
   expect_set("an import behind is_test is a test's", {["router.zig"] = "const a = @import(\"a.zig\");\n", ["a.zig"] = "pub fn run() void {\n    if (@import(\"builtin\").is_test) return @import(\"gate_test.zig\").run();\n}\n", ["gate_test.zig"] = "pub fn run() void { std.debug.print(\"x\", .{}); }\n"}, "a.zig,router.zig")
-  n = n + 27
+  n = n + 28
   -- Exemptions.
   expect("a test block", with_router({["a.zig"] = "const ok = 1;\ntest \"uses the host\" {\n    var t = std.Io.Threaded.init(std.heap.page_allocator, .{});\n    defer t.deinit();\n}\n"}), "")
   expect("after a test block", with_router({["a.zig"] = "test \"x\" {\n    const a = std.heap.page_allocator;\n}\nconst b = std.heap.page_allocator;\n"}), "a.zig:4:std.heap.page_allocator")
