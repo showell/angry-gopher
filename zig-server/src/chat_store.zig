@@ -124,7 +124,7 @@ pub const Stream = struct {
 /// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
-pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: Topic) !Stream {
+pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream {
     const path = try sessionMdPath(alloc, topic.dir, topic.sid);
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
 
@@ -143,7 +143,7 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: Topic) !Stream {
 /// the stored message (id + server-stamped date). **THE RENDER IS HERE, ONCE**
 /// (chat_frame.zig): the published blob is the finished SSE frame, the same
 /// for every viewer, which each open stream writes as it is.
-pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Topic, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
+pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: TopicAddress, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
     // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
     // refuses such a block on every read, so it would go out live and be gone
     // on reload. A nameless member (a release cut short) cannot post.
@@ -214,7 +214,7 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// `event: reaction` frame (chat_frame.reactionFrame), the line verbatim.
 /// Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is
 /// checked against the transcript's real count. Returns the stored line.
-pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: Topic, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
+pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
     const count = try messageCount(io, alloc, topic.dir, topic.sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
 
@@ -223,11 +223,28 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: Topic, msg_num: us
     // The echo made before the store, as a message's (177.1).
     const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
     const live_blob = try chat_frame.reactionFrame(alloc, line);
-    _ = try store.append(io, alloc, try reactionsPath(alloc, topic.dir, topic.sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
+    const path = try reactionsPath(alloc, topic.dir, topic.sid);
+    // **A TORN LINE STAYS ITS OWN LINE**: an append a stop cut short leaves a
+    // line with no newline, and the next one glued to it is one line that
+    // reads as neither (the client drops a line it cannot parse): two events
+    // lost where one was. So a sidecar that does not end in a newline gets one
+    // first. Read before the store, so a read that fails stores nothing.
+    const lead = if (try endsMidLine(io, alloc, path)) "\n" else "";
+    _ = try store.append(io, alloc, path, try std.fmt.allocPrint(alloc, "{s}{s}\n", .{ lead, line }));
 
     // Stored is done (as for a message): the live publish cannot fail.
     bus.publish(live_key, live_blob);
     return line;
+}
+
+/// Whether the file at `path` has bytes and its last is not a newline: an
+/// append that was cut short. No file, or an empty one, is not.
+fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
+    const st = (try store.statOrNull(io, alloc, path)) orelse return false;
+    if (st.size == 0) return false;
+    var last: [1]u8 = undefined;
+    if (try store.readAt(io, alloc, path, st.size - 1, &last) != 1) return error.ShortRead;
+    return last[0] != '\n';
 }
 
 /// reactionLine is the ONE place the sidecar's line shape is written. `on`
@@ -251,9 +268,12 @@ test "reactionLine is one JSON object with the six fields, strings escaped" {
     );
 }
 
-/// A topic as the store finds it: its conversation's folder, the
-/// conversation's bus key, and the session's id.
-pub const Topic = struct { dir: []const u8, key: []const u8, sid: []const u8 };
+/// **WHERE A TOPIC IS**, as the store and the bus find it: its conversation's
+/// folder (`dir`), its conversation's key (`key`, the first half of the
+/// topic's bus key `<key>/<sid>`), and its id (`sid`). Not chat_conv.Topic,
+/// the routed topic a handler holds (its conversation, id and title), from
+/// which this is made.
+pub const TopicAddress = struct { dir: []const u8, key: []const u8, sid: []const u8 };
 
 /// Who writes: the display name stored with the message, and the uid.
 pub const Author = struct { name: []const u8, id: []const u8 };
@@ -263,8 +283,23 @@ pub const Author = struct { name: []const u8, id: []const u8 };
 pub const ConvKind = enum { dm, channel };
 
 /// ConvMeta carries what the cross-page fanout needs that the storage path
-/// doesn't otherwise know: the conv kind and its member uids (recipients).
-pub const ConvMeta = struct { kind: ConvKind, members: []const []const u8 };
+/// doesn't otherwise know: the conv kind and its member uids (recipients),
+/// each once.
+pub const ConvMeta = struct {
+    kind: ConvKind,
+    members: []const []const u8,
+
+    /// A DM between `a` and `b`. **EACH PERSON ONCE**: in the DM with
+    /// yourself (`1_1`) the two are one, and listed twice they were sent
+    /// every notice twice and had every image and code block written to
+    /// their images.md and code.md twice.
+    pub fn dm(alloc: Alloc, a: []const u8, b: []const u8) !ConvMeta {
+        const members = try alloc.alloc([]const u8, if (std.mem.eql(u8, a, b)) 1 else 2);
+        members[0] = a;
+        if (members.len == 2) members[1] = b;
+        return .{ .kind = .dm, .members = members };
+    }
+};
 
 /// A uid that is not known is written as this, because a field left empty would
 /// make the line one field short and the whole record unreadable — which is
@@ -475,4 +510,26 @@ test "a reaction that answers an error stored nothing, and one that answers succ
             return error.TestUnexpectedResult;
         }
     }
+}
+
+test "a reaction after a torn one starts its own line: the torn line is lost, the next is not" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("something to react to");
+    const topic: TopicAddress = .{ .dir = f.dir, .key = "1_2", .sid = "topic" };
+    // A stop cut the last append short: no newline after it.
+    const torn = "{\"msg\":1,\"uid\":\"1\",\"fr";
+    _ = try store.append(f.io, a, try reactionsPath(a, f.dir, "topic"), torn);
+
+    const line = try appendReaction(f.io, a, &f.bus, topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
+    const after = try readReactions(f.io, a, f.dir, "topic");
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n{s}\n", .{ torn, line }), after);
+    // The next reaction needs no newline of its own: the file ended in one.
+    const second = try appendReaction(f.io, a, &f.bus, topic, 1, .{ .name = "Tester", .id = "1" }, "🎉", true);
+    const twice = try readReactions(f.io, a, f.dir, "topic");
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}{s}\n", .{ after, second }), twice);
 }

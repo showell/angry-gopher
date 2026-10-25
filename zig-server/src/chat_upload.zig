@@ -13,6 +13,7 @@
 //! whole-file download (and bounds the bytes held in RAM per request).
 
 const std = @import("std");
+const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -257,14 +258,14 @@ fn parseRange(hdr: []const u8, size: u64) ?Range {
     var end: u64 = size - 1;
     if (left.len == 0) {
         // Suffix range: last N bytes.
-        const suffix = std.fmt.parseInt(u64, right, 10) catch return null;
+        const suffix = decimal.parseInt(u64, right) orelse return null;
         if (suffix == 0) return null;
         start = if (suffix >= size) 0 else size - suffix;
     } else {
-        start = std.fmt.parseInt(u64, left, 10) catch return null;
+        start = decimal.parseInt(u64, left) orelse return null;
         if (start >= size) return null;
         if (right.len != 0) {
-            const e = std.fmt.parseInt(u64, right, 10) catch return null;
+            const e = decimal.parseInt(u64, right) orelse return null;
             if (e < start) return null;
             end = @min(e, size - 1);
         }

@@ -4,6 +4,7 @@
 //! startup backfill (split from chat_store.zig by metal-vmm QUEUE 174).
 
 const std = @import("std");
+const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
@@ -124,7 +125,7 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
     if (!std.mem.startsWith(u8, id, sid)) return null;
     const rest = id[sid.len..];
     if (rest.len < 2 or rest[0] != '_') return null;
-    return std.fmt.parseInt(usize, rest[1..], 10) catch null;
+    return decimal.parseInt(usize, rest[1..]);
 }
 
 /// The whole transcript, decoded, for a session whose sidecar cannot say. What
@@ -293,15 +294,15 @@ pub fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?C
     if (raw.len == 0 or raw[raw.len - 1] != '\n') return null;
     var lines = std.mem.splitScalar(u8, raw, '\n');
     var head = std.mem.tokenizeScalar(u8, lines.next() orelse return null, ' ');
-    const count = std.fmt.parseInt(usize, head.next() orelse return null, 10) catch return null;
-    const size = std.fmt.parseInt(u64, head.next() orelse return null, 10) catch return null;
+    const count = decimal.parseInt(usize, head.next() orelse return null) orelse return null;
+    const size = decimal.parseInt(u64, head.next() orelse return null) orelse return null;
     if (head.next() != null) return null;
     return .{ .count = count, .size = size, .last = parseLast(lines.next() orelse "") };
 }
 
 fn parseLast(line: []const u8) ?Last {
     var it = std.mem.tokenizeScalar(u8, line, ' ');
-    const offset = std.fmt.parseInt(u64, it.next() orelse return null, 10) catch return null;
+    const offset = decimal.parseInt(u64, it.next() orelse return null) orelse return null;
     const uid = it.next() orelse return null;
     if (it.next() != null) return null;
     return .{ .offset = offset, .uid = if (std.mem.eql(u8, uid, no_uid)) "" else uid };
@@ -348,6 +349,15 @@ fn fixtureSetSidecar(self: *CountFixture, text: []const u8) !void {
 fn fixtureTranscriptSize(self: *CountFixture) !u64 {
     const a = self.arena.allocator();
     return (try Io.Dir.cwd().statFile(self.io, try sessionMdPath(a, self.dir, "topic"), .{})).size;
+}
+
+test "a message's number has one spelling: digits after the topic and its underscore" {
+    try testing.expectEqual(@as(?usize, 0), indexOf("topic_1", "topic"));
+    try testing.expectEqual(@as(?usize, 9), indexOf("topic_10", "topic"));
+    // Spellings Zig's parseInt took, each a second name for some message.
+    for ([_][]const u8{ "topic_1_0", "topic_+5", "topic_-0", "topic_ 1", "topic_", "topic_0", "topic1" }) |id| {
+        try testing.expectEqual(@as(?usize, null), indexOf(id, "topic"));
+    }
 }
 
 test "count: every send records the count and the transcript size it was taken at" {

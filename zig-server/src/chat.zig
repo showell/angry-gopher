@@ -31,6 +31,7 @@
 //! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");
+const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -229,11 +230,8 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
     // folder and the fan-out's writes are named after both.
     const other = if (std.mem.eql(u8, pair[0..us], uid)) pair[us + 1 ..] else pair[0..us];
     if (!try users.principalExists(io, alloc, other)) return http.notFound(req);
-    const members = try alloc.alloc([]const u8, 2);
-    members[0] = pair[0..us];
-    members[1] = pair[us + 1 ..];
     const conv = Conv{
-        .meta = .{ .kind = .dm, .members = members },
+        .meta = try store.ConvMeta.dm(alloc, pair[0..us], pair[us + 1 ..]),
         .key = pair,
         .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pair}),
         .dir = try store.dmConvDir(alloc, pair),
@@ -278,6 +276,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
         return page.notFoundPage(req, io, alloc, uid, what, conv.base);
     }
     const tail = segs.next() orelse {
+        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
         try page.conversationPage(req, io, alloc, uid, topic);
         return;
     };
@@ -285,6 +284,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     if (std.mem.eql(u8, tail, "uploads")) {
         const file = segs.next() orelse return http.notFound(req);
         if (segs.next() != null) return http.notFound(req);
+        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
         return upload.serveUpload(req, io, alloc, conv.dir, topic.sid, file);
     }
     if (segs.next() != null) return http.notFound(req); // the rest take no further segment
@@ -299,10 +299,13 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else if (std.mem.eql(u8, tail, "unpin")) {
         try pinSession(req, io, alloc, uid, conv.key, topic.sid, false);
     } else if (std.mem.eql(u8, tail, "raw")) {
+        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
         try rawTranscript(req, io, alloc, conv.dir, topic.sid);
     } else if (std.mem.eql(u8, tail, "download")) {
+        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
         try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
     } else if (std.mem.eql(u8, tail, "saved")) {
+        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
         try savedIds(req, io, alloc, uid, conv.key, topic.sid);
     } else if (std.mem.eql(u8, tail, "reactions")) {
         try reactions.serveFile(req, io, alloc, conv.dir, topic.sid);
@@ -311,6 +314,13 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else {
         try http.notFound(req);
     }
+}
+
+/// Whether `req` only reads: a GET, or a HEAD (std answers it without the
+/// body). The page and the tails that serve what is stored answer nothing
+/// else: a POST there was served as if it were a GET.
+fn isRead(req: *const Request) bool {
+    return req.head.method == .GET or req.head.method == .HEAD;
 }
 
 fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !bool {
@@ -363,6 +373,12 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     const cid = (try formField(alloc, body, "cid")) orelse "";
     if (std.mem.trim(u8, md, " \t\r\n").len == 0) {
         return req.respond("not sent: the message is empty\n", .{ .status = .bad_request });
+    }
+    // **A MESSAGE IS TEXT**: its bytes are UTF-8. Stored otherwise, every
+    // stream would send it as JSON's array of numbers where the client reads a
+    // string. A browser always sends UTF-8; only a hand-made request is refused.
+    if (!std.unicode.utf8ValidateSlice(md)) {
+        return req.respond("not sent: the message is not UTF-8 text\n", .{ .status = .bad_request });
     }
 
     // Refuse hostile / absurdly over-formatted markdown at the door rather than
@@ -463,7 +479,7 @@ fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
     var best_n: i64 = -1;
     for (try store.listSessions(io, alloc, dir)) |s| {
         if (!std.mem.startsWith(u8, s, "general")) continue;
-        const n = std.fmt.parseInt(i64, s["general".len..], 10) catch continue;
+        const n = decimal.parseInt(i64, s["general".len..]) orelse continue;
         if (n > best_n) {
             best_n = n;
             best = s;

@@ -15,6 +15,7 @@
 //!   POST /<…>/<sid>/react       form msg=<n> emoji=<glyph> on=<1|0> → 204
 
 const std = @import("std");
+const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -49,7 +50,7 @@ pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []c
     const emoji = (try chat.formField(alloc, body, "emoji")) orelse "";
     const on_s = (try chat.formField(alloc, body, "on")) orelse "1";
 
-    const msg_num = std.fmt.parseInt(usize, msg_s, 10) catch return badRequest(req, "react: msg must be a message number\n");
+    const msg_num = decimal.parseInt(usize, msg_s) orelse return badRequest(req, "react: msg must be a message number\n");
     if (!validEmoji(emoji)) return badRequest(req, "react: emoji must be one glyph\n");
     const on = std.mem.eql(u8, on_s, "1");
 

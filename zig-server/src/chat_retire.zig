@@ -29,6 +29,7 @@
 //!     conversation now gone is dropped, so no kept user's page lands on a 404.
 
 const std = @import("std");
+const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
@@ -267,7 +268,7 @@ fn allMembers(io: Io, alloc: Alloc) ![]Member {
     var out: std.ArrayList(Member) = .empty;
     for (entries) |e| {
         if (e.kind != .directory) continue;
-        _ = std.fmt.parseInt(u64, e.name, 10) catch continue;
+        _ = decimal.parseInt(u64, e.name) orelse continue;
         const id = try alloc.dupe(u8, e.name);
         try out.append(alloc, .{ .id = id, .name = try users.getUserName(io, alloc, id) });
     }

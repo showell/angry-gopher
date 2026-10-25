@@ -292,10 +292,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 
     const conv_dir = try store.dmConvDir(alloc, conv);
     const from_name = try users.getUserName(io, alloc, uid);
-    const members = try alloc.alloc([]const u8, 2);
-    members[0] = uid;
-    members[1] = partner;
-    const meta = store.ConvMeta{ .kind = .dm, .members = members };
+    const meta = try store.ConvMeta.dm(alloc, uid, partner);
     const msg = try store.appendMessage(io, alloc, bus, meta, .{ .dir = conv_dir, .key = conv, .sid = sid }, .{ .name = from_name, .id = uid }, doc_body, "");
 
     const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"session\":{f},\"id\":{f}}}", .{

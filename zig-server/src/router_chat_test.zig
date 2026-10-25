@@ -46,6 +46,8 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     // No markdown field at all; one that is only whitespace.
     try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "cid=x")));
     try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=+%0A+&cid=x")));
+    // Bytes that are not UTF-8 (Latin-1's é): not text, so not stored.
+    try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=caf%E9&cid=x")));
     // A message that began DROP_ON_FLOOR is a message.
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=DROP_ON_FLOOR+is+a+phrase&cid=y")));
     // A code block's indentation stays.
@@ -72,6 +74,11 @@ test "route: sign-up refuses a name it would have to change, never registering a
     try testing.expect(std.mem.indexOf(u8, page, "set-cookie: __Host-gopher_auth=") == null);
     try testing.expect(std.mem.indexOf(u8, page, "Names can use only") != null);
     try testing.expectEqual(@as(?[]const u8, null), try users.findMemberByName(io, a, "Bobx"));
+    // A name whose bytes are not UTF-8 is refused, and makes no account.
+    const latin1 = try harness.postForm(a, io, "/login/full", "x=y", "name=Jos%E9&password=pw&action=register");
+    try testing.expect(std.mem.indexOf(u8, latin1, "set-cookie: __Host-gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, latin1, "not readable text") != null);
+    try testing.expectEqual(@as(?[]const u8, null), try users.findMemberByName(io, a, "Jos\xe9"));
     // Nor logs in as the member the cleaned name would have been.
     _ = try harness.memberSession(a, io, "1", "Steve");
     const as_steve = try harness.postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
@@ -258,6 +265,30 @@ test "a stream is a GET's: a POST to one is 405, its body never read nor held (m
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const got = try harness.postAs(a, io, "/chat/notifications", cookies, &@as([100]u8, @splat('x')));
     try testing.expectEqualStrings("405 Method Not Allowed", harness.status(got));
+}
+
+test "route: the page and what a topic serves only answer a read: a POST there is 405, a GET is served" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"hello"});
+    const chat_store = @import("chat_store.zig");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "Plans.uploads", "0123456789abcdef0123456789abcdef.png" }), "\x89PNG\r\n\x1a\n", .{});
+    for ([_][]const u8{ "", "/raw", "/download", "/saved", "/uploads/0123456789abcdef0123456789abcdef.png" }) |tail| {
+        const path = try std.fmt.allocPrint(a, "/chat/c/1_2/Plans{s}", .{tail});
+        errdefer std.debug.print("{s}\n", .{path});
+        try testing.expectEqualStrings("405 Method Not Allowed", harness.status(try harness.postAs(a, io, path, steve, "x=y")));
+        try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, path, steve)));
+    }
 }
 
 test "route: pin puts a topic in the viewer's Pinned group and unpin takes it out" {

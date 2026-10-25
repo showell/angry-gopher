@@ -4,6 +4,7 @@
 //! metal-vmm QUEUE 174).
 
 const std = @import("std");
+const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
@@ -251,7 +252,7 @@ fn canonicalUid(s: []const u8) bool {
 }
 
 fn atoiOr0(s: []const u8) i64 {
-    return std.fmt.parseInt(i64, s, 10) catch 0;
+    return decimal.parseInt(i64, s) orelse 0;
 }
 
 /// validSessionID matches `^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`

@@ -44,7 +44,7 @@ const Request = std.http.Server.Request;
 /// **THE BODY IS DELIMITED BY THE CONNECTION CLOSING**, not chunked: the host
 /// writes each live frame as it is, long after this handler has returned, and
 /// there is no chunk framing for it to carry on.
-pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: store.Topic) !void {
+pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: store.TopicAddress) !void {
     // A stream is a GET's (metal-vmm QUEUE 176.3).
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const since = try sse.readResume(req, alloc);

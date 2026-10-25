@@ -247,3 +247,23 @@ test "the fan-out's surfaces fail one at a time, each said: a member's images th
     // And member 1's surfaces are whole.
     _ = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "images.md" }), a, .limited(4096));
 }
+
+test "the DM with yourself fans out to you once: one images.md entry, one code.md entry, per message" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const dir = try chat_store.dmConvDir(a, "1_1");
+    const meta = try ConvMeta.dm(a, "1", "1");
+    try testing.expectEqual(@as(usize, 1), meta.members.len);
+    _ = try appendMessage(f.io, a, &f.bus, meta, .{ .dir = dir, .key = "1_1", .sid = "notes" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
+    for ([_][]const u8{ "images.md", "code.md" }) |feed| {
+        const text = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", feed }), a, .limited(4096));
+        errdefer std.debug.print("{s}:\n{s}\n", .{ feed, text });
+        try testing.expectEqual(@as(usize, 1), std.mem.count(u8, text, "Sent by Tester"));
+    }
+    // Two people are two members.
+    try testing.expectEqual(@as(usize, 2), (try ConvMeta.dm(a, "1", "2")).members.len);
+}

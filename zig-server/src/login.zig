@@ -352,10 +352,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
     // Idempotent: only seed when this DM has no topics yet.
     if ((try store.defaultSession(io, alloc, dir)).len != 0) return;
 
-    const members = try alloc.alloc([]const u8, 2);
-    members[0] = host_uid;
-    members[1] = new_uid;
-    const meta = store.ConvMeta{ .kind = .dm, .members = members };
+    const meta = try store.ConvMeta.dm(alloc, host_uid, new_uid);
 
     const topic = "general";
     const msg = try std.fmt.allocPrint(alloc, "Hi, this is an automated message from {s}. Please say hello and {s} will get back to you soon.", .{ host_name, host_name });

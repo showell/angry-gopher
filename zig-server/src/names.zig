@@ -17,10 +17,10 @@ pub const max_user_len = 40; // max display-name length
 // UNICODE NOTE: classifying letters/digits by full Unicode tables would need data
 // zig std doesn't expose, so the policy here is: ASCII letters/digits are
 // letters/digits, the space and apostrophe are allowed, and ANY non-ASCII
-// codepoint (byte >= 0x80) is treated as a letter. This is deliberately
-// permissive — it accepts some exotic symbols a stricter check would reject — but
-// it never locks out a legitimate name, and every real account name on the site
-// is ASCII anyway. Length is byte-based.
+// codepoint is treated as a letter, in a name that is valid UTF-8. This is
+// deliberately permissive — it accepts some exotic symbols a stricter check
+// would reject — but it never locks out a legitimate name, and every real
+// account name on the site is ASCII anyway. Length is byte-based.
 
 pub const NameResult = struct { name: []const u8, err: []const u8 };
 
@@ -40,6 +40,12 @@ pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
     const trimmed = std.mem.trim(u8, raw, " \t\r\n");
     if (trimmed.len == 0) return .{ .name = "", .err = "Please enter a name." };
     if (trimmed.len > max_user_len) return .{ .name = "", .err = "That name is too long (40 characters max)." };
+    // **A NAME IS TEXT**: its bytes are UTF-8. A name goes into every message
+    // its owner writes (the transcript's `from:`, the reactions sidecar, the
+    // stream's JSON), and JSON written from bytes that are not UTF-8 is an
+    // array of numbers where a client reads a string. A browser always sends
+    // UTF-8, so only a hand-made request is refused here.
+    if (!std.unicode.utf8ValidateSlice(trimmed)) return .{ .name = "", .err = "That name is not readable text; please type it again." };
 
     var b: std.ArrayList(u8) = .empty;
     var last_space = false;
@@ -87,6 +93,9 @@ test "validateUserName collapses whitespace, requires alnum, rejects punctuation
         "path/name", //          slash
         "'' ''", //              punctuation but no letter/digit
         &@as([41]u8, @splat('a')), //            41 bytes, over the 40 cap
+        "Jos\xe9", //            Latin-1, not UTF-8
+        "a\xc0\xafb", //         an overlong encoding of '/'
+        "\xed\xa0\x80x", //       a UTF-16 surrogate half
     };
     for (cases) |raw| {
         const r = try validateUserName(a, raw);
