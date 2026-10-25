@@ -9,12 +9,25 @@ const std = @import("std");
 const testing = std.testing;
 const twin = @import("roc_chat_twin");
 const timefmt = @import("timefmt.zig");
+const decimal = @import("decimal.zig");
+const chat_paths = @import("chat_paths.zig");
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
     time_rfc3339 = 1,
     time_date = 2,
     time_unix_from_rfc3339 = 3,
+    parse_u64 = 4,
+    json_string = 5,
+    trim = 6,
+    participant = 7,
+    pair_key = 8,
+    valid_topic_id = 9,
+    valid_channel_name = 10,
+    valid_msg_ref_id = 11,
+    path_join = 12,
+    first_of = 13,
+    transcript_path = 14,
 };
 
 /// One Roc call's results, in `a`.
@@ -114,4 +127,157 @@ test "Time: a date read back, as written, with a fraction or an offset, and ever
         if (z != rz) differ.add("unixFromRFC3339(\"{s}\"): zig {?d}, roc {?d}", .{ text, z, rz });
     }
     try differ.none(texts.items.len);
+}
+
+// ── ZigText: decimal.zig, std.json.fmt, std.mem.trim ───────────────────────
+
+/// Byte strings that try a reader: every single byte, each pair of the
+/// ones that matter to JSON and to digits, UTF-8 good and broken, numbers
+/// at u64's edges, and a seeded spread of short ones.
+fn byteStrings(a: std.mem.Allocator) ![][]const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for ([_][]const u8{ "", "0", "00", "007", "18446744073709551615", "18446744073709551616", "99999999999999999999", "+5", "-0", "1_0", " 1", "1 ", "0x10", "1e3", "\u{0661}", "caf\xc3\xa9", "\xc3", "\xe2\x82", "\xf0\x9f\x98\x80", "\xed\xa0\x80", "\xc0\xaf", "\xff\xfe", "a\u{2028}b", "\x7f", " \t\r\n x \n\t", "\x0b\x0cx", "   ", "\n" }) |s| try out.append(a, s);
+    var b: [1]u8 = undefined;
+    for (0..256) |c| {
+        b[0] = @intCast(c);
+        try out.append(a, try a.dupe(u8, &b));
+    }
+    const special = [_]u8{ '"', '\\', '/', 0, 8, 9, 10, 12, 13, 0x1f, 0x7f, 'a', '7', 0xc3, 0xa9, 0xff };
+    for (special) |x| for (special) |y| try out.append(a, try a.dupe(u8, &.{ x, y }));
+    var rng = std.Random.DefaultPrng.init(0x7e47);
+    for (0..2000) |_| {
+        const n = rng.random().uintAtMost(usize, 12);
+        const s = try a.alloc(u8, n);
+        for (s) |*c| c.* = if (rng.random().boolean()) '0' + rng.random().uintAtMost(u8, 9) else rng.random().int(u8);
+        try out.append(a, s);
+    }
+    return out.toOwnedSlice(a);
+}
+
+test "ZigText: a number has one spelling, decimal.parseInt's at u64" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    const ss = try byteStrings(a);
+    for (ss) |s| {
+        const z = decimal.parseInt(u64, s);
+        const r = try roc1(a, .parse_u64, &.{s});
+        const rz: ?u64 = if (r) |t| try std.fmt.parseInt(u64, t, 10) else null;
+        if (z != rz) differ.add("parseInt(\"{f}\"): zig {?d}, roc {?d}", .{ std.zig.fmtString(s), z, rz });
+    }
+    try differ.none(ss.len);
+}
+
+test "ZigText: a string as std.json.fmt writes it, and as the readers trim it" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    const ss = try byteStrings(a);
+    for (ss) |s| {
+        const z = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(s, .{})});
+        const r = (try roc1(a, .json_string, &.{s})).?;
+        if (!std.mem.eql(u8, z, r)) differ.add("json(\"{f}\"): zig {s}, roc {s}", .{ std.zig.fmtString(s), z, r });
+        const zt = std.mem.trim(u8, s, " \t\r\n");
+        const rt = (try roc1(a, .trim, &.{s})).?;
+        if (!std.mem.eql(u8, zt, rt)) differ.add("trim(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(s), std.zig.fmtString(zt), std.zig.fmtString(rt) });
+    }
+    try differ.none(ss.len * 2);
+}
+
+// ── Paths (chat_paths.zig) ─────────────────────────────────────────────────
+
+fn yes(b: []const u8) bool {
+    return std.mem.eql(u8, b, "1");
+}
+
+test "Paths: who is in a DM, and its canonical key" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    const halves = [_][]const u8{ "", "0", "1", "2", "9", "10", "01", "007", "12", "21", "99999999999999999999", "9223372036854775807", "9223372036854775808", "a", "..", "1a", "-1", "+1", "1_2", "\xff" };
+    for (halves) |x| for (halves) |y| {
+        const pair = try std.fmt.allocPrint(a, "{s}_{s}", .{ x, y });
+        const zk = try chat_paths.chatPairKey(a, x, y);
+        const rk = (try roc1(a, .pair_key, &.{ x, y })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zk, rk)) differ.add("pairKey(\"{s}\", \"{s}\"): zig {s}, roc {s}", .{ x, y, zk, rk });
+        for ([_][]const u8{ x, y, "1", "", "3" }) |user| {
+            for ([_][]const u8{ pair, x, try std.fmt.allocPrint(a, "{s}__{s}", .{ x, y }) }) |key| {
+                const z = try chat_paths.chatKeyParticipant(a, key, user);
+                const r = yes((try roc1(a, .participant, &.{ key, user })).?);
+                compared += 1;
+                if (z != r) differ.add("participant(\"{s}\", \"{s}\"): zig {}, roc {}", .{ key, user, z, r });
+            }
+        }
+    };
+    try differ.none(compared);
+}
+
+test "Paths: topic ids, channel names and message ids, every byte at every place" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var ids: std.ArrayList([]const u8) = .empty;
+    for (try byteStrings(a)) |s| try ids.append(a, s);
+    for ([_][]const u8{ "general", "ChitChat", "a-b", "a--b", "-a", "a-", "2026-10-25", "general_3", "a-b_10", "_3", "a_", "a_b_3", "ops", "9ops", "Ops-9", "a b", "general_03" }) |s| try ids.append(a, s);
+    for ([_]usize{ 39, 40, 41, 79, 80, 81 }) |n| {
+        const s = try a.alloc(u8, n);
+        @memset(s, 'x');
+        try ids.append(a, s);
+    }
+    for ([_][]const u8{ "ab-cd_12", "ops-x" }) |base| for (0..base.len) |i| for (0..256) |c| {
+        const s = try a.dupe(u8, base);
+        s[i] = @intCast(c);
+        try ids.append(a, s);
+    };
+    var differ: Differences = .{};
+    for (ids.items) |s| {
+        const checks = .{
+            .{ Fn.valid_topic_id, chat_paths.validTopicID(s) },
+            .{ Fn.valid_channel_name, chat_paths.validChannelName(s) },
+            .{ Fn.valid_msg_ref_id, chat_paths.validMsgRefID(s) },
+        };
+        inline for (checks) |c| {
+            const r = yes((try roc1(a, c[0], &.{s})).?);
+            if (r != c[1]) differ.add("{t}(\"{f}\"): zig {}, roc {}", .{ c[0], std.zig.fmtString(s), c[1], r });
+        }
+    }
+    try differ.none(ids.items.len * 3);
+}
+
+test "Paths: paths joined as std.fs.path.join, a transcript's path, a conversation's first topic" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    const parts = [_][]const u8{ "", "/", "a", "/a", "a/", "/a/", "a//", "//a", "chat", "../x", "b c" };
+    for (parts) |x| for (parts) |y| for (parts) |z| {
+        const zj = try std.fs.path.join(a, &.{ x, y, z });
+        const rj = (try roc1(a, .path_join, &.{ x, y, z })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zj, rj)) differ.add("join(\"{s}\", \"{s}\", \"{s}\"): zig \"{s}\", roc \"{s}\"", .{ x, y, z, zj, rj });
+    };
+    for (parts) |dir| for ([_][]const u8{ "general", "", "a/b" }) |sid| {
+        const zp = try chat_paths.transcriptPath(a, dir, sid);
+        const rp = (try roc1(a, .transcript_path, &.{ dir, sid })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zp, rp)) differ.add("transcriptPath(\"{s}\", \"{s}\"): zig {s}, roc {s}", .{ dir, sid, zp, rp });
+    };
+    for ([_][]const []const u8{ &.{}, &.{"a"}, &.{ "a", "ChitChat" }, &.{ "ChitChat", "b" }, &.{ "chitchat", "z" }, &.{ "2026-10-25", "general" } }) |topics| {
+        const zf = chat_paths.firstOf(topics);
+        const rf = (try roc1(a, .first_of, topics)).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zf, rf)) differ.add("firstOf: zig {s}, roc {s}", .{ zf, rf });
+    }
+    try differ.none(compared);
 }
