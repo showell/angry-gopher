@@ -100,8 +100,10 @@ pub const edge = @import("webbox").edge;
 /// and the library as `webbox`, and reaches nothing else of either.
 ///
 /// **WHAT ELSE THE SITE SERVES** (webbox's combo): Codex Chat and Damian's UO
-/// town (cobble-webbox), public and ungated, each under its own prefix with
-/// its own files under it in the data and auth roots. Neither passes through
+/// town (cobble-webbox), and the Roc chat's first route (roc-webbox,
+/// docs/ROC-CHAT.md T1: `GET /roc-chat/ping`), public and ungated, each
+/// under its own prefix with its own files under it in the data and auth
+/// roots. Neither passes through
 /// this application's cookies or refusals, and each is counted under its own
 /// name.
 pub const site = combined.site;
@@ -109,6 +111,7 @@ pub const hosting = combined.hosting;
 const combined = @import("webbox").combo.Mount(gopher, &.{
     .{ .prefix = "/codex-chat", .root = @import("codex_chat") },
     .{ .prefix = "/uo", .root = @import("uo_town") },
+    .{ .prefix = "/roc-chat", .root = @import("roc_chat") },
 });
 /// This application alone, as `Mount` takes its primary.
 const gopher = struct {

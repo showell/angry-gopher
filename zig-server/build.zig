@@ -46,6 +46,12 @@ pub fn build(b: *std.Build) void {
     // /uo: `uo_town`, Damian's UO town (TownWatch), the same way.
     const uo_town = cobble.module("uo_town");
     root.addImport("uo_town", uo_town);
+    // /roc-chat: `roc_chat`, the Roc chat (roc-webbox, docs/ROC-CHAT.md
+    // T1), its Roc built for this target. So every build needs the Roc
+    // roc-webbox pins: `roc` on the PATH, or -Droc=<path>.
+    const roc_webbox = b.dependency("roc_webbox", .{ .target = target, .optimize = optimize, .roc = b.option([]const u8, "roc", "the Roc compiler (default: `roc` on the PATH); the version roc-webbox's roc-version pins") orelse "roc" });
+    const roc_chat = roc_webbox.module("roc_chat");
+    root.addImport("roc_chat", roc_chat);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -166,6 +172,7 @@ pub fn build(b: *std.Build) void {
     router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("codex_chat", codex_chat);
     router_tests.root_module.addImport("uo_town", uo_town);
+    router_tests.root_module.addImport("roc_chat", roc_chat);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });

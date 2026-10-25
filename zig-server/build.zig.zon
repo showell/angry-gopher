@@ -18,5 +18,10 @@
         // under /codex-chat: the `cobble-webbox` checkout (../../cobble-webbox
         // from here), module `codex_chat`.
         .cobble_webbox = .{ .path = "../../cobble-webbox" },
+        // The Roc chat (docs/ROC-CHAT.md, T1), served under /roc-chat: the
+        // `roc-webbox` checkout (../../roc-webbox from here), module
+        // `roc_chat`, built by the Roc its roc-version pins (on the PATH, or
+        // -Droc=<path>).
+        .roc_webbox = .{ .path = "../../roc-webbox" },
     },
 }
