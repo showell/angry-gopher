@@ -1,4 +1,4 @@
-//! chat_count: what a session holds without reading its transcript: the
+//! chat_count: what a topic holds without reading its transcript: the
 //! `.count` sidecar (its message count, the size it was taken at, its last
 //! message's place and author), the last message for /chat/recent, and the
 //! startup backfill (split from chat_store.zig by metal-vmm QUEUE 174).
@@ -25,28 +25,28 @@ const no_uid = chat_store.no_uid;
 const sep = chat_store.sep;
 const ChatMessage = chat_store.ChatMessage;
 const listConvDirs = chat_paths.listConvDirs;
-const listSessions = chat_paths.listSessions;
-const rawSession = chat_paths.rawSession;
-const sessionMdPath = chat_paths.sessionMdPath;
+const listTopics = chat_paths.listTopics;
+const readTranscript = chat_paths.readTranscript;
+const transcriptPath = chat_paths.transcriptPath;
 
-/// What a session's last message is, for a listing that must not read the
+/// What a topic's last message is, for a listing that must not read the
 /// transcript: the words, when they were sent, and the uid that sent them
 /// (where the sidecar does not say, the member the last message names; empty
 /// when none does: never an older author, zig-metal-unikernel 153(1)).
 pub const LastMessage = struct {
     markdown: []const u8,
-    date: []const u8,
+    at: []const u8,
     uid: []const u8,
-    /// Which message of the session this is, counting from one.
+    /// Which message of the topic this is, counting from one.
     number: usize,
 };
 
-/// lastMessage answers a session's last message **without a stat and without
+/// lastMessage answers a topic's last message **without a stat and without
 /// reading the whole transcript**, when the sidecar can say where it begins:
 /// one small read of the sidecar, one bounded read of the tail.
 ///
 /// **NO STAT.** /chat/recent used to order by file mtime, which meant statting
-/// every session; the message carries its own date, so neither is needed. The
+/// every topic; the message carries its own date, so neither is needed. The
 /// price is that a transcript appended to behind this server's back is not
 /// noticed until the next message or the next read of the whole thing — which
 /// for a listing is a stale excerpt, where for `messageCount` it would be a
@@ -54,14 +54,14 @@ pub const LastMessage = struct {
 /// not.
 ///
 /// It is not trusted blindly: the last block in the window must be a message of
-/// this session, numbered at least what the sidecar says. Anything else — a
+/// this topic, numbered at least what the sidecar says. Anything else — a
 /// hand-edited transcript, a sidecar from another file, a message too long for
 /// the window — falls back to reading the whole thing.
 pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
     const counted = readCount(io, alloc, conv_dir, sid);
     if (counted) |c| {
         if (c.last) |l| if (c.count > 0) {
-            const path = try sessionMdPath(alloc, conv_dir, sid);
+            const path = try transcriptPath(alloc, conv_dir, sid);
             const buf = try alloc.alloc(u8, tail_window);
             // absent-ok: the sidecar is a cache: a window that will not read falls back to the transcript.
             const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid, counted);
@@ -82,7 +82,7 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
                     // itself on the next send.
                     if (numberIn(got.id, sid)) |number| if (number >= c.count) return .{
                         .markdown = got.markdown,
-                        .date = got.date,
+                        .at = got.at,
                         // A current record's answer stands, nobody included;
                         // a record behind: the newer message's author.
                         .uid = if (number == c.count) l.uid else authorOf(io, alloc, got),
@@ -125,7 +125,7 @@ fn lookupAuthor(io: Io, alloc: Alloc, msg: ChatMessage) ![]const u8 {
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
-/// session's — which is what a sidecar pointing at the wrong place looks like.
+/// topic's — which is what a sidecar pointing at the wrong place looks like.
 fn numberIn(id: []const u8, sid: []const u8) ?usize {
     if (!std.mem.startsWith(u8, id, sid)) return null;
     const rest = id[sid.len..];
@@ -133,8 +133,8 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
     return decimal.parseInt(usize, rest[1..]);
 }
 
-/// The whole transcript, decoded, for a session whose sidecar cannot say. What
-/// every session cost before the sidecar carried a last message.
+/// The whole transcript, decoded, for a topic whose sidecar cannot say. What
+/// every topic cost before the sidecar carried a last message.
 ///
 /// **THE AUTHOR FROM THE SIDECAR, WHERE IT SPEAKS FOR THIS MESSAGE**
 /// (zig-metal-unikernel 153(1)'s review): a message too long for the window, or a
@@ -142,7 +142,7 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
 /// transcript is exactly the one it counted, in messages and in size.
 /// Otherwise none: unknown, never an older author.
 fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, counted: ?Count) !?LastMessage {
-    const raw = (try rawSession(io, alloc, conv_dir, sid)) orelse return null;
+    const raw = (try readTranscript(io, alloc, conv_dir, sid)) orelse return null;
     const msgs = try decodeChatFile(alloc, raw);
     if (msgs.len == 0) return null;
     const last = msgs[msgs.len - 1];
@@ -150,35 +150,35 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     // included; else the last author by name.
     const blocks = countBlocks(raw);
     const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == blocks and c.size == raw.len) l.uid else null) else null) else null;
-    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorOf(io, alloc, last), .number = blocks };
+    return .{ .markdown = last.markdown, .at = last.at, .uid = recorded orelse authorOf(io, alloc, last), .number = blocks };
 }
 
-/// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
+/// **EVERY TOPIC GETS A SIDECAR AT BOOT.** A conversation written before this
 /// existed, or repaired by hand, would otherwise cost a whole-transcript read
 /// on every listing for as long as nobody posts to it. Both hosts run this —
 /// the Linux server and the machine with no operating system — because they are
 /// judged on the files they leave behind as well as the answers they give.
 ///
-/// One pass over the conversations, reading only what it has to: a session
+/// One pass over the conversations, reading only what it has to: a topic
 /// whose sidecar already says where its last message is costs one small read.
 /// Answers how many it wrote.
 pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usize {
     var wrote: usize = 0;
-    // **ONE SESSION'S TRANSCRIPT AT A TIME.** The first boot after this arrives
+    // **ONE TOPIC'S TRANSCRIPT AT A TIME.** The first boot after this arrives
     // reads every transcript there is; holding them all at once would make the
     // pass cost the whole corpus, several times over, on the one host with no
     // operating system to ask for more.
-    var per_session = std.heap.ArenaAllocator.init(alloc);
-    defer per_session.deinit();
+    var per_topic = std.heap.ArenaAllocator.init(alloc);
+    defer per_topic.deinit();
     for (conv_dirs) |dir| {
         // absent-ok: the startup backfill skips a conversation it cannot list; it writes only what it can derive.
-        const sids = listSessions(io, alloc, dir) catch continue;
+        const sids = listTopics(io, alloc, dir) catch continue;
         for (sids) |sid| {
-            _ = per_session.reset(.retain_capacity);
-            const a = per_session.allocator();
+            _ = per_topic.reset(.retain_capacity);
+            const a = per_topic.allocator();
             if (readCount(io, a, dir, sid)) |c| if (c.last != null) continue;
             // absent-ok: the same, for a transcript it cannot read: no sidecar is written for it.
-            const raw = (rawSession(io, a, dir, sid) catch continue) orelse continue;
+            const raw = (readTranscript(io, a, dir, sid) catch continue) orelse continue;
             const msgs = decodeChatFile(a, raw) catch continue;
             if (msgs.len == 0) continue;
             // The last block begins at the last separator; a lone message
@@ -187,7 +187,7 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             // The last message's author, found by name (the box's must-fix
             // after 153(1)); "", when no member has it. A lookup that fails
             // writes nothing: the next boot asks again.
-            // absent-ok: the startup backfill skips a session whose author it cannot look up; reads find the author by name meanwhile.
+            // absent-ok: the startup backfill skips a topic whose author it cannot look up; reads find the author by name meanwhile.
             const uid = lookupAuthor(io, a, msgs[msgs.len - 1]) catch continue;
             // Counted only when written (metal-vmm QUEUE 172): the start's
             // report said "backfilled N" for writes that failed.
@@ -199,7 +199,7 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
     return wrote;
 }
 
-/// backfillAll gives every session on disk a last-message record. **Both hosts
+/// backfillAll gives every topic on disk a last-message record. **Both hosts
 /// call this once at startup** — see `backfillSidecars`.
 pub fn backfillAll(io: Io, alloc: Alloc) usize {
     // absent-ok: the startup backfill does nothing if it cannot list: nothing is written.
@@ -209,14 +209,14 @@ pub fn backfillAll(io: Io, alloc: Alloc) usize {
 
 // ── the message count ─────────
 
-/// countPath is {conv_dir}/sessions/<sid>.count — the session's message count,
+/// countPath is {conv_dir}/sessions/<sid>.count — the topic's message count,
 /// and the transcript size it was taken at: "<count> <size>\n".
 pub fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.count", .{sid});
     return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
 }
 
-/// messageCount is how many messages a session holds — the N that numbers the
+/// messageCount is how many messages a topic holds — the N that numbers the
 /// next one — WITHOUT reading the transcript when the count sidecar can say.
 ///
 /// Numbering a message used to mean reading and decoding the whole transcript
@@ -230,7 +230,7 @@ pub fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
 /// its count, or the file edited by hand. The one thing a size cannot catch is
 /// a rewrite to exactly the same length with a different number of messages.
 pub fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
-    const md = try sessionMdPath(alloc, conv_dir, sid);
+    const md = try transcriptPath(alloc, conv_dir, sid);
     // No transcript is no messages; a transcript that cannot be looked at or
     // read is an error, never 0: numbering from 0 would glue the next message
     // onto the last and count wrong from then on.
@@ -266,7 +266,7 @@ pub fn indexOf(id: []const u8, sid: []const u8) ?usize {
 
 /// **WHERE THE LAST MESSAGE STARTS, WHEN IT WAS SENT, AND BY WHOM** — the
 /// second line of the sidecar, and everything /chat/recent needs to list a
-/// session without reading its transcript.
+/// topic without reading its transcript.
 ///
 /// **THE OFFSET, NOT THE WORDS, AND NOT THE DATE EITHER.** Keeping the text
 /// here would be a second copy of it on disk, and a rendered excerpt would be a
@@ -353,7 +353,7 @@ fn fixtureSetSidecar(self: *CountFixture, text: []const u8) !void {
 
 fn fixtureTranscriptSize(self: *CountFixture) !u64 {
     const a = self.arena.allocator();
-    return (try Io.Dir.cwd().statFile(self.io, try sessionMdPath(a, self.dir, "topic"), .{})).size;
+    return (try Io.Dir.cwd().statFile(self.io, try transcriptPath(a, self.dir, "topic"), .{})).size;
 }
 
 test "a message's number has one spelling: digits after the topic and its underscore" {
@@ -491,7 +491,7 @@ test "count: a transcript that cannot be read is an error, never no messages" {
     defer f.deinit();
     const a = f.arena.allocator();
     // A folder where the transcript should be: there, and unreadable.
-    try store.makeDir(f.io, a, try sessionMdPath(a, f.dir, "topic"));
+    try store.makeDir(f.io, a, try transcriptPath(a, f.dir, "topic"));
     try testing.expect(std.meta.isError(messageCount(f.io, a, f.dir, "topic")));
 }
 
@@ -507,7 +507,7 @@ test "last message: the sidecar answers without reading the transcript" {
 
     const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
     try testing.expectEqualStrings("the last word", got.markdown);
-    try testing.expectEqualStrings(sent.date, got.date);
+    try testing.expectEqualStrings(sent.at, got.at);
     try testing.expectEqualStrings("1", got.uid);
     try testing.expectEqual(@as(usize, 3), got.number);
 }
@@ -551,10 +551,10 @@ test "last message: a sidecar pointing at the wrong place is not believed" {
     const a = f.arena.allocator();
     const size = try fixtureTranscriptSize(&f);
     // An offset into the middle of a block, and one that claims a message the
-    // session does not have.
+    // topic does not have.
     for ([_][]const u8{
         try std.fmt.allocPrint(a, "2 {d}\n7 1\n", .{size}), // into the middle of a block
-        try std.fmt.allocPrint(a, "9 {d}\n0 1\n", .{size}), // a message the session does not have
+        try std.fmt.allocPrint(a, "9 {d}\n0 1\n", .{size}), // a message the topic does not have
     }) |junk| {
         try fixtureSetSidecar(&f, junk);
         const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
@@ -588,7 +588,7 @@ test "last message: a block from before `uid:` names nobody where nothing else s
     const a = f.arena.allocator();
     // A transcript an older server wrote: no `uid:` lines, and no sidecar.
     // "Tester" is no member's name here, so nobody, never a guess.
-    try store.write(f.io, a, try sessionMdPath(a, f.dir, "topic"), "MSG_topic_1\nfrom: Tester\ndate: 2026-10-10T00:00:00Z\n\nfirst" ++ sep ++ "MSG_topic_2\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nsecond", .{});
+    try store.write(f.io, a, try transcriptPath(a, f.dir, "topic"), "MSG_topic_1\nfrom: Tester\ndate: 2026-10-10T00:00:00Z\n\nfirst" ++ sep ++ "MSG_topic_2\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nsecond", .{});
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
@@ -644,7 +644,7 @@ test "backfill: one pass reaches DMs and channels alike" {
     defer f.deinit();
     const a = f.arena.allocator();
     _ = try f.send("in a dm");
-    // A channel with a session of its own, written as the store lays it out.
+    // A channel with a topic of its own, written as the store lays it out.
     const chan = try channelConvDir(a, "general");
     const sessions = try std.fs.path.join(a, &.{ chan, "sessions" });
     try Io.Dir.cwd().createDirPath(f.io, sessions);
@@ -659,7 +659,7 @@ test "backfill: one pass reaches DMs and channels alike" {
     try testing.expectEqual(@as(usize, 1), backfillAll(f.io, a));
     const got = (try lastMessage(f.io, a, chan, "topic")).?;
     try testing.expectEqualStrings("in a channel", got.markdown);
-    try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.date);
+    try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.at);
 }
 
 test "backfill: the record it writes can be read back" {
@@ -692,7 +692,7 @@ test "backfill: the record it writes can be read back" {
 
     const got = (try lastMessage(f.io, a, dir, "topic")).?;
     try testing.expectEqualStrings("who said this", got.markdown);
-    try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.date);
+    try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.at);
 }
 
 test "last message: a record left one behind still answers with the true last message" {
@@ -795,7 +795,7 @@ test "the last session and conversation are written only when they change (zig-m
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try chat_state.setLastViewedTopic(f.io, a, "1", "1_2", "topic");
     const lc = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-conv" });
     const ls = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions", "1_2" });
     try testing.expectEqualStrings("1_2\n", try store.read(f.io, a, lc, .limited(64)));
@@ -803,11 +803,11 @@ test "the last session and conversation are written only when they change (zig-m
     // it back.
     try store.write(f.io, a, lc, "1_2", .{});
     try store.write(f.io, a, ls, "topic", .{});
-    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try chat_state.setLastViewedTopic(f.io, a, "1", "1_2", "topic");
     try testing.expectEqualStrings("1_2", try store.read(f.io, a, lc, .limited(64)));
     try testing.expectEqualStrings("topic", try store.read(f.io, a, ls, .limited(64)));
     // A new one is written.
-    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
+    try chat_state.setLastViewedTopic(f.io, a, "1", "1_2", "other");
     try testing.expectEqualStrings("other\n", try store.read(f.io, a, ls, .limited(64)));
 }
 

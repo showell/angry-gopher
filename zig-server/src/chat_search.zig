@@ -32,6 +32,7 @@
 //! is untouched).
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
@@ -66,7 +67,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     const raw = http.queryValue(try http.target(req, alloc), if (words_route) "prefix" else "word") orelse "";
     var buf: [tokens.max_word]u8 = undefined;
     const key = tokens.key(try chat.urlDecode(alloc, raw), &buf);
-    const reach = try chat_store.visibleConvs(io, alloc, uid);
+    const reach = try chat_paths.visibleConvs(io, alloc, uid);
     const idx = search_index.ready(io, alloc) orelse {
         return req.respond("{\"error\":\"search is not ready\"}", .{ .status = .service_unavailable, .extra_headers = &.{http.json_ct} });
     };
@@ -91,7 +92,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         // keep every smaller copy of the answer besides the last.
         var size: usize = 128;
         for (f.hits) |h| size += 128 + excerptCost(h.msg.markdown, key) + search_index.jsonCost(h.msg.from) +
-            search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.date) + search_index.jsonCost(h.conv.base);
+            search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.at) + search_index.jsonCost(h.conv.base);
         try b.ensureTotalCapacity(alloc, b.items.len + size);
         try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
         for (f.hits, 0..) |h, i| {
@@ -103,7 +104,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
                 .{ ",\"sid\":", h.msg.sid },
                 .{ ",\"id\":", h.msg.id },
                 .{ ",\"from\":", h.msg.from },
-                .{ ",\"date\":", h.msg.date },
+                .{ ",\"date\":", h.msg.at },
                 .{ ",\"before\":", ex.before },
                 .{ ",\"mark\":", ex.mark },
                 .{ ",\"after\":", ex.after },

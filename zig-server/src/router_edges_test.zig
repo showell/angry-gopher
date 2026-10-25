@@ -56,7 +56,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "log_view.zig", .func = "parseFilter" },
     .{ .file = "script_route.zig", .func = "parse" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
-    .{ .file = "chat.zig", .func = "highestGeneralSession", .unreachable_because = "topic folder names on the disk" },
+    .{ .file = "chat.zig", .func = "highestGeneralTopic", .unreachable_because = "topic folder names on the disk" },
     .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "readCount", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseLast", .unreachable_because = "a .count file the server wrote" },

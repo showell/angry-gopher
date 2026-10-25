@@ -6,12 +6,12 @@
 //! back, so the dependency is one-way.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const chat_upload = @import("chat_upload.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const store = @import("chat_store.zig");
 const chat_state = @import("chat_state.zig");
 const presence = @import("presence.zig");
 const html = @import("webbox").html;
@@ -34,14 +34,14 @@ const page_scripts = [_][]const u8{
     "chat.js",               "notify.js",
 };
 
-/// firstTopicPage renders the "no topics yet" bootstrap shell for a conversation
+/// noTopicsPage renders the "no topics yet" bootstrap shell for a conversation
 /// that is addressable (a DM pair, or a channel the viewer is in) but has no
-/// sessions on disk. The shell is deliberately thin: chrome + an empty mount
+/// topics on disk. The shell is deliberately thin: chrome + an empty mount
 /// carrying the conv base; the ChatFirstTopic client module owns the intro, the
 /// styling, and the ChatAddTopic widget (pre-filled "general") that POSTs
 /// <base>/new and navigates to the created topic. `base` is "/chat/c/<pair>" or
 /// "/channel/<name>"; the widget is base-shape-agnostic.
-pub fn firstTopicPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
+pub fn noTopicsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
     var page = try chrome.page(alloc, "Chat", title, viewer, "chat");
     const b = &page.body;
@@ -67,7 +67,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     const conv = topic.conv;
     // Remember where this user is — the /chat/default resume pointer, keyed by
     // pair. Only convs that persist a cursor (DMs) do this; channels don't.
-    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
+    if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
     const viewer = try users.getUserName(io, alloc, uid);
     const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic, now);
 
@@ -117,7 +117,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: No
         if (std.mem.eql(u8, u.id, uid)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        const pk = try store.chatPairKey(alloc, uid, u.id);
+        const pk = try chat_paths.chatPairKey(alloc, uid, u.id);
         const active = conv.meta.kind == .dm and std.mem.eql(u8, pk, conv.key);
         try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}", .{
             u.id, std.json.fmt(u.name, .{}), pk, active,
@@ -126,7 +126,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: No
         if (presence.isOnline(u.id, now)) try b.appendSlice(alloc, ",\"online\":true");
         try b.append(alloc, '}');
     }
-    for (try store.listUserChannels(io, alloc, uid)) |name| {
+    for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
         if (!first) try b.append(alloc, ',');
         first = false;
         const active = conv.meta.kind == .channel and std.mem.eql(u8, name, conv.key);
@@ -136,35 +136,35 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: No
         });
     }
 
-    // Sessions split by pinned state: the conv's
-    // pins (conv-key form) intersect the live session list — stale ids drop out.
-    const pins = try chat_state.pinnedSessions(io, alloc, uid, conv.key);
-    const sessions = try store.listSessions(io, alloc, conv.dir);
+    // Topics split by pinned state: the conv's
+    // pins (conv-key form) intersect the live topic list — stale ids drop out.
+    const pins = try chat_state.pinnedTopics(io, alloc, uid, conv.key);
+    const topics = try chat_paths.listTopics(io, alloc, conv.dir);
 
     try b.appendSlice(alloc, "],\"pinned_sessions\":[");
     first = true;
-    for (sessions) |s| {
+    for (topics) |s| {
         if (!chat_state.isPinned(pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        try emitSessionItem(&b, alloc, conv.base, s, topic.sid);
+        try emitTopicItem(&b, alloc, conv.base, s, topic.sid);
     }
-    try b.appendSlice(alloc, "],\"sessions\":[");
+    try b.appendSlice(alloc, "],\"topics\":[");
     first = true;
-    for (sessions) |s| {
+    for (topics) |s| {
         if (chat_state.isPinned(pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        try emitSessionItem(&b, alloc, conv.base, s, topic.sid);
+        try emitTopicItem(&b, alloc, conv.base, s, topic.sid);
     }
     try b.appendSlice(alloc, "]}");
 
     return html.scriptSafe(alloc, b.items);
 }
 
-/// emitSessionItem appends one session row (`{id,label,url,active}`) to the
+/// emitTopicItem appends one topic row (`{id,label,url,active}`) to the
 /// sidebar JSON — shared by the pinned and unpinned passes.
-fn emitSessionItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []const u8, sid: []const u8) !void {
+fn emitTopicItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []const u8, sid: []const u8) !void {
     const active = std.mem.eql(u8, s, sid);
     const u = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, s });
     try b.print(alloc, "{{\"id\":{f},\"label\":{f},\"url\":{f},\"active\":{}}}", .{

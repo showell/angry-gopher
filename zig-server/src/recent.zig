@@ -1,5 +1,5 @@
 //! recent: /chat/recent — a flat reverse-chronological feed of activity across
-//! the signed-in user's chat sessions (DMs + channels) and personal docs. The
+//! the signed-in user's chat topics (DMs + channels) and personal docs. The
 //! initial-load source is file mtime: on every GET the server walks the convs the
 //! viewer participates in plus their docs dir, stats each session/doc file, and
 //! ships the rows newest-first as inline JSON (the same recentEvent shape the
@@ -14,6 +14,9 @@
 //! 20s timer and upserts rows from onmessage events.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_count = @import("chat_count.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
@@ -61,7 +64,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     // the backlog, so the stream is live-only (no replay). Fed by the
     // appendMessage cross-page fanout + docs save/create.
     if (std.mem.eql(u8, rest, "/stream")) {
-        return sse.forward(req, bus, try store.recentBusKey(alloc, uid));
+        return sse.forward(req, bus, try chat_fanout.recentBusKey(alloc, uid));
     }
     return http.notFound(req);
 }
@@ -118,19 +121,19 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
     // DMs: one conv per other authorized principal.
     for (try users.listAuthorized(io, alloc)) |u| {
         if (std.mem.eql(u8, u.id, uid)) continue;
-        const conv = try store.chatPairKey(alloc, uid, u.id);
-        const dir = try store.dmConvDir(alloc, conv);
+        const conv = try chat_paths.chatPairKey(alloc, uid, u.id);
+        const dir = try chat_paths.dmConvDir(alloc, conv);
         const base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv});
         const where = try std.fmt.allocPrint(alloc, "to {s}", .{u.name});
-        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, .dm);
+        try gatherConvTopics(io, alloc, &items, dir, base, where, uid, .dm);
     }
 
     // Channels the viewer is a member of.
-    for (try store.listUserChannels(io, alloc, uid)) |name| {
-        const dir = try store.channelConvDir(alloc, name);
+    for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
+        const dir = try chat_paths.channelConvDir(alloc, name);
         const base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
         const where = try std.fmt.allocPrint(alloc, "in {s}", .{name});
-        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, .channel);
+        try gatherConvTopics(io, alloc, &items, dir, base, where, uid, .channel);
     }
 
     // The viewer's own docs.
@@ -153,25 +156,25 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
     return slice;
 }
 
-/// gatherConvSessions appends a chat row for each session in one conv: its last
+/// gatherConvTopics appends a chat row for each topic in one conv: its last
 /// message, when it was sent and by whom, and a one-line excerpt of it.
 /// `base`/`where` are the conv's pre-resolved URL base and per-viewer context
 /// label; `kind` says a 1:1 conv from a channel, for the wire.
 ///
-/// **NEITHER A STAT NOR A TRANSCRIPT READ.** Both were per-session costs that
+/// **NEITHER A STAT NOR A TRANSCRIPT READ.** Both were per-topic costs that
 /// grew with the conversation: this page used to read and decode every
-/// transcript in full to take the last message of each. `store.lastMessage`
-/// answers from the session's sidecar, and the date it carries is the message's
+/// transcript in full to take the last message of each. `chat_count.lastMessage`
+/// answers from the topic's sidecar, and the date it carries is the message's
 /// own — which is also the order, so there is no mtime to stat for.
-fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, kind: store.ConvKind) !void {
-    for (try store.listSessions(io, alloc, dir)) |sid| {
+fn gatherConvTopics(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, kind: store.ConvKind) !void {
+    for (try chat_paths.listTopics(io, alloc, dir)) |sid| {
         const url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
-        const last = (try store.lastMessage(io, alloc, dir, sid)) orelse {
-            // A session nobody has written to yet: it still belongs on the page.
+        const last = (try chat_count.lastMessage(io, alloc, dir, sid)) orelse {
+            // A topic nobody has written to yet: it still belongs on the page.
             try byFileTime(io, alloc, items, dir, sid, url, where, kind);
             continue;
         };
-        const at = timefmt.unixFromRFC3339(last.date) orelse {
+        const at = timefmt.unixFromRFC3339(last.at) orelse {
             // A message whose date header is missing or malformed — a
             // transcript written by something other than this server. Ordering
             // it at the epoch would bury it, and shipping its empty date to
@@ -196,7 +199,7 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
 }
 
 /// **A FILE'S TIME, AS FAT KEEPS IT: IN EVEN SECONDS.** A row with no
-/// recorded date (a doc, a session with no messages, a message whose date
+/// recorded date (a doc, a topic with no messages, a message whose date
 /// will not read) is ordered and shown by its file's modification time. FAT
 /// keeps that in two-second steps, rounded down, so a file written at an odd
 /// second reads a second earlier on zig-metal-unikernel than on Linux, and the two
@@ -208,7 +211,7 @@ fn fileSeconds(mtime_ns: i96) i64 {
 }
 
 /// newestFirst orders the feed. **A TIE IS BROKEN BY THE URL**, because a
-/// message's date is recorded to the second: two sessions written inside one
+/// message's date is recorded to the second: two topics written inside one
 /// second must still come out in the same order on every host that serves this
 /// data, or the two builds of this application would disagree about a page.
 fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
@@ -218,11 +221,11 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
     return std.mem.lessThan(u8, ka, kb);
 }
 
-/// byFileTime appends a row ordered by the session file's own mtime, with no
-/// excerpt: for a session with no messages, and for one whose last message
+/// byFileTime appends a row ordered by the topic file's own mtime, with no
+/// excerpt: for a topic with no messages, and for one whose last message
 /// carries no date this server can read.
 fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, kind: store.ConvKind) !void {
-    const path = try store.sessionMdPath(alloc, dir, sid);
+    const path = try chat_paths.transcriptPath(alloc, dir, sid);
     const st = (try disk.statOrNull(io, alloc, path)) orelse return;
     const secs = fileSeconds(st.mtime);
     try items.append(alloc, .{
@@ -237,7 +240,7 @@ fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []co
 }
 
 /// authorName renders the most-recent author's display name, "You" when that is
-/// the viewer. `uid` is what the session's sidecar recorded, and "" where it
+/// the viewer. `uid` is what the topic's sidecar recorded, and "" where it
 /// does not know: an empty Who cell, never an older author, which could be a
 /// "You" the viewer did not write (zig-metal-unikernel 153(1)).
 fn authorName(io: Io, alloc: Alloc, viewer: []const u8, uid: []const u8) ![]const u8 {
@@ -267,7 +270,7 @@ test "fs: a session with no messages, written at an odd second, shows the even s
     const io = threaded.io();
 
     const dir = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "chat", "1_2" });
-    const md = try store.sessionMdPath(a, dir, "empty");
+    const md = try chat_paths.transcriptPath(a, dir, "empty");
     try disk.write(io, a, md, "", .{});
     // 2026-09-21T14:13:21Z: an odd second, half a second in.
     const odd: i96 = 1790000001 * std.time.ns_per_s + 500_000_000;

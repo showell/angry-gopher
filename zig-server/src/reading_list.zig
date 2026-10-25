@@ -8,8 +8,8 @@
 //! and the unambiguous JUMP-BACK URL.
 //!
 //! Why the URL is built here and not via /chat/msg/<id>: that lookup endpoint
-//! re-derives the conversation from the bare id by scanning, and a session slug
-//! is only conv-LOCAL (1_2 and 1_3 can both hold a session named 2026-05-28), so
+//! re-derives the conversation from the bare id by scanning, and a topic slug
+//! is only conv-LOCAL (1_2 and 1_3 can both hold a topic named 2026-05-28), so
 //! it resolves to the FIRST match. At save time we know the conv unambiguously,
 //! so we freeze the fully-qualified location — the whole point of a reading list
 //! that spans conversations.
@@ -20,9 +20,10 @@
 //! body so an inner `~~~` can't close it early — mirrors chat.js pickQuoteFence.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const store = @import("chat_store.zig");
 const disk = @import("webbox").store;
 const docs_store = @import("docs_store.zig");
 const mem_meter = @import("webbox").mem_meter;
@@ -41,7 +42,7 @@ pub const max_reading_list_bytes: usize = 1 << 20;
 /// chatMsgLookup redirects to, but built from the conv we already know instead of
 /// re-derived. DM: /chat/c/<conv>/<sid>#msg-<id>; channel: /channel/<name>/<sid>#msg-<id>.
 pub fn jumpURL(alloc: Alloc, ref: Ref) ![]u8 {
-    const base = try store.convKeyBaseURL(alloc, ref.conv);
+    const base = try chat_fanout.convKeyBaseURL(alloc, ref.conv);
     return std.fmt.allocPrint(alloc, "{s}/{s}#msg-{s}", .{ base, ref.sid, ref.id });
 }
 
@@ -115,7 +116,7 @@ fn parseRefAt(text: []const u8, start: usize) ?Ref {
     const id_start = i;
     while (i < text.len and isIdChar(text[i])) : (i += 1) {}
     const id = text[id_start..i];
-    if (!store.validMsgRefID(id)) return null;
+    if (!chat_paths.validMsgRefID(id)) return null;
     return .{ .conv = conv, .sid = sid, .id = id };
 }
 

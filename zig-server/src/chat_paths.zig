@@ -1,5 +1,5 @@
 //! chat_paths: where conversations live and who may reach them: DM and
-//! channel directories, sessions, channel members, the viewer's walk, and the
+//! channel directories, topics, channel members, the viewer's walk, and the
 //! validators every path is checked by (split from chat_store.zig by
 //! metal-vmm QUEUE 174).
 
@@ -81,24 +81,24 @@ pub fn channelConvDir(alloc: Alloc, name: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels", name });
 }
 
-/// sessionMdPath is {conv_dir}/sessions/<sid>.md.
-pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
+/// transcriptPath is {conv_dir}/sessions/<sid>.md.
+pub fn transcriptPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.md", .{sid});
     return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
 }
 
-/// rawSession reads a session's literal on-disk transcript bytes, or null when
+/// readTranscript reads a topic's literal on-disk transcript bytes, or null when
 /// the file is missing/unreadable.
 /// The /raw view serves
 /// these bytes verbatim.
-pub fn rawSession(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?[]u8 {
-    const path = try sessionMdPath(alloc, conv_dir, sid);
+pub fn readTranscript(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?[]u8 {
+    const path = try transcriptPath(alloc, conv_dir, sid);
     return store.readOrNull(io, alloc, path, .unlimited);
 }
 
-/// listSessions returns the session ids (the `.md` basenames) under
+/// listTopics returns the topic ids (the `.md` basenames) under
 /// {conv_dir}/sessions, sorted ascending. Missing dir → empty.
-pub fn listSessions(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
+pub fn listTopics(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions" });
     const entries = try store.list(io, alloc, dir_path);
 
@@ -114,14 +114,20 @@ pub fn listSessions(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     return slice;
 }
 
-/// defaultSession prefers "ChitChat" when present, else the alphabetically-first
-/// session, else "" (empty conv).
-pub fn defaultSession(io: Io, alloc: Alloc, conv_dir: []const u8) ![]const u8 {
-    const sessions = try listSessions(io, alloc, conv_dir);
-    for (sessions) |s| {
+/// firstTopic is the topic a conversation opens on when nobody's last view
+/// says otherwise: `firstOf` its topics, or "" for a conversation with none.
+/// resumeTopic (chat_state) is the one that knows the viewer.
+pub fn firstTopic(io: Io, alloc: Alloc, conv_dir: []const u8) ![]const u8 {
+    return firstOf(try listTopics(io, alloc, conv_dir));
+}
+
+/// firstOf picks from a conversation's topics (listTopics, sorted): "ChitChat"
+/// when present, else the alphabetically first, else "".
+pub fn firstOf(topics: []const []const u8) []const u8 {
+    for (topics) |s| {
         if (std.mem.eql(u8, s, "ChitChat")) return s;
     }
-    if (sessions.len > 0) return sessions[0];
+    if (topics.len > 0) return topics[0];
     return "";
 }
 
@@ -255,11 +261,11 @@ fn atoiOr0(s: []const u8) i64 {
     return decimal.parseInt(i64, s) orelse 0;
 }
 
-/// validSessionID matches `^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`
+/// validTopicID matches `^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`
 /// in 1..80 chars — alphanumerics joined by single hyphens, no leading/trailing/
 /// double hyphen, no underscore/dot/slash. Doubles as the path-traversal guard
 /// for any sid that flows into a sessions/<sid> filesystem path.
-pub fn validSessionID(sid: []const u8) bool {
+pub fn validTopicID(sid: []const u8) bool {
     if (sid.len == 0 or sid.len > 80) return false;
     if (sid[0] == '-' or sid[sid.len - 1] == '-') return false;
     var prev_hyphen = false;
@@ -276,7 +282,7 @@ pub fn validSessionID(sid: []const u8) bool {
     return true;
 }
 
-/// validMsgRefID matches `^[A-Za-z0-9-]+_[0-9]+$` — a session slug, an
+/// validMsgRefID matches `^[A-Za-z0-9-]+_[0-9]+$` — a topic slug, an
 /// underscore, a decimal message index. The canonical message-ref id check,
 /// shared by the /chat/msg/<id> lookup and reading_list's saved-ref parse (and a
 /// path guard for the embedded sid). One home so the two can't drift.
@@ -364,4 +370,10 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
         try testing.expectEqual(before + 1, malformed_channels);
         try testing.expectEqualStrings("team", malformed_last);
     }
+}
+
+test "firstOf: ChitChat wins wherever it sorts, else the first, else none" {
+    try std.testing.expectEqualStrings("ChitChat", firstOf(&.{ "2026-01-01", "ChitChat", "zebra" }));
+    try std.testing.expectEqualStrings("2026-01-01", firstOf(&.{ "2026-01-01", "zebra" }));
+    try std.testing.expectEqualStrings("", firstOf(&.{}));
 }

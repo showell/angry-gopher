@@ -97,7 +97,7 @@ test "a long path goes in ustar's prefix, split at a slash, and one too long doe
 }
 
 test "a topic's download, at the longest topic name, reads back whole through zig's tar reader" {
-    // chat_store.validSessionID allows 80 characters.
+    // chat_store.validTopicID allows 80 characters.
     const sid = &@as([80]u8, @splat('a'));
     const paths = [_][]const u8{
         sid ++ "/" ++ sid ++ ".md",

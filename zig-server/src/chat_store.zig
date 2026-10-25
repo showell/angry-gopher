@@ -26,44 +26,13 @@ const chat_frame = @import("chat_frame.zig");
 const fanoutFailed = chat_fanout.fanoutFailed;
 const chat_count = @import("chat_count.zig");
 const writeCount = chat_count.writeCount;
-pub const countPath = chat_count.countPath;
 const messageCount = chat_count.messageCount;
 const chat_paths = @import("chat_paths.zig");
-pub const refusedText = chat_codec.refusedText;
-pub const isMessage = chat_codec.isMessage;
-pub const refuseBlock = chat_codec.refuseBlock;
-pub const decodeChatFile = chat_codec.decodeChatFile;
-pub const recentBusKey = chat_fanout.recentBusKey;
-pub const imagesBusKey = chat_fanout.imagesBusKey;
-pub const codeBusKey = chat_fanout.codeBusKey;
-pub const notifyBusKey = chat_fanout.notifyBusKey;
-pub const sidebarBusKey = chat_fanout.sidebarBusKey;
-pub const convKeyBaseURL = chat_fanout.convKeyBaseURL;
-pub const fanoutText = chat_fanout.fanoutText;
-pub const LastMessage = chat_count.LastMessage;
-pub const lastMessage = chat_count.lastMessage;
-pub const backfillSidecars = chat_count.backfillSidecars;
-pub const backfillAll = chat_count.backfillAll;
-pub const countBlocks = chat_count.countBlocks;
-pub const indexOf = chat_count.indexOf;
-pub const Reach = chat_paths.Reach;
-pub const visibleConvs = chat_paths.visibleConvs;
-pub const listConvDirs = chat_paths.listConvDirs;
-pub const dmConvDir = chat_paths.dmConvDir;
-pub const channelConvDir = chat_paths.channelConvDir;
-pub const sessionMdPath = chat_paths.sessionMdPath;
-pub const rawSession = chat_paths.rawSession;
-pub const listSessions = chat_paths.listSessions;
-pub const defaultSession = chat_paths.defaultSession;
-pub const channelMembers = chat_paths.channelMembers;
-pub const hasMember = chat_paths.hasMember;
-pub const malformedText = chat_paths.malformedText;
-pub const listUserChannels = chat_paths.listUserChannels;
-pub const chatKeyParticipant = chat_paths.chatKeyParticipant;
-pub const chatPairKey = chat_paths.chatPairKey;
-pub const validSessionID = chat_paths.validSessionID;
-pub const validMsgRefID = chat_paths.validMsgRefID;
-pub const validChannelName = chat_paths.validChannelName;
+const decodeChatFile = chat_codec.decodeChatFile;
+const indexOf = chat_count.indexOf;
+const dmConvDir = chat_paths.dmConvDir;
+const transcriptPath = chat_paths.transcriptPath;
+const readTranscript = chat_paths.readTranscript;
 
 const std = @import("std");
 const Now = @import("request_time.zig").Now;
@@ -98,9 +67,12 @@ pub const sep = "\n\n-------------\n";
 
 pub const dashes = "-------------"; // exactly 13; the collision shape
 
-/// ChatMessage is one decoded block. id/from/date/uid are slices into the
-/// source buffer; markdown is freshly built (line-unescaped + rejoined). The
-/// `date` is the raw RFC3339 header string, displayed as stored.
+/// ChatMessage is one decoded block. id/from/at/uid are slices into the
+/// source buffer; markdown is freshly built (line-unescaped + rejoined). `at`
+/// is when it was sent: the raw RFC3339 of the block's `date:` header,
+/// displayed as stored. The code says `at` everywhere, as the frames, the
+/// reactions and the feeds do; only the transcript's header, and the search
+/// results' JSON, say `date`.
 ///
 /// **WHO WROTE IT IS `uid`**, the author's account; `from` is the name they
 /// had when they wrote it, shown as written. A block from before `uid:` was
@@ -108,7 +80,7 @@ pub const dashes = "-------------"; // exactly 13; the collision shape
 pub const ChatMessage = struct {
     id: []const u8,
     from: []const u8,
-    date: []const u8,
+    at: []const u8,
     markdown: []const u8,
     uid: []const u8 = "",
 };
@@ -129,15 +101,15 @@ pub const Stream = struct {
     sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
 };
 
-/// openStream: inside one handler's turn, decode the session backlog
+/// openStream: inside one handler's turn, decode the topic backlog
 /// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
 pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream {
-    const path = try sessionMdPath(alloc, topic.dir, topic.sid);
+    const path = try transcriptPath(alloc, topic.dir, topic.sid);
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
 
-    // A session nobody has written to is genuinely empty; a session that will
+    // A topic nobody has written to is genuinely empty; a topic that will
     // not read is not, and showing it as empty is how a transcript looks lost.
     const raw = try store.readOrEmpty(io, alloc, path, .unlimited);
     const msgs = try decodeChatFile(alloc, raw);
@@ -157,13 +129,13 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
     // refuses such a block on every read, so it would go out live and be gone
     // on reload. A nameless member (a release cut short) cannot post.
     if (from.name.len == 0) return error.NoAuthor;
-    const path = try sessionMdPath(alloc, topic.dir, topic.sid);
+    const path = try transcriptPath(alloc, topic.dir, topic.sid);
 
     const index = try messageCount(io, alloc, topic.dir, topic.sid);
 
     const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
     const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
-    const msg = ChatMessage{ .id = id, .from = from.name, .date = at, .markdown = markdown, .uid = from.id };
+    const msg = ChatMessage{ .id = id, .from = from.name, .at = at, .markdown = markdown, .uid = from.id };
 
     const stored = try chatStoredForm(alloc, index, msg);
     // **THE ECHO IS MADE BEFORE THE STORE** (metal-vmm QUEUE 177.1): the live
@@ -195,7 +167,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
-    // session's first message. Best-effort; inside the same handler's turn.
+    // topic's first message. Best-effort; inside the same handler's turn.
     fanoutCrossPage(io, alloc, bus, meta, topic.key, topic.sid, msg, from.id, index);
 
     return msg;
@@ -360,7 +332,7 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
     _ = try appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world", "");
 
-    const msgs = try decodeChatFile(a, (try rawSession(io, a, dir, "topic")).?);
+    const msgs = try decodeChatFile(a, (try readTranscript(io, a, dir, "topic")).?);
     try testing.expectEqual(@as(usize, 1), msgs.len);
     try testing.expectEqualStrings("Tester", msgs[0].from);
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
@@ -388,9 +360,9 @@ test "a message's live frame is the frame a stream's backlog makes of it, the sa
     try testing.expectEqualStrings(live, also);
 
     // The backlog's frame for the same message, from what was stored.
-    const msgs = try decodeChatFile(a, (try rawSession(f.io, a, f.dir, "topic")).?);
+    const msgs = try decodeChatFile(a, (try readTranscript(f.io, a, f.dir, "topic")).?);
     try testing.expectEqualStrings(sent.id, msgs[1].id);
-    const replayed = try chat_frame.messageFrame(a, .{ .index = indexOf(msgs[1].id, "topic").?, .from = msgs[1].from, .from_uid = msgs[1].uid, .at = msgs[1].date, .id = msgs[1].id, .markdown = msgs[1].markdown });
+    const replayed = try chat_frame.messageFrame(a, .{ .index = indexOf(msgs[1].id, "topic").?, .from = msgs[1].from, .from_uid = msgs[1].uid, .at = msgs[1].at, .id = msgs[1].id, .markdown = msgs[1].markdown });
     try testing.expectEqualStrings(replayed, live);
     try testing.expect(std.mem.startsWith(u8, live, "id: 1\ndata: "));
 }
@@ -441,7 +413,7 @@ pub const CountFixture = struct {
 
     pub fn decoded(self: *CountFixture) !usize {
         const a = self.arena.allocator();
-        return (try decodeChatFile(a, (try rawSession(self.io, a, self.dir, "topic")).?)).len;
+        return (try decodeChatFile(a, (try readTranscript(self.io, a, self.dir, "topic")).?)).len;
     }
 };
 
@@ -557,9 +529,9 @@ test "a message and a reaction are stamped with the request's time, not the cloc
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
     const topic: TopicAddress = .{ .dir = f.dir, .key = "1_2", .sid = "topic" };
     const sent = try appendMessage(f.io, a, &f.bus, now, meta, topic, .{ .name = "Tester", .id = "1" }, "hi", "");
-    try testing.expectEqualStrings("2025-10-25T13:46:40Z", sent.date);
-    const stored = try decodeChatFile(a, (try rawSession(f.io, a, f.dir, "topic")).?);
-    try testing.expectEqualStrings("2025-10-25T13:46:40Z", stored[0].date);
+    try testing.expectEqualStrings("2025-10-25T13:46:40Z", sent.at);
+    const stored = try decodeChatFile(a, (try readTranscript(f.io, a, f.dir, "topic")).?);
+    try testing.expectEqualStrings("2025-10-25T13:46:40Z", stored[0].at);
     const line = try appendReaction(f.io, a, &f.bus, now.plus(60), topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
     try testing.expect(std.mem.endsWith(u8, line, ",\"at\":\"2025-10-25T13:47:40Z\"}"));
 }

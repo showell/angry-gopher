@@ -9,6 +9,9 @@
 //! because the route table must not reach for the machine (router.zig's rule).
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
@@ -67,9 +70,9 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
         try row(&b, alloc, "the slowest", if (t.n_slowest > 0) slow.written() else "none yet");
     }
     try row(&b, alloc, "requests refused at the edge", try edge.countsText(alloc));
-    try row(&b, alloc, "chat fan-out failures since boot", try @import("chat_store.zig").fanoutText(alloc));
-    try row(&b, alloc, "listings that skipped a malformed channel", try @import("chat_store.zig").malformedText(alloc));
-    try row(&b, alloc, "reads that met a refused transcript block", try @import("chat_store.zig").refusedText(alloc));
+    try row(&b, alloc, "chat fan-out failures since boot", try chat_fanout.fanoutText(alloc));
+    try row(&b, alloc, "listings that skipped a malformed channel", try chat_paths.malformedText(alloc));
+    try row(&b, alloc, "reads that met a refused transcript block", try chat_codec.refusedText(alloc));
     try b.appendSlice(alloc, "</table>\n<h2>The host</h2>\n");
 
     const facts = try host_facts.facts(io, alloc);

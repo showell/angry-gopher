@@ -1,4 +1,5 @@
 const std = @import("std");
+const chat_codec = @import("chat_codec.zig");
 const markdown = @import("markdown.zig");
 const chat_store = @import("chat_store.zig");
 const Io = @import("host_io").Io;
@@ -6,7 +7,7 @@ const Io = @import("host_io").Io;
 // Diagnostic timing probe for the markdown renderer over the REAL prod chat
 // corpus — NOT a gate, a measuring stick. It walks every chat transcript under
 // CHAT_DIR, splits each into messages with the real decoder
-// (chat_store.decodeChatFile), and times markdown.render on each message body.
+// (chat_codec.decodeChatFile), and times markdown.render on each message body.
 // Reports corpus size, average message length, average render time, and the
 // slowest individual messages — the starting point for hunting renderer
 // weaknesses.
@@ -112,7 +113,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
 
         var file_arena = std.heap.ArenaAllocator.init(alloc);
         defer file_arena.deinit();
-        const msgs = try chat_store.decodeChatFile(file_arena.allocator(), data);
+        const msgs = try chat_codec.decodeChatFile(file_arena.allocator(), data);
 
         for (msgs) |m| {
             var best_per: u64 = std.math.maxInt(u64);

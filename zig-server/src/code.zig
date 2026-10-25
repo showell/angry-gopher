@@ -6,10 +6,10 @@
 //! is a per-uid subscriber on the code bus (live-only; the page is the backlog).
 
 const std = @import("std");
+const chat_fanout = @import("chat_fanout.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const store = @import("chat_store.zig");
 const code_store = @import("code_store.zig");
 const images_store = @import("images_store.zig");
 const sse = @import("webbox").sse;
@@ -25,7 +25,7 @@ const Request = std.http.Server.Request;
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0) return renderCodePage(req, io, alloc, uid);
     if (std.mem.eql(u8, rest, "/stream")) {
-        return sse.forward(req, bus, try store.codeBusKey(alloc, uid));
+        return sse.forward(req, bus, try chat_fanout.codeBusKey(alloc, uid));
     }
     return http.notFound(req);
 }
@@ -51,7 +51,7 @@ fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeE
     try j.append(alloc, '[');
     for (entries, 0..) |e, i| {
         if (i != 0) try j.append(alloc, ',');
-        const base = try store.convKeyBaseURL(alloc, e.conv);
+        const base = try chat_fanout.convKeyBaseURL(alloc, e.conv);
         const src = try images_store.imagesSourceURL(alloc, base, e.source_id);
         try code_store.encodeCodeEvent(&j, alloc, e, src);
     }

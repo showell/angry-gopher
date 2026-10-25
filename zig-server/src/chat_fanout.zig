@@ -4,6 +4,7 @@
 //! split from chat_store.zig by 174).
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
@@ -81,7 +82,7 @@ pub fn fanoutText(alloc: Alloc) ![]const u8 {
 /// fanoutCrossPage publishes one new message to every cross-page attention feed
 ///: notify (status strip), recent (Recent page), images /
 /// code (per-user transcripts) per member, plus a sidebar topic-added on the
-/// session's FIRST message (index == 0). Best-effort: the message is saved
+/// topic's FIRST message (index == 0). Best-effort: the message is saved
 /// before; a failure for one member's surface is counted and said, and never
 /// blocks the write or that member's other surfaces.
 pub fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
@@ -102,7 +103,7 @@ pub fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key
         std.fmt.allocPrint(alloc, "{s} posted to {s} > {s}.", .{ msg.from, conv_key, sid })
     else
         std.fmt.allocPrint(alloc, "{s} sent you a message on {s}.", .{ msg.from, sid });
-    // topic-added (sidebar) — only on the session's first message; viewer-invariant.
+    // topic-added (sidebar) — only on the topic's first message; viewer-invariant.
     const topic_added: Alloc.Error![]const u8 = if (index == 0)
         std.fmt.allocPrint(alloc, "{{\"kind\":\"topic-added\",\"conv\":{f},\"sid\":{f},\"url\":{f}}}", .{
             std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}), std.json.fmt(rec_url, .{}),
@@ -162,7 +163,7 @@ const Fan = struct {
     /// partner did something"; you don't notify yourself about your own
     /// message (the author already sees the self-confirm via the main feed
     /// echo). Skipping the author here is the real invariant — the open-feed
-    /// conv+session suppression in notify.js only covers the currently-viewed
+    /// conv+topic suppression in notify.js only covers the currently-viewed
     /// thread, so author-skip is what keeps the dot quiet when you send to a
     /// thread you're not actively staring at.
     fn notify(f: *const Fan, uid: []const u8) !void {
@@ -189,7 +190,7 @@ const Fan = struct {
         const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
         const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
         var rj: std.ArrayList(u8) = .empty;
-        try recent_feed.encodeChatEvent(&rj, f.alloc, .{ .at = f.msg.date, .url = f.rec_url, .who = who, .where = where, .topic = f.sid, .excerpt = try f.excerpt, .dm = f.meta.kind == .dm });
+        try recent_feed.encodeChatEvent(&rj, f.alloc, .{ .at = f.msg.at, .url = f.rec_url, .who = who, .where = where, .topic = f.sid, .excerpt = try f.excerpt, .dm = f.meta.kind == .dm });
         f.bus.publish(try recentBusKey(f.alloc, uid), rj.items);
     }
 
@@ -197,7 +198,7 @@ const Fan = struct {
     fn images(f: *const Fan, uid: []const u8) !void {
         const tags = try f.tags;
         if (tags.len == 0) return;
-        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .images = tags };
+        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.at, .images = tags };
         try images_store.appendImagesEntry(f.io, f.alloc, uid, e);
         var ij: std.ArrayList(u8) = .empty;
         try images_store.encodeImagesEvent(&ij, f.alloc, e, try f.src_url);
@@ -208,7 +209,7 @@ const Fan = struct {
     fn code(f: *const Fan, uid: []const u8) !void {
         const blocks = try f.blocks;
         if (blocks.len == 0) return;
-        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .blocks = blocks };
+        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.at, .blocks = blocks };
         try code_store.appendCodeEntry(f.io, f.alloc, uid, e);
         var cj: std.ArrayList(u8) = .empty;
         try code_store.encodeCodeEvent(&cj, f.alloc, e, try f.src_url);
@@ -256,7 +257,7 @@ test "the DM with yourself fans out to you once: one images.md entry, one code.m
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    const dir = try chat_store.dmConvDir(a, "1_1");
+    const dir = try chat_paths.dmConvDir(a, "1_1");
     const meta = try ConvMeta.dm(a, "1", "1");
     try testing.expectEqual(@as(usize, 1), meta.members.len);
     _ = try appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = dir, .key = "1_1", .sid = "notes" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");

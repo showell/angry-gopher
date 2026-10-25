@@ -15,7 +15,7 @@
 //! maps; the messages for a word are found by reading the text of each
 //! conversation whose map holds the word. A query walks only the
 //! conversations the viewer can see, given by the caller on every request
-//! (`chat_store.visibleConvs`), never a list kept from an earlier one.
+//! (`chat_paths.visibleConvs`), never a list kept from an earlier one.
 //!
 //! **FEW ALLOCATIONS, NOT FEW BYTES** (the measurements, 155(e)): Linux's
 //! base allocator is the page allocator, a page at least for each, so a list
@@ -27,6 +27,8 @@
 //! nothing here locks.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const tokens = @import("search_tokens.zig");
@@ -40,12 +42,12 @@ pub const Msg = struct {
     sid: []const u8,
     id: []const u8,
     from: []const u8,
-    date: []const u8,
+    at: []const u8,
     markdown: []const u8,
 };
 
 /// Where a message's fields are in its conversation's text, one after another.
-const Ref = struct { sid: u32, start: u32, id: u32, from: u32, date: u32, markdown: u32 };
+const Ref = struct { sid: u32, start: u32, id: u32, from: u32, at: u32, markdown: u32 };
 
 const Conv = struct {
     text: std.ArrayList(u8) = .empty,
@@ -77,9 +79,9 @@ const Conv = struct {
         at += r.id;
         const from = t[at..][0..r.from];
         at += r.from;
-        const date = t[at..][0..r.date];
-        at += r.date;
-        return .{ .sid = c.sids.items[r.sid], .id = id, .from = from, .date = date, .markdown = t[at..][0..r.markdown] };
+        const date = t[at..][0..r.at];
+        at += r.at;
+        return .{ .sid = c.sids.items[r.sid], .id = id, .from = from, .at = date, .markdown = t[at..][0..r.markdown] };
     }
 };
 
@@ -98,35 +100,35 @@ pub const Stats = struct {
 pub const WordCount = struct { word: []const u8, count: usize };
 
 pub const Found = struct {
-    pub const Hit = struct { conv: chat_store.Reach, msg: Msg };
+    pub const Hit = struct { conv: chat_paths.Reach, msg: Msg };
     hits: []const Hit,
     /// Every message holding the word in the conversations walked, listed or not.
     matched: usize,
 };
 
 /// **ONE BLOCK OF A TRANSCRIPT, READ IN PLACE** (155's review): what
-/// `chat_store.decodeChatFile` makes of it, as slices of `piece` with no
+/// `chat_codec.decodeChatFile` makes of it, as slices of `piece` with no
 /// copy, so the build's scratch is the transcript and not several times it.
 /// A block whose body holds an escaped separator line, which the decoder
 /// unescapes, goes through the decoder (into `a`).
 ///
-/// Null for a block that is not a message (`chat_store.isMessage`), refused
+/// Null for a block that is not a message (`chat_codec.isMessage`), refused
 /// and counted as the decoder does: the two read the same messages.
 fn inPlace(a: Alloc, piece: []const u8) !?chat_store.ChatMessage {
     if (std.mem.indexOf(u8, piece, "\\-------------") != null) {
-        const got = try chat_store.decodeChatFile(a, piece);
+        const got = try chat_codec.decodeChatFile(a, piece);
         return if (got.len > 0) got[0] else null;
     }
     const m = inPlaceRead(piece);
-    if (!chat_store.isMessage(m)) {
-        chat_store.refuseBlock(piece);
+    if (!chat_codec.isMessage(m)) {
+        chat_codec.refuseBlock(piece);
         return null;
     }
     return m;
 }
 
 fn inPlaceRead(piece: []const u8) chat_store.ChatMessage {
-    var m: chat_store.ChatMessage = .{ .id = "", .from = "", .date = "", .markdown = "" };
+    var m: chat_store.ChatMessage = .{ .id = "", .from = "", .at = "", .markdown = "" };
     var lines = std.mem.splitScalar(u8, piece, '\n');
     var first = true;
     while (lines.next()) |ln| {
@@ -144,7 +146,7 @@ fn inPlaceRead(piece: []const u8) chat_store.ChatMessage {
         }
         if (std.mem.indexOf(u8, ln, ": ")) |at| {
             const k = ln[0..at];
-            if (std.mem.eql(u8, k, "from")) m.from = ln[at + 2 ..] else if (std.mem.eql(u8, k, "date")) m.date = ln[at + 2 ..];
+            if (std.mem.eql(u8, k, "from")) m.from = ln[at + 2 ..] else if (std.mem.eql(u8, k, "date")) m.at = ln[at + 2 ..];
         }
     }
     return m;
@@ -253,7 +255,7 @@ pub const Index = struct {
             break :blk @intCast(c.sids.items.len - 1);
         };
         const start = c.text.items.len;
-        const len = m.id.len + m.from.len + m.date.len + m.markdown.len;
+        const len = m.id.len + m.from.len + m.at.len + m.markdown.len;
         // A size the index's offsets cannot hold: said as what it is, never
         // as memory run out (metal-vmm QUEUE 172). **AND ALL OF IT, AT MOST
         // `text_most_total`** (metal-vmm QUEUE 184): any member's messages
@@ -269,10 +271,10 @@ pub const Index = struct {
             return error.ConversationTooBig;
         }
         try c.refs.ensureUnusedCapacity(self.gpa, 1);
-        try c.text.ensureUnusedCapacity(self.gpa, m.id.len + m.from.len + m.date.len + m.markdown.len);
-        for ([_][]const u8{ m.id, m.from, m.date, m.markdown }) |f| c.text.appendSliceAssumeCapacity(f);
+        try c.text.ensureUnusedCapacity(self.gpa, m.id.len + m.from.len + m.at.len + m.markdown.len);
+        for ([_][]const u8{ m.id, m.from, m.at, m.markdown }) |f| c.text.appendSliceAssumeCapacity(f);
         self.text_bytes += len;
-        c.refs.appendAssumeCapacity(.{ .sid = sid_at, .start = @intCast(start), .id = @intCast(m.id.len), .from = @intCast(m.from.len), .date = @intCast(m.date.len), .markdown = @intCast(m.markdown.len) });
+        c.refs.appendAssumeCapacity(.{ .sid = sid_at, .start = @intCast(start), .id = @intCast(m.id.len), .from = @intCast(m.from.len), .at = @intCast(m.at.len), .markdown = @intCast(m.markdown.len) });
         self.stats.messages += 1;
 
         // Each word of it, once.
@@ -309,7 +311,7 @@ pub const Index = struct {
         defer per.deinit();
         for (conv_dirs) |dir| {
             // absent-ok: a conversation that will not list is counted unreadable and skipped; nothing is written from it.
-            const sids = chat_store.listSessions(io, scratch, dir) catch |e| {
+            const sids = chat_paths.listTopics(io, scratch, dir) catch |e| {
                 if (e == error.OutOfMemory) return e;
                 try self.unreadableIn(dir);
                 continue;
@@ -321,7 +323,7 @@ pub const Index = struct {
                 const a = per.allocator();
                 self.stats.transcripts += 1;
                 // absent-ok: a transcript that cannot be read is counted unreadable, never taken as empty.
-                const raw = (chat_store.rawSession(io, a, dir, sid) catch |e| {
+                const raw = (chat_paths.readTranscript(io, a, dir, sid) catch |e| {
                     if (e == error.OutOfMemory) return e;
                     try self.unreadableIn(dir);
                     continue;
@@ -359,7 +361,7 @@ pub const Index = struct {
     }
 
     /// Transcripts the build could not read, in the conversations of `reach`.
-    pub fn unreadableFor(self: *const Index, reach: []const chat_store.Reach) usize {
+    pub fn unreadableFor(self: *const Index, reach: []const chat_paths.Reach) usize {
         var n: usize = 0;
         for (reach) |r| n += if (self.convs.getPtr(r.dir)) |c| c.unreadable else 0;
         return n;
@@ -368,7 +370,7 @@ pub const Index = struct {
     /// At most `most` words beginning with `prefix` (a key, folded), each
     /// with how many messages hold it in the conversations of `reach` and no
     /// others: most first, then by word.
-    pub fn wordsFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, prefix: []const u8, most: usize) ![]WordCount {
+    pub fn wordsFor(self: *const Index, alloc: Alloc, reach: []const chat_paths.Reach, prefix: []const u8, most: usize) ![]WordCount {
         var sums: std.StringHashMapUnmanaged(usize) = .empty;
         for (reach) |r| {
             const c = self.convs.getPtr(r.dir) orelse continue;
@@ -393,7 +395,7 @@ pub const Index = struct {
     /// order they came; at most `most` listed, and what they cost at most
     /// `budget.bytes` (past it the listing stops; the first is always
     /// listed), every one counted.
-    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, word: []const u8, most: usize, budget: Budget) !Found {
+    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_paths.Reach, word: []const u8, most: usize, budget: Budget) !Found {
         var hits: std.ArrayList(Found.Hit) = .empty;
         var matched: usize = 0;
         var bytes: usize = 0;
@@ -456,7 +458,7 @@ pub fn buildAll(io: Io, scratch: Alloc) ?Stats {
     drop();
     var idx = Index.init(mem_meter.base());
     // absent-ok: no conversations listed is no index, and the first search builds again; nothing is written.
-    const dirs = chat_store.listConvDirs(io, scratch) catch |e| {
+    const dirs = chat_paths.listConvDirs(io, scratch) catch |e| {
         idx.deinit();
         failed_at_ms = nowMs(io);
         failed_with = e;
@@ -544,7 +546,7 @@ const testing = std.testing;
 const roots = @import("roots.zig");
 
 fn msg(id: []const u8, text: []const u8) chat_store.ChatMessage {
-    return .{ .id = id, .from = "Tester", .date = "2026-10-10T00:00:00Z", .markdown = text };
+    return .{ .id = id, .from = "Tester", .at = "2026-10-10T00:00:00Z", .markdown = text };
 }
 
 test "words by prefix, counted by message, only in the conversations asked about" {
@@ -556,7 +558,7 @@ test "words by prefix, counted by message, only in the conversations asked about
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
     const got = try idx.wordsFor(a, &mine, "lay", 20);
     try testing.expectEqual(@as(usize, 2), got.len);
     // "layout" in one message, however often; "layaway" not here.
@@ -568,7 +570,7 @@ test "words by prefix, counted by message, only in the conversations asked about
     try testing.expectEqual(@as(usize, 1), the_words.len);
     try testing.expectEqual(@as(usize, 1), the_words[0].count);
     // Both conversations: counts sum.
-    const both = [_]chat_store.Reach{ mine[0], .{ .dir = "c/2_3", .base = "/chat/c/2_3", .kind = .dm } };
+    const both = [_]chat_paths.Reach{ mine[0], .{ .dir = "c/2_3", .base = "/chat/c/2_3", .kind = .dm } };
     const summed = try idx.wordsFor(a, &both, "the", 20);
     try testing.expectEqual(@as(usize, 2), summed[0].count);
     // At most `most`, the most held first.
@@ -584,7 +586,7 @@ test "messages for a word, at most so many listed and every one counted" {
     }
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
     const f = try idx.messagesFor(arena.allocator(), &mine, "tonight", 3, .{});
     try testing.expectEqual(@as(usize, 4), f.matched);
     try testing.expectEqual(@as(usize, 3), f.hits.len);
@@ -627,7 +629,7 @@ test "fs: a build out of memory fails, never an index missing what it could not 
         if (i > 0) try body.appendSlice(a, chat_store.sep);
         try body.print(a, "MSG_t_{d}\nfrom: Tester\ndate: 2026-10-10T00:00:00Z\n\nwords of message {d}, and more words", .{ i + 1, i });
     }
-    try store.write(io, a, try chat_store.sessionMdPath(a, try chat_store.dmConvDir(a, "1_2"), "t"), body.items, .{});
+    try store.write(io, a, try chat_paths.transcriptPath(a, try chat_paths.dmConvDir(a, "1_2"), "t"), body.items, .{});
 
     var failing = testing.FailingAllocator.init(testing.allocator, .{});
     const meter = mem_meter.useForTest(failing.allocator());
@@ -650,7 +652,7 @@ test "fs: a build out of memory fails, never an index missing what it could not 
 
     // An append the memory refuses drops the whole index.
     failing.fail_index = failing.alloc_index;
-    noteAppend(io, try chat_store.dmConvDir(a, "1_2"), "t", msg("t_201", "a brand new word"));
+    noteAppend(io, try chat_paths.dmConvDir(a, "1_2"), "t", msg("t_201", "a brand new word"));
     try testing.expectEqual(@as(?Stats, null), stats());
     // And a search does not build it again at once (the box's review of 155, 3).
     failing.fail_index = std.math.maxInt(usize);
@@ -672,7 +674,7 @@ test "a block read in place is what the decoder makes of it (155's review)" {
         // A `uid:` line, which this reader does not take, as a server from
         // before `uid:` did not: the rest of the block reads the same.
         "MSG_t_10\nfrom: H\ndate: d\nuid: 7\n\nwith its author's account";
-    const want = try chat_store.decodeChatFile(a, file);
+    const want = try chat_codec.decodeChatFile(a, file);
     var got: std.ArrayList(chat_store.ChatMessage) = .empty;
     var blocks = std.mem.splitSequence(u8, file, sep);
     while (blocks.next()) |piece| {
@@ -684,7 +686,7 @@ test "a block read in place is what the decoder makes of it (155's review)" {
     for (want, got.items) |w, g| {
         try testing.expectEqualStrings(w.id, g.id);
         try testing.expectEqualStrings(w.from, g.from);
-        try testing.expectEqualStrings(w.date, g.date);
+        try testing.expectEqualStrings(w.at, g.at);
         try testing.expectEqualStrings(w.markdown, g.markdown);
     }
     try testing.expectEqualStrings("7", want[5].uid);
@@ -701,7 +703,7 @@ test "messages for a word stop at a byte budget, every one still counted (the bo
     }
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
     const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 2500 });
     try testing.expectEqual(@as(usize, 3), f.matched);
     try testing.expectEqual(@as(usize, 2), f.hits.len);
@@ -715,7 +717,7 @@ test "a word too long to ask for is never suggested (the box's review of 155, 2)
     try idx.add("c/1_2", "t", msg("t_1", &@as([tokens.max_word + 1]u8, @splat('a')) ++ " " ++ &@as([tokens.max_word]u8, @splat('a'))));
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
     const got = try idx.wordsFor(arena.allocator(), &mine, "aaa", 20);
     try testing.expectEqual(@as(usize, 1), got.len);
     try testing.expectEqual(tokens.max_word, got[0].word.len);
@@ -735,7 +737,7 @@ test "the budget is charged what the JSON costs, not the raw bytes (the review o
     try idx.add("c/1_2", "t", msg("t_2", hostile));
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
     const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 8000 });
     try testing.expectEqual(@as(usize, 2), f.matched);
     try testing.expectEqual(@as(usize, 1), f.hits.len);
@@ -792,7 +794,7 @@ test "the index holds at most its total of text: past it, the conversation a mes
     var idx = Index.init(testing.allocator);
     defer idx.deinit();
     const one = msg("t_1", "a word");
-    const len = one.id.len + one.from.len + one.date.len + one.markdown.len;
+    const len = one.id.len + one.from.len + one.at.len + one.markdown.len;
     total_most_for_test = 3 * len;
     defer total_most_for_test = null;
     // Exactly the total, over two conversations: all held.

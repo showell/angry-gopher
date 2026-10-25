@@ -1,7 +1,7 @@
 //! chat_upload: chat image AND screencast uploads.
 //!   POST <conv-base>/<sid>/upload          store one image/video, return its URL
 //!   GET  <conv-base>/<sid>/uploads/<file>  serve a stored image/video
-//! Uploads land in the session's sidecar dir (sessions/<sid>.uploads/) under a
+//! Uploads land in the topic's sidecar dir (sessions/<sid>.uploads/) under a
 //! random unguessable name whose extension is derived from the SNIFFED magic
 //! bytes (never the client's filename). Both DMs and channels route here; the
 //! conv-base + sid + dir are supplied by the caller (chat.topicRoute), so this
@@ -50,7 +50,7 @@ const stream_piece = 256 << 10; // 256 KiB
 // ── write path (POST <base>/<sid>/upload) ─────────────────────────────────────
 
 /// handleUpload accepts one multipart image/video upload, stores it in the
-/// session's uploads sidecar under a random name (extension from sniffed magic
+/// topic's uploads sidecar under a random name (extension from sniffed magic
 /// bytes), and returns {url, name, kind, width, height} JSON. `kind` is "image"
 /// or "video" so the client inserts the right tag; width/height are 0 (we don't
 /// decode dimensions — the client omits the attrs then, per its BROWSER_WORKAROUND).

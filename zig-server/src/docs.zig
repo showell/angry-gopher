@@ -21,6 +21,8 @@
 //! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
@@ -101,7 +103,7 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
     const b = &page.body;
     try b.appendSlice(alloc, docs_css);
 
-    // Cross-session new-message strip + favicon alert, shared with chat via
+    // Cross-topic new-message strip + favicon alert, shared with chat via
     // notify.js. Empty (zero-height) until a ping arrives.
     try b.appendSlice(alloc, "<div class=\"docs-notify chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div class=\"docs-layout\">");
@@ -247,7 +249,7 @@ fn publishDocRecent(alloc: Alloc, bus: *Bus, uid: []const u8, slug: []const u8, 
     var j: std.ArrayList(u8) = .empty;
     // who is always "You": docs are per-user, only the author sees this row.
     feed.encodeDocEvent(&j, alloc, at, "You", slug, title) catch return;
-    const key = store.recentBusKey(alloc, uid) catch return;
+    const key = chat_fanout.recentBusKey(alloc, uid) catch return;
     bus.publish(key, j.items);
 }
 
@@ -288,10 +290,10 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now
     if (!try validChatPartner(io, alloc, uid, partner)) {
         return req.respond("no default chat partner available\n", .{ .status = .bad_request });
     }
-    const conv = try store.chatPairKey(alloc, uid, partner);
-    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv, now);
+    const conv = try chat_paths.chatPairKey(alloc, uid, partner);
+    const sid = try chat_state.resumeTopic(io, alloc, uid, conv, now);
 
-    const conv_dir = try store.dmConvDir(alloc, conv);
+    const conv_dir = try chat_paths.dmConvDir(alloc, conv);
     const from_name = try users.getUserName(io, alloc, uid);
     const meta = try store.ConvMeta.dm(alloc, uid, partner);
     const msg = try store.appendMessage(io, alloc, bus, now, meta, .{ .dir = conv_dir, .key = conv, .sid = sid }, .{ .name = from_name, .id = uid }, doc_body, "");

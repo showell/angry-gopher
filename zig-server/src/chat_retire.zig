@@ -12,7 +12,7 @@
 //! confirm removes, and a second confirm removes nothing.
 //!
 //! **WHAT IT REMOVES:**
-//!   - **Old topics:** a session whose newest message (`date:` lines) is older
+//!   - **Old topics:** a topic whose newest message (`date:` lines) is older
 //!     than `days` — its `.md`, and the `.count`, `.lastauthor`,
 //!     `.reactions.jsonl` and `.uploads/` beside it. **A topic that holds no
 //!     datable message is kept** (Steve, 2026-10-04): it may be one someone just
@@ -29,6 +29,8 @@
 //!     conversation now gone is dropped, so no kept user's page lands on a 404.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
 const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
@@ -172,11 +174,11 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, mode: Mode) !Plan {
 
     // Phase 1: old topics, in every conversation (DMs and channels alike).
     // absent-ok: a retire that cannot list the conversations retires none: it removes less, never more.
-    const convs = chat_store.listConvDirs(io, alloc) catch &.{};
+    const convs = chat_paths.listConvDirs(io, alloc) catch &.{};
     for (convs) |dir| {
         const key = try convDisplayKey(alloc, dir);
         // absent-ok: the same, for one conversation's topics: kept.
-        const sids = chat_store.listSessions(io, alloc, dir) catch continue;
+        const sids = chat_paths.listTopics(io, alloc, dir) catch continue;
         for (sids) |sid| {
             // **A TOPIC WE CANNOT DATE IS KEPT** (Steve, 2026-10-04): an empty
             // or hand-damaged transcript may be a fresh topic someone just
@@ -224,16 +226,16 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, mode: Mode) !Plan {
 
 // ── phase 1: topics ───────────────────────────────────────────────────────────
 
-/// The newest `date:` across a session's messages, in unix seconds, or null
+/// The newest `date:` across a topic's messages, in unix seconds, or null
 /// when it has no message that carries a parseable date (an empty or
 /// hand-damaged transcript) — which the caller keeps, not retires.
 fn newestUnix(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?i64 {
     // absent-ok: a topic that cannot be dated is kept, not retired (Steve, 2026-10-04).
-    const raw = (chat_store.rawSession(io, alloc, conv_dir, sid) catch return null) orelse return null;
-    const msgs = chat_store.decodeChatFile(alloc, raw) catch return null;
+    const raw = (chat_paths.readTranscript(io, alloc, conv_dir, sid) catch return null) orelse return null;
+    const msgs = chat_codec.decodeChatFile(alloc, raw) catch return null;
     var newest: ?i64 = null;
     for (msgs) |m| {
-        if (timefmt.unixFromRFC3339(m.date)) |t| {
+        if (timefmt.unixFromRFC3339(m.at)) |t| {
             if (newest == null or t > newest.?) newest = t;
         }
     }
@@ -453,10 +455,6 @@ fn tx(a: Alloc, sid: []const u8, at: i64) ![]u8 {
     return std.fmt.allocPrint(a, "MSG_{s}_1\nfrom: Tester\ndate: {s}\n\nhello there", .{ sid, date });
 }
 
-fn sessionPath(a: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
-    return std.fs.path.join(a, &.{ conv_dir, "sessions", try std.fmt.allocPrint(a, "{s}.md", .{sid}) });
-}
-
 const now: i64 = 1_700_000_000; // a fixed "now" for the fixture
 const old_at: i64 = now - 100 * std.time.s_per_day; // retire
 const new_at: i64 = now - 5 * std.time.s_per_day; // keep
@@ -475,20 +473,20 @@ fn stage(io: Io, a: Alloc) !void {
     try store.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "next-id.txt" }), "10\n", .{});
 
     // DM 1_2: an old topic and a new one.
-    const dm12 = try chat_store.dmConvDir(a, "1_2");
-    try store.write(io, a, try sessionPath(a, dm12, "oldtopic"), try tx(a, "oldtopic", old_at), .{});
+    const dm12 = try chat_paths.dmConvDir(a, "1_2");
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm12, "oldtopic"), try tx(a, "oldtopic", old_at), .{});
     try store.write(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.count" }), "1 0\n", .{});
     try store.write(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.uploads", "pic.png" }), "img", .{});
-    try store.write(io, a, try sessionPath(a, dm12, "freshtopic"), try tx(a, "freshtopic", new_at), .{});
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm12, "freshtopic"), try tx(a, "freshtopic", new_at), .{});
 
     // DM 1_9: a topic, the whole conv goes when 9 does.
-    const dm19 = try chat_store.dmConvDir(a, "1_9");
-    try store.write(io, a, try sessionPath(a, dm19, "chat"), try tx(a, "chat", new_at), .{});
+    const dm19 = try chat_paths.dmConvDir(a, "1_9");
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm19, "chat"), try tx(a, "chat", new_at), .{});
 
     // Channel general: members 1,2,9; an old topic.
     try store.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n9\n", .{});
-    const gen = try chat_store.channelConvDir(a, "general");
-    try store.write(io, a, try sessionPath(a, gen, "oldchan"), try tx(a, "oldchan", old_at), .{});
+    const gen = try chat_paths.channelConvDir(a, "general");
+    try store.write(io, a, try chat_paths.transcriptPath(a, gen, "oldchan"), try tx(a, "oldchan", old_at), .{});
 
     // The removed user's state everywhere it lives.
     for ([_][]const u8{ users.users_root, player.player_root, storage.data_root }) |r|
@@ -530,7 +528,7 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expectEqual(@as(usize, 0), dry.countOf(.ref_pinned)); // 1_2 survives
     // The dry run touched nothing.
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
-    try testing.expect(try store.has(io, a, try sessionPath(a, try chat_store.dmConvDir(a, "1_2"), "oldtopic")));
+    try testing.expect(try store.has(io, a, try chat_paths.transcriptPath(a, try chat_paths.dmConvDir(a, "1_2"), "oldtopic")));
 
     // Search's index, built before the confirm (metal-vmm 155(b)).
     const mem_meter = @import("webbox").mem_meter;
@@ -539,8 +537,8 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     const emptied = search_index.emptyForTest();
     defer emptied.end();
     _ = search_index.buildAll(io, a).?;
-    const dm12_reach = [_]chat_store.Reach{.{ .dir = try chat_store.dmConvDir(a, "1_2"), .base = "/chat/c/1_2", .kind = .dm }};
-    const dm19_reach = [_]chat_store.Reach{.{ .dir = try chat_store.dmConvDir(a, "1_9"), .base = "/chat/c/1_9", .kind = .dm }};
+    const dm12_reach = [_]chat_paths.Reach{.{ .dir = try chat_paths.dmConvDir(a, "1_2"), .base = "/chat/c/1_2", .kind = .dm }};
+    const dm19_reach = [_]chat_paths.Reach{.{ .dir = try chat_paths.dmConvDir(a, "1_9"), .base = "/chat/c/1_9", .kind = .dm }};
     try testing.expectEqual(@as(usize, 2), (try search_index.ready(io, a).?.messagesFor(a, &dm12_reach, "hello", 10, .{})).matched);
     try testing.expectEqual(@as(usize, 1), (try search_index.ready(io, a).?.messagesFor(a, &dm19_reach, "hello", 10, .{})).matched);
 
@@ -559,14 +557,14 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.users_root, "9" })));
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ storage.data_root, "9" })));
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "9" })));
-    try testing.expect(!try store.has(io, a, try chat_store.dmConvDir(a, "1_9")));
+    try testing.expect(!try store.has(io, a, try chat_paths.dmConvDir(a, "1_9")));
 
     // The old topic and its sidecars are gone; the fresh topic stays.
-    const dm12 = try chat_store.dmConvDir(a, "1_2");
-    try testing.expect(!try store.has(io, a, try sessionPath(a, dm12, "oldtopic")));
+    const dm12 = try chat_paths.dmConvDir(a, "1_2");
+    try testing.expect(!try store.has(io, a, try chat_paths.transcriptPath(a, dm12, "oldtopic")));
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.count" })));
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.uploads" })));
-    try testing.expect(try store.has(io, a, try sessionPath(a, dm12, "freshtopic")));
+    try testing.expect(try store.has(io, a, try chat_paths.transcriptPath(a, dm12, "freshtopic")));
 
     // The channel stays, without uid 9; members 1 and 2 remain.
     const chan = try store.read(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), .unlimited);
@@ -598,11 +596,11 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const saved = try roots.pointForTest(a, base);
     defer saved.restore();
-    const dm = try chat_store.dmConvDir(a, "1_2");
-    try store.write(io, a, try sessionPath(a, dm, "empty"), "", .{});
-    try store.write(io, a, try sessionPath(a, dm, "undated"), "MSG_undated_1\nfrom: X\n\nbody", .{});
-    try store.write(io, a, try sessionPath(a, dm, "recent"), try tx(a, "recent", new_at), .{});
-    try store.write(io, a, try sessionPath(a, dm, "stale"), try tx(a, "stale", old_at), .{});
+    const dm = try chat_paths.dmConvDir(a, "1_2");
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm, "empty"), "", .{});
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm, "undated"), "MSG_undated_1\nfrom: X\n\nbody", .{});
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm, "recent"), try tx(a, "recent", new_at), .{});
+    try store.write(io, a, try chat_paths.transcriptPath(a, dm, "stale"), try tx(a, "stale", old_at), .{});
 
     var dry = try plan(io, a, .{ .days = 30, .keep = &.{}, .now = now }, .dry_run);
     // Only the datably-old topic retires; empty, undated and recent all stay.
@@ -663,7 +661,7 @@ test "fs: a confirm whose removals fail is an error, not a report of what went (
     _ = try plan(io, a, p, .apply);
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ storage.data_root, "9" })));
-    try testing.expect(!try store.has(io, a, try chat_store.dmConvDir(a, "1_9")));
+    try testing.expect(!try store.has(io, a, try chat_paths.dmConvDir(a, "1_9")));
 }
 
 test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm QUEUE 105)" {

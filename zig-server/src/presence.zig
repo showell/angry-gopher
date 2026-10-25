@@ -17,10 +17,11 @@
 //! process-lifetime page allocator, NOT the per-request arena.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const users = @import("users.zig");
-const store = @import("chat_store.zig");
 const mem_meter = @import("webbox").mem_meter;
 const Bus = @import("webbox").bus.Bus;
 const Now = @import("request_time.zig").Now;
@@ -121,7 +122,7 @@ pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, 
         if (std.mem.eql(u8, other.id, uid)) continue;
 
         // sidebar: flip the partner row's presence dot (user-online, UserID-only).
-        if (store.sidebarBusKey(alloc, other.id)) |k| {
+        if (chat_fanout.sidebarBusKey(alloc, other.id)) |k| {
             const ev = std.fmt.allocPrint(alloc, "{{\"kind\":\"user-online\",\"user_id\":{f},\"user_name\":{f}}}", .{
                 std.json.fmt(uid, .{}), std.json.fmt(name, .{}),
             }) catch continue;
@@ -130,8 +131,8 @@ pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, 
 
         // notify: status strip. LinkURL = the recipient's default conv with the
         // user who came online (pair-key is per-recipient — convs sort numerically).
-        if (store.notifyBusKey(alloc, other.id)) |k| {
-            const pk = store.chatPairKey(alloc, other.id, uid) catch continue;
+        if (chat_fanout.notifyBusKey(alloc, other.id)) |k| {
+            const pk = chat_paths.chatPairKey(alloc, other.id, uid) catch continue;
             const link = std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pk}) catch continue;
             const ev = std.fmt.allocPrint(alloc, "{{\"text\":{f},\"link_url\":{f}}}", .{
                 std.json.fmt(text, .{}), std.json.fmt(link, .{}),

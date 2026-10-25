@@ -1,6 +1,8 @@
 //! router.zig's tests: chat's routes.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
 const player = @import("player.zig");
 const users = @import("users.zig");
 const mem_meter = @import("webbox").mem_meter;
@@ -39,7 +41,6 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const chat_store = @import("chat_store.zig");
     const steve = try harness.memberSession(a, io, "1", "Steve");
     _ = try harness.memberSession(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
@@ -52,8 +53,8 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=DROP_ON_FLOOR+is+a+phrase&cid=y")));
     // A code block's indentation stays.
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=++++code%0A++++more&cid=z")));
-    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
-    const msgs = try chat_store.decodeChatFile(a, raw);
+    const raw = (try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Plans")).?;
+    const msgs = try chat_codec.decodeChatFile(a, raw);
     try testing.expectEqual(@as(usize, 3), msgs.len);
     try testing.expectEqualStrings("DROP_ON_FLOOR is a phrase", msgs[1].markdown);
     try testing.expectEqualStrings("    code\n    more", msgs[2].markdown);
@@ -96,15 +97,14 @@ test "route: one form decoder: a bad escape or a field sent twice is a 400 on ev
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const chat_store = @import("chat_store.zig");
     const steve = try harness.memberSession(a, io, "1", "Steve");
     _ = try harness.memberSession(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     for ([_][]const u8{ "markdown=100%zz&cid=x", "markdown=a&markdown=b&cid=x", "markdown=50%&cid=x" }) |bad| {
         try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, bad)));
     }
-    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
-    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    const raw = (try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_codec.decodeChatFile(a, raw)).len);
     try testing.expectEqualStrings("400 Bad Request", harness.status(try harness.postForm(a, io, "/play", "x=y", "name=Ada%zz&next=%2Fgame")));
     // A well-formed escape still decodes.
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=100%25&cid=y")));
@@ -131,7 +131,7 @@ test "route: a topic that is not there is a 404 that says so, on every tail but 
     for ([_][]const u8{ "/chat/c/1_2/Nowhere/raw", "/chat/c/1_2/Nowhere/stream", "/chat/c/1_2/Nowhere/reactions" }) |t|
         try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, t, steve)));
     try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Nowhere/react", steve, "msg=1&emoji=%F0%9F%91%8D")));
-    try testing.expect((try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Nowhere")) == null);
+    try testing.expect((try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Nowhere")) == null);
     // Another case is the same topic (Steve, 2026-10-02).
     try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat/c/1_2/PLANS/raw", steve)));
     // The resume pointer still names Plans.
@@ -169,8 +169,8 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     try testing.expect(std.mem.indexOf(u8, landed, "location: /chat/c/1_2\r\n") != null);
     // A send to a topic not yet there makes it.
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Fresh/send", steve, "markdown=first&cid=x")));
-    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Fresh")).?;
-    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    const raw = (try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Fresh")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_codec.decodeChatFile(a, raw)).len);
     _ = chat_state;
 }
 
@@ -191,8 +191,8 @@ test "route: a send and a reaction store their author's name and uid each where 
     _ = try harness.memberSession(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
-    const dir = try chat_store.dmConvDir(a, "1_2");
-    const msgs = try chat_store.decodeChatFile(a, (try chat_store.rawSession(io, a, dir, "Plans")).?);
+    const dir = try chat_paths.dmConvDir(a, "1_2");
+    const msgs = try chat_codec.decodeChatFile(a, (try chat_paths.readTranscript(io, a, dir, "Plans")).?);
     try testing.expectEqualStrings("Steve", msgs[msgs.len - 1].from);
     try testing.expectEqualStrings("1", (try chat_count.lastMessage(io, a, dir, "Plans")).?.uid);
     const n = try std.fmt.allocPrint(a, "msg={d}&emoji=%F0%9F%91%8D", .{msgs.len});
@@ -307,9 +307,9 @@ test "route: pin puts a topic in the viewer's Pinned group and unpin takes it ou
     _ = try harness.memberSession(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
-    const pinned = try chat_state.pinnedSessions(io, a, "1", "1_2");
+    const pinned = try chat_state.pinnedTopics(io, a, "1", "1_2");
     try testing.expectEqual(@as(usize, 1), pinned.len);
     try testing.expectEqualStrings("Plans", pinned[0]);
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
-    try testing.expectEqual(@as(usize, 0), (try chat_state.pinnedSessions(io, a, "1", "1_2")).len);
+    try testing.expectEqual(@as(usize, 0), (try chat_state.pinnedTopics(io, a, "1", "1_2")).len);
 }

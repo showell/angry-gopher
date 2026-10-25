@@ -1,6 +1,8 @@
 //! router.zig's tests: the store-failure class: a failure is a 500, never silence or a lie.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
 const Io = @import("host_io").Io;
 const player = @import("player.zig");
 const users = @import("users.zig");
@@ -367,8 +369,8 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     try std.Io.Dir.cwd().deleteTree(io, bookmarks);
     try harness.UidSite.disk.write(io, a, bookmarks, "", .{});
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
-    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
-    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    const raw = (try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_codec.decodeChatFile(a, raw)).len);
     // The player row is a file where its folder goes: the login's mirror fails.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
@@ -449,7 +451,6 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     defer uid_site.deinit();
     const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const chat_store = @import("chat_store.zig");
     const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
     const ada = try users.allocateUser(io, a, "Ada");
     try users.setUserPassword(io, a, ada, "a password for Ada");
@@ -461,7 +462,7 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     const hello = "markdown=hello";
     _ = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, hello.len, hello }));
     // Where the topic's uploads go is a file: the upload cannot be stored.
-    const updir = try std.fs.path.join(a, &.{ try chat_store.dmConvDir(a, key), "sessions", "scripts.uploads" });
+    const updir = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, key), "sessions", "scripts.uploads" });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
     const before = try users.userUploadBytes(io, a, ada);
     const png = "\x89PNG\r\n\x1a\n" ++ repeated("\x00", 64);

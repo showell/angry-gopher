@@ -1,4 +1,5 @@
 const std = @import("std");
+const chat_codec = @import("chat_codec.zig");
 const Io = @import("host_io").Io;
 const markdown = @import("markdown.zig");
 const chat_store = @import("chat_store.zig");
@@ -151,7 +152,7 @@ fn collectSources(io: Io, a: std.mem.Allocator, dir_path: []const u8, rel: []con
         } else if (std.mem.endsWith(u8, entry.name, ".md")) {
             if (std.mem.eql(u8, here, "sessions")) {
                 const data = try Io.Dir.cwd().readFileAlloc(io, child, a, .unlimited);
-                for (try chat_store.decodeChatFile(a, data)) |m|
+                for (try chat_codec.decodeChatFile(a, data)) |m|
                     try out.append(a, .{ .id = try std.fmt.allocPrint(a, "{s}#{s}", .{ child_rel, m.id }), .md = m.markdown });
             } else if (in_docs) {
                 const slug = entry.name[0 .. entry.name.len - 3];

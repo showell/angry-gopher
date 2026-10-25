@@ -31,6 +31,8 @@
 //! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Now = @import("request_time.zig").Now;
 const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
@@ -147,8 +149,8 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // /chat/search/words, /chat/search/messages — search across every
     // conversation the viewer can see (chat_search.zig), JSON.
     if (matchPrefix(sub, "/search")) |rest| return chat_search.handle(req, io, alloc, uid, rest, now);
-    // /chat/default — resume the last (conv, session); /chat/conversations —
-    // the (partner × session) matrix as JSON (the API-key discovery entry point);
+    // /chat/default — resume the last (conv, topic); /chat/conversations —
+    // the (partner × topic) matrix as JSON (the API-key discovery entry point);
     // /chat/msg/<id> — resolve a global MSG_ ref to its thread and 302 there.
     if (std.mem.eql(u8, sub, "/default")) return chatDefault(req, io, alloc, uid, now);
     if (std.mem.eql(u8, sub, "/conversations")) return chatConversations(req, io, alloc, uid, now);
@@ -162,10 +164,10 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // (notify: status-strip pings + came-online; sidebar: topic-added +
     // user-online). Live-only — the server-rendered page is the backlog.
     if (std.mem.eql(u8, sub, "/notifications")) {
-        return sse.forward(req, bus, try store.notifyBusKey(alloc, uid));
+        return sse.forward(req, bus, try chat_fanout.notifyBusKey(alloc, uid));
     }
     if (std.mem.eql(u8, sub, "/sidebar/stream")) {
-        return sse.forward(req, bus, try store.sidebarBusKey(alloc, uid));
+        return sse.forward(req, bus, try chat_fanout.sidebarBusKey(alloc, uid));
     }
     try http.notFound(req);
 }
@@ -182,7 +184,7 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
 
     var segs = segments(sub);
     const name_raw = segs.next() orelse return http.notFound(req);
-    if (!store.validChannelName(name_raw)) return http.notFound(req);
+    if (!chat_paths.validChannelName(name_raw)) return http.notFound(req);
     // No dupe: the router resolved the path via http.target, which owns it, so
     // path-derived slices already survive the body read.
     const name = name_raw;
@@ -191,28 +193,28 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     // is not there and one the viewer is not in (or was removed from) read
     // alike, so the page names no channel a viewer cannot see.
     const not_yours = try std.fmt.allocPrint(alloc, "#{s} is not a channel you are a member of.", .{name});
-    const members = (try store.channelMembers(io, alloc, name)) orelse return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
-    if (!store.hasMember(members, uid)) return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
+    const members = (try chat_paths.channelMembers(io, alloc, name)) orelse return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
+    if (!chat_paths.hasMember(members, uid)) return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
 
     const conv = Conv{
         .meta = .{ .kind = .channel, .members = members },
         .key = name,
         .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name}),
-        .dir = try store.channelConvDir(alloc, name),
+        .dir = try chat_paths.channelConvDir(alloc, name),
     };
 
     const topic_raw = segs.next() orelse {
-        const def = try store.defaultSession(io, alloc, conv.dir);
+        const def = try chat_paths.firstTopic(io, alloc, conv.dir);
         if (def.len == 0) {
             // Member of a channel with no topics yet — offer to start the first.
             const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
-            return page.firstTopicPage(req, io, alloc, uid, conv.base, title);
+            return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
         }
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
     };
     // /channel/<name>/new — create a topic ("new" is reserved).
     if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
-    if (!store.validSessionID(topic_raw)) return http.notFound(req);
+    if (!chat_paths.validTopicID(topic_raw)) return http.notFound(req);
     const topic = topic_raw; // owned via the router's http.target (see `name` above)
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
@@ -223,7 +225,7 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
 fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8, now: Now) !void {
     var segs = segments(rest);
     const pair_raw = segs.next() orelse return http.notFound(req);
-    if (!try store.chatKeyParticipant(alloc, pair_raw, uid)) return http.notFound(req);
+    if (!try chat_paths.chatKeyParticipant(alloc, pair_raw, uid)) return http.notFound(req);
     // No dupe: the router resolved the path via http.target, which owns it, so
     // these path-derived strings (used after the body read for response URLs,
     // fanout keys, member uids) already survive head invalidation.
@@ -239,23 +241,23 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
         .meta = try store.ConvMeta.dm(alloc, pair[0..us], pair[us + 1 ..]),
         .key = pair,
         .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pair}),
-        .dir = try store.dmConvDir(alloc, pair),
+        .dir = try chat_paths.dmConvDir(alloc, pair),
     };
 
     const sid_raw = segs.next() orelse {
-        const def = try store.defaultSession(io, alloc, conv.dir);
+        const def = try chat_paths.firstTopic(io, alloc, conv.dir);
         if (def.len == 0) {
             // Addressable pair, no topics yet — offer to start the first one
             // (rather than 404 a real, reachable conversation).
             const partner = try partnerName(io, alloc, conv.key, uid);
             const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
-            return page.firstTopicPage(req, io, alloc, uid, conv.base, title);
+            return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
         }
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
     };
     // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
     if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
-    if (!store.validSessionID(sid_raw)) return http.notFound(req);
+    if (!chat_paths.validTopicID(sid_raw)) return http.notFound(req);
     const sid = sid_raw; // owned via the router's http.target (see `pair` above)
 
     const partner = try partnerName(io, alloc, conv.key, uid);
@@ -300,9 +302,9 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else if (std.mem.eql(u8, tail, "upload")) {
         try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid);
     } else if (std.mem.eql(u8, tail, "pin")) {
-        try pinSession(req, io, alloc, uid, conv.key, topic.sid, true);
+        try pinTopic(req, io, alloc, uid, conv.key, topic.sid, true);
     } else if (std.mem.eql(u8, tail, "unpin")) {
-        try pinSession(req, io, alloc, uid, conv.key, topic.sid, false);
+        try pinTopic(req, io, alloc, uid, conv.key, topic.sid, false);
     } else if (std.mem.eql(u8, tail, "raw")) {
         if (!isRead(req)) return http.methodNotAllowed(req, .GET);
         try rawTranscript(req, io, alloc, conv.dir, topic.sid);
@@ -329,7 +331,7 @@ fn isRead(req: *const Request) bool {
 }
 
 fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !bool {
-    for (try store.listSessions(io, alloc, conv_dir)) |s| {
+    for (try chat_paths.listTopics(io, alloc, conv_dir)) |s| {
         if (std.ascii.eqlIgnoreCase(s, sid)) return true;
     }
     return false;
@@ -397,7 +399,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // The bookmark first (metal-vmm QUEUE 156(g)): one that fails is a 500
     // with nothing stored, never a 500 for a message that was, which the
     // client would send again.
-    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
+    if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
     // Where a plain form post goes back to, made before the store (177.1):
     // made after, an allocation that failed was a 500 for a stored message.
     const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
@@ -405,12 +407,12 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     return sendDone(req, is_async, back);
 }
 
-/// pinSession handles POST /<…>/<sid>/{pin,unpin}: toggle
+/// pinTopic handles POST /<…>/<sid>/{pin,unpin}: toggle
 /// whether `sid` is in the caller's per-conv Pinned group, then 204. Per-user
 /// state; conv-level auth already passed (any participant pins their own view).
-fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
+fn pinTopic(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
-    try chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
+    try chat_state.setTopicPinned(io, alloc, uid, conv_key, sid, pinned);
     return req.respond("", .{ .status = .no_content });
 }
 
@@ -427,9 +429,9 @@ fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
 
 /// newTopic handles POST <conv-base>/new:
 /// validate the `topic` form field, refuse duplicates + the reserved "new", then
-/// seed the session with a first "hi" message (which fans out topic-added). For a
+/// seed the topic with a first "hi" message (which fans out topic-added). For a
 /// DM it also remembers the new topic as last-viewed and announces it as a link
-/// in the highest generalN session, where the partner already watches. Returns
+/// in the highest generalN topic, where the partner already watches. Returns
 /// `{conv, sid}` JSON. Shared by DMs and channels (kind gates the DM-only extras).
 fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
@@ -437,7 +439,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
     const topic_raw = (try formField(alloc, body, "topic")) orelse "";
     const topic = std.mem.trim(u8, topic_raw, " \t\r\n");
-    if (!store.validSessionID(topic)) {
+    if (!chat_paths.validTopicID(topic)) {
         return req.respond("Topic must be letters, digits, and hyphens only — no spaces, underscores, or punctuation.\n", .{ .status = .bad_request });
     }
     if (std.ascii.eqlIgnoreCase(topic, "new")) {
@@ -446,20 +448,20 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     // **WITHOUT CASE** (metal-vmm QUEUE 156(a)): the store's names are not
     // (FAT folds them), so "plans" beside "Plans" was one file, the new
     // topic's first message landing in the old.
-    for (try store.listSessions(io, alloc, conv.dir)) |s| {
+    for (try chat_paths.listTopics(io, alloc, conv.dir)) |s| {
         if (std.ascii.eqlIgnoreCase(s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
     // The bookmark first, as a send's (156(g)): one that fails makes no topic,
     // where it answered 500 for a topic made, and a retry met 409. A bookmark
-    // to a topic not made is never followed (resolveSessionForUser).
-    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
+    // to a topic not made is never followed (resumeTopic).
+    if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic);
     _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic }, .{ .name = from_name, .id = uid }, "hi", "");
 
     if (conv.persistsCursor()) {
         // Announce the new topic where the partner already watches (best-effort).
-        if (try highestGeneralSession(io, alloc, conv.dir)) |gen| {
+        if (try highestGeneralTopic(io, alloc, conv.dir)) |gen| {
             if (!std.mem.eql(u8, gen, topic)) {
                 const note = try std.fmt.allocPrint(alloc, "New topic: [{s}]({s}/{s})", .{ topic, conv.base, topic });
                 // **NOT BEST-EFFORT ANY MORE.** This used to be `catch {}`, so
@@ -477,12 +479,12 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
 }
 
-/// highestGeneralSession returns the "general<N>" session with the largest N in
+/// highestGeneralTopic returns the "general<N>" topic with the largest N in
 /// `dir`, or null when there is none.
-fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
+fn highestGeneralTopic(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
     var best: ?[]const u8 = null;
     var best_n: i64 = -1;
-    for (try store.listSessions(io, alloc, dir)) |s| {
+    for (try chat_paths.listTopics(io, alloc, dir)) |s| {
         if (!std.mem.startsWith(u8, s, "general")) continue;
         const n = decimal.parseInt(i64, s["general".len..]) orelse continue;
         if (n > best_n) {
@@ -496,29 +498,29 @@ fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
 // ── default / conversations / msg-ref lookup ──────────────────────────────────
 
 /// chatDefault resumes the viewer's last conversation: read their last-conv
-/// bookmark, resolve its landing session, and 302 into /chat/c/<conv>/<sid>. It
+/// bookmark, resolve its landing topic, and 302 into /chat/c/<conv>/<sid>. It
 /// backs both bare /chat and /chat/default. When there's no bookmark (or it names
 /// a conv they no longer participate in), we render the "no conversations" page
 /// rather than redirect — the invariant that everyone has SOME conversation isn't
 /// enforced yet, so this is the honest empty state.
 fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: Now) !void {
     const conv = try chat_state.lastUserConv(io, alloc, uid);
-    if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
+    if (conv.len == 0 or !(try chat_paths.chatKeyParticipant(alloc, conv, uid))) {
         return page.noConversationsPage(req, io, alloc, uid);
     }
     // A conversation with no topic yet lands on its own page, which offers to
     // start the first, where it went to today's date as a topic: a send makes
     // one there, but a page of a topic not there is a 404 (156(j)'s review).
-    if ((try store.defaultSession(io, alloc, try store.dmConvDir(alloc, conv))).len == 0) {
+    if ((try chat_paths.firstTopic(io, alloc, try chat_paths.dmConvDir(alloc, conv))).len == 0) {
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}));
     }
-    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv, now);
+    const sid = try chat_state.resumeTopic(io, alloc, uid, conv, now);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
 }
 
-/// chatConversations serves GET /chat/conversations: the (partner × session)
+/// chatConversations serves GET /chat/conversations: the (partner × topic)
 /// matrix as JSON — every other authorized principal, each conv's default
-/// landing session and its session list (sorted). The discovery entry point for
+/// landing topic and its topic list (sorted). The discovery entry point for
 /// API-key clients.
 fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: Now) !void {
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
@@ -530,14 +532,14 @@ fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: 
         if (std.mem.eql(u8, partner.id, uid)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        const conv = try store.chatPairKey(alloc, uid, partner.id);
-        const def = try chat_state.resolveSessionForUser(io, alloc, uid, conv, now);
-        const dir = try store.dmConvDir(alloc, conv);
+        const conv = try chat_paths.chatPairKey(alloc, uid, partner.id);
+        const def = try chat_state.resumeTopic(io, alloc, uid, conv, now);
+        const dir = try chat_paths.dmConvDir(alloc, conv);
         try b.print(alloc, "{{\"conv\":{f},\"partner\":{{\"id\":{f},\"name\":{f}}},\"default\":{f},\"sessions\":[", .{
             std.json.fmt(conv, .{}), std.json.fmt(partner.id, .{}), std.json.fmt(partner.name, .{}), std.json.fmt(def, .{}),
         });
         var sfirst = true;
-        for (try store.listSessions(io, alloc, dir)) |s| {
+        for (try chat_paths.listTopics(io, alloc, dir)) |s| {
             if (!sfirst) try b.append(alloc, ',');
             sfirst = false;
             try b.print(alloc, "{f}", .{std.json.fmt(s, .{})});
@@ -550,33 +552,33 @@ fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: 
 
 /// chatMsgLookup resolves a global MSG_<id> to the thread it lives in and 302s to
 /// that topic URL + #msg-<id>. Walks the viewer's accessible convs (DM partners,
-/// then channels) and picks the first whose session list holds the sid embedded
+/// then channels) and picks the first whose topic list holds the sid embedded
 /// in the id.
 fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []const u8) !void {
-    if (!store.validMsgRefID(id)) return http.notFound(req);
+    if (!chat_paths.validMsgRefID(id)) return http.notFound(req);
     const cut = std.mem.lastIndexOfScalar(u8, id, '_').?; // validMsgRefID guarantees one
     const sid = id[0..cut];
 
     for (try users.listAuthorized(io, alloc)) |partner| {
         if (std.mem.eql(u8, partner.id, uid)) continue;
-        const conv = try store.chatPairKey(alloc, uid, partner.id);
-        const dir = try store.dmConvDir(alloc, conv);
-        if (try convHasSession(io, alloc, dir, sid)) {
+        const conv = try chat_paths.chatPairKey(alloc, uid, partner.id);
+        const dir = try chat_paths.dmConvDir(alloc, conv);
+        if (try convHasTopic(io, alloc, dir, sid)) {
             return redirectFound(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
         }
     }
-    for (try store.listUserChannels(io, alloc, uid)) |name| {
-        const dir = try store.channelConvDir(alloc, name);
-        if (try convHasSession(io, alloc, dir, sid)) {
+    for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
+        const dir = try chat_paths.channelConvDir(alloc, name);
+        if (try convHasTopic(io, alloc, dir, sid)) {
             return redirectFound(req, try std.fmt.allocPrint(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
         }
     }
     return http.notFound(req);
 }
 
-/// convHasSession reports whether `dir`'s session list contains `sid`.
-fn convHasSession(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool {
-    for (try store.listSessions(io, alloc, dir)) |s| {
+/// convHasTopic reports whether `dir`'s topic list contains `sid`.
+fn convHasTopic(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool {
+    for (try chat_paths.listTopics(io, alloc, dir)) |s| {
         if (std.mem.eql(u8, s, sid)) return true;
     }
     return false;
@@ -595,7 +597,7 @@ fn redirectFound(req: *Request, location: []const u8) !void {
 
 /// rawTranscript serves the literal on-disk .md bytes (text/plain, nosniff).
 fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
-    const data = (try store.rawSession(io, alloc, conv_dir, sid)) orelse return http.notFound(req);
+    const data = (try chat_paths.readTranscript(io, alloc, conv_dir, sid)) orelse return http.notFound(req);
     try req.respond(data, .{ .extra_headers = &.{
         .{ .name = "content-type", .value = "text/plain; charset=utf-8" },
         .{ .name = "x-content-type-options", .value = "nosniff" },

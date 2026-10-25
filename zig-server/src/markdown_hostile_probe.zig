@@ -12,6 +12,7 @@
 // Work-units are deterministic (markdown.workUnits), so this is a stable signal,
 // not wall-time. Run: cd zig-server && zig build markdown-probe
 const std = @import("std");
+const chat_codec = @import("chat_codec.zig");
 const markdown = @import("markdown.zig");
 const chat_store = @import("chat_store.zig");
 const mtext = @import("markdown_text.zig");
@@ -88,7 +89,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
         var would_trip: usize = 0;
         for (files.items) |path| {
             const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch continue;
-            const msgs = try chat_store.decodeChatFile(alloc, data);
+            const msgs = try chat_codec.decodeChatFile(alloc, data);
             for (msgs) |m| {
                 if (m.markdown.len == 0) continue;
                 const w = try markdown.workUnits(alloc, m.markdown);

@@ -18,8 +18,8 @@ const indexOf = chat_count.indexOf;
 const readCount = chat_count.readCount;
 const backfillSidecars = chat_count.backfillSidecars;
 const countPath = chat_count.countPath;
-const rawSession = chat_paths.rawSession;
-const sessionMdPath = chat_paths.sessionMdPath;
+const readTranscript = chat_paths.readTranscript;
+const transcriptPath = chat_paths.transcriptPath;
 const appendMessage = chat_store.appendMessage;
 const ConvMeta = chat_store.ConvMeta;
 const cutSeq = chat_store.cutSeq;
@@ -49,7 +49,7 @@ pub fn refusedText(alloc: Alloc) ![]const u8 {
 /// Whether a decoded block is a message: it has an id, an author and a date
 /// (the decoder and search's in-place reading ask the same).
 pub fn isMessage(m: ChatMessage) bool {
-    return m.id.len > 0 and m.from.len > 0 and m.date.len > 0;
+    return m.id.len > 0 and m.from.len > 0 and m.at.len > 0;
 }
 
 /// A block that is not a message: counted, and its first line kept to say.
@@ -61,7 +61,7 @@ pub fn refuseBlock(piece: []const u8) void {
     refused_last = refused_last_buf[0..n];
 }
 
-/// decodeChatFile parses a whole session file into messages. Splits on `sep`
+/// decodeChatFile parses a whole topic file into messages. Splits on `sep`
 /// (no trailing separator on disk, so one piece per message).
 ///
 /// **TWO SKIPS, NAMED** (metal-vmm QUEUE 156(h)):
@@ -96,7 +96,7 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
     while (lit.next()) |ln| try lines.append(alloc, ln);
     const ls = lines.items;
 
-    var msg: ChatMessage = .{ .id = "", .from = "", .date = "", .markdown = "" };
+    var msg: ChatMessage = .{ .id = "", .from = "", .at = "", .markdown = "" };
     var i: usize = 0;
     if (i < ls.len and std.mem.startsWith(u8, ls[i], "MSG_")) {
         msg.id = ls[i]["MSG_".len..];
@@ -108,7 +108,7 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
             if (std.mem.eql(u8, kv.before, "from")) {
                 msg.from = kv.after;
             } else if (std.mem.eql(u8, kv.before, "date")) {
-                msg.date = kv.after;
+                msg.at = kv.after;
             } else if (std.mem.eql(u8, kv.before, "uid")) {
                 msg.uid = kv.after;
             }
@@ -160,8 +160,8 @@ fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
         first = false;
         try body.appendSlice(alloc, try escapeBodyLine(alloc, line));
     }
-    if (msg.uid.len == 0) return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\n\n{s}", .{ msg.id, msg.from, msg.date, body.items });
-    return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\nuid: {s}\n\n{s}", .{ msg.id, msg.from, msg.date, msg.uid, body.items });
+    if (msg.uid.len == 0) return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\n\n{s}", .{ msg.id, msg.from, msg.at, body.items });
+    return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\nuid: {s}\n\n{s}", .{ msg.id, msg.from, msg.at, msg.uid, body.items });
 }
 
 /// escapeBodyLine protects a body line that would collide with `sep` by
@@ -180,7 +180,7 @@ test "a message's author is stored as `uid:` after its date, read back, and adds
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const with = ChatMessage{ .id = "t_1", .from = "Steve", .date = "2026-10-25T12:00:00Z", .markdown = "hi\nthere", .uid = "1" };
+    const with = ChatMessage{ .id = "t_1", .from = "Steve", .at = "2026-10-25T12:00:00Z", .markdown = "hi\nthere", .uid = "1" };
     const block = try chatStoredForm(a, 0, with);
     try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\nuid: 1\n\nhi\nthere", block);
     const back = (try decodeChatFile(a, block))[0];
@@ -227,8 +227,8 @@ test "a refused block keeps its number: a recount counts blocks, so no id is giv
     try testing.expectError(error.NoAuthor, appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "", .id = "1" }, "hi", ""));
     // As one written before: t_2 has no author, and the sidecar is gone.
     _ = try f.send("one");
-    const md = try sessionMdPath(a, f.dir, "topic");
-    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = md, .data = try std.fmt.allocPrint(a, "{s}{s}MSG_topic_2\nfrom: \ndate: 2026-10-10T00:00:00Z\n\nnameless{s}MSG_topic_3\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nthree", .{ (try rawSession(f.io, a, f.dir, "topic")).?, sep, sep }) });
+    const md = try transcriptPath(a, f.dir, "topic");
+    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = md, .data = try std.fmt.allocPrint(a, "{s}{s}MSG_topic_2\nfrom: \ndate: 2026-10-10T00:00:00Z\n\nnameless{s}MSG_topic_3\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nthree", .{ (try readTranscript(f.io, a, f.dir, "topic")).?, sep, sep }) });
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
     try testing.expectEqualStrings("topic_4", (try f.send("four")).id);
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));

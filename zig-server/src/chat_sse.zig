@@ -22,6 +22,7 @@
 //! (`respond`, `push`); the live frames are the host's (bus.zig's `Kept`).
 
 const std = @import("std");
+const chat_count = @import("chat_count.zig");
 const Io = @import("host_io").Io;
 const store = @import("chat_store.zig");
 const chat_frame = @import("chat_frame.zig");
@@ -67,8 +68,8 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: s
     for (rest, first..) |m, i| {
         // Its index from its id, as the live stream's: a refused block before
         // it keeps its number (chat_store.countBlocks).
-        const index = store.indexOf(m.id, topic.sid) orelse i;
-        const frame = try chat_frame.messageFrame(alloc, .{ .index = index, .from = m.from, .from_uid = m.uid, .at = m.date, .id = m.id, .markdown = m.markdown });
+        const index = chat_count.indexOf(m.id, topic.sid) orelse i;
+        const frame = try chat_frame.messageFrame(alloc, .{ .index = index, .from = m.from, .from_uid = m.uid, .at = m.at, .id = m.id, .markdown = m.markdown });
         sse.push(&body, frame) catch return;
     }
 
@@ -90,7 +91,7 @@ fn verbatim(_: []const u8, _: Alloc, blob: []const u8) Alloc.Error!?[]const u8 {
 /// backlog's positions behind the indexes after it.
 fn backlogFrom(backlog: []const store.ChatMessage, sid: []const u8, since: usize) []const store.ChatMessage {
     for (backlog, 0..) |m, i| {
-        if ((store.indexOf(m.id, sid) orelse i) >= since) return backlog[i..];
+        if ((chat_count.indexOf(m.id, sid) orelse i) >= since) return backlog[i..];
     }
     return backlog[backlog.len..];
 }
@@ -104,7 +105,7 @@ test "a reconnect past a refused block misses nothing: since is an index, not a 
     // t_3 (its id: 2) reconnects with since = 3 and must get t_4.
     const m = struct {
         fn of(id: []const u8) store.ChatMessage {
-            return .{ .id = id, .from = "a", .date = "d", .markdown = "x" };
+            return .{ .id = id, .from = "a", .at = "d", .markdown = "x" };
         }
     };
     const backlog = [_]store.ChatMessage{ m.of("t_1"), m.of("t_3"), m.of("t_4") };

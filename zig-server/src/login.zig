@@ -23,6 +23,8 @@
 //! (a direct call here — there's only the one listener).
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
@@ -314,9 +316,9 @@ fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_
     const authorized = users.listAuthorized(io, alloc) catch return;
     for (authorized) |u| {
         if (std.mem.eql(u8, u.id, new_uid)) continue;
-        const pk = store.chatPairKey(alloc, u.id, new_uid) catch continue;
+        const pk = chat_paths.chatPairKey(alloc, u.id, new_uid) catch continue;
         const url = std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pk}) catch continue;
-        const key = store.sidebarBusKey(alloc, u.id) catch continue;
+        const key = chat_fanout.sidebarBusKey(alloc, u.id) catch continue;
         const ev = std.fmt.allocPrint(alloc, "{{\"kind\":\"user-arrived\",\"user_id\":{f},\"user_name\":{f},\"conv\":{f},\"url\":{f}}}", .{
             std.json.fmt(new_uid, .{}), std.json.fmt(new_name, .{}), std.json.fmt(pk, .{}), std.json.fmt(url, .{}),
         }) catch continue;
@@ -347,11 +349,11 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, now
     if (!try users.principalExists(io, alloc, host_uid)) return;
 
     const host_name = try users.getUserName(io, alloc, host_uid);
-    const pair = try store.chatPairKey(alloc, host_uid, new_uid);
-    const dir = try store.dmConvDir(alloc, pair);
+    const pair = try chat_paths.chatPairKey(alloc, host_uid, new_uid);
+    const dir = try chat_paths.dmConvDir(alloc, pair);
 
     // Idempotent: only seed when this DM has no topics yet.
-    if ((try store.defaultSession(io, alloc, dir)).len != 0) return;
+    if ((try chat_paths.firstTopic(io, alloc, dir)).len != 0) return;
 
     const meta = try store.ConvMeta.dm(alloc, host_uid, new_uid);
 
@@ -360,7 +362,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, now
     _ = try store.appendMessage(io, alloc, bus, now, meta, .{ .dir = dir, .key = pair, .sid = topic }, .{ .name = host_name, .id = host_uid }, msg, "");
 
     // The new member has no last-conv bookmark yet — land their /chat here.
-    try chat_state.setUserLastSession(io, alloc, new_uid, pair, topic);
+    try chat_state.setLastViewedTopic(io, alloc, new_uid, pair, topic);
 }
 
 // ── cookies + response helpers ────────────────────────────────────────────────

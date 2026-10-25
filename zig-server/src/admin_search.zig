@@ -15,13 +15,14 @@
 //! folded (English on this site; any other byte must match exactly).
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
 const chat = @import("chat.zig");
-const store = @import("chat_store.zig");
 
 const Request = std.http.Server.Request;
 
@@ -40,7 +41,7 @@ pub const Hit = struct {
     sid: []const u8,
     id: []const u8,
     from: []const u8,
-    date: []const u8,
+    at: []const u8,
     snippet: []const u8,
 };
 
@@ -58,7 +59,7 @@ pub const Result = struct {
 };
 
 /// Every message `uid` can see whose markdown contains `key`: DMs first,
-/// then channels, each transcript in session order.
+/// then channels, each transcript in topic order.
 pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
     var hits: std.ArrayList(Hit) = .empty;
     var r: Result = .{ .hits = &.{}, .matched = 0, .transcripts = 0, .messages = 0, .bytes = 0, .unreadable = 0, .too_big = 0 };
@@ -70,16 +71,16 @@ pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
     // never the whole of chat.
     var per = std.heap.ArenaAllocator.init(alloc);
     defer per.deinit();
-    for (try store.visibleConvs(io, alloc, uid)) |conv| {
+    for (try chat_paths.visibleConvs(io, alloc, uid)) |conv| {
         const dir = conv.dir;
         const base = conv.base;
-        for (try store.listSessions(io, alloc, dir)) |sid| {
+        for (try chat_paths.listTopics(io, alloc, dir)) |sid| {
             _ = per.reset(.retain_capacity);
             const a = per.allocator();
             r.transcripts += 1;
             transcripts_read += 1;
             // absent-ok: a transcript gone since the listing, or one that cannot be read, is counted and said on the page, never taken as no match.
-            const raw = (store.rawSession(io, a, dir, sid) catch |e| {
+            const raw = (chat_paths.readTranscript(io, a, dir, sid) catch |e| {
                 if (e == error.OutOfMemory) r.too_big += 1 else r.unreadable += 1;
                 continue;
             }) orelse {
@@ -87,7 +88,7 @@ pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
                 continue;
             };
             r.bytes += raw.len;
-            const msgs = store.decodeChatFile(a, raw) catch |e| {
+            const msgs = chat_codec.decodeChatFile(a, raw) catch |e| {
                 if (e == error.OutOfMemory) r.too_big += 1 else r.unreadable += 1;
                 continue;
             };
@@ -101,7 +102,7 @@ pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
                     .sid = sid,
                     .id = try alloc.dupe(u8, m.id),
                     .from = try alloc.dupe(u8, m.from),
-                    .date = try alloc.dupe(u8, m.date),
+                    .at = try alloc.dupe(u8, m.at),
                     .snippet = try alloc.dupe(u8, snippetAround(m.markdown, at, key.len)),
                 });
             }
@@ -162,7 +163,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
             try html.htmlEscape(alloc, h.id),
             try html.htmlEscape(alloc, h.id),
             try html.htmlEscape(alloc, h.from),
-            try html.htmlEscape(alloc, h.date),
+            try html.htmlEscape(alloc, h.at),
             try html.htmlEscape(alloc, h.snippet),
         });
     }

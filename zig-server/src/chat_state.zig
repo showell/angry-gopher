@@ -1,7 +1,7 @@
 //! chat_state: per-user chat state — which
-//! (conv, session) a user was last looking at, and which sessions they've pinned
+//! (conv, topic) a user was last looking at, and which topics they've pinned
 //! in each conversation. Backs /chat/default (resume where you were), the
-//! conversation page's session memory, and the sidebar's Pinned group.
+//! conversation page's topic memory, and the sidebar's Pinned group.
 //!
 //! Per-user state files (under the shared chat tree):
 //!   {chat_root}/users/<uid>/last-conv                  — conv-key text file
@@ -13,6 +13,7 @@
 //! (errors are never surfaced to the request).
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
@@ -26,7 +27,7 @@ fn userChatStateDir(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ store.chat_root, "users", uid });
 }
 
-// ── last conv / session (the /chat/default resume pointer) ────────────────────
+// ── last conv / topic (the /chat/default resume pointer) ────────────────────
 
 /// lastUserConv returns the conv-key this user was most recently looking at, or
 /// "" if they've never had one.
@@ -37,23 +38,23 @@ pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
     return std.mem.trim(u8, b, " \t\r\n");
 }
 
-/// lastUserSession returns the session id this user last viewed for `conv_key`,
+/// lastViewedTopic returns the topic id this user last viewed for `conv_key`,
 /// or "" if never.
-pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
+pub fn lastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key });
     const b = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return "";
     return std.mem.trim(u8, b, " \t\r\n");
 }
 
-/// setUserLastSession persists which session this user last viewed for `conv_key`
+/// setLastViewedTopic persists which topic this user last viewed for `conv_key`
 /// AND bumps the last-conv pointer so /chat/default resumes the right pair.
 /// Best-effort.
 ///
 /// **WRITTEN ONLY WHEN IT CHANGES** (zig-metal-unikernel 153(1)): on every send and
 /// view the value is usually the one already there, and a write is disk
 /// requests each time; the read is from memory. `write` makes the folders.
-pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {
+pub fn setLastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {
     if (uid.len == 0 or sid.len == 0) return;
     const dir = try userChatStateDir(alloc, uid);
     try writeIfChanged(io, alloc, try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key }), sid);
@@ -68,12 +69,12 @@ fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) !vo
     try disk.write(io, alloc, path, try std.fmt.allocPrint(alloc, "{s}\n", .{value}), .{});
 }
 
-// ── pinned sessions (the sidebar's Pinned group) ──────────────────────────────
+// ── pinned topics (the sidebar's Pinned group) ──────────────────────────────
 
-/// pinnedSessions returns the set of session ids this user has pinned in the
+/// pinnedTopics returns the set of topic ids this user has pinned in the
 /// conversation `conv_key`, sorted (the file's content order). A missing file →
-/// empty. Stale ids are harmless — callers intersect with the live session list.
-pub fn pinnedSessions(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
+/// empty. Stale ids are harmless — callers intersect with the live topic list.
+pub fn pinnedTopics(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
     return parsePinned(alloc, try readPinnedFile(io, alloc, uid, conv_key));
 }
 
@@ -90,7 +91,7 @@ fn parsePinned(alloc: Alloc, b: []const u8) ![][]const u8 {
 }
 
 /// isPinned reports whether `sid` is in a pinned-set slice (linear; the set is
-/// tiny — a handful of sessions).
+/// tiny — a handful of topics).
 pub fn isPinned(set: [][]const u8, sid: []const u8) bool {
     for (set) |s| {
         if (std.mem.eql(u8, s, sid)) return true;
@@ -98,11 +99,11 @@ pub fn isPinned(set: [][]const u8, sid: []const u8) bool {
     return false;
 }
 
-/// setSessionPinned adds or removes one session from the user's pinned set for
+/// setTopicPinned adds or removes one topic from the user's pinned set for
 /// `conv_key`, persisting it sorted. Removing the last pin deletes the file.
 /// **A PIN THAT DID NOT LAND SAYS SO** (metal-vmm QUEUE 156(g)): every
 /// failure is the caller's, where it answered 204 having written nothing.
-pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
+pub fn setTopicPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
     if (uid.len == 0 or sid.len == 0) return;
     // **A SET THAT WILL NOT READ IS NOT AN EMPTY SET.** What is read here is
     // rewritten below, so treating a failed read as "no pins" used to delete
@@ -150,22 +151,23 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
 
-// ── resume target (the bare-conv landing session) ─────────────────────────────
+// ── resume target (the bare-conv landing topic) ─────────────────────────────
 
-/// resolveSessionForUser picks the session a bare /chat/c/<conv> (or docs
-/// post-to-chat) lands on for `uid`, in priority order: the user's last-viewed (if
-/// it still exists) → ChitChat → first-alphabetical → today's date (so a brand-new
-/// conv auto-creates today's session on first post).
-/// Shared by /chat/default and the docs post flow.
-pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, now: Now) ![]const u8 {
-    const dir = try store.dmConvDir(alloc, conv);
-    const sessions = try store.listSessions(io, alloc, dir);
+/// resumeTopic picks the topic a bare /chat/c/<conv> (or docs post-to-chat)
+/// lands on for `uid`: the one they last viewed, if it still exists; else the
+/// conversation's first topic (chat_paths.firstOf); else today's date, so a
+/// brand-new conversation makes today's topic on its first post. Shared by
+/// /chat/default and the docs post flow. Where the viewer does not count,
+/// chat_paths.firstTopic.
+pub fn resumeTopic(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, now: Now) ![]const u8 {
+    const dir = try chat_paths.dmConvDir(alloc, conv);
+    const topics = try chat_paths.listTopics(io, alloc, dir);
 
-    const last = try lastUserSession(io, alloc, uid, conv);
+    const last = try lastViewedTopic(io, alloc, uid, conv);
     if (last.len != 0) {
-        for (sessions) |s| if (std.mem.eql(u8, s, last)) return last;
+        for (topics) |s| if (std.mem.eql(u8, s, last)) return last;
     }
-    for (sessions) |s| if (std.mem.eql(u8, s, "ChitChat")) return s;
-    if (sessions.len > 0) return sessions[0];
+    const first = chat_paths.firstOf(topics);
+    if (first.len > 0) return first;
     return timefmt.formatDateUTC(alloc, now.unixSecs());
 }

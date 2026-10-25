@@ -1,6 +1,7 @@
 //! router.zig's tests: search.
 
 const std = @import("std");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const users = @import("users.zig");
 const streams = @import("webbox").bus;
@@ -160,7 +161,7 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     var hub = Hub.init(io, a);
     var bus = Bus.of(&hub);
     const meta = chat_store.ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    _ = try chat_store.appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = try chat_store.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight", "");
+    _ = try chat_store.appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = try chat_paths.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight", "");
     chat_search.forgetAll();
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
 
@@ -260,7 +261,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     const idx = search_index.ready(io, a).?;
     var compared: usize = 0;
     for ([_][]const u8{ "1", "2", "3" }) |who| {
-        const reach = try chat_store.visibleConvs(io, a, who);
+        const reach = try chat_paths.visibleConvs(io, a, who);
         var key_it = keys.keyIterator();
         while (key_it.next()) |k| {
             const base_r = try admin_search.search(io, a, who, k.*);

@@ -7,6 +7,7 @@
 //! arena of its own over the process allocator, given back when it ends.
 
 const std = @import("std");
+const chat_count = @import("chat_count.zig");
 const Io = @import("host_io").Io;
 const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
@@ -47,7 +48,7 @@ pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartRe
     const backfilled = blk: {
         var pass = std.heap.ArenaAllocator.init(base);
         defer pass.deinit();
-        break :blk chat_store.backfillAll(io, pass.allocator());
+        break :blk chat_count.backfillAll(io, pass.allocator());
     };
     // Search's index in memory.
     const t0 = Io.Clock.now(.awake, io);
@@ -82,7 +83,7 @@ pub fn refresh(io: Io, base: std.mem.Allocator) Refresh {
     const backfilled = blk: {
         var pass = std.heap.ArenaAllocator.init(base);
         defer pass.deinit();
-        break :blk chat_store.backfillAll(io, pass.allocator());
+        break :blk chat_count.backfillAll(io, pass.allocator());
     };
     const search = blk: {
         var pass = std.heap.ArenaAllocator.init(base);
