@@ -65,34 +65,42 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
             const buf = try alloc.alloc(u8, tail_window);
             // absent-ok: the sidecar is a cache: a window that will not read falls back to the transcript.
             const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid, counted);
-            // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
-            // and nothing below could tell. Read it the slow way instead.
-            if (n < tail_window) {
-                _ = alloc.resize(buf, n);
-                const msgs = try decodeChatFile(alloc, buf[0..n]);
-                if (msgs.len > 0) {
-                    const got = msgs[msgs.len - 1];
-                    // **AT LEAST what the sidecar says, not exactly.** A crash
-                    // or a failed write between appending a message and
-                    // recording it leaves an offset one message behind — and
-                    // it would VERIFY, because the count is one behind too.
-                    // Reading to the end of the file instead of to a recorded
-                    // size means the newer message is right there, so the
-                    // answer is the true last one and the record repairs
-                    // itself on the next send.
-                    if (numberIn(got.id, sid)) |number| if (number >= c.count) return .{
-                        .markdown = got.markdown,
-                        .at = got.at,
-                        // A current record's answer stands, nobody included;
-                        // a record behind: the newer message's author.
-                        .uid = if (number == c.count) l.uid else authorOf(io, alloc, got),
-                        .number = number,
-                    };
-                }
-            }
+            _ = alloc.resize(buf, n);
+            if (try windowLast(alloc, c.count, buf[0..n], n == tail_window, sid)) |w| return .{
+                .markdown = w.msg.markdown,
+                .at = w.msg.at,
+                // A current record's answer stands, nobody included;
+                // a record behind: the newer message's author.
+                .uid = if (w.current) l.uid else authorOf(io, alloc, w.msg),
+                .number = w.number,
+            };
         };
     }
     return fallbackLast(io, alloc, conv_dir, sid, counted);
+}
+
+/// What the window read at the sidecar's offset says the last message is,
+/// or null when it cannot be believed: its last block must be a message of
+/// `sid`, numbered at least `count`. `current` when numbered exactly that:
+/// the record speaks for it.
+///
+/// **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**, and
+/// nothing here could tell: `full` is never believed.
+///
+/// **AT LEAST what the sidecar says, not exactly.** A crash or a failed
+/// write between appending a message and recording it leaves an offset one
+/// message behind — and it would VERIFY, because the count is one behind
+/// too. Reading to the end of the file instead of to a recorded size means
+/// the newer message is right there, so the answer is the true last one and
+/// the record repairs itself on the next send.
+pub fn windowLast(alloc: Alloc, count: usize, window: []const u8, full: bool, sid: []const u8) !?struct { msg: ChatMessage, number: usize, current: bool } {
+    if (full) return null;
+    const msgs = try decodeChatFile(alloc, window);
+    if (msgs.len == 0) return null;
+    const got = msgs[msgs.len - 1];
+    const number = numberIn(got.id, sid) orelse return null;
+    if (number < count) return null;
+    return .{ .msg = got, .number = number, .current = number == count };
 }
 
 /// **THE AUTHOR WHERE NO SIDECAR SAYS** (the box's must-fix after 153(1)):
@@ -126,7 +134,7 @@ fn lookupAuthor(io: Io, alloc: Alloc, msg: ChatMessage) ![]const u8 {
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
 /// topic's — which is what a sidecar pointing at the wrong place looks like.
-fn numberIn(id: []const u8, sid: []const u8) ?usize {
+pub fn numberIn(id: []const u8, sid: []const u8) ?usize {
     if (!std.mem.startsWith(u8, id, sid)) return null;
     const rest = id[sid.len..];
     if (rest.len < 2 or rest[0] != '_') return null;
@@ -149,8 +157,16 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     // The record's answer where it speaks for this transcript, nobody
     // included; else the last author by name.
     const blocks = countBlocks(raw);
-    const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == blocks and c.size == raw.len) l.uid else null) else null) else null;
-    return .{ .markdown = last.markdown, .at = last.at, .uid = recorded orelse authorOf(io, alloc, last), .number = blocks };
+    return .{ .markdown = last.markdown, .at = last.at, .uid = recordedAuthor(counted, blocks, raw.len) orelse authorOf(io, alloc, last), .number = blocks };
+}
+
+/// The author the record names, nobody included, when it speaks for a
+/// transcript of `blocks` blocks and `size` bytes: exactly the one it
+/// counted. Else null: unknown, never an older author.
+pub fn recordedAuthor(counted: ?Count, blocks: usize, size: u64) ?[]const u8 {
+    const c = counted orelse return null;
+    const l = c.last orelse return null;
+    return if (c.count == blocks and c.size == size) l.uid else null;
 }
 
 /// **EVERY TOPIC GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -238,10 +254,15 @@ pub fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8)
         error.FileNotFound => return 0,
         else => return e,
     }).size;
-    if (readCount(io, alloc, conv_dir, sid)) |c| {
-        if (c.size == size) return c.count;
-    }
+    if (believedCount(readCount(io, alloc, conv_dir, sid), size)) |n| return n;
     return countBlocks(try store.read(io, alloc, md, .unlimited));
+}
+
+/// The count a sidecar gives, believed only when the transcript is still
+/// the `size` it was taken at; else null, and the transcript is counted.
+pub fn believedCount(counted: ?Count, size: u64) ?usize {
+    const c = counted orelse return null;
+    return if (c.size == size) c.count else null;
 }
 
 /// **MESSAGES ARE NUMBERED BY BLOCK** (the review of 156): a block the
@@ -277,9 +298,9 @@ pub fn indexOf(id: []const u8, sid: []const u8) ?usize {
 ///
 /// The uid is here because the transcript does not hold one: a block records
 /// the author's NAME, and "is this the viewer" is a question about the uid.
-const Last = struct { offset: u64, uid: []const u8 };
+pub const Last = struct { offset: u64, uid: []const u8 };
 
-const Count = struct { count: usize, size: u64, last: ?Last = null };
+pub const Count = struct { count: usize, size: u64, last: ?Last = null };
 
 /// readCount parses the sidecar: "<count> <size>" on the first line, and
 /// optionally "<offset> <uid>" on the second. Null for a first line that
@@ -293,6 +314,11 @@ pub fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?C
     const path = countPath(alloc, conv_dir, sid) catch return null;
     // absent-ok: a cache: a count that will not read is recounted from the transcript (messageCount).
     const raw = store.read(io, alloc, path, .limited(1024)) catch return null;
+    return parseCount(raw);
+}
+
+/// A sidecar's bytes as `readCount` believes them.
+pub fn parseCount(raw: []const u8) ?Count {
     // **WHOLE, OR NOT AT ALL**: written by `write`, a crash can leave it cut
     // short, and a uid cut short is another uid (the review of 153(1)).
     // Every record ends in a newline.
@@ -324,19 +350,20 @@ pub fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, c
 /// writeCount, saying whether it wrote (the backfill counts only what did).
 fn tryWriteCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64, last: ?Last) !void {
     const path = try countPath(alloc, conv_dir, sid);
-    const head = try std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size });
-    const text = if (last) |l|
-        try std.fmt.allocPrint(alloc, "{s}{d} {s}\n", .{
-            head, l.offset, if (l.uid.len > 0) l.uid else no_uid,
-        })
-    else
-        head;
+    const text = try countText(alloc, count, size, last);
     // **A `write`, NOT A `replace`** (zig-metal-unikernel 153(1)): the sidecar is a
     // cache, checked against the transcript's size, so one a crash left
     // empty or torn is recounted, on either host (and `readCount` refuses
     // one cut short of its newline); on zig-metal-unikernel a write is as safe as a
     // replace besides (STORE.md), at about half the disk requests.
     try store.write(io, alloc, path, text, .{});
+}
+
+/// A sidecar's bytes, as `tryWriteCount` writes them.
+pub fn countText(alloc: Alloc, count: usize, size: u64, last: ?Last) ![]u8 {
+    const head = try std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size });
+    const l = last orelse return head;
+    return std.fmt.allocPrint(alloc, "{s}{d} {s}\n", .{ head, l.offset, if (l.uid.len > 0) l.uid else no_uid });
 }
 
 // The fixture's reads and writes of the files it made, beside the tests

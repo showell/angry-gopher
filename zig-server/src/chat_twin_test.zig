@@ -12,6 +12,7 @@ const timefmt = @import("timefmt.zig");
 const decimal = @import("decimal.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_codec = @import("chat_codec.zig");
+const chat_count = @import("chat_count.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
 
 /// chat/twin.roc's numbers.
@@ -32,6 +33,14 @@ const Fn = enum(u8) {
     transcript_path = 14,
     decode_file = 15,
     stored_form = 16,
+    count_blocks = 17,
+    number_in = 18,
+    index_of = 19,
+    parse_count = 20,
+    count_text = 21,
+    believed_count = 22,
+    recorded_author = 23,
+    window_last = 24,
 };
 
 /// One Roc call's results, in `a`.
@@ -377,5 +386,142 @@ test "Codec: a message's stored form, and what reads back from a file of them" {
         try decodeAgrees(a, file.items, &differ);
         compared += 1;
     }
+    try differ.none(compared);
+}
+
+// ── Count (chat_count.zig) ─────────────────────────────────────────────────
+
+/// Zig's optional number as the twin's results: none, or its digits.
+fn digitsOf(a: std.mem.Allocator, n: ?u64) ![]const []const u8 {
+    const v = n orelse return &.{};
+    return a.dupe([]const u8, &.{try std.fmt.allocPrint(a, "{d}", .{v})});
+}
+
+fn sameResults(want: []const []const u8, got: []const []const u8) bool {
+    if (want.len != got.len) return false;
+    for (want, got) |w, g| if (!std.mem.eql(u8, w, g)) return false;
+    return true;
+}
+
+/// Sidecars as they are written and as a crash or a hand leaves them:
+/// numbers at u64's edges, signs, `_`, doubled and trailing spaces, a
+/// missing newline, a third token, a torn second line.
+fn sidecars(a: std.mem.Allocator) ![][]const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for ([_][]const u8{ "", "\n", "3 120\n", "3 120", "3 120\n40 7\n", "3 120\n40 -\n", "3 120\n40 7", "3  120\n", " 3 120 \n", "3 120 9\n", "3\n", "3 120\n40\n", "3 120\n40 7 8\n", "3 120\n\n", "+3 120\n", "3 1_20\n", "18446744073709551615 18446744073709551615\n18446744073709551615 x\n", "18446744073709551616 1\n", "0 0\n0 -\n", "3\t120\n" }) |t| try out.append(a, t);
+    const bits = [_][]const u8{ "0", "1", "3", "40", "120", "007", "18446744073709551615", "18446744073709551616", " ", "  ", "\n", "-", "7", "x", "\t", "+1", "_" };
+    var rng = std.Random.DefaultPrng.init(0xc0047);
+    const r = rng.random();
+    for (0..2000) |_| {
+        var b: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 9)) |_| try b.appendSlice(a, bits[r.uintLessThan(usize, bits.len)]);
+        if (r.boolean()) try b.append(a, '\n');
+        try out.append(a, b.items);
+    }
+    return out.toOwnedSlice(a);
+}
+
+const sizes = [_]u64{ 0, 1, 3, 40, 120, std.math.maxInt(u64) };
+
+test "Count: blocks counted, and a message's number and index in its topic" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (try codecStrings(a, 0xb10c5, 2000, 24)) |raw| {
+        const z = chat_count.countBlocks(raw);
+        const r = try std.fmt.parseInt(usize, (try roc1(a, .count_blocks, &.{raw})).?, 10);
+        compared += 1;
+        if (z != r) differ.add("countBlocks(\"{f}\"): zig {d}, roc {d}", .{ std.zig.fmtString(raw), z, r });
+    }
+    const sids = [_][]const u8{ "general", "", "a", "a_1", "t_", "2026-10-25" };
+    const tails = [_][]const u8{ "", "_", "_0", "_1", "_01", "_7", "_18446744073709551615", "_18446744073709551616", "_1_0", "_+1", "1", "_ 1", "_1 ", "__1", "_x" };
+    for (sids) |sid| for (sids) |other| for (tails) |tail| {
+        const id = try std.mem.concat(a, u8, &.{ other, tail });
+        for ([_]Fn{ .number_in, .index_of }) |f| {
+            const z = if (f == .number_in) chat_count.numberIn(id, sid) else chat_count.indexOf(id, sid);
+            const r = try roc(a, f, &.{ id, sid });
+            compared += 1;
+            if (!sameResults(try digitsOf(a, z), r)) differ.add("{t}(\"{s}\", \"{s}\"): zig {?d}, roc {d} results", .{ f, id, sid, z, r.len });
+        }
+    };
+    try differ.none(compared);
+}
+
+test "Count: a sidecar read, written, and believed or not" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (try sidecars(a)) |raw| {
+        const z = chat_count.parseCount(raw);
+        var want: std.ArrayList([]const u8) = .empty;
+        if (z) |c| {
+            try want.appendSlice(a, &.{ try std.fmt.allocPrint(a, "{d}", .{c.count}), try std.fmt.allocPrint(a, "{d}", .{c.size}) });
+            if (c.last) |l| try want.appendSlice(a, &.{ try std.fmt.allocPrint(a, "{d}", .{l.offset}), l.uid });
+        }
+        const r = try roc(a, .parse_count, &.{raw});
+        compared += 1;
+        if (!sameResults(want.items, r)) differ.add("parseCount(\"{f}\"): zig {d} fields, roc {d}", .{ std.zig.fmtString(raw), want.items.len, r.len });
+        for (sizes) |size| {
+            const sz = try std.fmt.allocPrint(a, "{d}", .{size});
+            const zb = chat_count.believedCount(z, size);
+            compared += 1;
+            if (!sameResults(try digitsOf(a, zb), try roc(a, .believed_count, &.{ raw, sz }))) differ.add("believedCount(\"{f}\", {d})", .{ std.zig.fmtString(raw), size });
+            for ([_]usize{ 0, 1, 3, 40 }) |blocks| {
+                const bl = try std.fmt.allocPrint(a, "{d}", .{blocks});
+                const zr = chat_count.recordedAuthor(z, blocks, size);
+                const zw: []const []const u8 = if (zr) |u| try a.dupe([]const u8, &.{u}) else &.{};
+                compared += 1;
+                if (!sameResults(zw, try roc(a, .recorded_author, &.{ raw, bl, sz }))) differ.add("recordedAuthor(\"{f}\", {d}, {d})", .{ std.zig.fmtString(raw), blocks, size });
+            }
+        }
+    }
+    for ([_]usize{ 0, 3, std.math.maxInt(usize) }) |count| for (sizes) |size| for ([_]?chat_count.Last{ null, .{ .offset = 0, .uid = "" }, .{ .offset = 40, .uid = "7" }, .{ .offset = std.math.maxInt(u64), .uid = "-" } }) |last| {
+        const zt = try chat_count.countText(a, count, size, last);
+        const c = try std.fmt.allocPrint(a, "{d}", .{count});
+        const sz = try std.fmt.allocPrint(a, "{d}", .{size});
+        const rt = (try roc1(a, .count_text, if (last) |l| &.{ c, sz, try std.fmt.allocPrint(a, "{d}", .{l.offset}), l.uid } else &.{ c, sz })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zt, rt)) differ.add("countText: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(zt), std.zig.fmtString(rt) });
+    };
+    try differ.none(compared);
+}
+
+test "Count: the window at the record's offset, believed or read the slow way" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var windows: std.ArrayList([]const u8) = .empty;
+    try windows.appendSlice(a, try codecStrings(a, 0x3140, 500, 24));
+    // Files of this topic's messages, numbered in and out of order, some
+    // with another topic's id, some ending in a torn block.
+    var rng = std.Random.DefaultPrng.init(0x3141);
+    const r = rng.random();
+    for (0..500) |_| {
+        var file: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 3)) |index| {
+            var m = try codecMessage(a, r);
+            m.id = try std.fmt.allocPrint(a, "{s}_{d}", .{ if (r.uintLessThan(u8, 5) == 0) "u" else "t", r.uintAtMost(u8, 6) });
+            try file.appendSlice(a, try chat_codec.chatStoredForm(a, index, m));
+        }
+        if (r.uintLessThan(u8, 4) == 0) try file.appendSlice(a, "\n\n-------------\nMSG_t_9\nfrom: x");
+        try windows.append(a, file.items);
+    }
+    for (windows.items) |w| for ([_]usize{ 0, 1, 3, 6 }) |count| for ([_]bool{ false, true }) |full| {
+        const z = try chat_count.windowLast(a, count, w, full, "t");
+        const want: []const []const u8 = if (z) |got| &.{ try std.fmt.allocPrint(a, "{d}", .{got.number}), if (got.current) "1" else "0", got.msg.id, got.msg.from, got.msg.at, got.msg.uid, got.msg.markdown } else &.{};
+        const c = try std.fmt.allocPrint(a, "{d}", .{count});
+        const got = try roc(a, .window_last, &.{ c, w, if (full) "1" else "0", "t" });
+        compared += 1;
+        if (!sameResults(want, got)) differ.add("windowLast({d}, \"{f}\", {}): zig {d} fields, roc {d}", .{ count, std.zig.fmtString(w), full, want.len, got.len });
+    };
     try differ.none(compared);
 }

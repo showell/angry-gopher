@@ -58,7 +58,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
     .{ .file = "chat.zig", .func = "highestGeneralTopic", .unreachable_because = "topic folder names on the disk" },
     .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
-    .{ .file = "chat_count.zig", .func = "readCount", .unreachable_because = "a .count file the server wrote" },
+    .{ .file = "chat_count.zig", .func = "parseCount", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseLast", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_retire.zig", .func = "allMembers", .unreachable_because = "folder names on the disk" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },
