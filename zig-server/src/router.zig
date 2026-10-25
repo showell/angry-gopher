@@ -27,8 +27,6 @@ const chess = @import("chess.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
-const codex_chat = @import("codex_chat");
-const uo_town = @import("uo_town");
 const settings = @import("settings.zig");
 const admin = @import("admin.zig");
 const admin_lynrummy = @import("admin_lynrummy.zig");
@@ -64,8 +62,8 @@ pub const Hub = streams.Hub;
 pub const mem_meter = @import("webbox").mem_meter;
 /// The setup as one call (site.zig's `start`, around this application's own:
 /// app_start.zig): contract step 2.
-pub const start = Served.start;
-pub const Started = Served.Started;
+pub const start = site.start;
+pub const Started = site.Started;
 pub const Host = webbox_site.Host;
 /// **ONLY WHAT A HOST NEEDS IS EXPORTED**: the types `Host` is made of and a
 /// host's facts are written in. The setup's modules (roots, the stores, the
@@ -100,8 +98,24 @@ pub const edge = @import("webbox").edge;
 /// rule's two questions), and `hosting`, what only the application can say
 /// to a host about itself. A host imports the application's root as a module
 /// and the library as `webbox`, and reaches nothing else of either.
-pub const site = Served;
-pub const hosting = struct {
+///
+/// **WHAT ELSE THE SITE SERVES** (webbox's combo): Codex Chat and Damian's UO
+/// town (cobble-webbox), public and ungated, each under its own prefix with
+/// its own files under it in the data and auth roots. Neither passes through
+/// this application's cookies or refusals, and each is counted under its own
+/// name.
+pub const site = combined.site;
+pub const hosting = combined.hosting;
+const combined = @import("webbox").combo.Mount(gopher, &.{
+    .{ .prefix = "/codex-chat", .root = @import("codex_chat") },
+    .{ .prefix = "/uo", .root = @import("uo_town") },
+});
+/// This application alone, as `Mount` takes its primary.
+const gopher = struct {
+    pub const site = webbox_site.Site(App);
+    pub const hosting = gopher_hosting;
+};
+const gopher_hosting = struct {
     /// What its data is called, where a host names it (zig-metal-unikernel's
     /// console and /admin/host).
     pub const data_name = "chat's data";
@@ -154,21 +168,13 @@ const App = struct {
 pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
 
 /// **BETWEEN REQUESTS**: a slice of the operator's background script
-/// (admin_script.zig, metal-vmm QUEUE 222), which goes first while it has
-/// more; and the UO town's tick, a quarter second apart, whose wake is the
-/// host's otherwise.
-fn betweenRequests(io: Io, now: webbox_site.Now, bus: *streams.Bus) webbox_site.Wake {
-    const more = @import("admin_script.zig").between(io, now.unix_s);
-    const town = uo_town.between(io, now, bus);
-    return if (more) .more else town;
+/// (admin_script.zig, metal-vmm QUEUE 222), while it has more.
+fn betweenRequests(io: Io, unix_s: i64) bool {
+    return @import("admin_script.zig").between(io, unix_s);
 }
 
 fn familyOf(path: []const u8) Family {
     if (http.pathUnder(path, "/admin") != null) return .admin;
-    if (http.pathUnder(path, uo_town.prefix)) |sub|
-        return if (std.mem.eql(u8, sub, "/town/events")) .streams else .games;
-    if (http.pathUnder(path, codex_chat.prefix)) |sub|
-        return if (std.mem.eql(u8, sub, "/api/chat/events")) .streams else .chat;
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
         // As routeBodyLimit reads an upload: `.../upload/` is the upload.
@@ -201,8 +207,6 @@ fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !
 /// within its path's. Only the upload's is past `body_rule.before_turn_most`.
 fn routeBodyLimit(path: []const u8) u64 {
     const caps = request_limits.body;
-    if (http.pathUnder(path, codex_chat.prefix) != null) return codex_chat.bodyLimit(path);
-    if (http.pathUnder(path, uo_town.prefix) != null) return uo_town.bodyLimit(path);
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
         // chat.zig's segments skip empty ones: `.../upload/` is the upload.
@@ -220,21 +224,20 @@ fn routeBodyLimit(path: []const u8) u64 {
 pub const body_rule = @import("webbox").body;
 /// The route's cap on a body, from the head's target: contract step 3's
 /// first half, before the body is read.
-pub const bodyLimit = Served.bodyLimit;
+pub const bodyLimit = site.bodyLimit;
 /// Who is asking to upload, from the head (null: a stranger).
-pub const uploader = Served.uploader;
+pub const uploader = site.uploader;
 /// The work between requests (a background script's slices, metal-vmm QUEUE
 /// 222): the Linux host takes this module as its site and steps a site that
 /// declares it; the kernel calls it as `site.between`.
-pub const between = Served.between;
-const Served = webbox_site.Site(App);
+pub const between = site.between;
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it. The serving around it (the 500 for a failure, the
 /// 400 for a malformed form, the kept stream as the answer) is site.zig's.
-pub const route = Served.route;
+pub const route = site.route;
 
 fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
@@ -282,16 +285,6 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
         try chat.handle(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/channel")) |sub| {
         try chat.handleChannel(req, io, alloc, bus, sub);
-    } else if (http.pathUnder(path, codex_chat.prefix) != null) {
-        // Public + ungated: Codex Chat (cobble-webbox's codex_chat), its own
-        // names claimed first come first served with no password, and its
-        // own files under codex-chat/ beside chat's. It takes the whole
-        // path and its own prefix off.
-        try codex_chat.routes(req, io, alloc, bus);
-    } else if (http.pathUnder(path, uo_town.prefix) != null) {
-        // Public + ungated: Damian's UO town (cobble-webbox's uo_town), its
-        // five seats held by tokens it gives; it takes the whole path.
-        try uo_town.routes(req, io, alloc, bus);
     } else if (http.pathUnder(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/gallery")) |sub| {
