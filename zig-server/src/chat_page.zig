@@ -106,8 +106,8 @@ pub fn conversationHtml(alloc: Alloc, v: View) ![]const u8 {
     // data-upload-*: the server's caps and accepted types, the client's only
     // copy (metal-vmm QUEUE 157(d)).
     try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\" data-me-name=\"{s}\" data-upload-image-max=\"{d}\" data-upload-video-max=\"{d}\" data-upload-accept=\"{s}\" data-search-min=\"{d}\">", .{
-        try htmlEscape(alloc, v.key), try htmlEscape(alloc, v.base), try htmlEscape(alloc, v.sid), try htmlEscape(alloc, v.uid),           try htmlEscape(alloc, v.viewer),
-        chat_upload.image_max,           chat_upload.video_max,            chat_upload.accept,               @import("search_tokens.zig").min_len,
+        try htmlEscape(alloc, v.key), try htmlEscape(alloc, v.base), try htmlEscape(alloc, v.sid), try htmlEscape(alloc, v.uid),         try htmlEscape(alloc, v.viewer),
+        chat_upload.image_max,        chat_upload.video_max,         chat_upload.accept,           @import("search_tokens.zig").min_len,
     });
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div class=\"chat-layout\">");
