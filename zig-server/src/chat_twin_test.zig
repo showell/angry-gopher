@@ -15,6 +15,8 @@ const chat_codec = @import("chat_codec.zig");
 const chat_count = @import("chat_count.zig");
 const chat_frame = @import("chat_frame.zig");
 const markdown = @import("markdown.zig");
+const reactions = @import("reactions.zig");
+const http = @import("webbox").http;
 const ChatMessage = @import("chat_store.zig").ChatMessage;
 
 /// chat/twin.roc's numbers.
@@ -45,6 +47,9 @@ const Fn = enum(u8) {
     window_last = 24,
     message_frame = 25,
     reaction_frame = 26,
+    form_field = 27,
+    react_form = 28,
+    valid_emoji = 29,
 };
 
 /// One Roc call's results, in `a`.
@@ -573,6 +578,87 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
         const rr = (try roc1(a, .reaction_frame, &.{line})).?;
         compared += 1;
         if (!std.mem.eql(u8, zr, rr)) differ.add("reactionFrame(\"{f}\")", .{std.zig.fmtString(line)});
+    }
+    try differ.none(compared);
+}
+
+// ── Form, Reaction (webbox http.formField; reactions.zig) ──────────────────
+
+/// Forms built of the pieces that try a decoder and a reader: separators,
+/// `+`, escapes good and bad (a `%` at the end, one hex digit, upper and
+/// lower case), repeated and empty names, the react form's own fields, and
+/// emoji at their edges (one glyph, a variation selector, ZWJ, too long,
+/// torn, ASCII mixed in).
+fn forms(a: std.mem.Allocator) ![][]const u8 {
+    const bits = [_][]const u8{ "&", "=", "msg", "emoji", "on", "1", "0", "007", "x", "+", "%", "%2", "%2B", "%2b", "%41", "%zz", "%4G", "%G1", "%af", "%AF", "%4g", "%F0%9F%91%8D", "%EF%B8%8F", "%E2%80%8D", "%E2%9D%A4", "%F0%9F", "%C3%A9", "%FF", "%00", "%20", "a%2", "18446744073709551616", "msg=", "emoji=", "on=" };
+    var rng = std.Random.DefaultPrng.init(0xf0a3);
+    const r = rng.random();
+    const out = try a.alloc([]const u8, 4000);
+    for (out) |*f| {
+        var b: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 10)) |_| try b.appendSlice(a, bits[r.uintLessThan(usize, bits.len)]);
+        f.* = b.items;
+    }
+    return out;
+}
+
+test "Form: a field as webbox's formField reads it, for every form tried" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (try forms(a)) |body| for ([_][]const u8{ "msg", "emoji", "on", "x", "" }) |name| {
+        const want: []const []const u8 = if (http.formField(a, body, name)) |found|
+            (if (found) |v| &.{ "F", v } else &.{})
+        else |e| switch (e) {
+            error.MalformedForm => &.{"M"},
+            else => return e,
+        };
+        const got = try roc(a, .form_field, &.{ body, name });
+        compared += 1;
+        if (!sameResults(want, got)) differ.add("formField(\"{s}\", \"{s}\"): zig {d} results, roc {d}", .{ body, name, want.len, got.len });
+    };
+    try differ.none(compared);
+}
+
+test "Reaction: the react form judged as parseReactForm judges it, and one glyph as validEmoji knows one" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (try forms(a)) |body| {
+        const want: []const []const u8 = if (reactions.parseReactForm(a, body)) |f| switch (f) {
+            .reacted => |r| &.{ "R", try std.fmt.allocPrint(a, "{d}", .{r.msg}), r.emoji, if (r.on) "1" else "0" },
+            .bad => |why| &.{ "B", why },
+        } else |e| switch (e) {
+            error.MalformedForm => &.{"M"},
+            else => return e,
+        };
+        const got = try roc(a, .react_form, &.{body});
+        compared += 1;
+        if (!sameResults(want, got)) differ.add("parseReactForm(\"{s}\"): zig {d} results, roc {d}", .{ body, want.len, got.len });
+    }
+    // Glyphs at the length edge, every byte string, and each with one byte
+    // changed to an ASCII one or a torn lead.
+    var glyphs: std.ArrayList([]const u8) = .empty;
+    try glyphs.appendSlice(a, try byteStrings(a));
+    for ([_][]const u8{ "\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F468}\u{200D}\u{1F469}", "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", "\u{1F1FA}\u{1F1F8}\u{1F1FA}\u{1F1F8}", "\u{1F1FA}\u{1F1F8}\u{1F1FA}\u{1F1F8}\u{1F44D}", "\u{1F44D}\u{1F44D}\u{1F44D}\u{2764}\u{00E9}", "\u{2000}", "\u{FFFF}", "\u{10FFFF}", "\xf4\x90\x80\x80", "\xe0\x80\x80" }) |g| {
+        try glyphs.append(a, g);
+        for (0..g.len) |i| for ([_]u8{ 'a', 0xc3, 0x80 }) |b| {
+            const d = try a.dupe(u8, g);
+            d[i] = b;
+            try glyphs.append(a, d);
+        };
+    }
+    for (glyphs.items) |g| {
+        const want = reactions.validEmoji(g);
+        const got = yes((try roc1(a, .valid_emoji, &.{g})).?);
+        compared += 1;
+        if (want != got) differ.add("validEmoji(\"{f}\"): zig {}, roc {}", .{ std.zig.fmtString(g), want, got });
     }
     try differ.none(compared);
 }

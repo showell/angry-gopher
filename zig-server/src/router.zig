@@ -374,6 +374,7 @@ const testing = std.testing;
 // Every file of router.zig's tests, so they run (build.zig's root is this file).
 test {
     _ = @import("chat_route_twin.zig");
+    _ = @import("chat_actions_twin_test.zig");
     _ = @import("router_edges_test.zig");
     _ = @import("router_script_test.zig");
     _ = @import("router_failures_test.zig");
@@ -467,18 +468,13 @@ test "the pre-turn hooks agree with the Roc router: an upload's path gets the up
     defer arena.deinit();
     const a = arena.allocator();
     const caps = request_limits.body;
-    const Yes = struct {
-        fn ask(_: *anyopaque) bool {
-            return true;
-        }
-        var dummy: u8 = 0;
-    };
     var checked: usize = 0;
     for (try @import("chat_route_twin.zig").corpus(a)) |sub| for ([_][]const u8{ "/chat", "/channel" }) |area| {
         const path = try std.mem.concat(a, u8, &.{ area, sub });
         if ((http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel")) == null) continue;
         roc_chat.use(a);
-        const d = try roc_chat.decide(a, sub, std.mem.eql(u8, area, "/channel"), .{ .ctx = &Yes.dummy, .ask = Yes.ask });
+        var routing: roc_chat.Routing = .{};
+        const d = try roc_chat.decide(a, sub, std.mem.eql(u8, area, "/channel"), .GET, routing.host());
         const r = d.serve.route;
         const stream = r.tail == .stream or r.family == .notifications or r.family == .sidebar_stream or
             ((r.family == .recent or r.family == .images or r.family == .code) and std.mem.eql(u8, r.rest, "/stream"));

@@ -44,7 +44,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "game.zig", .func = "handle" },
     .{ .file = "game.zig", .func = "sessionRoute" },
     .{ .file = "puzzles.zig", .func = "sessionRoute" },
-    .{ .file = "reactions.zig", .func = "handleReact" },
+    .{ .file = "reactions.zig", .func = "parseReactForm" },
     .{ .file = "markdown.zig", .func = "listMarkerAt" },
     .{ .file = "signed.zig", .func = "verify" },
     .{ .file = "signed.zig", .func = "issuedOf" },

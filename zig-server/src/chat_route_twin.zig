@@ -182,16 +182,6 @@ fn generated(alloc: std.mem.Allocator, out: *std.ArrayList([]const u8)) !void {
     }
 }
 
-const Ask = struct {
-    member: bool,
-    asked: bool = false,
-    fn ask(ctx: *anyopaque) bool {
-        const a: *Ask = @ptrCast(@alignCast(ctx));
-        a.asked = true;
-        return a.member;
-    }
-};
-
 test "the Roc router decides every corpus path as chat.zig's dispatch did, under both areas, member or not" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -209,10 +199,13 @@ test "the Roc router decides every corpus path as chat.zig's dispatch did, under
         var call = std.heap.ArenaAllocator.init(testing.allocator);
         defer call.deinit();
         roc_chat.use(call.allocator());
-        var ask: Ask = .{ .member = member };
-        const got = try roc_chat.decide(call.allocator(), sub, channel, .{ .ctx = &ask, .ask = Ask.ask });
+        var ask: roc_chat.Routing = .{ .member = member };
+        var got = try roc_chat.decide(call.allocator(), sub, channel, .GET, ask.host());
         const want = try decide(call.allocator(), sub, channel, member);
         compared += 1;
+        // A route the Roc serves itself (C4) counted presence itself, before
+        // it found no topic and handed the route to Zig.
+        if (got == .serve and ask.marked) got.serve.presence = true;
         // Asked exactly when the old code read who it was: all but a script.
         const old_asked = !(want == .serve and want.serve.route.family == .asset);
         if (!got.eql(want) or ask.asked != old_asked) {

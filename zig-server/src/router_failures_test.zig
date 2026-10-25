@@ -376,6 +376,43 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
 }
 
+test "route: a reaction that will not store, and a sidecar that will not read, are 500s, never a quiet answer (C4: the Roc's routes keep the host's errors)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // The sidecar is a folder: it can be neither appended to nor read.
+    const sidecar = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Plans.reactions.jsonl" });
+    try std.Io.Dir.cwd().createDirPath(io, sidecar);
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/react", steve, "msg=1&emoji=%F0%9F%91%8D")));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_2/Plans/reactions", steve)));
+}
+
+/// A request whose handler must fail: the router's error, and the 500 the
+/// site would have sent (here, what went out before it).
+fn askFailing(a: std.mem.Allocator, io: Io, method: []const u8, target: []const u8, cookies: []const u8) ![]const u8 {
+    const raw = try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ method, target, cookies });
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    try testing.expect(std.meta.isError(router.route(&req, io, a, &b)));
+    try out.writer.flush();
+    return out.written();
+}
+
 test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gone is 404; a full reading list is 413, never 'save failed' 500 (metal-vmm QUEUE 172)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

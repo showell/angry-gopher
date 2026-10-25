@@ -8,8 +8,14 @@
 //! but a stream counts as presence. Who is asking stays here: the Roc asks
 //! (`Host.member!`), after the static scripts, so a script's request does no
 //! identity reads, as before.
+//!
+//! **A TOPIC'S REACTIONS, REACT, PIN AND UNPIN ARE THE ROC'S** (C4): it
+//! serves them itself, asking `Call` (below) for presence, the topic, the
+//! body and the store's writes, which stay Zig's until C8, and answers what
+//! to send. `handle` sends it once the call has ended.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Io = @import("host_io").Io;
 const webbox = @import("webbox");
 const http = webbox.http;
@@ -18,60 +24,172 @@ const roc_chat = @import("roc_chat");
 const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
+const reactions = @import("reactions.zig");
+const chat_state = @import("chat_state.zig");
+const store = @import("chat_store.zig");
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
 const Alloc = std.mem.Allocator;
 
+/// **TESTS ONLY: THE OLD ZIG SERVES** (chat_actions_twin.zig's oracle): when
+/// set, a request is decided by the Zig parse the router replaced and its
+/// topic's reactions, react, pin and unpin by the Zig handlers C4 replaced,
+/// so a test can run the same requests both ways. Never read outside a
+/// test: `builtin.is_test` takes the branch out of every other build.
+pub var test_oracle: bool = false;
+
+/// **TESTS ONLY: THE REQUEST'S TIME**, when set, for both ways of serving
+/// (a reaction is stamped with it). Read only under `builtin.is_test`.
+pub var test_now: ?Now = null;
+
+fn requestTime(io: Io) Now {
+    if (builtin.is_test) if (test_now) |t| return t;
+    return Now.read(io);
+}
+
 /// handle answers `sub`, the path under /chat, or under /channel when
 /// `channel`.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, channel: bool) !void {
+    if (builtin.is_test and test_oracle) return @import("chat_actions_twin.zig").handle(req, io, alloc, bus, sub, channel);
     // The request's time, read once: everything it stamps carries it
     // (request_time.zig).
-    const now = Now.read(io);
-    var who: Who = .{ .req = req, .io = io, .alloc = alloc };
+    const now = requestTime(io);
+    var call: Call = .{ .req = req, .io = io, .alloc = alloc, .bus = bus, .now = now };
     // **THE ROC'S MEMORY IS THE REQUEST'S**: its call's arena is made from
     // this request's allocator, so nothing it took outlives the request.
     roc_chat.use(alloc);
-    const decision = try roc_chat.decide(alloc, sub, channel, .{ .ctx = &who, .ask = Who.ask });
+    const decision = try roc_chat.decide(alloc, sub, channel, req.head.method, call.host());
     // A failure the Roc could not be told (the store, reading who it is)
     // fails the request, as it did before the router.
-    if (who.failed) |e| return e;
+    if (call.failed) |e| return e;
+    if (decision != .redirect and !(decision == .serve and decision.serve.route.family == .asset) and !call.asked)
+        std.debug.panic("the Roc router answered {f} without asking who is asking", .{decision});
     switch (decision) {
         .redirect => |location| return http.redirect(req, location),
         .serve => |s| {
-            if (s.route.family != .asset and !who.asked) std.debug.panic("the Roc router served {f} without asking who is asking", .{s.route});
-            if (s.presence) presence.markActiveAndBroadcast(io, alloc, bus, who.uid, now);
-            return chat.serve(req, io, alloc, bus, who.uid, s.route, now);
+            if (s.presence) presence.markActiveAndBroadcast(io, alloc, bus, call.uid, now);
+            return chat.serve(req, io, alloc, bus, call.uid, s.route, now);
         },
+        .respond => |r| {
+            const typed = [_]std.http.Header{.{ .name = "content-type", .value = r.content_type }};
+            return req.respond(r.body, .{ .status = @fromBackingInt(@intCast(r.status)), .extra_headers = if (r.content_type.len > 0) &typed else &.{} });
+        },
+        .not_allowed => |m| return http.methodNotAllowed(req, m),
+        // The host answered inside the call (a body too big): nothing more.
+        .answered => {},
+        // The site's 400 for every malformed form (webbox site.zig).
+        .malformed_form => return error.MalformedForm,
     }
 }
 
-/// Who is asking, read when the Roc first asks.
-const Who = struct {
+/// **ONE REQUEST'S HOST, FOR ITS ROC CALL**: who is asking, read when the
+/// Roc first asks, and the hosted functions the Roc's own routes call.
+/// A failure is kept (`fail`), told to the Roc as "not done", and returned
+/// by `handle` once the call has ended: a C call cannot carry a Zig error.
+pub const Call = struct {
     req: *Request,
     io: Io,
     alloc: Alloc,
+    bus: *Bus,
+    now: Now,
     uid: []const u8 = "",
     asked: bool = false,
+    /// The topic `topic` found, for the calls after it.
+    found: ?store.TopicAddress = null,
     failed: ?anyerror = null,
 
-    fn ask(ctx: *anyopaque) bool {
-        const w: *Who = @ptrCast(@alignCast(ctx));
-        w.asked = true;
+    pub fn host(c: *Call) roc_chat.Host {
+        return .{ .ctx = c, .member = member, .presence = presence_, .topic = topic, .body = body, .reactions = reactions_, .react = react, .pin = pin };
+    }
+
+    fn of(ctx: *anyopaque) *Call {
+        return @ptrCast(@alignCast(ctx));
+    }
+
+    fn fail(c: *Call, e: anyerror) void {
+        c.failed = e;
+    }
+
+    pub fn member(ctx: *anyopaque) bool {
+        const c = of(ctx);
+        c.asked = true;
         // absent-ok: not read as absence: `fail` keeps the error, and handle returns it once the Roc call ends (a C call cannot carry it).
-        w.uid = users.currentUserID(w.io, w.alloc, w.req) catch |e| return w.fail(e);
+        c.uid = users.currentUserID(c.io, c.alloc, c.req) catch |e| {
+            c.fail(e);
+            return false;
+        };
         // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images,
         // code, the conversations API) is members + agents only. A guest
         // (name-only, no password) or a stranger is sent to set a password and
         // returned here: guests may play the game, but chat requires
         // membership.
         // absent-ok: the same: the error is kept and returned, never read as "not a member".
-        return users.principalAuthorized(w.io, w.alloc, w.uid) catch |e| w.fail(e);
+        return users.principalAuthorized(c.io, c.alloc, c.uid) catch |e| {
+            c.fail(e);
+            return false;
+        };
     }
 
-    fn fail(w: *Who, e: anyerror) bool {
-        w.failed = e;
+    fn presence_(ctx: *anyopaque) void {
+        const c = of(ctx);
+        presence.markActiveAndBroadcast(c.io, c.alloc, c.bus, c.uid, c.now);
+    }
+
+    fn topic(ctx: *anyopaque, family: u8, key: []const u8, sid: []const u8) bool {
+        const c = of(ctx);
+        const f = std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.topic!: family {d}", .{family});
+        const route: roc_chat.Route = .{ .family = f, .part = .topic, .key = c.alloc.dupe(u8, key) catch |e| return c.no(e), .sid = c.alloc.dupe(u8, sid) catch |e| return c.no(e) };
+        // absent-ok: not read as absence: a failed lookup is kept and returned once the call ends; only "not found" is false.
+        c.found = chat.findTopic(c.io, c.alloc, c.uid, route) catch |e| return c.no(e);
+        return c.found != null;
+    }
+
+    /// `fail`, answering the Roc "not done".
+    fn no(c: *Call, e: anyerror) bool {
+        c.fail(e);
         return false;
+    }
+
+    fn body(ctx: *anyopaque) ?[]const u8 {
+        const c = of(ctx);
+        // Null when it answered 413 (or 400) itself.
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        return http.readLimitedBody(c.req, c.alloc, reactions.max_body_bytes) catch |e| {
+            c.fail(e);
+            return null;
+        };
+    }
+
+    fn reactions_(ctx: *anyopaque) ?[]const u8 {
+        const c = of(ctx);
+        const t = c.found orelse @panic("Host.reactions!: no topic found");
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        return store.readReactions(c.io, c.alloc, t.dir, t.sid) catch |e| {
+            c.fail(e);
+            return null;
+        };
+    }
+
+    fn react(ctx: *anyopaque, msg: u64, emoji: []const u8, on: bool) u8 {
+        const c = of(ctx);
+        const t = c.found orelse @panic("Host.react!: no topic found");
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const done = reactions.storeReaction(c.io, c.alloc, c.bus, t, c.uid, c.now, .{ .msg = msg, .emoji = emoji, .on = on }) catch |e| {
+            c.fail(e);
+            return 2;
+        };
+        return switch (done) {
+            .stored => 0,
+            .no_such_message => 1,
+        };
+    }
+
+    fn pin(ctx: *anyopaque, pinned: bool) bool {
+        const c = of(ctx);
+        const t = c.found orelse @panic("Host.pin!: no topic found");
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        chat_state.setTopicPinned(c.io, c.alloc, c.uid, t.key, t.sid, pinned) catch |e| return c.no(e);
+        return true;
     }
 };

@@ -10,7 +10,9 @@
 //! (chat/chat_emoji.js) — here we check only that a reaction has the SHAPE of
 //! one glyph.
 //!
-//! Routes (DM and channel alike, dispatched by chat.topicRoute):
+//! Routes (DM and channel alike), the Roc's since C4 (roc-webbox
+//! chat/main.roc `act!`): what is here is what it asks of Zig, the form's
+//! twin and the store's part.
 //!   GET  /<…>/<sid>/reactions   the sidecar bytes (ndjson; empty when none)
 //!   POST /<…>/<sid>/react       form msg=<n> emoji=<glyph> on=<1|0> → 204
 
@@ -22,49 +24,47 @@ const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
-const chat = @import("chat.zig");
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
 /// A react form is three short fields; anything bigger is not a reaction.
-const max_body_bytes = limits.body.reaction;
+pub const max_body_bytes = limits.body.reaction;
 /// The longest whitelisted glyph is a base character plus a variation selector
 /// (7 bytes); 16 leaves room without admitting a sentence.
 pub const max_emoji_bytes = 16;
 
-/// serveFile answers GET /<…>/<sid>/reactions with the sidecar's bytes.
-pub fn serveFile(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
-    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
-    const bytes = try store.readReactions(io, alloc, conv_dir, sid);
-    try req.respond(bytes, .{ .extra_headers = &.{http.ndjson_ct} });
+/// A reaction as its form says it.
+pub const Reacted = struct { msg: usize, emoji: []const u8, on: bool };
+
+/// The react form's answer: a reaction, or why not (a 400's one line).
+pub const ReactForm = union(enum) { reacted: Reacted, bad: []const u8 };
+
+/// **WHAT THE REACT FORM SAYS**, judged before anything is stored: every
+/// field read first (a malformed one is `error.MalformedForm`, whichever it
+/// is), then `msg` a message number, `emoji` one glyph, `on` "1" (or absent)
+/// to add it and anything else to take it back. Roc's twin: roc-webbox
+/// chat/Reaction.roc.
+pub fn parseReactForm(alloc: Alloc, body: []const u8) !ReactForm {
+    const msg_s = (try http.formField(alloc, body, "msg")) orelse "";
+    const emoji = (try http.formField(alloc, body, "emoji")) orelse "";
+    const on_s = (try http.formField(alloc, body, "on")) orelse "1";
+    const msg = decimal.parseInt(usize, msg_s) orelse return .{ .bad = "react: msg must be a message number\n" };
+    if (!validEmoji(emoji)) return .{ .bad = "react: emoji must be one glyph\n" };
+    return .{ .reacted = .{ .msg = msg, .emoji = emoji, .on = std.mem.eql(u8, on_s, "1") } };
 }
 
-/// handleReact answers POST /<…>/<sid>/react: validate the three fields, append
-/// the event (which fans out live), 204. Bad input is a 400 with a one-line
-/// reason; `msg` beyond the transcript's count is one of them.
-pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8, now: Now) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
-    const body = (try http.readLimitedBody(req, alloc, max_body_bytes)) orelse return;
-    const msg_s = (try chat.formField(alloc, body, "msg")) orelse "";
-    const emoji = (try chat.formField(alloc, body, "emoji")) orelse "";
-    const on_s = (try chat.formField(alloc, body, "on")) orelse "1";
-
-    const msg_num = decimal.parseInt(usize, msg_s) orelse return badRequest(req, "react: msg must be a message number\n");
-    if (!validEmoji(emoji)) return badRequest(req, "react: emoji must be one glyph\n");
-    const on = std.mem.eql(u8, on_s, "1");
-
+/// **THE STORE'S PART OF A REACTION** (the Roc's `Host.react!` until C8):
+/// the author's name looked up, the line appended and sent live, or no such
+/// message in the topic.
+pub fn storeReaction(io: Io, alloc: Alloc, bus: *Bus, topic: store.TopicAddress, uid: []const u8, now: Now, r: Reacted) !enum { stored, no_such_message } {
     const from_name = try users.getUserName(io, alloc, uid);
-    _ = store.appendReaction(io, alloc, bus, now, .{ .dir = conv_dir, .key = conv_key, .sid = sid }, msg_num, .{ .name = from_name, .id = uid }, emoji, on) catch |e| switch (e) {
-        error.NoSuchMessage => return badRequest(req, "react: no such message\n"),
+    _ = store.appendReaction(io, alloc, bus, now, topic, r.msg, .{ .name = from_name, .id = uid }, r.emoji, r.on) catch |e| switch (e) {
+        error.NoSuchMessage => return .no_such_message,
         else => return e,
     };
-    try req.respond("", .{ .status = .no_content });
-}
-
-fn badRequest(req: *Request, msg: []const u8) !void {
-    try req.respond(msg, .{ .status = .bad_request });
+    return .stored;
 }
 
 /// validEmoji: the SHAPE of one emoji glyph — 1..16 bytes of valid UTF-8 with

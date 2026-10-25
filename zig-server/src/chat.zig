@@ -13,9 +13,10 @@
 //!   GET  /chat/c/<conv>/<sid>/stream   SSE: backlog replay + LIVE fan-out
 //!   POST /chat/c/<conv>/<sid>/send     post a message (fans out to live streams)
 //!   GET  /chat/c/<conv>/<sid>/raw      the literal on-disk .md bytes
-//!   GET  /chat/c/<conv>/<sid>/reactions  the reaction sidecar (ndjson; reactions.zig)
-//!   POST /chat/c/<conv>/<sid>/react    toggle one reaction (fans out as event: reaction)
-//!   .../<sid>/{upload,uploads,download,pin,unpin,saved}   see topicRoute
+//!   .../<sid>/{upload,uploads,download,saved}   see topicRoute
+//!   .../<sid>/{reactions,react,pin,unpin}   the Roc's (roc-webbox chat/main.roc
+//!                                      `act!`, over chat_router.zig's hosted
+//!                                      functions and `findTopic` here)
 //!   {GET,POST} /channel/<name>/<topic>{,/stream,/send,/raw}   the channel equivalents
 //!   GET  /chat/notifications           SSE: per-uid notify strip (status pings +
 //!                                      came-online), a notifyBusKey subscriber
@@ -61,7 +62,6 @@ const upload = @import("chat_upload.zig");
 const presence = @import("presence.zig");
 const chat_state = @import("chat_state.zig");
 const download = @import("chat_download.zig");
-const reactions = @import("reactions.zig");
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
@@ -121,6 +121,36 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .sidebar_stream => return sse.forward(req, bus, try chat_fanout.sidebarBusKey(alloc, uid)),
         .not_found => return http.notFound(req),
     }
+}
+
+/// **WHERE A TOPIC ROUTE'S TOPIC IS, IF IT IS ONE THE VIEWER MAY USE**
+/// (the Roc's `Host.topic!`): what convRoute or channelRoute, then
+/// topicRoute, look up before serving a topic's tail, in their order,
+/// answering nothing. Null for any of their 404s: the Roc hands the route
+/// back, and they answer it as ever. `route` is a DM's or a channel's topic.
+pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?store.TopicAddress {
+    std.debug.assert(route.part == .topic);
+    const key = route.key;
+    const dir = switch (route.family) {
+        .dm => dir: {
+            if (!try chat_paths.chatKeyParticipant(alloc, key, uid)) return null;
+            const us = std.mem.indexOfScalar(u8, key, '_').?;
+            const other = if (std.mem.eql(u8, key[0..us], uid)) key[us + 1 ..] else key[0..us];
+            if (!try users.principalExists(io, alloc, other)) return null;
+            // The page's title names the partner: a name that will not read
+            // fails the request here as it does there.
+            _ = try partnerName(io, alloc, key, uid);
+            break :dir try chat_paths.dmConvDir(alloc, key);
+        },
+        .channel => dir: {
+            const members = (try chat_paths.channelMembers(io, alloc, key)) orelse return null;
+            if (!chat_paths.hasMember(members, uid)) return null;
+            break :dir try chat_paths.channelConvDir(alloc, key);
+        },
+        else => unreachable,
+    };
+    if (!try topicExists(io, alloc, dir, route.sid)) return null;
+    return .{ .dir = dir, .key = key, .sid = route.sid };
 }
 
 /// channelRoute serves /channel/<name>[/<sid>[/...]]: `route.key` is a
@@ -230,8 +260,10 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
         .stream => try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }),
         .send => try sendMessage(req, io, alloc, bus, topic, uid, now),
         .upload => try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid),
-        .pin => try pinTopic(req, io, alloc, uid, conv.key, topic.sid, true),
-        .unpin => try pinTopic(req, io, alloc, uid, conv.key, topic.sid, false),
+        // The Roc's (roc-webbox chat/main.roc `act!`, docs/ROC-CHAT.md C4):
+        // it hands one back only when `findTopic` did not find it, and that
+        // was answered above.
+        .pin, .unpin, .reactions, .react => std.debug.panic("chat.topicRoute: {t} is the Roc's, and its topic was here", .{route.tail}),
         .raw => {
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
             try rawTranscript(req, io, alloc, conv.dir, topic.sid);
@@ -244,8 +276,6 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
             try savedIds(req, io, alloc, uid, conv.key, topic.sid);
         },
-        .reactions => try reactions.serveFile(req, io, alloc, conv.dir, topic.sid),
-        .react => try reactions.handleReact(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid, now),
         // No tail served here, or one with segments after it.
         .invalid, .invalid_send => try http.notFound(req),
     }
@@ -333,15 +363,6 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
     _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
     return sendDone(req, is_async, back);
-}
-
-/// pinTopic handles POST /<…>/<sid>/{pin,unpin}: toggle
-/// whether `sid` is in the caller's per-conv Pinned group, then 204. Per-user
-/// state; conv-level auth already passed (any participant pins their own view).
-fn pinTopic(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
-    try chat_state.setTopicPinned(io, alloc, uid, conv_key, sid, pinned);
-    return req.respond("", .{ .status = .no_content });
 }
 
 /// sendDone reports a send: 204 for async fetch callers, else a
