@@ -13,6 +13,8 @@ const decimal = @import("decimal.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_codec = @import("chat_codec.zig");
 const chat_count = @import("chat_count.zig");
+const chat_frame = @import("chat_frame.zig");
+const markdown = @import("markdown.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
 
 /// chat/twin.roc's numbers.
@@ -41,6 +43,8 @@ const Fn = enum(u8) {
     believed_count = 22,
     recorded_author = 23,
     window_last = 24,
+    message_frame = 25,
+    reaction_frame = 26,
 };
 
 /// One Roc call's results, in `a`.
@@ -523,5 +527,52 @@ test "Count: the window at the record's offset, believed or read the slow way" {
         compared += 1;
         if (!sameResults(want, got)) differ.add("windowLast({d}, \"{f}\", {}): zig {d} fields, roc {d}", .{ count, std.zig.fmtString(w), full, want.len, got.len });
     };
+    try differ.none(compared);
+}
+
+// ── Frame (chat_frame.zig) ─────────────────────────────────────────────────
+
+test "Frame: a message's frame and a reaction's, whatever their bytes" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    const strings = try byteStrings(a);
+    var rng = std.Random.DefaultPrng.init(0xf4a3e);
+    const r = rng.random();
+    const pick = struct {
+        fn f(rr: std.Random, ss: []const []const u8) []const u8 {
+            return if (rr.uintLessThan(u8, 4) == 0) "" else ss[rr.uintLessThan(usize, ss.len)];
+        }
+    }.f;
+    for (0..2000) |i| {
+        const m: chat_frame.Message = .{
+            .index = switch (i % 3) {
+                0 => i,
+                1 => 0,
+                else => std.math.maxInt(usize),
+            },
+            .from = pick(r, strings),
+            .from_uid = pick(r, strings),
+            .at = pick(r, strings),
+            .id = pick(r, strings),
+            .markdown = if (i % 2 == 0) pick(r, strings) else (try codecMessage(a, r)).markdown,
+            .cid = pick(r, strings),
+        };
+        const zf = try chat_frame.messageFrame(a, m);
+        const idx = try std.fmt.allocPrint(a, "{d}", .{m.index});
+        const html = try markdown.render(a, m.markdown);
+        const rf = (try roc1(a, .message_frame, &.{ idx, m.from, m.from_uid, m.at, html, m.markdown, m.id, m.cid })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zf, rf)) differ.add("messageFrame: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(zf), std.zig.fmtString(rf) });
+    }
+    for (strings) |line| {
+        const zr = try chat_frame.reactionFrame(a, line);
+        const rr = (try roc1(a, .reaction_frame, &.{line})).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zr, rr)) differ.add("reactionFrame(\"{f}\")", .{std.zig.fmtString(line)});
+    }
     try differ.none(compared);
 }
