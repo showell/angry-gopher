@@ -7,6 +7,11 @@
      "/channel/<name>"). SESSION_BASE = CONV_BASE + /<sid>; cross-session
      refs reuse CONV_BASE + /<other-sid>. Same code path for both kinds. */
   var CONV_BASE=root.dataset.convBase;
+  /* PRODUCT_DECISION: whose message it is, decided here. The stream sends every
+     viewer the same frame (the server builds it once, at send), so `mine` is
+     the client's: a message is mine when its author is the name the page says
+     I am, as the server once said per viewer. */
+  var ME_NAME=root.dataset.meName;
   var SESSION_BASE=CONV_BASE+'/'+encodeURIComponent(SESSION);
 
   /* ===== message store — parallel to MessageView's bubble list =====
@@ -274,6 +279,7 @@
 
   es.onmessage=function(e){
     var m=JSON.parse(e.data);
+    m.mine=(m.from===ME_NAME);
     if(inBacklog){
       appendMessage(m);
       backlogSeen++;
@@ -289,8 +295,10 @@
          cursorToExtreme(true) with stick→false would record-too-fast on a burst. */
       pane.cursorToExtreme(true);
     }
-    if(m.cid){
-      /* PRODUCT_DECISION: our message round-tripped (saved + echoed). The
+    if(m.cid && ChatCompose.sentHere(m.cid)){
+      /* PRODUCT_DECISION: our message round-tripped (saved + echoed): one THIS
+         tab sent, not any frame carrying a cid — every viewer of the topic is
+         sent the sender's cid. The
          status-bar ping doubles as a self-test for #chat-notify — every
          send exercises the same DOM target the other-conv ping uses, so
          a regression there shows up the next time you talk to anyone.

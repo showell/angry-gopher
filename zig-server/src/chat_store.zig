@@ -19,7 +19,7 @@ const chat_codec = @import("chat_codec.zig");
 const chatStoredForm = chat_codec.chatStoredForm;
 const chat_fanout = @import("chat_fanout.zig");
 const fanoutCrossPage = chat_fanout.fanoutCrossPage;
-const busBlob = chat_fanout.busBlob;
+const chat_frame = @import("chat_frame.zig");
 const fanoutFailed = chat_fanout.fanoutFailed;
 const chat_count = @import("chat_count.zig");
 const writeCount = chat_count.writeCount;
@@ -138,10 +138,11 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: Topic) !Stream {
 
 /// appendMessage stores one message, inside one handler's turn: read the current count → the message index, encode the on-disk block
 /// (with separator + body-line escaping), append it, record the count and the
-/// author in the `.count`, then publish a fan-out blob to the live subscribers — all in
+/// author in the `.count`, then publish the message's frame to the live subscribers — all in
 /// one turn, so no other handler's openStream can double- or zero-count it. Returns
-/// the stored message (id + server-stamped date). NO render here: the blob
-/// carries raw markdown; each stream renders per-viewer.
+/// the stored message (id + server-stamped date). **THE RENDER IS HERE, ONCE**
+/// (chat_frame.zig): the published blob is the finished SSE frame, the same
+/// for every viewer, which each open stream writes as it is.
 pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Topic, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
     // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
     // refuses such a block on every read, so it would go out live and be gone
@@ -162,7 +163,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Top
     // success with no echo on the sender's stream, whose client then sent the
     // message again: a duplicate.
     const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
-    const live_blob = try busBlob(alloc, index, from.name, at, id, cid, markdown);
+    const live_blob = try chat_frame.messageFrame(alloc, .{ .index = index, .from = from.name, .at = at, .id = id, .markdown = markdown, .cid = cid });
     // **NO `.lastauthor`** (zig-metal-unikernel 153(1)): the `.count` carries the
     // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
@@ -209,10 +210,10 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 }
 
 /// appendReaction records one event `{msg, uid, from, emoji, on, at}` on the
-/// sidecar and fans it out live on the topic's bus key, wrapped as
-/// `{"reaction":<line>}` so the transcript stream can tell it from a message
-/// blob. Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is checked
-/// against the transcript's real count. Returns the stored line.
+/// sidecar and fans it out live on the topic's bus key as its finished
+/// `event: reaction` frame (chat_frame.reactionFrame), the line verbatim.
+/// Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is
+/// checked against the transcript's real count. Returns the stored line.
 pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: Topic, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
     const count = try messageCount(io, alloc, topic.dir, topic.sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
@@ -221,7 +222,7 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: Topic, msg_num: us
     const line = try reactionLine(alloc, msg_num, from.id, from.name, emoji, on, at);
     // The echo made before the store, as a message's (177.1).
     const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
-    const live_blob = try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line});
+    const live_blob = try chat_frame.reactionFrame(alloc, line);
     _ = try store.append(io, alloc, try reactionsPath(alloc, topic.dir, topic.sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
 
     // Stored is done (as for a message): the live publish cannot fail.
@@ -323,6 +324,35 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     try testing.expectEqual(@as(usize, 1), msgs.len);
     try testing.expectEqualStrings("Tester", msgs[0].from);
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
+}
+
+test "a message's live frame is the frame a stream's backlog makes of it, the same for every viewer" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("first");
+    const ann = try f.bus.open("1_2/topic");
+    defer f.bus.close(ann);
+    const bob = try f.bus.open("1_2/topic");
+    defer f.bus.close(bob);
+
+    const sent = try f.send("**second**, with a [link](/chat)\n\n```\ncode\n```");
+
+    const live = ann.poll() orelse return error.TestUnexpectedResult;
+    defer ann.gpa.free(live);
+    const also = bob.poll() orelse return error.TestUnexpectedResult;
+    defer bob.gpa.free(also);
+    try testing.expectEqualStrings(live, also);
+
+    // The backlog's frame for the same message, from what was stored.
+    const msgs = try decodeChatFile(a, (try rawSession(f.io, a, f.dir, "topic")).?);
+    try testing.expectEqualStrings(sent.id, msgs[1].id);
+    const replayed = try chat_frame.messageFrame(a, .{ .index = indexOf(msgs[1].id, "topic").?, .from = msgs[1].from, .at = msgs[1].date, .id = msgs[1].id, .markdown = msgs[1].markdown });
+    try testing.expectEqualStrings(replayed, live);
+    try testing.expect(std.mem.startsWith(u8, live, "id: 1\ndata: "));
 }
 
 /// A store over a throwaway directory, for the count tests below. The test
@@ -435,7 +465,7 @@ test "a reaction that answers an error stored nothing, and one that answers succ
         const got = appendReaction(f.io, failing.allocator(), &f.bus, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
         const after = (try readReactions(f.io, a, f.dir, "topic")).len;
         if (got) |_| {
-            if (!echoed(live, "\"reaction\"")) {
+            if (!echoed(live, "event: reaction\n")) {
                 std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
                 return error.TestUnexpectedResult;
             }

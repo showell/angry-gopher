@@ -10,6 +10,11 @@ window.ChatCompose = (function(){
   var textarea, form, status, uploadBtn, fileInput;
   var SESSION_BASE, closeCompose;
   var pendingCid=null, pendingTimer=null;
+  /* PRODUCT_DECISION: the cids THIS tab has sent, the last few, so an echo can
+     be told from someone else's message carrying their own cid — even one that
+     arrives after the send was given up on ("the host may be down"), whose
+     "sent" notice is what tells the user not to send it again. */
+  var sentCids=[];
   /* PRODUCT_DECISION: the server's per-kind caps and accepted types, handed
      over by init from the page (metal-vmm QUEUE 157(d)): the server's own,
      where this file kept copies that "must match". */
@@ -78,6 +83,7 @@ window.ChatCompose = (function(){
     if(!text.trim()) return;
     var cid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2);
     pendingCid=cid;
+    sentCids.push(cid); if(sentCids.length>20) sentCids.shift();
     setComposeEnabled(false); /* PRODUCT_DECISION: keep the text disabled until the host acks. */
     status.style.color=ChatColors.mutedFg; status.textContent='Sending…';
     pendingTimer=setTimeout(hostDown, 3000);
@@ -321,6 +327,7 @@ window.ChatCompose = (function(){
     return { body: built.body };
   }
   function isPending(){ return !!pendingCid; }
+  function sentHere(cid){ return sentCids.indexOf(cid)>=0; }
   /* PRODUCT_DECISION: SSE echo arrived for our pending cid — clear the box and re-enable. */
   function ackIfPending(cid){
     if(!(pendingCid && cid===pendingCid)) return;
@@ -329,7 +336,7 @@ window.ChatCompose = (function(){
     setComposeEnabled(true); textarea.focus();
   }
 
-  return { init:init, isPending:isPending, ackIfPending:ackIfPending,
+  return { init:init, isPending:isPending, sentHere:sentHere, ackIfPending:ackIfPending,
            insertAtCursor:insertAtCursor, setMarkdown:setMarkdown, focus:focus,
            resizePlan:resizePlan, shrinkPicture:shrinkPicture };
 })();
