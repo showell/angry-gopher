@@ -8,6 +8,7 @@
 //!   POST /settings/apikey   generate (or revoke=1) the caller's key
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
@@ -27,7 +28,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, "/login/full");
     if (!try users.isMember(io, alloc, uid)) return http.notFound(req); // NEED_PASSWORD
-    presence.markActiveAndBroadcast(io, alloc, bus, uid);
+    presence.markActiveAndBroadcast(io, alloc, bus, uid, Now.read(io));
 
     if (sub.len == 0) return renderSettings(req, io, alloc, uid);
     if (std.mem.eql(u8, sub, "/apikey")) return handleAPIKey(req, io, alloc, uid);

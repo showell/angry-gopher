@@ -15,6 +15,7 @@
 //!   POST /<…>/<sid>/react       form msg=<n> emoji=<glyph> on=<1|0> → 204
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
@@ -43,7 +44,7 @@ pub fn serveFile(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid:
 /// handleReact answers POST /<…>/<sid>/react: validate the three fields, append
 /// the event (which fans out live), 204. Bad input is a 400 with a one-line
 /// reason; `msg` beyond the transcript's count is one of them.
-pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
+pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_body_bytes)) orelse return;
     const msg_s = (try chat.formField(alloc, body, "msg")) orelse "";
@@ -55,7 +56,7 @@ pub fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []c
     const on = std.mem.eql(u8, on_s, "1");
 
     const from_name = try users.getUserName(io, alloc, uid);
-    _ = store.appendReaction(io, alloc, bus, .{ .dir = conv_dir, .key = conv_key, .sid = sid }, msg_num, .{ .name = from_name, .id = uid }, emoji, on) catch |e| switch (e) {
+    _ = store.appendReaction(io, alloc, bus, now, .{ .dir = conv_dir, .key = conv_key, .sid = sid }, msg_num, .{ .name = from_name, .id = uid }, emoji, on) catch |e| switch (e) {
         error.NoSuchMessage => return badRequest(req, "react: no such message\n"),
         else => return e,
     };

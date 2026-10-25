@@ -23,6 +23,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const mem_meter = @import("webbox").mem_meter;
 const Bus = @import("webbox").bus.Bus;
+const Now = @import("request_time.zig").Now;
 
 /// PresenceWindow: a markActive within this window (5 min) means online.
 const window_ns: i128 = 5 * std.time.ns_per_min;
@@ -46,21 +47,17 @@ var owed: std.StringHashMapUnmanaged(i128) = .empty;
 /// failure (the user list unreadable) is not read on every request. **IT IS
 /// TRIED ON THE USER'S NEXT REQUEST PAST THE WAIT**, never by a timer
 /// (metal-vmm QUEUE 180.6): a user who goes quiet is told to no one, and
-/// shows online to whoever renders a page, by `isOnline`. A test sets 0 to
-/// try again at once.
-pub var owed_retry_ns: i128 = 30 * std.time.ns_per_s;
-
-fn nowNs(io: Io) i128 {
-    return Io.Clock.now(.real, io).nanoseconds;
-}
+/// shows online to whoever renders a page, by `isOnline`. A test lets the
+/// time pass (`Now.plus`).
+const owed_retry_ns: i128 = 30 * std.time.ns_per_s;
 
 /// markActive bumps `uid`'s lastSeen and reports whether THIS bump was the
 /// transition edge from offline to online (true on first-ever sighting OR after
-/// >= PresenceWindow of inactivity). Pure state mutation — callers that need to
-/// broadcast use markActiveAndBroadcast.
-pub fn markActive(io: Io, uid: []const u8) bool {
+/// >= PresenceWindow of inactivity), at the request's time `at`. Pure state
+/// mutation — callers that need to broadcast use markActiveAndBroadcast.
+pub fn markActive(uid: []const u8, at: Now) bool {
     if (uid.len == 0) return false;
-    const now = nowNs(io);
+    const now: i128 = at.real_ns;
     const gop = last_seen.getOrPut(gpa, uid) catch return false;
     if (!gop.found_existing) {
         // getOrPut stored the borrowed (arena) key slice; replace it with a
@@ -90,18 +87,18 @@ pub fn markActive(io: Io, uid: []const u8) bool {
 /// request) after `owed_retry_ns` is the edge again. Its last sighting stands, so it is
 /// still online (177.6: it was set back a window, which showed an active
 /// user offline).
-fn unmark(io: Io, uid: []const u8) void {
+fn unmark(uid: []const u8, at: Now) void {
     const key = last_seen.getKey(uid) orelse return;
-    owed.put(gpa, key, nowNs(io)) catch {};
+    owed.put(gpa, key, at.real_ns) catch {};
 }
 
-/// isOnline reports whether `uid` was markActive'd within PresenceWindow.
-/// Read-only; called by the sidebar payload to compute each partner row's
-/// first-paint Online flag.
-pub fn isOnline(io: Io, uid: []const u8) bool {
+/// isOnline reports whether `uid` was markActive'd within PresenceWindow of
+/// the request's time `at`. Read-only; called by the sidebar payload to
+/// compute each partner row's first-paint Online flag.
+pub fn isOnline(uid: []const u8, at: Now) bool {
     if (uid.len == 0) return false;
     const v = last_seen.get(uid) orelse return false;
-    return (nowNs(io) - v) < window_ns;
+    return (@as(i128, at.real_ns) - v) < window_ns;
 }
 
 /// markActiveAndBroadcast bumps `uid` and, ONLY on the came-online edge, fans the
@@ -109,16 +106,16 @@ pub fn isOnline(io: Io, uid: []const u8) bool {
 /// sidebar (the partner-row dot) + notify (the status strip + favicon flash).
 /// Self is excluded. Best-effort — a failure for one recipient/surface is
 /// swallowed.
-pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) void {
-    if (!markActive(io, uid)) return;
+pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, at: Now) void {
+    if (!markActive(uid, at)) return;
     // **AN EDGE NOT TOLD IS NOT SPENT** (metal-vmm QUEUE 172): a broadcast
     // that cannot start gives the edge back, so the next request tries again
     // (it was lost until the user had been idle five minutes).
     // absent-ok: a best-effort online broadcast: nothing is written from it, and the edge is kept.
-    const name = users.getUserName(io, alloc, uid) catch return unmark(io, uid);
+    const name = users.getUserName(io, alloc, uid) catch return unmark(uid, at);
     // absent-ok: the same.
-    const authorized = users.listAuthorized(io, alloc) catch return unmark(io, uid);
-    const text = std.fmt.allocPrint(alloc, "{s} has come online.", .{name}) catch return unmark(io, uid);
+    const authorized = users.listAuthorized(io, alloc) catch return unmark(uid, at);
+    const text = std.fmt.allocPrint(alloc, "{s} has come online.", .{name}) catch return unmark(uid, at);
 
     for (authorized) |other| {
         if (std.mem.eql(u8, other.id, uid)) continue;
@@ -155,12 +152,17 @@ test "presence: a broadcast that could not start leaves its user online, and a l
     var bus = Bus.of(&hub);
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const uid = "presence-owed-177";
-    markActiveAndBroadcast(io, failing.allocator(), &bus, uid);
+    const t = Now.at(1_761_400_000);
+    markActiveAndBroadcast(io, failing.allocator(), &bus, uid, t);
     // Active a moment ago: online, whatever the broadcast did.
-    try std.testing.expect(isOnline(io, uid));
+    try std.testing.expect(isOnline(uid, t.plus(1)));
     // Owed, but not tried again at once: the user list is not re-read on
     // every request while the failure lasts.
-    try std.testing.expect(!markActive(io, uid));
+    try std.testing.expect(!markActive(uid, t.plus(1)));
+    // Past the wait, the next request is the edge again.
+    try std.testing.expect(markActive(uid, t.plus(32)));
+    // And five minutes quiet is offline.
+    try std.testing.expect(!isOnline(uid, t.plus(32 + 5 * 60)));
 }
 
 test "presence: a came-online edge whose broadcast could not start is not spent: the next request tries again (metal-vmm QUEUE 172)" {
@@ -175,9 +177,8 @@ test "presence: a came-online edge whose broadcast could not start is not spent:
     // Nothing to be had: the name, the members, the text.
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const uid = "presence-edge-172";
-    owed_retry_ns = 0;
-    defer owed_retry_ns = 30 * std.time.ns_per_s;
-    markActiveAndBroadcast(io, failing.allocator(), &bus, uid);
-    // Not told to anyone, so still the edge.
-    try std.testing.expect(markActive(io, uid));
+    const t = Now.at(1_761_400_000);
+    markActiveAndBroadcast(io, failing.allocator(), &bus, uid, t);
+    // Not told to anyone, so still the edge, on the next request past the wait.
+    try std.testing.expect(markActive(uid, t.plus(31)));
 }

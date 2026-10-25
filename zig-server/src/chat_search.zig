@@ -32,6 +32,7 @@
 //! is untouched).
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
@@ -55,11 +56,11 @@ pub const per_second = 5;
 pub const most_bytes = 2 << 20;
 
 /// `rest` is the path after "/chat/search".
-pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
+pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8, now: Now) !void {
     const words_route = std.mem.eql(u8, rest, "/words");
     if (!words_route and !std.mem.eql(u8, rest, "/messages")) return http.notFound(req);
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
-    if (!admit(uid, nowMs(io))) {
+    if (!admit(uid, now.awakeMs())) {
         return req.respond("{\"error\":\"too many searches; wait a second\"}", .{ .status = .too_many_requests, .extra_headers = &.{http.json_ct} });
     }
     const raw = http.queryValue(try http.target(req, alloc), if (words_route) "prefix" else "word") orelse "";
@@ -194,10 +195,6 @@ fn str(b: *std.ArrayList(u8), alloc: Alloc, s: []const u8) !void {
 
 const Window = struct { start_ms: i64, n: u32 };
 var windows: std.StringHashMapUnmanaged(Window) = .empty;
-
-fn nowMs(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds, std.time.ns_per_ms));
-}
 
 /// Whether `uid` may search at `now_ms`: at most `per_second` in a second.
 /// Its map holds a member each, so it is bounded by the roster. A failure to

@@ -6,6 +6,7 @@
 //! back, so the dependency is one-way.
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const chat_upload = @import("chat_upload.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -62,13 +63,13 @@ pub fn notFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: 
 
 // ── the conversation page (boots the prod JS) ────────────────────────────────
 
-pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, topic: Topic) !void {
+pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) !void {
     const conv = topic.conv;
     // Remember where this user is — the /chat/default resume pointer, keyed by
     // pair. Only convs that persist a cursor (DMs) do this; channels don't.
     if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     const viewer = try users.getUserName(io, alloc, uid);
-    const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic);
+    const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic, now);
 
     var page = try chrome.page(alloc, "Chat", topic.title, viewer, "");
     // doctype + <head> + platform style + colors/theme scripts + top bar +
@@ -106,7 +107,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
 /// conversations = every other authorized user (DM) + every channel the viewer
 /// is in; pinned_sessions = [] (pins not ported yet); sessions = this conv's
 /// topics. The `</`→`<\/` pass is script-tag safety for inline embedding.
-fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic) ![]const u8 {
+fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) ![]const u8 {
     const conv = topic.conv;
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, "{\"conversations\":[");
@@ -122,7 +123,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic) ![]cons
             u.id, std.json.fmt(u.name, .{}), pk, active,
         });
         // online (omitted when false) — drives the partner row's first-paint dot.
-        if (presence.isOnline(io, u.id)) try b.appendSlice(alloc, ",\"online\":true");
+        if (presence.isOnline(u.id, now)) try b.appendSlice(alloc, ",\"online\":true");
         try b.append(alloc, '}');
     }
     for (try store.listUserChannels(io, alloc, uid)) |name| {

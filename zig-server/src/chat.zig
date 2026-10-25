@@ -31,6 +31,7 @@
 //! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
@@ -82,6 +83,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
         return serveAsset(req, sub[1..]);
     }
 
+    // The request's time, read once: everything it stamps carries it
+    // (request_time.zig).
+    const now = Now.read(io);
     const uid = try users.currentUserID(io, alloc, req);
     // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images, code,
     // the conversations API) is members + agents only. A guest (name-only, no
@@ -94,21 +98,21 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // Presence: any authorized page/action counts as activity — but NOT the SSE
     // streams (a stream is the browser's job, and JS assets resolved above). On
     // the offline→online edge this fans a came-online event to other users.
-    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
+    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
 
     // Bare /chat is no longer a conversations INDEX — it resumes you straight
     // into your last conversation (chatDefault), or shows the empty-state page if
     // you have none. Every "Chat" link across the site points here, so the resume
     // behaviour is centralized in one handler.
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        return chatDefault(req, io, alloc, uid);
+        return chatDefault(req, io, alloc, uid, now);
     }
     // /chat/docs[/...] — the three-pane authoring surface (docs.zig). Guard the
     // boundary so only "/docs" or "/docs/..." matches (".js" is already served
     // above; anything like "/docsX" falls through to 404).
     if (matchPrefix(sub, "/docs")) |rest| {
         if (rest.len == 0 or rest[0] == '/') {
-            try docs.handle(req, io, alloc, bus, uid, rest);
+            try docs.handle(req, io, alloc, bus, uid, rest, now);
             return;
         }
     }
@@ -142,15 +146,15 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     }
     // /chat/search/words, /chat/search/messages — search across every
     // conversation the viewer can see (chat_search.zig), JSON.
-    if (matchPrefix(sub, "/search")) |rest| return chat_search.handle(req, io, alloc, uid, rest);
+    if (matchPrefix(sub, "/search")) |rest| return chat_search.handle(req, io, alloc, uid, rest, now);
     // /chat/default — resume the last (conv, session); /chat/conversations —
     // the (partner × session) matrix as JSON (the API-key discovery entry point);
     // /chat/msg/<id> — resolve a global MSG_ ref to its thread and 302 there.
-    if (std.mem.eql(u8, sub, "/default")) return chatDefault(req, io, alloc, uid);
-    if (std.mem.eql(u8, sub, "/conversations")) return chatConversations(req, io, alloc, uid);
+    if (std.mem.eql(u8, sub, "/default")) return chatDefault(req, io, alloc, uid, now);
+    if (std.mem.eql(u8, sub, "/conversations")) return chatConversations(req, io, alloc, uid, now);
     if (matchPrefix(sub, "/msg/")) |id| return chatMsgLookup(req, io, alloc, uid, id);
     if (matchPrefix(sub, "/c/")) |rest| {
-        try convRoute(req, io, alloc, bus, uid, rest);
+        try convRoute(req, io, alloc, bus, uid, rest, now);
         return;
     }
     // The two cross-page attention streams the prod JS opens on boot. Both are
@@ -168,12 +172,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 
 /// handleChannel dispatches /channel/* — `sub` is the path after "/channel".
 pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
+    const now = Now.read(io);
     const uid = try users.currentUserID(io, alloc, req);
     // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
     if (!try users.principalAuthorized(io, alloc, uid)) {
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/channel{s}", .{sub}));
     }
-    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
+    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
 
     var segs = segments(sub);
     const name_raw = segs.next() orelse return http.notFound(req);
@@ -206,16 +211,16 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
     };
     // /channel/<name>/new — create a topic ("new" is reserved).
-    if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid);
+    if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
     if (!store.validSessionID(topic_raw)) return http.notFound(req);
     const topic = topic_raw; // owned via the router's http.target (see `name` above)
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
-    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = topic, .title = title });
+    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = topic, .title = title }, now);
 }
 
 /// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream|send]]. `rest` is after "/c/".
-fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
+fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8, now: Now) !void {
     var segs = segments(rest);
     const pair_raw = segs.next() orelse return http.notFound(req);
     if (!try store.chatKeyParticipant(alloc, pair_raw, uid)) return http.notFound(req);
@@ -249,19 +254,19 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
     };
     // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
-    if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid);
+    if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
     if (!store.validSessionID(sid_raw)) return http.notFound(req);
     const sid = sid_raw; // owned via the router's http.target (see `pair` above)
 
     const partner = try partnerName(io, alloc, conv.key, uid);
     const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
-    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = sid, .title = title });
+    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = sid, .title = title }, now);
 }
 
 /// topicRoute fans out the per-topic tail shared by DMs and channels: the bare
 /// page, `/stream` (SSE), `/send` (POST a message), or `/raw` (literal bytes).
 /// `segs` is positioned just after the sid. `title` is the top-bar title.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, topic: Topic) !void {
+fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, topic: Topic, now: Now) !void {
     const conv = topic.conv;
     // **A TOPIC THAT IS NOT THERE IS A 404 THAT SAYS SO** (metal-vmm QUEUE
     // 156(j)), where its page was served as an empty one and became where
@@ -277,7 +282,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     }
     const tail = segs.next() orelse {
         if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-        try page.conversationPage(req, io, alloc, uid, topic);
+        try page.conversationPage(req, io, alloc, uid, topic, now);
         return;
     };
     // /uploads/<file> — serve a stored image (two trailing segments).
@@ -291,7 +296,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     if (std.mem.eql(u8, tail, "stream")) {
         try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid });
     } else if (std.mem.eql(u8, tail, "send")) {
-        try sendMessage(req, io, alloc, bus, topic, uid);
+        try sendMessage(req, io, alloc, bus, topic, uid, now);
     } else if (std.mem.eql(u8, tail, "upload")) {
         try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid);
     } else if (std.mem.eql(u8, tail, "pin")) {
@@ -310,7 +315,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else if (std.mem.eql(u8, tail, "reactions")) {
         try reactions.serveFile(req, io, alloc, conv.dir, topic.sid);
     } else if (std.mem.eql(u8, tail, "react")) {
-        try reactions.handleReact(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid);
+        try reactions.handleReact(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid, now);
     } else {
         try http.notFound(req);
     }
@@ -358,7 +363,7 @@ fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 /// trim, once, stripped a code block's first indentation), and trimmed only
 /// to ask whether it is empty. (`DROP_ON_FLOOR`, which dropped a real
 /// message that began with it, is gone: nothing used it.)
-fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8) !void {
+fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8, now: Now) !void {
     const conv = topic.conv;
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
@@ -396,7 +401,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // Where a plain form post goes back to, made before the store (177.1):
     // made after, an allocation that failed was a 500 for a stored message.
     const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
-    _ = try store.appendMessage(io, alloc, bus, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
+    _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
     return sendDone(req, is_async, back);
 }
 
@@ -426,7 +431,7 @@ fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
 /// DM it also remembers the new topic as last-viewed and announces it as a link
 /// in the highest generalN session, where the partner already watches. Returns
 /// `{conv, sid}` JSON. Shared by DMs and channels (kind gates the DM-only extras).
-fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []const u8) !void {
+fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
@@ -450,7 +455,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     // where it answered 500 for a topic made, and a retry met 409. A bookmark
     // to a topic not made is never followed (resolveSessionForUser).
     if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
-    _ = try store.appendMessage(io, alloc, bus, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic }, .{ .name = from_name, .id = uid }, "hi", "");
+    _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic }, .{ .name = from_name, .id = uid }, "hi", "");
 
     if (conv.persistsCursor()) {
         // Announce the new topic where the partner already watches (best-effort).
@@ -463,7 +468,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
                 // closes the connection; a retry then meets the duplicate
                 // check above and says the topic already exists, which is true
                 // and is a great deal more use than silence.
-                _ = try store.appendMessage(io, alloc, bus, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = gen }, .{ .name = from_name, .id = uid }, note, "");
+                _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = gen }, .{ .name = from_name, .id = uid }, note, "");
             }
         }
     }
@@ -496,7 +501,7 @@ fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
 /// a conv they no longer participate in), we render the "no conversations" page
 /// rather than redirect — the invariant that everyone has SOME conversation isn't
 /// enforced yet, so this is the honest empty state.
-fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: Now) !void {
     const conv = try chat_state.lastUserConv(io, alloc, uid);
     if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
         return page.noConversationsPage(req, io, alloc, uid);
@@ -507,7 +512,7 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if ((try store.defaultSession(io, alloc, try store.dmConvDir(alloc, conv))).len == 0) {
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}));
     }
-    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
+    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv, now);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
 }
 
@@ -515,7 +520,7 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 /// matrix as JSON — every other authorized principal, each conv's default
 /// landing session and its session list (sorted). The discovery entry point for
 /// API-key clients.
-fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: Now) !void {
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
 
     var b: std.ArrayList(u8) = .empty;
@@ -526,7 +531,7 @@ fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void
         if (!first) try b.append(alloc, ',');
         first = false;
         const conv = try store.chatPairKey(alloc, uid, partner.id);
-        const def = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
+        const def = try chat_state.resolveSessionForUser(io, alloc, uid, conv, now);
         const dir = try store.dmConvDir(alloc, conv);
         try b.print(alloc, "{{\"conv\":{f},\"partner\":{{\"id\":{f},\"name\":{f}}},\"default\":{f},\"sessions\":[", .{
             std.json.fmt(conv, .{}), std.json.fmt(partner.id, .{}), std.json.fmt(partner.name, .{}), std.json.fmt(def, .{}),

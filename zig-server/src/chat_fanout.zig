@@ -4,6 +4,7 @@
 //! split from chat_store.zig by 174).
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
@@ -239,7 +240,7 @@ test "the fan-out's surfaces fail one at a time, each said: a member's images th
     try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "2", "images.md" }));
     const before = fanout_failures;
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    _ = try appendMessage(f.io, a, &f.bus, meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
+    _ = try appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
     try testing.expectEqual(before + 1, fanout_failures);
     try testing.expect(std.mem.startsWith(u8, fanout_last, "images for member 2, "));
     const code = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "2", "code.md" });
@@ -258,7 +259,7 @@ test "the DM with yourself fans out to you once: one images.md entry, one code.m
     const dir = try chat_store.dmConvDir(a, "1_1");
     const meta = try ConvMeta.dm(a, "1", "1");
     try testing.expectEqual(@as(usize, 1), meta.members.len);
-    _ = try appendMessage(f.io, a, &f.bus, meta, .{ .dir = dir, .key = "1_1", .sid = "notes" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
+    _ = try appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = dir, .key = "1_1", .sid = "notes" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
     for ([_][]const u8{ "images.md", "code.md" }) |feed| {
         const text = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", feed }), a, .limited(4096));
         errdefer std.debug.print("{s}:\n{s}\n", .{ feed, text });

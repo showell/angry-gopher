@@ -66,6 +66,7 @@ pub const validMsgRefID = chat_paths.validMsgRefID;
 pub const validChannelName = chat_paths.validChannelName;
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 
 const Io = @import("host_io").Io;
 
@@ -151,7 +152,7 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream 
 /// the stored message (id + server-stamped date). **THE RENDER IS HERE, ONCE**
 /// (chat_frame.zig): the published blob is the finished SSE frame, the same
 /// for every viewer, which each open stream writes as it is.
-pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: TopicAddress, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
+pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, topic: TopicAddress, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
     // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
     // refuses such a block on every read, so it would go out live and be gone
     // on reload. A nameless member (a release cut short) cannot post.
@@ -161,7 +162,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Top
     const index = try messageCount(io, alloc, topic.dir, topic.sid);
 
     const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
-    const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
+    const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
     const msg = ChatMessage{ .id = id, .from = from.name, .date = at, .markdown = markdown, .uid = from.id };
 
     const stored = try chatStoredForm(alloc, index, msg);
@@ -222,11 +223,11 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// `event: reaction` frame (chat_frame.reactionFrame), the line verbatim.
 /// Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is
 /// checked against the transcript's real count. Returns the stored line.
-pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
+pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAddress, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
     const count = try messageCount(io, alloc, topic.dir, topic.sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
 
-    const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
+    const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
     const line = try reactionLine(alloc, msg_num, from.id, from.name, emoji, on, at);
     // The echo made before the store, as a message's (177.1).
     const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
@@ -318,10 +319,6 @@ pub const no_uid = "-";
 /// than this is served the old way, by reading the whole transcript.
 pub const tail_window = 64 * 1024;
 
-fn nowUnix(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-}
-
 const Cut = struct { before: []const u8, after: []const u8 };
 
 /// cutSeq splits `s` at the first `needle`, returning the parts, or null when
@@ -361,7 +358,7 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
 
     const dir = try dmConvDir(a, "1_2");
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-    _ = try appendMessage(io, a, &bus, meta, .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world", "");
+    _ = try appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world", "");
 
     const msgs = try decodeChatFile(a, (try rawSession(io, a, dir, "topic")).?);
     try testing.expectEqual(@as(usize, 1), msgs.len);
@@ -432,14 +429,14 @@ pub const CountFixture = struct {
 
     pub fn send(self: *CountFixture, text: []const u8) !ChatMessage {
         const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-        return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
+        return appendMessage(self.io, self.arena.allocator(), &self.bus, Now.read(self.io), meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
     }
 
     /// A message as a server from before `uid:` stored it: its block names
     /// its author by name only, for the tests of how such a block is credited.
     pub fn sendLegacy(self: *CountFixture, text: []const u8) !ChatMessage {
         const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-        return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "" }, text, "");
+        return appendMessage(self.io, self.arena.allocator(), &self.bus, Now.read(self.io), meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "" }, text, "");
     }
 
     pub fn decoded(self: *CountFixture) !usize {
@@ -464,7 +461,7 @@ test "a send that answers an error stored nothing, and one that stored answers s
     while (fail_at < 400) : (fail_at += 1) {
         var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
         const before = try messageCount(f.io, a, f.dir, "topic");
-        const sent = appendMessage(f.io, failing.allocator(), &f.bus, meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
+        const sent = appendMessage(f.io, failing.allocator(), &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
         const after = try messageCount(f.io, a, f.dir, "topic");
         if (sent) |m| {
             try testing.expectEqual(before + 1, after);
@@ -512,7 +509,7 @@ test "a reaction that answers an error stored nothing, and one that answers succ
     while (fail_at < 100) : (fail_at += 1) {
         var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
         const before = (try readReactions(f.io, a, f.dir, "topic")).len;
-        const got = appendReaction(f.io, failing.allocator(), &f.bus, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
+        const got = appendReaction(f.io, failing.allocator(), &f.bus, Now.read(f.io), .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
         const after = (try readReactions(f.io, a, f.dir, "topic")).len;
         if (got) |_| {
             if (!echoed(live, "event: reaction\n")) {
@@ -540,11 +537,29 @@ test "a reaction after a torn one starts its own line: the torn line is lost, th
     const torn = "{\"msg\":1,\"uid\":\"1\",\"fr";
     _ = try store.append(f.io, a, try reactionsPath(a, f.dir, "topic"), torn);
 
-    const line = try appendReaction(f.io, a, &f.bus, topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
+    const line = try appendReaction(f.io, a, &f.bus, Now.read(f.io), topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
     const after = try readReactions(f.io, a, f.dir, "topic");
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n{s}\n", .{ torn, line }), after);
     // The next reaction needs no newline of its own: the file ended in one.
-    const second = try appendReaction(f.io, a, &f.bus, topic, 1, .{ .name = "Tester", .id = "1" }, "🎉", true);
+    const second = try appendReaction(f.io, a, &f.bus, Now.read(f.io), topic, 1, .{ .name = "Tester", .id = "1" }, "🎉", true);
     const twice = try readReactions(f.io, a, f.dir, "topic");
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}{s}\n", .{ after, second }), twice);
+}
+
+test "a message and a reaction are stamped with the request's time, not the clock's" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const now = Now.at(1_761_400_000);
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
+    const topic: TopicAddress = .{ .dir = f.dir, .key = "1_2", .sid = "topic" };
+    const sent = try appendMessage(f.io, a, &f.bus, now, meta, topic, .{ .name = "Tester", .id = "1" }, "hi", "");
+    try testing.expectEqualStrings("2025-10-25T13:46:40Z", sent.date);
+    const stored = try decodeChatFile(a, (try rawSession(f.io, a, f.dir, "topic")).?);
+    try testing.expectEqualStrings("2025-10-25T13:46:40Z", stored[0].date);
+    const line = try appendReaction(f.io, a, &f.bus, now.plus(60), topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
+    try testing.expect(std.mem.endsWith(u8, line, ",\"at\":\"2025-10-25T13:47:40Z\"}"));
 }

@@ -21,6 +21,7 @@
 //! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -48,7 +49,7 @@ const max_doc_bytes = limits.body.doc;
 /// handle dispatches /chat/docs* — `rest` is the path after "/docs" (keeps its
 /// leading '/', empty for "/chat/docs"). The docs URL space is flat (one segment
 /// after /docs/), so a nested slash is a 404.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
+pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8, now: Now) !void {
     if (rest.len == 0 or std.mem.eql(u8, rest, "/")) {
         // Land straight in the doc you last touched (incl. the reading list right
         // after a save) rather than an empty nudge. Only the bare landing falls
@@ -60,11 +61,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     }
     const seg = rest[1..]; // rest starts with '/'
     if (std.mem.eql(u8, seg, "list")) return docsList(req, io, alloc, uid);
-    if (std.mem.eql(u8, seg, "new")) return docsNew(req, io, alloc, bus, uid);
-    if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, bus, uid);
+    if (std.mem.eql(u8, seg, "new")) return docsNew(req, io, alloc, bus, uid, now);
+    if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, bus, uid, now);
     if (std.mem.eql(u8, seg, "render")) return docsRender(req, alloc);
-    if (std.mem.eql(u8, seg, "post")) return docsPost(req, io, alloc, bus, uid);
-    if (std.mem.eql(u8, seg, "save_to_reading_list")) return docsSaveToReadingList(req, io, alloc, bus, uid);
+    if (std.mem.eql(u8, seg, "post")) return docsPost(req, io, alloc, bus, uid, now);
+    if (std.mem.eql(u8, seg, "save_to_reading_list")) return docsSaveToReadingList(req, io, alloc, bus, uid, now);
 
     if (std.mem.indexOfScalar(u8, seg, '/') != null) return http.notFound(req);
     if (std.mem.endsWith(u8, seg, ".md")) {
@@ -203,20 +204,20 @@ fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 
 /// docsNew creates a new empty doc and 303s to it. Title is required (else back
 /// to /chat/docs).
-fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
+fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.redirect(req, "/chat/docs");
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const title_raw = (try chat.formField(alloc, body, "title")) orelse "";
     const title = std.mem.trim(u8, title_raw, " \t\r\n");
     if (title.len == 0) return http.redirect(req, "/chat/docs");
     const slug = try docs_store.createUserDoc(io, alloc, uid, title);
-    publishDocRecent(io, alloc, bus, uid, slug);
+    publishDocRecent(alloc, bus, uid, slug, now);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/docs/{s}", .{slug}));
 }
 
 /// docsSave overwrites an existing doc's body (autosave target) → 204. A POST for
 /// an unknown slug is rejected (autosave must not spawn a doc from a stale URL).
-fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
+fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
@@ -233,15 +234,15 @@ fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
         error.DocDoesNotExist => return req.respond("no such doc\n", .{ .status = .not_found }),
         else => return e,
     };
-    publishDocRecent(io, alloc, bus, uid, slug);
+    publishDocRecent(alloc, bus, uid, slug, now);
     return req.respond("", .{ .status = .no_content });
 }
 
 /// publishDocRecent pings the author's own recent feed when they create or save a
 /// doc. Docs are per-user, so no fan-out — only the
 /// author sees it. Best-effort.
-fn publishDocRecent(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, slug: []const u8) void {
-    const at = timefmt.formatRFC3339UTC(alloc, nowUnix(io)) catch return;
+fn publishDocRecent(alloc: Alloc, bus: *Bus, uid: []const u8, slug: []const u8, now: Now) void {
+    const at = timefmt.formatRFC3339UTC(alloc, now.unixSecs()) catch return;
     const title = docs_store.titleFromSlug(alloc, slug) catch return;
     var j: std.ArrayList(u8) = .empty;
     // who is always "You": docs are per-user, only the author sees this row.
@@ -267,7 +268,7 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
 /// docsPost appends the doc's current body as a chat message to the caller's
 /// default partner and returns {conv, session, id} so the client can navigate to
 /// the posted message.
-fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
+fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
@@ -288,12 +289,12 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
         return req.respond("no default chat partner available\n", .{ .status = .bad_request });
     }
     const conv = try store.chatPairKey(alloc, uid, partner);
-    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
+    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv, now);
 
     const conv_dir = try store.dmConvDir(alloc, conv);
     const from_name = try users.getUserName(io, alloc, uid);
     const meta = try store.ConvMeta.dm(alloc, uid, partner);
-    const msg = try store.appendMessage(io, alloc, bus, meta, .{ .dir = conv_dir, .key = conv, .sid = sid }, .{ .name = from_name, .id = uid }, doc_body, "");
+    const msg = try store.appendMessage(io, alloc, bus, now, meta, .{ .dir = conv_dir, .key = conv, .sid = sid }, .{ .name = from_name, .id = uid }, doc_body, "");
 
     const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"session\":{f},\"id\":{f}}}", .{
         std.json.fmt(conv, .{}), std.json.fmt(sid, .{}), std.json.fmt(msg.id, .{}),
@@ -308,7 +309,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 /// authenticated principal's own doc — uid is the session principal, never the
 /// request. reading_list.save caps the doc size (DocTooLarge → 413 here; a
 /// hammering client hits the bound, not unbounded growth).
-fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
+fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const conv = std.mem.trim(u8, (try chat.formField(alloc, body, "conv")) orelse "", " \t\r\n");
@@ -327,7 +328,7 @@ fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []
         error.DocTooLarge => return req.respond("not saved: the reading list is full\n", .{ .status = .payload_too_large }),
         else => return e,
     };
-    publishDocRecent(io, alloc, bus, uid, reading_list.reading_list_slug);
+    publishDocRecent(alloc, bus, uid, reading_list.reading_list_slug, now);
     return req.respond("", .{ .status = .no_content });
 }
 
@@ -347,10 +348,6 @@ fn validChatPartner(io: Io, alloc: Alloc, uid: []const u8, partner: []const u8) 
         if (std.mem.eql(u8, u.id, partner)) return true;
     }
     return false;
-}
-
-fn nowUnix(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
 // ── docsCSS ────────────────

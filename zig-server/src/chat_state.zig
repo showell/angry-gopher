@@ -13,6 +13,7 @@
 //! (errors are never surfaced to the request).
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
@@ -156,7 +157,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// it still exists) → ChitChat → first-alphabetical → today's date (so a brand-new
 /// conv auto-creates today's session on first post).
 /// Shared by /chat/default and the docs post flow.
-pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8) ![]const u8 {
+pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, now: Now) ![]const u8 {
     const dir = try store.dmConvDir(alloc, conv);
     const sessions = try store.listSessions(io, alloc, dir);
 
@@ -166,9 +167,5 @@ pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []cons
     }
     for (sessions) |s| if (std.mem.eql(u8, s, "ChitChat")) return s;
     if (sessions.len > 0) return sessions[0];
-    return timefmt.formatDateUTC(alloc, nowUnix(io));
-}
-
-fn nowUnix(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return timefmt.formatDateUTC(alloc, now.unixSecs());
 }

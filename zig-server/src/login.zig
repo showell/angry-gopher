@@ -23,6 +23,7 @@
 //! (a direct call here — there's only the one listener).
 
 const std = @import("std");
+const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -338,10 +339,10 @@ const host_uid = "1";
 /// broken signup.
 fn sendHostWelcome(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) void {
     // absent-ok: a best-effort welcome: a failure means no welcome, never a broken signup.
-    sendHostWelcomeImpl(io, alloc, bus, new_uid) catch {};
+    sendHostWelcomeImpl(io, alloc, bus, new_uid, Now.read(io)) catch {};
 }
 
-fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !void {
+fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, now: Now) !void {
     if (std.mem.eql(u8, new_uid, host_uid)) return;
     if (!try users.principalExists(io, alloc, host_uid)) return;
 
@@ -356,7 +357,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
 
     const topic = "general";
     const msg = try std.fmt.allocPrint(alloc, "Hi, this is an automated message from {s}. Please say hello and {s} will get back to you soon.", .{ host_name, host_name });
-    _ = try store.appendMessage(io, alloc, bus, meta, .{ .dir = dir, .key = pair, .sid = topic }, .{ .name = host_name, .id = host_uid }, msg, "");
+    _ = try store.appendMessage(io, alloc, bus, now, meta, .{ .dir = dir, .key = pair, .sid = topic }, .{ .name = host_name, .id = host_uid }, msg, "");
 
     // The new member has no last-conv bookmark yet — land their /chat here.
     try chat_state.setUserLastSession(io, alloc, new_uid, pair, topic);
