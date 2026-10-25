@@ -506,3 +506,39 @@ fn repeated(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
     };
     return &out;
 }
+
+test "route: a chat request whose asker cannot be read is a 500, never a sign-in (the Roc router asks; the failure is kept and returned)" {
+    // The Roc router asks the host who is asking (chat_router.zig `Who`), and
+    // a C call cannot carry a Zig error: the error is kept and returned after
+    // the call. Were it read as "not a member", a member whose session could
+    // not be checked would be sent to sign in, and a disk that failed would
+    // look like a signed-out browser.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // as above: presence outlives the test
+    defer meter.restore();
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", now)});
+    const fine = try harness.UidSite.ask(a, io, "/chat/conversations", member);
+    try testing.expectEqualStrings("200 OK", harness.status(fine));
+
+    // The member's password file, now a link to itself: checking it fails.
+    // A POST: router.route's own look at the session before dispatch (a
+    // legacy session moved on a GET) is a GET's alone, so this failure is
+    // the chat's identity check's.
+    const password = try std.fs.path.join(a, &.{ users.auth_root, "2", "password" });
+    try std.Io.Dir.cwd().deleteFile(io, password);
+    try std.Io.Dir.cwd().symLink(io, "password", password, .{});
+    for ([_][]const u8{ "/chat/c/1_2/general/send", "/channel/ops/general/send" }) |target| {
+        const answered = try postFailing(a, io, target, member, "markdown=hi");
+        try testing.expect(std.mem.startsWith(u8, harness.status(answered), "500"));
+    }
+}

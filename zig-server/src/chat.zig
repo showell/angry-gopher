@@ -75,120 +75,58 @@ const max_message_bytes = limits.body.chat_message;
 const Conv = @import("chat_conv.zig").Conv;
 const Topic = @import("chat_conv.zig").Topic;
 
-// ── dispatch ───────────────────────────────────────────────────────────────
+// ── serving a route ───────────────────────────────────────────────────────
 
-/// handle dispatches /chat/* — `sub` keeps its leading '/' (empty for "/chat").
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
-    // Embedded JS assets are public (the prod server serves them unauthenticated
-    // too — they're static client code); resolve them before the identity gate.
-    if (sub.len > 1 and std.mem.endsWith(u8, sub, ".js")) {
-        return serveAsset(req, sub[1..]);
-    }
+const roc_chat = @import("roc_chat");
+const Route = roc_chat.Route;
 
-    // The request's time, read once: everything it stamps carries it
-    // (request_time.zig).
-    const now = Now.read(io);
-    const uid = try users.currentUserID(io, alloc, req);
-    // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images, code,
-    // the conversations API) is members + agents only. A guest (name-only, no
-    // password) or a stranger is sent to set a password and returned here —
-    // guests may play the game, but chat requires membership.
-    if (!try users.principalAuthorized(io, alloc, uid)) {
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/chat{s}", .{sub}));
+/// serve answers a /chat or /channel request where the Roc router sent it
+/// (chat_router.zig, which ran the prelude: the static scripts, the gate,
+/// presence). `route` is the path as the router parsed it; nothing here
+/// reads the path again. What needs the disk or the viewer is decided here,
+/// in the order it always was: whether the viewer is in the DM and its
+/// other half exists, a channel's members, whether the topic exists, a
+/// read-only tail's method.
+pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route, now: Now) !void {
+    switch (route.family) {
+        // Embedded JS assets are public (static client code): the router
+        // sends them here before the gate.
+        .asset => return serveAsset(req, route.rest),
+        // Bare /chat resumes you straight into your last conversation, or
+        // shows the empty-state page if you have none; every "Chat" link
+        // across the site points here.
+        .default => return chatDefault(req, io, alloc, uid, now),
+        // /chat/docs[/...]: the three-pane authoring surface (docs.zig).
+        .docs => return docs.handle(req, io, alloc, bus, uid, route.rest, now),
+        // /chat/recent, /images, /code [/stream]: the activity feed and the
+        // per-user transcripts; /chat/links, a static page.
+        .recent => return recent.handle(req, io, alloc, bus, uid, route.rest),
+        .images => return images.handle(req, io, alloc, bus, uid, route.rest),
+        .code => return code.handle(req, io, alloc, bus, uid, route.rest),
+        .links => return links.handle(req, io, alloc, uid, route.rest),
+        // /chat/search/words, /chat/search/messages (chat_search.zig), JSON.
+        .search => return chat_search.handle(req, io, alloc, uid, route.rest, now),
+        // The (partner × topic) matrix as JSON, the API-key discovery entry
+        // point; a global MSG_ ref resolved to its thread and 302 there.
+        .conversations => return chatConversations(req, io, alloc, uid, now),
+        .msg => return chatMsgLookup(req, io, alloc, uid, route.rest),
+        .dm => return convRoute(req, io, alloc, bus, uid, route, now),
+        .channel => return channelRoute(req, io, alloc, bus, uid, route, now),
+        // The two cross-page attention streams the prod JS opens on boot,
+        // per-uid bus subscribers forwarding the published event JSON
+        // verbatim (notify: status-strip pings + came-online; sidebar:
+        // topic-added + user-online). Live-only: the server-rendered page is
+        // the backlog.
+        .notifications => return sse.forward(req, bus, try chat_fanout.notifyBusKey(alloc, uid)),
+        .sidebar_stream => return sse.forward(req, bus, try chat_fanout.sidebarBusKey(alloc, uid)),
+        .not_found => return http.notFound(req),
     }
-
-    // Presence: any authorized page/action counts as activity — but NOT the SSE
-    // streams (a stream is the browser's job, and JS assets resolved above). On
-    // the offline→online edge this fans a came-online event to other users.
-    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
-
-    // Bare /chat is no longer a conversations INDEX — it resumes you straight
-    // into your last conversation (chatDefault), or shows the empty-state page if
-    // you have none. Every "Chat" link across the site points here, so the resume
-    // behaviour is centralized in one handler.
-    if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        return chatDefault(req, io, alloc, uid, now);
-    }
-    // /chat/docs[/...] — the three-pane authoring surface (docs.zig). Guard the
-    // boundary so only "/docs" or "/docs/..." matches (".js" is already served
-    // above; anything like "/docsX" falls through to 404).
-    if (matchPrefix(sub, "/docs")) |rest| {
-        if (rest.len == 0 or rest[0] == '/') {
-            try docs.handle(req, io, alloc, bus, uid, rest, now);
-            return;
-        }
-    }
-    // /chat/recent[/stream] — the activity feed (recent.zig).
-    if (matchPrefix(sub, "/recent")) |rest| {
-        if (rest.len == 0 or rest[0] == '/') {
-            try recent.handle(req, io, alloc, bus, uid, rest);
-            return;
-        }
-    }
-    // /chat/images[/stream] — the per-user image transcript (images.zig).
-    if (matchPrefix(sub, "/images")) |rest| {
-        if (rest.len == 0 or rest[0] == '/') {
-            try images.handle(req, io, alloc, bus, uid, rest);
-            return;
-        }
-    }
-    // /chat/code[/stream] — the per-user code transcript (code.zig).
-    if (matchPrefix(sub, "/code")) |rest| {
-        if (rest.len == 0 or rest[0] == '/') {
-            try code.handle(req, io, alloc, bus, uid, rest);
-            return;
-        }
-    }
-    // /chat/links — a per-user curated links page (chat_links.zig). Static: no stream.
-    if (matchPrefix(sub, "/links")) |rest| {
-        if (rest.len == 0 or rest[0] == '/') {
-            try links.handle(req, io, alloc, uid, rest);
-            return;
-        }
-    }
-    // /chat/search/words, /chat/search/messages — search across every
-    // conversation the viewer can see (chat_search.zig), JSON.
-    if (matchPrefix(sub, "/search")) |rest| return chat_search.handle(req, io, alloc, uid, rest, now);
-    // /chat/default — resume the last (conv, topic); /chat/conversations —
-    // the (partner × topic) matrix as JSON (the API-key discovery entry point);
-    // /chat/msg/<id> — resolve a global MSG_ ref to its thread and 302 there.
-    if (std.mem.eql(u8, sub, "/default")) return chatDefault(req, io, alloc, uid, now);
-    if (std.mem.eql(u8, sub, "/conversations")) return chatConversations(req, io, alloc, uid, now);
-    if (matchPrefix(sub, "/msg/")) |id| return chatMsgLookup(req, io, alloc, uid, id);
-    if (matchPrefix(sub, "/c/")) |rest| {
-        try convRoute(req, io, alloc, bus, uid, rest, now);
-        return;
-    }
-    // The two cross-page attention streams the prod JS opens on boot. Both are
-    // per-uid bus subscribers forwarding the published event JSON verbatim
-    // (notify: status-strip pings + came-online; sidebar: topic-added +
-    // user-online). Live-only — the server-rendered page is the backlog.
-    if (std.mem.eql(u8, sub, "/notifications")) {
-        return sse.forward(req, bus, try chat_fanout.notifyBusKey(alloc, uid));
-    }
-    if (std.mem.eql(u8, sub, "/sidebar/stream")) {
-        return sse.forward(req, bus, try chat_fanout.sidebarBusKey(alloc, uid));
-    }
-    try http.notFound(req);
 }
 
-/// handleChannel dispatches /channel/* — `sub` is the path after "/channel".
-pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
-    const now = Now.read(io);
-    const uid = try users.currentUserID(io, alloc, req);
-    // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
-    if (!try users.principalAuthorized(io, alloc, uid)) {
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/channel{s}", .{sub}));
-    }
-    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
-
-    var segs = segments(sub);
-    const name_raw = segs.next() orelse return http.notFound(req);
-    if (!chat_paths.validChannelName(name_raw)) return http.notFound(req);
-    // No dupe: the router resolved the path via http.target, which owns it, so
-    // path-derived slices already survive the body read.
-    const name = name_raw;
-
+/// channelRoute serves /channel/<name>[/<sid>[/...]]: `route.key` is a
+/// valid channel name (the router checked its shape).
+fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route, now: Now) !void {
+    const name = route.key;
     // **ONE ANSWER, THAT SAYS WHY** (metal-vmm QUEUE 156(j)): a channel that
     // is not there and one the viewer is not in (or was removed from) read
     // alike, so the page names no channel a viewer cannot see.
@@ -202,34 +140,31 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
         .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name}),
         .dir = try chat_paths.channelConvDir(alloc, name),
     };
-
-    const topic_raw = segs.next() orelse {
-        const def = try chat_paths.firstTopic(io, alloc, conv.dir);
-        if (def.len == 0) {
-            // Member of a channel with no topics yet — offer to start the first.
-            const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
-            return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
-        }
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
-    };
-    // /channel/<name>/new — create a topic ("new" is reserved).
-    if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
-    if (!chat_paths.validTopicID(topic_raw)) return http.notFound(req);
-    const topic = topic_raw; // owned via the router's http.target (see `name` above)
-
-    const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
-    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = topic, .title = title }, now);
+    switch (route.part) {
+        .landing => {
+            const def = try chat_paths.firstTopic(io, alloc, conv.dir);
+            if (def.len == 0) {
+                // Member of a channel with no topics yet: offer to start the first.
+                const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
+                return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
+            }
+            return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
+        },
+        // /channel/<name>/new: create a topic ("new" is reserved).
+        .new => return newTopic(req, io, alloc, bus, conv, uid, now),
+        .invalid => return http.notFound(req),
+        .topic => {
+            const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, route.sid });
+            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title }, now);
+        },
+    }
 }
 
-/// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream|send]]. `rest` is after "/c/".
-fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8, now: Now) !void {
-    var segs = segments(rest);
-    const pair_raw = segs.next() orelse return http.notFound(req);
-    if (!try chat_paths.chatKeyParticipant(alloc, pair_raw, uid)) return http.notFound(req);
-    // No dupe: the router resolved the path via http.target, which owns it, so
-    // these path-derived strings (used after the body read for response URLs,
-    // fanout keys, member uids) already survive head invalidation.
-    const pair = pair_raw;
+/// convRoute serves /chat/c/<conv>[/<sid>[/...]]: `route.key` is the pair
+/// as written.
+fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route, now: Now) !void {
+    const pair = route.key;
+    if (!try chat_paths.chatKeyParticipant(alloc, pair, uid)) return http.notFound(req);
 
     // DM members are the two uids in the (already participant-checked) pair key.
     const us = std.mem.indexOfScalar(u8, pair, '_').?;
@@ -243,32 +178,33 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
         .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pair}),
         .dir = try chat_paths.dmConvDir(alloc, pair),
     };
-
-    const sid_raw = segs.next() orelse {
-        const def = try chat_paths.firstTopic(io, alloc, conv.dir);
-        if (def.len == 0) {
-            // Addressable pair, no topics yet — offer to start the first one
-            // (rather than 404 a real, reachable conversation).
+    switch (route.part) {
+        .landing => {
+            const def = try chat_paths.firstTopic(io, alloc, conv.dir);
+            if (def.len == 0) {
+                // Addressable pair, no topics yet: offer to start the first one
+                // (rather than 404 a real, reachable conversation).
+                const partner = try partnerName(io, alloc, conv.key, uid);
+                const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
+                return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
+            }
+            return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
+        },
+        // /chat/c/<conv>/new: create a topic ("new" beats {sid}; it's reserved).
+        .new => return newTopic(req, io, alloc, bus, conv, uid, now),
+        .invalid => return http.notFound(req),
+        .topic => {
             const partner = try partnerName(io, alloc, conv.key, uid);
-            const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
-            return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
-        }
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
-    };
-    // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
-    if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
-    if (!chat_paths.validTopicID(sid_raw)) return http.notFound(req);
-    const sid = sid_raw; // owned via the router's http.target (see `pair` above)
-
-    const partner = try partnerName(io, alloc, conv.key, uid);
-    const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
-    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = sid, .title = title }, now);
+            const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, route.sid });
+            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title }, now);
+        },
+    }
 }
 
-/// topicRoute fans out the per-topic tail shared by DMs and channels: the bare
-/// page, `/stream` (SSE), `/send` (POST a message), or `/raw` (literal bytes).
-/// `segs` is positioned just after the sid. `title` is the top-bar title.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, topic: Topic, now: Now) !void {
+/// topicRoute serves the per-topic tail shared by DMs and channels: the bare
+/// page, `/stream` (SSE), `/send` (POST a message), `/raw` (literal bytes),
+/// and the rest. `title` is the top-bar title.
+fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid: []const u8, topic: Topic, now: Now) !void {
     const conv = topic.conv;
     // **A TOPIC THAT IS NOT THERE IS A 404 THAT SAYS SO** (metal-vmm QUEUE
     // 156(j)), where its page was served as an empty one and became where
@@ -276,50 +212,42 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     // its first message does (the judges send to one first). Without case,
     // as Steve's rule has it (2026-10-02, option 1: case does not tell
     // topics apart, on FAT or on Linux).
-    var peek = segs.*;
-    const is_send = if (peek.next()) |t| std.mem.eql(u8, t, "send") else false;
+    const is_send = route.tail == .send or route.tail == .invalid_send;
     if (!is_send and !try topicExists(io, alloc, conv.dir, topic.sid)) {
         const what = try std.fmt.allocPrint(alloc, "There is no topic \u{201C}{s}\u{201D} in this conversation.", .{topic.sid});
         return page.notFoundPage(req, io, alloc, uid, what, conv.base);
     }
-    const tail = segs.next() orelse {
-        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-        try page.conversationPage(req, io, alloc, uid, topic, now);
-        return;
-    };
-    // /uploads/<file> — serve a stored image (two trailing segments).
-    if (std.mem.eql(u8, tail, "uploads")) {
-        const file = segs.next() orelse return http.notFound(req);
-        if (segs.next() != null) return http.notFound(req);
-        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-        return upload.serveUpload(req, io, alloc, conv.dir, topic.sid, file);
-    }
-    if (segs.next() != null) return http.notFound(req); // the rest take no further segment
-    if (std.mem.eql(u8, tail, "stream")) {
-        try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid });
-    } else if (std.mem.eql(u8, tail, "send")) {
-        try sendMessage(req, io, alloc, bus, topic, uid, now);
-    } else if (std.mem.eql(u8, tail, "upload")) {
-        try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid);
-    } else if (std.mem.eql(u8, tail, "pin")) {
-        try pinTopic(req, io, alloc, uid, conv.key, topic.sid, true);
-    } else if (std.mem.eql(u8, tail, "unpin")) {
-        try pinTopic(req, io, alloc, uid, conv.key, topic.sid, false);
-    } else if (std.mem.eql(u8, tail, "raw")) {
-        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-        try rawTranscript(req, io, alloc, conv.dir, topic.sid);
-    } else if (std.mem.eql(u8, tail, "download")) {
-        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-        try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
-    } else if (std.mem.eql(u8, tail, "saved")) {
-        if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-        try savedIds(req, io, alloc, uid, conv.key, topic.sid);
-    } else if (std.mem.eql(u8, tail, "reactions")) {
-        try reactions.serveFile(req, io, alloc, conv.dir, topic.sid);
-    } else if (std.mem.eql(u8, tail, "react")) {
-        try reactions.handleReact(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid, now);
-    } else {
-        try http.notFound(req);
+    switch (route.tail) {
+        .page => {
+            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
+            try page.conversationPage(req, io, alloc, uid, topic, now);
+        },
+        // /uploads/<file>: serve a stored image.
+        .uploads => {
+            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
+            return upload.serveUpload(req, io, alloc, conv.dir, topic.sid, route.rest);
+        },
+        .stream => try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }),
+        .send => try sendMessage(req, io, alloc, bus, topic, uid, now),
+        .upload => try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid),
+        .pin => try pinTopic(req, io, alloc, uid, conv.key, topic.sid, true),
+        .unpin => try pinTopic(req, io, alloc, uid, conv.key, topic.sid, false),
+        .raw => {
+            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
+            try rawTranscript(req, io, alloc, conv.dir, topic.sid);
+        },
+        .download => {
+            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
+            try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
+        },
+        .saved => {
+            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
+            try savedIds(req, io, alloc, uid, conv.key, topic.sid);
+        },
+        .reactions => try reactions.serveFile(req, io, alloc, conv.dir, topic.sid),
+        .react => try reactions.handleReact(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid, now),
+        // No tail served here, or one with segments after it.
+        .invalid, .invalid_send => try http.notFound(req),
     }
 }
 
@@ -623,35 +551,6 @@ fn partnerName(io: Io, alloc: Alloc, conv: []const u8, me: []const u8) ![]const 
     const other = if (std.mem.eql(u8, a, me)) b else a;
     const name = try users.getUserName(io, alloc, other);
     return if (name.len == 0) other else name;
-}
-
-const SegIter = struct {
-    rest: []const u8,
-    fn next(self: *SegIter) ?[]const u8 {
-        while (self.rest.len > 0 and self.rest[0] == '/') self.rest = self.rest[1..];
-        if (self.rest.len == 0) return null;
-        const end = std.mem.indexOfScalar(u8, self.rest, '/') orelse self.rest.len;
-        const seg = self.rest[0..end];
-        self.rest = self.rest[end..];
-        return seg;
-    }
-};
-
-fn segments(path: []const u8) SegIter {
-    return .{ .rest = path };
-}
-
-fn matchPrefix(s: []const u8, prefix: []const u8) ?[]const u8 {
-    if (!std.mem.startsWith(u8, s, prefix)) return null;
-    return s[prefix.len..];
-}
-
-/// isStreamPath reports whether `sub` is one of the chat subsystem's SSE streams
-/// — which presence deliberately doesn't count as activity.
-/// True for the per-conv/recent/images/code "…/stream" tails,
-/// the named "/notifications", and "/sidebar/stream" (caught by the suffix).
-fn isStreamPath(sub: []const u8) bool {
-    return std.mem.endsWith(u8, sub, "/stream") or std.mem.eql(u8, sub, "/notifications");
 }
 
 /// formField pulls one application/x-www-form-urlencoded field from `body`,

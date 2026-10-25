@@ -27,6 +27,7 @@ const chess = @import("chess.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
+const chat_router = @import("chat_router.zig");
 const settings = @import("settings.zig");
 const admin = @import("admin.zig");
 const admin_lynrummy = @import("admin_lynrummy.zig");
@@ -100,10 +101,8 @@ pub const edge = @import("webbox").edge;
 /// and the library as `webbox`, and reaches nothing else of either.
 ///
 /// **WHAT ELSE THE SITE SERVES** (webbox's combo): Codex Chat and Damian's UO
-/// town (cobble-webbox), and the Roc chat's first route (roc-webbox,
-/// docs/ROC-CHAT.md T1: `GET /roc-chat/ping`), public and ungated, each
-/// under its own prefix with its own files under it in the data and auth
-/// roots. Neither passes through
+/// town (cobble-webbox), public and ungated, each under its own prefix with
+/// its own files under it in the data and auth roots. Neither passes through
 /// this application's cookies or refusals, and each is counted under its own
 /// name.
 pub const site = combined.site;
@@ -111,7 +110,6 @@ pub const hosting = combined.hosting;
 const combined = @import("webbox").combo.Mount(gopher, &.{
     .{ .prefix = "/codex-chat", .root = @import("codex_chat") },
     .{ .prefix = "/uo", .root = @import("uo_town") },
-    .{ .prefix = "/roc-chat", .root = @import("roc_chat") },
 });
 /// This application alone, as `Mount` takes its primary.
 const gopher = struct {
@@ -182,7 +180,9 @@ fn familyOf(path: []const u8) Family {
     if (in_chat) |sub| {
         // As routeBodyLimit reads an upload: `.../upload/` is the upload.
         if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload") or std.mem.indexOf(u8, sub, "/uploads/") != null) return .uploads;
-        if (std.mem.endsWith(u8, sub, "/stream") or std.mem.eql(u8, sub, "/notifications")) return .streams;
+        // `.../stream/` is a topic's stream too (chat.zig's segments skip
+        // empty ones), as the router holds it (the hooks test below).
+        if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/stream") or std.mem.eql(u8, sub, "/notifications")) return .streams;
         if (http.pathUnder(sub, "/docs") != null) return .docs;
         return .chat;
     }
@@ -285,9 +285,9 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     } else if (http.pathUnder(path, "/game")) |sub| {
         try game.handle(req, io, alloc, sub, client);
     } else if (http.pathUnder(path, "/chat")) |sub| {
-        try chat.handle(req, io, alloc, bus, sub);
+        try chat_router.handle(req, io, alloc, bus, sub, false);
     } else if (http.pathUnder(path, "/channel")) |sub| {
-        try chat.handleChannel(req, io, alloc, bus, sub);
+        try chat_router.handle(req, io, alloc, bus, sub, true);
     } else if (http.pathUnder(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
     } else if (http.pathUnder(path, "/gallery")) |sub| {
@@ -373,6 +373,7 @@ const testing = std.testing;
 
 // Every file of router.zig's tests, so they run (build.zig's root is this file).
 test {
+    _ = @import("chat_route_twin.zig");
     _ = @import("router_edges_test.zig");
     _ = @import("router_script_test.zig");
     _ = @import("router_failures_test.zig");
@@ -454,4 +455,50 @@ test "route families: each request counted under its part of the site (metal-vmm
             return error.TestExpectedEqual;
         }
     }
+}
+
+test "the pre-turn hooks agree with the Roc router: an upload's path gets the upload's cap and family, a stream's the streams', a doc's the docs'" {
+    // familyOf and routeBodyLimit classify a path before the turn, in Zig
+    // (they must: no Roc runs outside a call, docs/ROC-CHAT.md R1), beside
+    // the Roc router's parse. Every path the router sends to an upload, a
+    // stream or the docs must be one they classify so.
+    const roc_chat = @import("roc_chat");
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const caps = request_limits.body;
+    const Yes = struct {
+        fn ask(_: *anyopaque) bool {
+            return true;
+        }
+        var dummy: u8 = 0;
+    };
+    var checked: usize = 0;
+    for (try @import("chat_route_twin.zig").corpus(a)) |sub| for ([_][]const u8{ "/chat", "/channel" }) |area| {
+        const path = try std.mem.concat(a, u8, &.{ area, sub });
+        if ((http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel")) == null) continue;
+        roc_chat.use(a);
+        const d = try roc_chat.decide(a, sub, std.mem.eql(u8, area, "/channel"), .{ .ctx = &Yes.dummy, .ask = Yes.ask });
+        const r = d.serve.route;
+        const stream = r.tail == .stream or r.family == .notifications or r.family == .sidebar_stream or
+            ((r.family == .recent or r.family == .images or r.family == .code) and std.mem.eql(u8, r.rest, "/stream"));
+        const wrong: ?[]const u8 = if (r.tail == .upload and routeBodyLimit(path) != caps.upload_any)
+            "an upload without the upload's cap"
+        else if ((r.tail == .upload or r.tail == .uploads) and familyOf(path) != .uploads)
+            "an upload not counted as one"
+        else if (stream and familyOf(path) != .streams)
+            "a stream not counted as one"
+        else if (r.family == .docs and familyOf(path) != .docs)
+            "a doc not counted as one"
+        else if (r.family == .docs and routeBodyLimit(path) != caps.doc)
+            "a doc without the doc's cap"
+        else
+            null;
+        if (wrong) |why| {
+            std.debug.print("{s}: {s} (routed {f}; family {t}, cap {d})\n", .{ path, why, r, familyOf(path), routeBodyLimit(path) });
+            return error.TestUnexpectedResult;
+        }
+        checked += 1;
+    };
+    try testing.expect(checked > 5000);
 }
