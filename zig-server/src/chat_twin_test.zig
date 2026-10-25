@@ -11,6 +11,8 @@ const twin = @import("roc_chat_twin");
 const timefmt = @import("timefmt.zig");
 const decimal = @import("decimal.zig");
 const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
+const ChatMessage = @import("chat_store.zig").ChatMessage;
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -28,6 +30,8 @@ const Fn = enum(u8) {
     path_join = 12,
     first_of = 13,
     transcript_path = 14,
+    decode_file = 15,
+    stored_form = 16,
 };
 
 /// One Roc call's results, in `a`.
@@ -278,6 +282,100 @@ test "Paths: paths joined as std.fs.path.join, a transcript's path, a conversati
         const rf = (try roc1(a, .first_of, topics)).?;
         compared += 1;
         if (!std.mem.eql(u8, zf, rf)) differ.add("firstOf: zig {s}, roc {s}", .{ zf, rf });
+    }
+    try differ.none(compared);
+}
+
+// ── Codec (chat_codec.zig) ─────────────────────────────────────────────────
+
+/// The pieces a transcript is made of, and the ones that break it: the
+/// separator and its dashes with and without backslashes, headers with and
+/// without ": ", torn ids, whitespace a skip must see through, bytes that
+/// are not UTF-8.
+const codec_bits = [_][]const u8{ "MSG_", "MSG_t_1", "\n", "\n", "\n\n", "from: ", "date: ", "uid: ", "from:", ": ", ":", "Steve", "2026-10-25T12:00:00Z", "7", "x", "\\", "\\\\", "-------------", "\\-------------", "\\\\-------------", "------------", "--------------", "\n\n-------------\n", " ", "\t", "\r", "\xff", "caf\xc3\xa9" };
+
+/// A seeded spread of byte strings made of `codec_bits`, up to `most` bits.
+fn codecStrings(a: std.mem.Allocator, seed: u64, n: usize, most: usize) ![][]const u8 {
+    var rng = std.Random.DefaultPrng.init(seed);
+    const r = rng.random();
+    const out = try a.alloc([]const u8, n);
+    for (out) |*s| {
+        var b: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, most)) |_| try b.appendSlice(a, codec_bits[r.uintLessThan(usize, codec_bits.len)]);
+        s.* = b.items;
+    }
+    return out;
+}
+
+/// A message whose every field is drawn from `codec_bits`, the id, author
+/// and date never empty (a message as the store writes one).
+fn codecMessage(a: std.mem.Allocator, r: std.Random) !ChatMessage {
+    const pick = struct {
+        fn f(al: std.mem.Allocator, rr: std.Random, most: usize, nonempty: bool) ![]const u8 {
+            var b: std.ArrayList(u8) = .empty;
+            for (0..rr.uintAtMost(usize, most)) |_| try b.appendSlice(al, codec_bits[rr.uintLessThan(usize, codec_bits.len)]);
+            if (nonempty and b.items.len == 0) try b.append(al, 'm');
+            return b.items;
+        }
+    }.f;
+    return .{ .id = try pick(a, r, 2, true), .from = try pick(a, r, 2, true), .at = try pick(a, r, 2, true), .uid = try pick(a, r, 1, false), .markdown = try pick(a, r, 12, false) };
+}
+
+/// The Roc's decode against chatDecodeFile's, field by field, the refused
+/// count too.
+fn decodeAgrees(a: std.mem.Allocator, data: []const u8, differ: *Differences) !void {
+    const before = chat_codec.refused_blocks;
+    const zm = try chat_codec.decodeChatFile(a, data);
+    const zrefused = chat_codec.refused_blocks - before;
+    const got = try roc(a, .decode_file, &.{data});
+    const rrefused = try std.fmt.parseInt(usize, got[0], 10);
+    const rest = got[1..];
+    if (zrefused != rrefused or rest.len != zm.len * 5) {
+        differ.add("decode(\"{f}\"): zig {d} messages {d} refused, roc {d} fields {d} refused", .{ std.zig.fmtString(data), zm.len, zrefused, rest.len, rrefused });
+        return;
+    }
+    for (zm, 0..) |m, i| {
+        const want = [_][]const u8{ m.id, m.from, m.at, m.uid, m.markdown };
+        for (want, rest[i * 5 ..][0..5], 0..) |w, g, f| if (!std.mem.eql(u8, w, g)) {
+            differ.add("decode(\"{f}\") message {d} field {d}: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(data), i, f, std.zig.fmtString(w), std.zig.fmtString(g) });
+            return;
+        };
+    }
+}
+
+test "Codec: a transcript decoded, whatever its bytes" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    const files = try codecStrings(a, 0xc0dec, 3000, 24);
+    for (files) |f| try decodeAgrees(a, f, &differ);
+    try differ.none(files.len);
+}
+
+test "Codec: a message's stored form, and what reads back from a file of them" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var rng = std.Random.DefaultPrng.init(0x5704ed);
+    const r = rng.random();
+    var compared: usize = 0;
+    for (0..300) |_| {
+        var file: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 4)) |index| {
+            const m = try codecMessage(a, r);
+            const zs = try chat_codec.chatStoredForm(a, index, m);
+            const idx = try std.fmt.allocPrint(a, "{d}", .{index});
+            const rs = (try roc1(a, .stored_form, &.{ idx, m.id, m.from, m.at, m.uid, m.markdown })).?;
+            compared += 1;
+            if (!std.mem.eql(u8, zs, rs)) differ.add("storedForm({d}, \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ index, std.zig.fmtString(m.markdown), std.zig.fmtString(zs), std.zig.fmtString(rs) });
+            try file.appendSlice(a, zs);
+        }
+        try decodeAgrees(a, file.items, &differ);
+        compared += 1;
     }
     try differ.none(compared);
 }
