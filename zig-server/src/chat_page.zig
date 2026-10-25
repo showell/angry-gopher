@@ -77,10 +77,13 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
 
     try b.appendSlice(alloc, chat_css);
     // data-me: the viewer's uid, so the client can tell its own reactions apart.
+    // data-me-name: the viewer's name, so the client can tell its own messages
+    // apart (a message names its author; the stream sends every viewer the
+    // same frame, chat_frame.zig).
     // data-upload-*: the server's caps and accepted types, the client's only
     // copy (metal-vmm QUEUE 157(d)).
-    try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\" data-upload-image-max=\"{d}\" data-upload-video-max=\"{d}\" data-upload-accept=\"{s}\" data-search-min=\"{d}\">", .{
-        try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid), try htmlEscape(alloc, uid),
+    try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\" data-me-name=\"{s}\" data-upload-image-max=\"{d}\" data-upload-video-max=\"{d}\" data-upload-accept=\"{s}\" data-search-min=\"{d}\">", .{
+        try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid), try htmlEscape(alloc, uid),           try htmlEscape(alloc, viewer),
         chat_upload.image_max,           chat_upload.video_max,            chat_upload.accept,               @import("search_tokens.zig").min_len,
     });
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");

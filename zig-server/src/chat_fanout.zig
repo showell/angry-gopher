@@ -228,20 +228,6 @@ fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewe
     return std.fmt.allocPrint(alloc, "to {s}", .{name});
 }
 
-/// busBlob is the internal fan-out payload — every field a stream needs to build
-/// its per-viewer wire event EXCEPT `mine` (viewer-relative) and `html` (rendered
-/// per-stream from `markdown`). JSON for robustness over arbitrary markdown bytes.
-pub fn busBlob(alloc: Alloc, index: usize, from: []const u8, at: []const u8, id: []const u8, cid: []const u8, markdown: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "{{\"index\":{d},\"from\":{f},\"at\":{f},\"id\":{f},\"cid\":{f},\"markdown\":{f}}}", .{
-        index,
-        std.json.fmt(from, .{}),
-        std.json.fmt(at, .{}),
-        std.json.fmt(id, .{}),
-        std.json.fmt(cid, .{}),
-        std.json.fmt(markdown, .{}),
-    });
-}
-
 test "the fan-out's surfaces fail one at a time, each said: a member's images that will not write still leave their code (metal-vmm QUEUE 156(c))" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
