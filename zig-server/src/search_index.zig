@@ -668,7 +668,10 @@ test "a block read in place is what the decoder makes of it (155's review)" {
         "\nfrom: D\ndate: d\n\nno id line" ++ sep ++ // the first line empty: refused by both
         "MSG_t_5\nfrom: E\ndate: d\n\nabove\n\\-------------\nbelow" ++ sep ++ // an escaped separator line
         "not a header\n\nbody" ++ sep ++ "  \n\t" ++ sep ++ "MSG_t_8\nfrom: F\ndate: d\n\nlast" ++ sep ++
-        "MSG_t_9\nfrom: G\n\nno date"; // refused by both
+        "MSG_t_9\nfrom: G\n\nno date" ++ sep ++ // refused by both
+        // A `uid:` line, which this reader does not take, as a server from
+        // before `uid:` did not: the rest of the block reads the same.
+        "MSG_t_10\nfrom: H\ndate: d\nuid: 7\n\nwith its author's account";
     const want = try chat_store.decodeChatFile(a, file);
     var got: std.ArrayList(chat_store.ChatMessage) = .empty;
     var blocks = std.mem.splitSequence(u8, file, sep);
@@ -676,7 +679,7 @@ test "a block read in place is what the decoder makes of it (155's review)" {
         if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
         if (try inPlace(a, piece)) |m| try got.append(a, m);
     }
-    try testing.expectEqual(@as(usize, 5), want.len); // t_1, t_2, t_3, t_5, t_8
+    try testing.expectEqual(@as(usize, 6), want.len); // t_1, t_2, t_3, t_5, t_8, t_10
     try testing.expectEqual(want.len, got.items.len);
     for (want, got.items) |w, g| {
         try testing.expectEqualStrings(w.id, g.id);
@@ -684,6 +687,8 @@ test "a block read in place is what the decoder makes of it (155's review)" {
         try testing.expectEqualStrings(w.date, g.date);
         try testing.expectEqualStrings(w.markdown, g.markdown);
     }
+    try testing.expectEqualStrings("7", want[5].uid);
+    try testing.expectEqualStrings("with its author's account", got.items[5].markdown);
 }
 
 test "messages for a word stop at a byte budget, every one still counted (the box's review of 155, 1)" {

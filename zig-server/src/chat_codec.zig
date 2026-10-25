@@ -108,6 +108,8 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
                 msg.from = kv.after;
             } else if (std.mem.eql(u8, kv.before, "date")) {
                 msg.date = kv.after;
+            } else if (std.mem.eql(u8, kv.before, "uid")) {
+                msg.uid = kv.after;
             }
         }
     }
@@ -146,8 +148,8 @@ pub fn chatStoredForm(alloc: Alloc, index: usize, msg: ChatMessage) ![]u8 {
 }
 
 /// encodeChatBlock renders one message to its on-disk block: the MSG_ id line,
-/// the from/date header, a blank line, then the body with each line escaped
-/// against a separator collision.
+/// the from/date header and, when the author is known, `uid:`; a blank line,
+/// then the body with each line escaped against a separator collision.
 fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
     var body: std.ArrayList(u8) = .empty;
     var it = std.mem.splitScalar(u8, msg.markdown, '\n');
@@ -157,7 +159,8 @@ fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
         first = false;
         try body.appendSlice(alloc, try escapeBodyLine(alloc, line));
     }
-    return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\n\n{s}", .{ msg.id, msg.from, msg.date, body.items });
+    if (msg.uid.len == 0) return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\n\n{s}", .{ msg.id, msg.from, msg.date, body.items });
+    return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\nuid: {s}\n\n{s}", .{ msg.id, msg.from, msg.date, msg.uid, body.items });
 }
 
 /// escapeBodyLine protects a body line that would collide with `sep` by
@@ -171,6 +174,24 @@ fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
 }
 
 // ── the last message, for /chat/recent ────────────────────────────────────────
+
+test "a message's author is stored as `uid:` after its date, read back, and adds only that line" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const with = ChatMessage{ .id = "t_1", .from = "Steve", .date = "2026-10-25T12:00:00Z", .markdown = "hi\nthere", .uid = "1" };
+    const block = try chatStoredForm(a, 0, with);
+    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\nuid: 1\n\nhi\nthere", block);
+    const back = (try decodeChatFile(a, block))[0];
+    try testing.expectEqualStrings("1", back.uid);
+    try testing.expectEqualStrings("Steve", back.from);
+    try testing.expectEqualStrings("hi\nthere", back.markdown);
+    // No author known: no `uid:` line, the block as it always was.
+    var without = with;
+    without.uid = "";
+    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\n\nhi\nthere", try chatStoredForm(a, 0, without));
+    try testing.expectEqualStrings("", (try decodeChatFile(a, try chatStoredForm(a, 0, without)))[0].uid);
+}
 
 test "the decoder refuses a block with no id, author or date, counted; a blank piece is a torn append's and skipped (metal-vmm QUEUE 156(h))" {
     const a = testing.allocator;

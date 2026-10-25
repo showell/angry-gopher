@@ -9,8 +9,11 @@
   var CONV_BASE=root.dataset.convBase;
   /* PRODUCT_DECISION: whose message it is, decided here. The stream sends every
      viewer the same frame (the server builds it once, at send), so `mine` is
-     the client's: a message is mine when its author is the name the page says
-     I am, as the server once said per viewer. */
+     the client's: a message is mine when its author's account (from_uid) is
+     mine (data-me), whatever either of us is called now. A message stored
+     before its author's account was recorded has no from_uid: mine when its
+     author's name is the one the page says I have. */
+  var ME=root.dataset.me;
   var ME_NAME=root.dataset.meName;
   var SESSION_BASE=CONV_BASE+'/'+encodeURIComponent(SESSION);
 
@@ -279,7 +282,7 @@
 
   es.onmessage=function(e){
     var m=JSON.parse(e.data);
-    m.mine=(m.from===ME_NAME);
+    m.mine = m.from_uid ? (m.from_uid===ME) : (m.from===ME_NAME);
     if(inBacklog){
       appendMessage(m);
       backlogSeen++;

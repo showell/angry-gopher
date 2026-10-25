@@ -22,6 +22,7 @@ const tail_window = chat_store.tail_window;
 const CountFixture = chat_store.CountFixture;
 const no_uid = chat_store.no_uid;
 const sep = chat_store.sep;
+const ChatMessage = chat_store.ChatMessage;
 const listConvDirs = chat_paths.listConvDirs;
 const listSessions = chat_paths.listSessions;
 const rawSession = chat_paths.rawSession;
@@ -82,8 +83,8 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
                         .markdown = got.markdown,
                         .date = got.date,
                         // A current record's answer stands, nobody included;
-                        // a record behind: the newer message's author by name.
-                        .uid = if (number == c.count) l.uid else authorByName(io, alloc, got.from),
+                        // a record behind: the newer message's author.
+                        .uid = if (number == c.count) l.uid else authorOf(io, alloc, got),
                         .number = number,
                     };
                 }
@@ -94,7 +95,8 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 }
 
 /// **THE AUTHOR WHERE NO SIDECAR SAYS** (the box's must-fix after 153(1)):
-/// where the record is behind its transcript or missing, the member named
+/// where the record is behind its transcript or missing, the message's own
+/// `uid:`, or, for a block written before it had one, the member named
 /// `from`, the last message's name (names are unique among members; login
 /// finds members by name), else "". The backfill records it; a send records
 /// its own author. Never an older author.
@@ -106,17 +108,19 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 ///
 /// **ONE MEMBER, OR NOBODY** (the box's review of 155): a name two members
 /// share (108's sign-up race) names neither.
-fn authorByName(io: Io, alloc: Alloc, from: []const u8) []const u8 {
+fn authorOf(io: Io, alloc: Alloc, msg: ChatMessage) []const u8 {
     // absent-ok: an author that cannot be looked up is shown as nobody, for this read only: nothing records it.
-    return lookupAuthor(io, alloc, from) catch "";
+    return lookupAuthor(io, alloc, msg) catch "";
 }
 
-/// `authorByName`, its failure kept: what the backfill records is believed
+/// `authorOf`, its failure kept: what the backfill records is believed
 /// for good (a current record is never asked again), so a lookup that
-/// failed must record nothing, never nobody (the box's should-fix).
-fn lookupAuthor(io: Io, alloc: Alloc, from: []const u8) ![]const u8 {
-    if (from.len == 0) return "";
-    return (try users.onlyMemberNamed(io, alloc, from)) orelse "";
+/// failed must record nothing, never nobody (the box's should-fix). A
+/// message that names its author is not looked up at all.
+fn lookupAuthor(io: Io, alloc: Alloc, msg: ChatMessage) ![]const u8 {
+    if (msg.uid.len > 0) return msg.uid;
+    if (msg.from.len == 0) return "";
+    return (try users.onlyMemberNamed(io, alloc, msg.from)) orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -145,7 +149,7 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     // included; else the last author by name.
     const blocks = countBlocks(raw);
     const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == blocks and c.size == raw.len) l.uid else null) else null) else null;
-    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorByName(io, alloc, last.from), .number = blocks };
+    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorOf(io, alloc, last), .number = blocks };
 }
 
 /// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -183,7 +187,7 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             // after 153(1)); "", when no member has it. A lookup that fails
             // writes nothing: the next boot asks again.
             // absent-ok: the startup backfill skips a session whose author it cannot look up; reads find the author by name meanwhile.
-            const uid = lookupAuthor(io, a, msgs[msgs.len - 1].from) catch continue;
+            const uid = lookupAuthor(io, a, msgs[msgs.len - 1]) catch continue;
             // Counted only when written (metal-vmm QUEUE 172): the start's
             // report said "backfilled N" for writes that failed.
             // absent-ok: a sidecar that will not write is recounted by the next read, and asked again next boot.
@@ -570,7 +574,24 @@ test "last message: a session from before the sidecar is read from its transcrip
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
-    try testing.expectEqualStrings("", got.uid); // nothing says (153(1))
+    // No sidecar says, and the message does: its own `uid:`.
+    try testing.expectEqualStrings("1", got.uid);
+}
+
+test "last message: a block from before `uid:` names nobody where nothing else says (153(1))" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    // A transcript an older server wrote: no `uid:` lines, and no sidecar.
+    // "Tester" is no member's name here, so nobody, never a guess.
+    try store.write(f.io, a, try sessionMdPath(a, f.dir, "topic"), "MSG_topic_1\nfrom: Tester\ndate: 2026-10-10T00:00:00Z\n\nfirst" ++ sep ++ "MSG_topic_2\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nsecond", .{});
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("second", got.markdown);
+    try testing.expectEqual(@as(usize, 2), got.number);
+    try testing.expectEqualStrings("", got.uid);
 }
 
 test "backfill: a session with no last-message record gets one, and only once" {
@@ -592,7 +613,8 @@ test "backfill: a session with no last-message record gets one, and only once" {
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("last", got.markdown);
-    try testing.expectEqualStrings("", got.uid); // unknown
+    // Not the `.lastauthor`: the message's own `uid:`.
+    try testing.expectEqualStrings("1", got.uid);
     // A second pass finds nothing to do.
     try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
 }
@@ -697,9 +719,9 @@ test "last message: a record left one behind still answers with the true last me
     try testing.expectEqualStrings("the second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
     // The stale uid is not used, nor a `.lastauthor` (zig-metal-unikernel 153(1)):
-    // nothing says who wrote the newer message, so no author, never one that
+    // the newer message says who wrote it (its `uid:`), never a guess that
     // could be wrong (a "You" for a message the viewer did not write).
-    try testing.expectEqualStrings("", got.uid);
+    try testing.expectEqualStrings("1", got.uid);
 }
 
 test "last message: one too long for the window is read the slow way, and is right" {
@@ -723,10 +745,11 @@ test "last message: one too long for the window is read the slow way, and is rig
     try testing.expectEqualStrings("1", got.uid);
 
     // A sidecar whose count matches but whose size does not (the transcript
-    // edited by hand since) speaks for some other last message: no author.
+    // edited by hand since) speaks for some other last message: not its uid
+    // (9), but the last message's own.
     const c = readCount(f.io, a, f.dir, "topic").?;
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "{d} {d}\n{d} 9\n", .{ c.count, c.size + 1, c.last.?.offset }));
-    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
 
 test "last message: a sidecar claiming a size far past the file does not ask for that much" {
@@ -796,9 +819,9 @@ test "the author where no sidecar says is the member the last message names; the
     const a = f.arena.allocator();
     try users.setUserName(f.io, a, "1", "Tester");
     try users.setUserPassword(f.io, a, "1", "pw");
-    _ = try f.send("the first");
+    _ = try f.sendLegacy("the first");
     const after_first = try fixtureTranscriptSize(&f);
-    _ = try f.send("the second");
+    _ = try f.sendLegacy("the second");
     // One behind, its uid someone else's: the newer message's author by name.
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
     try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
@@ -823,7 +846,7 @@ test "a current record that says nobody is believed: a name reused after its mem
     const a = f.arena.allocator();
     // The last message is "Tester"'s, and no member has that name now: the
     // backfill records nobody.
-    _ = try f.send("from someone since gone");
+    _ = try f.sendLegacy("from someone since gone");
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
     const dirs = [_][]const u8{f.dir};
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
@@ -845,9 +868,9 @@ test "a name two members share names nobody (the box's review of 155, 4)" {
         try users.setUserName(f.io, a, id, "Tester");
         try users.setUserPassword(f.io, a, id, "pw");
     }
-    _ = try f.send("the first");
+    _ = try f.sendLegacy("the first");
     const after_first = try fixtureTranscriptSize(&f);
-    _ = try f.send("the second");
+    _ = try f.sendLegacy("the second");
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
     try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
@@ -863,7 +886,7 @@ test "a lookup that fails at boot records nothing, so a later boot finds the aut
     try users.setUserPassword(f.io, a, "1", "pw");
     // An account whose name will not read: the lookup fails.
     try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ users.auth_root, "5", "name" }));
-    _ = try f.send("hello");
+    _ = try f.sendLegacy("hello");
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
     const dirs = [_][]const u8{f.dir};
     try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));

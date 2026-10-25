@@ -10,7 +10,10 @@
 //!   {chat_root}/channels/<name>.channel                — channel member uids
 //!
 //! Transcript file format: messages concatenated, joined by `sep`. Each block is
-//!   MSG_<sid>_<n>\nfrom: <name>\ndate: <RFC3339>\n\n<markdown body>
+//!   MSG_<sid>_<n>\nfrom: <name>\ndate: <RFC3339>\nuid: <uid>\n\n<markdown body>
+//! (`uid:` only on blocks written since it was added; a reader takes the
+//! header lines it knows and passes over the rest, so a server from before it
+//! reads these blocks as it always read blocks.)
 //! decodeChatFile parses that, including the 13-hyphen separator-collision
 //! unescape. Round-trips with the raw bytes (the /raw view serves them verbatim,
 //! this decoder parses them).
@@ -94,14 +97,19 @@ pub const sep = "\n\n-------------\n";
 
 pub const dashes = "-------------"; // exactly 13; the collision shape
 
-/// ChatMessage is one decoded block. id/from/date are slices into the source
-/// buffer; markdown is freshly built (line-unescaped + rejoined). The `date` is
-/// the raw RFC3339 header string, displayed as stored.
+/// ChatMessage is one decoded block. id/from/date/uid are slices into the
+/// source buffer; markdown is freshly built (line-unescaped + rejoined). The
+/// `date` is the raw RFC3339 header string, displayed as stored.
+///
+/// **WHO WROTE IT IS `uid`**, the author's account; `from` is the name they
+/// had when they wrote it, shown as written. A block from before `uid:` was
+/// written has none (""): who wrote it is known only by that name.
 pub const ChatMessage = struct {
     id: []const u8,
     from: []const u8,
     date: []const u8,
     markdown: []const u8,
+    uid: []const u8 = "",
 };
 
 // ── decode ──────────────────────────────────────────────────────────────────
@@ -154,7 +162,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Top
 
     const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
-    const msg = ChatMessage{ .id = id, .from = from.name, .date = at, .markdown = markdown };
+    const msg = ChatMessage{ .id = id, .from = from.name, .date = at, .markdown = markdown, .uid = from.id };
 
     const stored = try chatStoredForm(alloc, index, msg);
     // **THE ECHO IS MADE BEFORE THE STORE** (metal-vmm QUEUE 177.1): the live
@@ -163,7 +171,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, topic: Top
     // success with no echo on the sender's stream, whose client then sent the
     // message again: a duplicate.
     const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
-    const live_blob = try chat_frame.messageFrame(alloc, .{ .index = index, .from = from.name, .at = at, .id = id, .markdown = markdown, .cid = cid });
+    const live_blob = try chat_frame.messageFrame(alloc, .{ .index = index, .from = from.name, .from_uid = from.id, .at = at, .id = id, .markdown = markdown, .cid = cid });
     // **NO `.lastauthor`** (zig-metal-unikernel 153(1)): the `.count` carries the
     // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
@@ -385,7 +393,7 @@ test "a message's live frame is the frame a stream's backlog makes of it, the sa
     // The backlog's frame for the same message, from what was stored.
     const msgs = try decodeChatFile(a, (try rawSession(f.io, a, f.dir, "topic")).?);
     try testing.expectEqualStrings(sent.id, msgs[1].id);
-    const replayed = try chat_frame.messageFrame(a, .{ .index = indexOf(msgs[1].id, "topic").?, .from = msgs[1].from, .at = msgs[1].date, .id = msgs[1].id, .markdown = msgs[1].markdown });
+    const replayed = try chat_frame.messageFrame(a, .{ .index = indexOf(msgs[1].id, "topic").?, .from = msgs[1].from, .from_uid = msgs[1].uid, .at = msgs[1].date, .id = msgs[1].id, .markdown = msgs[1].markdown });
     try testing.expectEqualStrings(replayed, live);
     try testing.expect(std.mem.startsWith(u8, live, "id: 1\ndata: "));
 }
@@ -425,6 +433,13 @@ pub const CountFixture = struct {
     pub fn send(self: *CountFixture, text: []const u8) !ChatMessage {
         const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
         return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
+    }
+
+    /// A message as a server from before `uid:` stored it: its block names
+    /// its author by name only, for the tests of how such a block is credited.
+    pub fn sendLegacy(self: *CountFixture, text: []const u8) !ChatMessage {
+        const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
+        return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "" }, text, "");
     }
 
     pub fn decoded(self: *CountFixture) !usize {

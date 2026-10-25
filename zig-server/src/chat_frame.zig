@@ -7,7 +7,8 @@
 //! the same live or replayed. The host's render for a kept topic stream copies
 //! the blob through (chat_sse.verbatim): no parse, no markdown, no viewer,
 //! on the connection's own task or in the single loop's pump. Whose message
-//! it is (`mine`) is the client's to say, from `from` and the page's
+//! it is (`mine`) is the client's to say: `from_uid` against the page's
+//! `data-me`, or, for a message from before `uid:` was stored, `from` against
 //! `data-me-name`.
 
 const std = @import("std");
@@ -16,10 +17,13 @@ const markdown = @import("markdown.zig");
 const Alloc = std.mem.Allocator;
 
 /// One message, as its frame carries it: `index` is 0-based (the SSE `id:`),
-/// `at` the stored RFC3339 date, `cid` the sender's client id (empty: none).
+/// `from_uid` the author's account (empty: a message from before it was
+/// stored), `at` the stored RFC3339 date, `cid` the sender's client id
+/// (empty: none).
 pub const Message = struct {
     index: usize,
     from: []const u8,
+    from_uid: []const u8 = "",
     at: []const u8,
     id: []const u8,
     markdown: []const u8,
@@ -27,24 +31,22 @@ pub const Message = struct {
 };
 
 /// messageFrame is one message's SSE event: `id: <index>`, then a `data:` line
-/// of JSON with `html` rendered here from `markdown`. `cid` is included only
-/// when non-empty (a backlog frame never has one).
+/// of JSON with `html` rendered here from `markdown`. `from_uid` follows
+/// `from` when the author is known; `cid` comes last, only when non-empty (a
+/// backlog frame never has one).
 pub fn messageFrame(alloc: Alloc, m: Message) ![]u8 {
     const html = try markdown.render(alloc, m.markdown);
-    if (m.cid.len > 0) {
-        return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"cid\":{f}}}\n\n", .{
-            m.index,                   m.index,
-            std.json.fmt(m.from, .{}), std.json.fmt(m.at, .{}),
-            std.json.fmt(html, .{}),   std.json.fmt(m.markdown, .{}),
-            std.json.fmt(m.id, .{}),   std.json.fmt(m.cid, .{}),
-        });
-    }
-    return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f}}}\n\n", .{
-        m.index,                   m.index,
-        std.json.fmt(m.from, .{}), std.json.fmt(m.at, .{}),
-        std.json.fmt(html, .{}),   std.json.fmt(m.markdown, .{}),
-        std.json.fmt(m.id, .{}),
+    var out: std.Io.Writer.Allocating = .init(alloc);
+    const w = &out.writer;
+    try w.print("id: {d}\ndata: {{\"index\":{d},\"from\":{f}", .{ m.index, m.index, std.json.fmt(m.from, .{}) });
+    if (m.from_uid.len > 0) try w.print(",\"from_uid\":{f}", .{std.json.fmt(m.from_uid, .{})});
+    try w.print(",\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f}", .{
+        std.json.fmt(m.at, .{}),       std.json.fmt(html, .{}),
+        std.json.fmt(m.markdown, .{}), std.json.fmt(m.id, .{}),
     });
+    if (m.cid.len > 0) try w.print(",\"cid\":{f}", .{std.json.fmt(m.cid, .{})});
+    try w.writeAll("}\n\n");
+    return out.toOwnedSlice();
 }
 
 /// reactionFrame is a reaction's SSE event: `event: reaction`, its data the
@@ -63,6 +65,7 @@ const testing = std.testing;
 const Data = struct {
     index: usize,
     from: []const u8,
+    from_uid: ?[]const u8 = null,
     at: []const u8,
     html: []const u8,
     markdown: []const u8,
@@ -89,6 +92,7 @@ test "messageFrame: id is the index, fields JSON-escaped, html rendered, no mine
     try testing.expectEqual(@as(usize, 3), std.mem.count(u8, frame, "\n"));
     try testing.expect(std.mem.indexOf(u8, frame, "\"mine\"") == null);
     try testing.expect(std.mem.indexOf(u8, frame, "\"cid\"") == null);
+    try testing.expect(std.mem.indexOf(u8, frame, "\"from_uid\"") == null);
 
     const p = try parseData(a, frame);
     try testing.expectEqual(@as(usize, 7), p.value.index);
@@ -114,4 +118,16 @@ test "reactionFrame carries the sidecar line verbatim as an event: reaction" {
     const frame = try reactionFrame(testing.allocator, line);
     defer testing.allocator.free(frame);
     try testing.expectEqualStrings("event: reaction\ndata: " ++ line ++ "\n\n", frame);
+}
+
+test "messageFrame: a known author's uid rides after their name" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const frame = try messageFrame(a, .{ .index = 2, .from = "Steve", .from_uid = "1", .at = "d", .id = "t_3", .markdown = "hi", .cid = "c-1" });
+    try testing.expect(std.mem.startsWith(u8, frame, "id: 2\ndata: {\"index\":2,\"from\":\"Steve\",\"from_uid\":\"1\",\"at\":"));
+    try testing.expect(std.mem.endsWith(u8, frame, ",\"cid\":\"c-1\"}\n\n"));
+    const p = try parseData(a, frame);
+    try testing.expectEqualStrings("1", p.value.from_uid.?);
+    try testing.expectEqualStrings("c-1", p.value.cid.?);
 }

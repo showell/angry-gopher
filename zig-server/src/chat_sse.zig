@@ -68,7 +68,7 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: s
         // Its index from its id, as the live stream's: a refused block before
         // it keeps its number (chat_store.countBlocks).
         const index = store.indexOf(m.id, topic.sid) orelse i;
-        const frame = try chat_frame.messageFrame(alloc, .{ .index = index, .from = m.from, .at = m.date, .id = m.id, .markdown = m.markdown });
+        const frame = try chat_frame.messageFrame(alloc, .{ .index = index, .from = m.from, .from_uid = m.uid, .at = m.date, .id = m.id, .markdown = m.markdown });
         sse.push(&body, frame) catch return;
     }
 
