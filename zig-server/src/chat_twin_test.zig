@@ -17,6 +17,10 @@ const chat_frame = @import("chat_frame.zig");
 const markdown = @import("markdown.zig");
 const reactions = @import("reactions.zig");
 const http = @import("webbox").http;
+const webbox_html = @import("webbox").html;
+const chrome = @import("chat_chrome.zig");
+const chat_page = @import("chat_page.zig");
+const chat_upload = @import("chat_upload.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
 
 /// chat/twin.roc's numbers.
@@ -50,6 +54,14 @@ const Fn = enum(u8) {
     form_field = 27,
     react_form = 28,
     valid_emoji = 29,
+    chrome_page = 30,
+    not_found_page = 31,
+    no_topics_page = 32,
+    no_conversations_page = 33,
+    sidebar_json = 34,
+    conversation_page = 35,
+    html_escape = 36,
+    script_safe = 37,
 };
 
 /// One Roc call's results, in `a`.
@@ -659,6 +671,148 @@ test "Reaction: the react form judged as parseReactForm judges it, and one glyph
         const got = yes((try roc1(a, .valid_emoji, &.{g})).?);
         compared += 1;
         if (want != got) differ.add("validEmoji(\"{f}\"): zig {}, roc {}", .{ std.zig.fmtString(g), want, got });
+    }
+    try differ.none(compared);
+}
+
+// ── Chrome, Pages, Html (chat_chrome.zig, chat_page.zig, webbox html.zig) ──
+
+/// Every script's src as the chrome names it, as `name, src` pairs: what
+/// the host hands the Roc.
+fn srcPairs(a: std.mem.Allocator) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    inline for (chrome.assets) |asset| try out.appendSlice(a, &.{ asset.name, try chrome.src(a, asset.name) });
+    return out.items;
+}
+
+/// Text a page shows, hostile to HTML and to an inline script: every
+/// escaped byte, `</script>`, quotes, and the byte strings' corpus.
+fn pageTexts(a: std.mem.Allocator) ![][]const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for ([_][]const u8{ "", "Chat", "Steve", "a&b", "<b>x</b>", "\"q\" 'a'", "</script><script>alert(1)</script>", "</", "<\\/", "Ada Lovelace", "general", "#ops: plans", "caf\xc3\xa9", "\xff" }) |t| try out.append(a, t);
+    for ((try byteStrings(a))[0..200]) |t| try out.append(a, t);
+    return out.items;
+}
+
+test "Chrome: a chat page's shell, byte for byte, for every title, viewer and bold link tried" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    const pairs = try srcPairs(a);
+    const texts = try pageTexts(a);
+    for (texts, 0..) |t, i| for ([_][]const u8{ "", "chat", "docs", "recent", "images", "code", "links", "settings", "Chat" }) |active| {
+        const tab = texts[(i * 7) % texts.len];
+        const body = texts[(i * 13) % texts.len];
+        var page = try chrome.page(a, tab, t, texts[(i * 3) % texts.len], active);
+        try page.body.appendSlice(a, body);
+        const z = try page.bytes();
+        const r = (try roc1(a, .chrome_page, try std.mem.concat(a, []const u8, &.{ &.{ tab, t, texts[(i * 3) % texts.len], active, body }, pairs }))).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, r)) differ.add("chrome page \"{f}\" active \"{s}\": zig {d} bytes, roc {d}", .{ std.zig.fmtString(t), active, z.len, r.len });
+    };
+    try differ.none(compared);
+}
+
+test "Pages: the 404 that says why, the first-topic shell, the empty /chat and the conversation page, byte for byte" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    const pairs = try srcPairs(a);
+    const texts = try pageTexts(a);
+    const accept = chat_upload.accept;
+    const digits = struct {
+        fn f(al: std.mem.Allocator, n: anytype) ![]const u8 {
+            return std.fmt.allocPrint(al, "{d}", .{n});
+        }
+    }.f;
+    for (texts, 0..) |t, i| {
+        const u = texts[(i * 5 + 1) % texts.len];
+        const w = texts[(i * 11 + 2) % texts.len];
+        const checks = [_]struct { f: Fn, zig: []const u8, args: []const []const u8 }{
+            .{ .f = .not_found_page, .zig = try chat_page.notFoundHtml(a, t, u, w), .args = &.{ t, u, w } },
+            .{ .f = .no_topics_page, .zig = try chat_page.noTopicsHtml(a, t, u, w), .args = &.{ t, u, w } },
+            .{ .f = .no_conversations_page, .zig = try chat_page.noConversationsHtml(a, t), .args = &.{t} },
+        };
+        for (checks) |c| {
+            const r = (try roc1(a, c.f, try std.mem.concat(a, []const u8, &.{ c.args, pairs }))).?;
+            compared += 1;
+            if (!std.mem.eql(u8, c.zig, r)) differ.add("{t}(\"{f}\"): zig {d} bytes, roc {d}", .{ c.f, std.zig.fmtString(t), c.zig.len, r.len });
+        }
+        const v: chat_page.View = .{ .key = t, .base = u, .sid = w, .title = texts[(i * 3) % texts.len], .uid = texts[(i * 17) % texts.len], .viewer = texts[(i * 19) % texts.len], .sidebar_json = texts[(i * 23) % texts.len] };
+        const z = try chat_page.conversationHtml(a, v);
+        const r = (try roc1(a, .conversation_page, try std.mem.concat(a, []const u8, &.{ &.{ v.key, v.base, v.sid, v.title, v.uid, v.viewer, v.sidebar_json, try digits(a, chat_upload.image_max), try digits(a, chat_upload.video_max), accept, try digits(a, @import("search_tokens.zig").min_len) }, pairs }))).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, r)) differ.add("conversation page \"{f}\": zig {d} bytes, roc {d}", .{ std.zig.fmtString(t), z.len, r.len });
+    }
+    try differ.none(compared);
+}
+
+test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic list tried, script-safe" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var rng = std.Random.DefaultPrng.init(0x51deba7);
+    const r = rng.random();
+    const names = [_][]const u8{ "Steve", "Ada \"the\" </script>", "caf\xc3\xa9", "", "\x01", "Bo" };
+    const ids = [_][]const u8{ "1", "2", "3", "10", "12" };
+    // A topic named as a channel is, and a channel named as a DM's pair:
+    // what is active is the conversation of its kind.
+    const sids = [_][]const u8{ "general", "Plans", "plans", "a</b", "x\"y", "2026-10-25", "ops" };
+    const chans = [_][]const u8{ "ops", "team", "a</", "b\"c", "1_2", "2_3" };
+    var compared: usize = 0;
+    for (0..800) |_| {
+        const uid = ids[r.uintLessThan(usize, ids.len)];
+        var others: std.ArrayList(chat_page.Other) = .empty;
+        for (ids) |id| if (!std.mem.eql(u8, id, uid) and r.boolean()) try others.append(a, .{ .id = id, .name = names[r.uintLessThan(usize, names.len)], .online = r.boolean() });
+        var channels: std.ArrayList([]const u8) = .empty;
+        for (chans) |c| if (r.boolean()) try channels.append(a, c);
+        var topics: std.ArrayList([]const u8) = .empty;
+        for (sids) |t| if (r.boolean()) try topics.append(a, t);
+        // Pins in no order, some twice, some no longer topics.
+        var pins: std.ArrayList([]const u8) = .empty;
+        for (0..r.uintAtMost(usize, 5)) |_| try pins.append(a, sids[r.uintLessThan(usize, sids.len)]);
+        const dm = r.boolean();
+        const other = ids[r.uintLessThan(usize, ids.len)];
+        const key = if (dm) try chat_paths.chatPairKey(a, uid, other) else chans[r.uintLessThan(usize, chans.len)];
+        const base = try std.fmt.allocPrint(a, "{s}/{s}", .{ if (dm) "/chat/c" else "/channel", key });
+        const sid = sids[r.uintLessThan(usize, sids.len)];
+        const sb: chat_page.Sidebar = .{ .uid = uid, .dm = dm, .key = key, .base = base, .sid = sid, .others = others.items, .channels = channels.items, .pins = pins.items, .topics = topics.items };
+        const z = try chat_page.sidebarJSON(a, sb);
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.appendSlice(a, &.{ uid, if (dm) "1" else "0", key, base, sid, try std.fmt.allocPrint(a, "{d}", .{others.items.len}) });
+        for (others.items) |o| try args.appendSlice(a, &.{ o.id, o.name, if (o.online) "1" else "0" });
+        for ([_][]const []const u8{ channels.items, pins.items, topics.items }) |list| {
+            try args.append(a, try std.fmt.allocPrint(a, "{d}", .{list.len}));
+            try args.appendSlice(a, list);
+        }
+        const got = (try roc1(a, .sidebar_json, args.items)).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, got)) differ.add("sidebar: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
+    }
+    try differ.none(compared);
+}
+
+test "Html: text escaped and a blob made script-safe, as webbox's html.zig does" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (try pageTexts(a)) |t| {
+        const ze = try webbox_html.htmlEscape(a, t);
+        const zs = try webbox_html.scriptSafe(a, t);
+        compared += 2;
+        if (!std.mem.eql(u8, ze, (try roc1(a, .html_escape, &.{t})).?)) differ.add("htmlEscape(\"{f}\")", .{std.zig.fmtString(t)});
+        if (!std.mem.eql(u8, zs, (try roc1(a, .script_safe, &.{t})).?)) differ.add("scriptSafe(\"{f}\")", .{std.zig.fmtString(t)});
     }
     try differ.none(compared);
 }

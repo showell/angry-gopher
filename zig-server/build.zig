@@ -195,6 +195,8 @@ pub fn build(b: *std.Build) void {
     twin_tests.root_module.addImport("shale", shale);
     twin_tests.root_module.addImport("host_io", host_io);
     twin_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
+    // The pages' twins build the chrome, which names the bundles by their bytes.
+    for (assets) |a| twin_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
     test_step.dependOn(&b.addRunArtifact(twin_tests).step);
 
     // What decoding a transcript costs, Zig and its Roc twin side by side

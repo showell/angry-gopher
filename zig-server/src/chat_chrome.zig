@@ -98,8 +98,13 @@ pub const Page = struct {
 
     /// Closes the page and answers it, HTML, with `status`.
     pub fn send(self: *Page, req: *std.http.Server.Request, status: std.http.Status) !void {
+        try req.respond(try self.bytes(), .{ .status = status, .extra_headers = &.{http.html_ct} });
+    }
+
+    /// Closes the page: its bytes, whole (what `send` answers).
+    pub fn bytes(self: *Page) ![]const u8 {
         try end(&self.body, self.alloc);
-        try req.respond(self.body.items, .{ .status = status, .extra_headers = &.{http.html_ct} });
+        return self.body.items;
     }
 };
 

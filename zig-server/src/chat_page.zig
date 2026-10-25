@@ -43,22 +43,36 @@ const page_scripts = [_][]const u8{
 /// "/channel/<name>"; the widget is base-shape-agnostic.
 pub fn noTopicsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
+    try sendHtml(req, .ok, try noTopicsHtml(alloc, viewer, base, title));
+}
+
+/// noTopicsPage's bytes, for `viewer` (Roc's twin: roc-webbox chat/Pages.roc).
+pub fn noTopicsHtml(alloc: Alloc, viewer: []const u8, base: []const u8, title: []const u8) ![]const u8 {
     var page = try chrome.page(alloc, "Chat", title, viewer, "chat");
     const b = &page.body;
     try b.print(alloc, "<div id=\"chat-first-topic\" data-conv-base=\"{s}\"></div>", .{try htmlEscape(alloc, base)});
     try b.appendSlice(alloc, try chrome.script(alloc, "chat_add_topic.js"));
     try b.appendSlice(alloc, try chrome.script(alloc, "chat_first_topic.js"));
-    try page.send(req, .ok);
+    return page.bytes();
+}
+
+fn sendHtml(req: *Request, status: std.http.Status, bytes: []const u8) !void {
+    try req.respond(bytes, .{ .status = status, .extra_headers = &.{http.html_ct} });
 }
 
 /// **A 404 THAT SAYS WHY** (metal-vmm QUEUE 156(j)): `what` names what is not
 /// there, and `back` is where to go instead. A page, not a bare "not found".
 pub fn notFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: []const u8, back: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
+    try sendHtml(req, .not_found, try notFoundHtml(alloc, viewer, what, back));
+}
+
+/// notFoundPage's bytes, for `viewer`.
+pub fn notFoundHtml(alloc: Alloc, viewer: []const u8, what: []const u8, back: []const u8) ![]const u8 {
     var page = try chrome.page(alloc, "Chat", "Not here", viewer, "chat");
     const b = &page.body;
     try b.print(alloc, "<p>{s}</p><p><a href=\"{s}\">Go back</a></p>", .{ try htmlEscape(alloc, what), try htmlEscape(alloc, back) });
-    try page.send(req, .not_found);
+    return page.bytes();
 }
 
 // ── the conversation page (boots the prod JS) ────────────────────────────────
@@ -69,9 +83,17 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     // pair. Only convs that persist a cursor (DMs) do this; channels don't.
     if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
     const viewer = try users.getUserName(io, alloc, uid);
-    const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic, now);
+    const sidebar_json = try sidebarJSON(alloc, try sidebarOf(io, alloc, uid, topic, now));
+    try sendHtml(req, .ok, try conversationHtml(alloc, .{ .key = conv.key, .base = conv.base, .sid = topic.sid, .title = topic.title, .uid = uid, .viewer = viewer, .sidebar_json = sidebar_json }));
+}
 
-    var page = try chrome.page(alloc, "Chat", topic.title, viewer, "");
+/// What the conversation page shows, read: the conversation's key and URL
+/// base, the topic, its title, the viewer, and the sidebar's JSON.
+pub const View = struct { key: []const u8, base: []const u8, sid: []const u8, title: []const u8, uid: []const u8, viewer: []const u8, sidebar_json: []const u8 };
+
+/// conversationPage's bytes, from what it read (Roc's twin: chat/Pages.roc).
+pub fn conversationHtml(alloc: Alloc, v: View) ![]const u8 {
+    var page = try chrome.page(alloc, "Chat", v.title, v.viewer, "");
     // doctype + <head> + platform style + colors/theme scripts + top bar +
     // open .app-body-wrap. active="" so no nav link is bolded inside a conv.
     const b = &page.body;
@@ -84,7 +106,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     // data-upload-*: the server's caps and accepted types, the client's only
     // copy (metal-vmm QUEUE 157(d)).
     try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\" data-me-name=\"{s}\" data-upload-image-max=\"{d}\" data-upload-video-max=\"{d}\" data-upload-accept=\"{s}\" data-search-min=\"{d}\">", .{
-        try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid), try htmlEscape(alloc, uid),           try htmlEscape(alloc, viewer),
+        try htmlEscape(alloc, v.key), try htmlEscape(alloc, v.base), try htmlEscape(alloc, v.sid), try htmlEscape(alloc, v.uid),           try htmlEscape(alloc, v.viewer),
         chat_upload.image_max,           chat_upload.video_max,            chat_upload.accept,               @import("search_tokens.zig").min_len,
     });
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
@@ -92,7 +114,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
 
     // left-rail mount + the inline sidebar payload (first paint, no round-trip).
     try b.appendSlice(alloc, "<div id=\"chat-left-sidebar\"></div>");
-    try b.print(alloc, "<script type=\"application/json\" id=\"chat-sidebar-data\">{s}</script>", .{sidebar_json});
+    try b.print(alloc, "<script type=\"application/json\" id=\"chat-sidebar-data\">{s}</script>", .{v.sidebar_json});
 
     try b.appendSlice(alloc, "<div id=\"chat-feed\"></div>");
     try b.appendSlice(alloc, "<div id=\"chat-right-sidebar\"></div></div>");
@@ -100,62 +122,90 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     // sibling bundles, in document order, then close #chat-root + the chrome.
     try b.appendSlice(alloc, "</div>");
     inline for (page_scripts) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
-    try page.send(req, .ok);
+    return page.bytes();
 }
 
-/// buildSidebarJSON is the inline left-rail payload:
-/// conversations = every other authorized user (DM) + every channel the viewer
-/// is in; pinned_sessions = [] (pins not ported yet); sessions = this conv's
-/// topics. The `</`→`<\/` pass is script-tag safety for inline embedding.
-fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) ![]const u8 {
+/// Another member, as the sidebar lists them.
+pub const Other = struct { id: []const u8, name: []const u8, online: bool };
+
+/// What the sidebar shows, read: the viewer, the conversation (`dm` its kind
+/// or a channel's), the topic, every other member, the viewer's channels,
+/// their pins in this conversation, and its topics.
+pub const Sidebar = struct {
+    uid: []const u8,
+    dm: bool,
+    key: []const u8,
+    base: []const u8,
+    sid: []const u8,
+    others: []const Other,
+    channels: []const []const u8,
+    pins: [][]const u8,
+    topics: []const []const u8,
+};
+
+/// The sidebar's data, read for `topic`.
+fn sidebarOf(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) !Sidebar {
     const conv = topic.conv;
+    var others: std.ArrayList(Other) = .empty;
+    for (try users.listAuthorized(io, alloc)) |u| {
+        if (std.mem.eql(u8, u.id, uid)) continue;
+        // online: the partner row's first-paint dot.
+        try others.append(alloc, .{ .id = u.id, .name = u.name, .online = presence.isOnline(u.id, now) });
+    }
+    const channels = try chat_paths.listUserChannels(io, alloc, uid);
+    // Topics split by pinned state: the conv's pins (conv-key form) intersect
+    // the live topic list — stale ids drop out.
+    const pins = try chat_state.pinnedTopics(io, alloc, uid, conv.key);
+    const topics = try chat_paths.listTopics(io, alloc, conv.dir);
+    return .{ .uid = uid, .dm = conv.meta.kind == .dm, .key = conv.key, .base = conv.base, .sid = topic.sid, .others = others.items, .channels = channels, .pins = pins, .topics = topics };
+}
+
+/// sidebarJSON is the inline left-rail payload: conversations = every other
+/// authorized user (DM) + every channel the viewer is in; pinned_sessions and
+/// topics = this conv's topics, pinned or not. The `</`→`<\/` pass is
+/// script-tag safety for inline embedding. Roc's twin: chat/Pages.roc.
+pub fn sidebarJSON(alloc: Alloc, sb: Sidebar) ![]const u8 {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, "{\"conversations\":[");
 
     var first = true;
-    for (try users.listAuthorized(io, alloc)) |u| {
-        if (std.mem.eql(u8, u.id, uid)) continue;
+    for (sb.others) |u| {
         if (!first) try b.append(alloc, ',');
         first = false;
-        const pk = try chat_paths.chatPairKey(alloc, uid, u.id);
-        const active = conv.meta.kind == .dm and std.mem.eql(u8, pk, conv.key);
+        const pk = try chat_paths.chatPairKey(alloc, sb.uid, u.id);
+        const active = sb.dm and std.mem.eql(u8, pk, sb.key);
         try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}", .{
             u.id, std.json.fmt(u.name, .{}), pk, active,
         });
-        // online (omitted when false) — drives the partner row's first-paint dot.
-        if (presence.isOnline(u.id, now)) try b.appendSlice(alloc, ",\"online\":true");
+        // online (omitted when false).
+        if (u.online) try b.appendSlice(alloc, ",\"online\":true");
         try b.append(alloc, '}');
     }
-    for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
+    for (sb.channels) |name| {
         if (!first) try b.append(alloc, ',');
         first = false;
-        const active = conv.meta.kind == .channel and std.mem.eql(u8, name, conv.key);
+        const active = !sb.dm and std.mem.eql(u8, name, sb.key);
         const label = try std.fmt.allocPrint(alloc, "# {s}", .{name});
         try b.print(alloc, "{{\"id\":\"ch:{s}\",\"label\":{f},\"url\":\"/channel/{s}\",\"active\":{}}}", .{
             name, std.json.fmt(label, .{}), name, active,
         });
     }
 
-    // Topics split by pinned state: the conv's
-    // pins (conv-key form) intersect the live topic list — stale ids drop out.
-    const pins = try chat_state.pinnedTopics(io, alloc, uid, conv.key);
-    const topics = try chat_paths.listTopics(io, alloc, conv.dir);
-
     try b.appendSlice(alloc, "],\"pinned_sessions\":[");
     first = true;
-    for (topics) |s| {
-        if (!chat_state.isPinned(pins, s)) continue;
+    for (sb.topics) |s| {
+        if (!chat_state.isPinned(sb.pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        try emitTopicItem(&b, alloc, conv.base, s, topic.sid);
+        try emitTopicItem(&b, alloc, sb.base, s, sb.sid);
     }
     try b.appendSlice(alloc, "],\"topics\":[");
     first = true;
-    for (topics) |s| {
-        if (chat_state.isPinned(pins, s)) continue;
+    for (sb.topics) |s| {
+        if (chat_state.isPinned(sb.pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        try emitTopicItem(&b, alloc, conv.base, s, topic.sid);
+        try emitTopicItem(&b, alloc, sb.base, s, sb.sid);
     }
     try b.appendSlice(alloc, "]}");
 
@@ -180,10 +230,15 @@ fn emitTopicItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []con
 /// honest empty case — a real page, not a redirect into a half-real index.
 pub fn noConversationsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
+    try sendHtml(req, .ok, try noConversationsHtml(alloc, viewer));
+}
+
+/// noConversationsPage's bytes, for `viewer`.
+pub fn noConversationsHtml(alloc: Alloc, viewer: []const u8) ![]const u8 {
     var page = try chrome.page(alloc, "Chat", "Chat", viewer, "chat");
     const b = &page.body;
     try b.appendSlice(alloc, "<p>You do not have any conversations.</p>");
-    try page.send(req, .ok);
+    return page.bytes();
 }
 
 // ── chat-specific templates (shared chrome lives in chat_chrome.zig) ──────────────
