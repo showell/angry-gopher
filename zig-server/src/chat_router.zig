@@ -16,8 +16,9 @@
 //! file primitives, named and parsed by the Roc), the body, the
 //! primitives a reaction and a message are stored and sent by (a line
 //! appended, a topic's count, the markdown render, a message's block stored
-//! with its count and search, the bus), and the cross-page fan-out, which
-//! stays Zig's until C8b, and answers what to send. `handle` sends it once
+//! with its count and search, the bus) and fanned out by (a message's parts
+//! as the one markdown reader finds them, a feed's entry appended, a
+//! surface that failed counted), and answers what to send. `handle` sends it once
 //! the call has ended. **THE HOST HOLDS NO CONVERSATION BETWEEN CALLS**:
 //! each operation on one is handed it (`roc_chat.Conv`) by the Roc.
 
@@ -36,6 +37,9 @@ const recent = @import("recent.zig");
 const store = @import("chat_store.zig");
 const chat_count = @import("chat_count.zig");
 const chat_fanout = @import("chat_fanout.zig");
+const recent_feed = @import("recent_feed.zig");
+const images_store = @import("images_store.zig");
+const code_store = @import("code_store.zig");
 const chat_page = @import("chat_page.zig");
 const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
@@ -160,7 +164,9 @@ pub const Call = struct {
             .now = now_,
             .render = render,
             .store_message = storeMessage,
-            .fan_out = fanOut,
+            .message_parts = messageParts,
+            .append_entry = appendEntry,
+            .fanout_failed = fanoutFailed,
             .header = header,
             .hostile = hostile,
         };
@@ -561,18 +567,61 @@ pub const Call = struct {
         return true;
     }
 
-    /// **THE CROSS-PAGE FAN-OUT, STILL THE ZIG'S** (Host.fan_out!;
-    /// roc-webbox docs/ROC-CHAT.md C8b ports it): chat_fanout's
-    /// fanoutCrossPage, unchanged, after the publish. **STORED IS DONE**: a
-    /// failure here is the fan-out's, counted and said (fanoutFailed), never
-    /// the send's.
-    fn fanOut(ctx: *anyopaque, conv_: roc_chat.Conv, sid_: []const u8, m: roc_chat.Message, index: u64) void {
+    /// **THE FAN-OUT'S PRIMITIVES NEVER FAIL THE REQUEST** (metal-vmm QUEUE
+    /// 172, 156(c)): the Roc fans a message out after its store, and
+    /// **STORED IS DONE**. Each failure goes back to the Roc as its error,
+    /// which the Roc counts for one member's one surface (`fanoutFailed`),
+    /// never kept by `fail`. After a failure of the request (none can follow
+    /// a store) each answers that failure, doing nothing.
+
+    /// **A MESSAGE'S PARTS, AS THE ONE MARKDOWN READER FINDS THEM**
+    /// (Host.message_parts!): recent_feed.recentExcerpt,
+    /// images_store.extractImageTags and code_store.extractCodeBlocks, as
+    /// fanoutCrossPage took them, each made or failed on its own.
+    fn messageParts(ctx: *anyopaque, md: []const u8) roc_chat.Parts {
+        const c = of(ctx);
+        if (c.failed) |e| return .{ .excerpt = .{ .failed = e }, .images = .{ .failed = e }, .code = .{ .failed = e } };
+        return .{
+            .excerpt = if (recent_feed.recentExcerpt(c.alloc, md)) |x| .{ .made = x } else |e| .{ .failed = e },
+            .images = if (images_store.extractImageTags(c.alloc, md)) |tags| .{ .made = tags } else |e| .{ .failed = e },
+            .code = if (codeBlocks(c.alloc, md)) |blocks| .{ .made = blocks } else |e| .{ .failed = e },
+        };
+    }
+
+    fn codeBlocks(alloc: Alloc, md: []const u8) ![]const roc_chat.Block {
+        const found = try code_store.extractCodeBlocks(alloc, md);
+        const out = try alloc.alloc(roc_chat.Block, found.len);
+        for (found, out) |b, *o| o.* = .{ .lang = b.lang, .body = b.body };
+        return out;
+    }
+
+    /// **A FEED'S ENTRY APPENDED** (Host.append_entry!): as images_store
+    /// `appendImagesEntry` and code_store `appendCodeEntry` append theirs,
+    /// the entry's bytes the Roc's. The file is read only to decide whether
+    /// the separator goes first; a read that fails is the append's failure,
+    /// as it was theirs. The seam has refused a path outside the chat root.
+    fn appendEntry(ctx: *anyopaque, path: []const u8, separator: []const u8, entry: []const u8) roc_chat.Appended {
+        const c = of(ctx);
+        if (c.failed) |e| return .{ .failed = e };
+        c.appendedEntry(path, separator, entry) catch |e| return .{ .failed = e };
+        return .appended;
+    }
+
+    fn appendedEntry(c: *Call, path: []const u8, separator: []const u8, entry: []const u8) !void {
+        const p = try std.fs.path.join(c.alloc, &.{ store.chat_root, path });
+        const existing = try webbox.store.readOrEmpty(c.io, c.alloc, p, .unlimited);
+        const bytes = if (existing.len > 0) try std.mem.concat(c.alloc, u8, &.{ separator, entry }) else entry;
+        _ = try webbox.store.append(c.io, c.alloc, p, bytes);
+    }
+
+    /// **A SURFACE THAT FAILED FOR ONE MEMBER, COUNTED AND SAID**
+    /// (Host.fanout_failed!): chat_fanout.fanoutFailed, the operator's count
+    /// and last failure on /admin/host, in its words: "<surface> for member
+    /// <uid>, <error>, on <key>/<sid>".
+    fn fanoutFailed(ctx: *anyopaque, surface: roc_chat.Surface, member_: []const u8, key: []const u8, sid: []const u8, e: anyerror) void {
         const c = of(ctx);
         if (c.dead()) return;
-        const r = c.resolved(conv_) catch |e| return chat_fanout.fanoutFailed("every surface", "every member", e, conv_.key, sid_);
-        const sid = c.alloc.dupe(u8, sid_) catch |e| return chat_fanout.fanoutFailed("every surface", "every member", e, r.key, sid_);
-        const msg = c.chatMessage(m) catch |e| return chat_fanout.fanoutFailed("every surface", "every member", e, r.key, sid);
-        chat_fanout.fanoutCrossPage(c.io, c.alloc, c.bus, r.meta, r.key, sid, msg, msg.uid, index);
+        chat_fanout.fanoutFailed(@tagName(surface), member_, e, key, sid);
     }
 
     fn header(ctx: *anyopaque, name: []const u8) []const []const u8 {

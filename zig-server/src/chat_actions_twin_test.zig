@@ -10,6 +10,7 @@ const chat_router = @import("chat_router.zig");
 const store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const chat_search = @import("chat_search.zig");
 const search_index = @import("search_index.zig");
 const Now = @import("request_time.zig").Now;
@@ -626,7 +627,13 @@ fn getRaw(a: Alloc, target: []const u8, cookie: []const u8) ![]const u8 {
 
 /// Every key a send publishes on in `sendRun`'s site: each topic's, then
 /// each member's notify, sidebar, recent, images and code.
-const send_keys = [_][]const u8{ "1_2/Plans", "1_2/Fresh", "ops/Standup", "ops/Brand", "1_3/Fresh" } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3");
+const send_keys = [_][]const u8{ "1_2/Plans", "1_2/Fresh", "ops/Standup", "ops/Brand", "1_3/Fresh", "1_1/Notes", "1_2/Feeds", "1_4/Ideas" } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3") ++ memberKeys("4");
+
+/// A message for the feeds: image tags (one across a line, one whose alt
+/// needs JSON's escapes, one with no space after `<img`, never a tag), and
+/// fences (a longer one holding a shorter, a quote skipped, a language, one
+/// never closed).
+const feeds_md = "two <img src=\"/a.png\" alt=\"q\\\"x\"> and <IMG\nsrc=\"/b.png\">, not <imgx>\n\n````zig\nconst x = 1;\n```\ninner\n```\n````\n\n~~~ quote\nquoted\n~~~\n\n```c\nint y;\n```\n\n```\nunterminated\nunclosed";
 
 fn memberKeys(comptime uid: []const u8) [5][]const u8 {
     return .{ "ntf:" ++ uid, "sb:" ++ uid, "rec:" ++ uid, "img:" ++ uid, "code:" ++ uid };
@@ -680,9 +687,16 @@ fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, file
         .{ 1, "/channel/ops/Brand/send", "plain zeppelin words", null, true },
         .{ 0, "/channel/ops/Standup/send", "x\r\n\r\n", "\xe2\x80\xa8", false },
         .{ 2, "/chat/c/1_3/Fresh/send", "hi zeppelin", null, false },
+        // The feeds: several image tags (one across a line, one whose alt
+        // needs escaping), fences (a longer one holding a shorter, a quote
+        // skipped, a language, one never closed), in a DM's new topic (the
+        // sidebar's too), a channel of three, and the DM with yourself.
+        .{ 0, "/chat/c/1_2/Feeds/send", feeds_md, null, false },
+        .{ 1, "/channel/ops/Standup/send", "<img src=\"/c.png\">\n\n```sh\nls \"q\" \\\\\n```\n~~~\ntilde\n~~~", null, false },
+        .{ 0, "/chat/c/1_1/Notes/send", "<img src=\"/n.png\">\n\n```\nnote\n```", null, false },
     };
-    const answers = try a.alloc([]const u8, sends.len);
-    for (sends, answers) |s, *got| {
+    const answers = try a.alloc([]const u8, sends.len + 1);
+    for (sends, answers[0..sends.len]) |s, *got| {
         const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, s[1], cookies[s[0]], s[2], s[3], if (s[4]) .async_ else .sync));
         got.* = try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out });
     }
@@ -694,6 +708,16 @@ fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, file
         const r = try serveOn(a, io, &hub, oracle, try getRaw(a, try std.fmt.allocPrint(a, "/chat/search/messages?word={s}", .{word}), c));
         try searches.print(a, "{?t} {s}\n", .{ r.err, r.out });
     };
+    // **A NAME THAT WILL NOT READ LABELS NO ROW** (recentWhere's
+    // absent-ok), last, as search's roster would fail on it: member 4's name is a folder, which a new topic never
+    // reads, so its "hi" fans out with member 1's Recent row named for no
+    // one, and is sent all the same.
+    _ = try harness.memberSession(a, io, "4", "Dee");
+    const name4 = try std.fs.path.join(a, &.{ users.auth_root, "4", "name" });
+    try harness.UidSite.disk.remove(io, a, name4);
+    try std.Io.Dir.cwd().createDirPath(io, name4);
+    const made = try serveOn(a, io, &hub, oracle, try reactRaw(a, "/chat/c/1_4/new", cookies[0], "topic=Ideas"));
+    answers[sends.len] = try std.fmt.allocPrint(a, "{?t} {s}", .{ made.err, made.out });
     return .{ .answers = answers, .files = try tree(a, io, site.base), .frames = try drained(a, &hub, &send_keys, &subs), .searches = searches.items };
 }
 
@@ -723,7 +747,27 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
     // escaped; a first message's topic-added on both DM members' sidebars
     // and every channel member's; the frames with their escaped names and
     // cids; the feeds; search finding what landed after it was built.
-    try testing.expectEqual(@as(usize, 5), std.mem.count(u8, try std.mem.join(a, "", roc.answers), "303 See Other"));
+    try testing.expectEqual(@as(usize, 8), std.mem.count(u8, try std.mem.join(a, "", roc.answers), "303 See Other"));
+    // The feeds (C8b): each member's images.md and code.md as the Zig wrote
+    // them (a tag one line, a longer fence holding a shorter, the quote
+    // skipped, the fence never closed closed), the DM with yourself one
+    // entry each, not two; every member of the channel's.
+    for ([_][]const u8{
+        "<IMG src=\"/b.png\">",
+        "```zig\nconst x = 1;\n```\ninner\n```\n```\n\n```c\nint y;\n```\n\n```\nunterminated\nunclosed\n```",
+        "```sh\nls \"q\" \\\\\n```\n\n```\ntilde\n```",
+    }) |want| if (std.mem.indexOf(u8, roc.files, want) == null) {
+        std.debug.print("not in the files: {f}\n", .{std.zig.fmtString(want)});
+        return error.TestUnexpectedResult;
+    };
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, roc.files, "source MSG_Notes_1 in 1_1:"));
+    try testing.expectEqual(@as(usize, 6), std.mem.count(u8, roc.files, "source MSG_Standup_4 in ops:"));
+    try testing.expectEqual(@as(usize, 4), std.mem.count(u8, roc.files, "source MSG_Feeds_1 in 1_2:"));
+    for ([_][]const u8{ "\"url\":\"/chat/c/1_4/Ideas\",\"who\":\"You\",\"topic\":\"Ideas\"", "\"where\":\"to \",\"topic\":\"Notes\"","\"kind\":\"topic-added\",\"conv\":\"1_1\",\"sid\":\"Notes\"", "\"images\":[\"<img src=\\\"/a.png\\\" alt=\\\"q\\\\\\\"x\\\">\",\"<IMG\\nsrc=\\\"/b.png\\\">\"]" }) |want|
+        if (std.mem.indexOf(u8, roc.frames, want) == null) {
+            std.debug.print("not in the frames: {f}\n", .{std.zig.fmtString(want)});
+            return error.TestUnexpectedResult;
+        };
     try testing.expectEqual(@as(usize, 2), std.mem.count(u8, try std.mem.join(a, "", roc.answers), "204 No Content"));
     for ([_][]const u8{
         "MSG_Plans_3\nfrom: Q\"uote",
@@ -820,6 +864,73 @@ test "a send whose transcript will not append, whose count fails, or whose sende
             return error.TestUnexpectedResult;
         }
     }
+}
+
+/// Sends carrying an image and code, in DM 1_2 and channel ops (1, 2, 3),
+/// on a site where member 2's images.md is a folder, the old way or the
+/// Roc's: every answer, frame and file, how many fan-out failures were
+/// counted, and the last one said, as /admin/host says it.
+fn feedFailRun(a: Alloc, io: Io, oracle: bool) !struct { answers: []const u8, frames: []const u8, files: []const u8, counted: usize, last: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n3\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ store.chat_root, "users", "2", "images.md" }));
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    var hub = webbox.bus.Hub.init(io, a);
+    const keys = [_][]const u8{ "1_2/Plans", "ops/Standup" } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3");
+    var subs: [keys.len]*webbox.bus.Subscriber = undefined;
+    for (keys, &subs) |k, *s| s.* = try hub.open(k);
+    const before = chat_fanout.fanout_failures;
+    var answers: std.ArrayList(u8) = .empty;
+    for ([_][]const u8{ "/chat/c/1_2/Plans/send", "/channel/ops/Standup/send" }) |target| {
+        const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, target, steve, "<img src=\"/x.png\">\n\n```\ncode\n```", null, .sync));
+        try answers.print(a, "{?t} {s}\n", .{ r.err, harness.status(r.out) });
+    }
+    const text = try chat_fanout.fanoutText(a);
+    const last = text[(std.mem.indexOf(u8, text, "; the last: ") orelse return error.TestUnexpectedResult) + "; the last: ".len ..];
+    return .{ .answers = answers.items, .frames = try drained(a, &hub, &keys, &subs), .files = try tree(a, io, site.base), .counted = chat_fanout.fanout_failures - before, .last = last };
+}
+
+test "a member whose images.md will not take an entry: that surface fails for that member, counted and said in the old Zig's words, and their code, every other member's surfaces and the send are whole (metal-vmm QUEUE 172, 156(c)), the same both ways" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const zig = try feedFailRun(a, io, true);
+    const roc = try feedFailRun(a, io, false);
+    var differ: usize = 0;
+    inline for (.{ "answers", "frames", "files", "last" }) |what| if (!std.mem.eql(u8, @field(zig, what), @field(roc, what))) {
+        differ += 1;
+        std.debug.print(what ++ " differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(@field(zig, what)), std.zig.fmtString(@field(roc, what)) });
+    };
+    if (zig.counted != roc.counted) {
+        differ += 1;
+        std.debug.print("fan-out failures counted: zig {d}, roc {d}\n", .{ zig.counted, roc.counted });
+    }
+    try testing.expectEqual(@as(usize, 0), differ);
+    // It reached what it means to: both sends done, one failure each, the
+    // last said in fanoutFailed's words; member 2's code and every other
+    // member's images arrived, member 2's images never sent.
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, roc.answers, "303 See Other"));
+    try testing.expectEqual(@as(usize, 2), roc.counted);
+    try testing.expectEqualStrings("images for member 2, IsDir, on ops/Standup", roc.last);
+    for ([_][]const u8{ "== code:2\n", "== img:1\n", "== img:3\n", "== rec:2\n", "== ntf:2\n" }) |key| if (std.mem.indexOf(u8, roc.frames, key) == null) {
+        std.debug.print("nothing published on {s}\n", .{key});
+        return error.TestUnexpectedResult;
+    };
+    try testing.expect(std.mem.indexOf(u8, roc.frames, "== img:2\n") == null);
+    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, roc.files, "Sent by Steve at 2025-10-25T13:46:40Z, source MSG_Standup_2 in ops:\n```\ncode\n```"));
 }
 
 /// The most one request's memory held, served the old way or the Roc's: the

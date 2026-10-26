@@ -2,6 +2,16 @@
 //! topic's live stream and every member's cross-page surfaces (notify, sidebar,
 //! recent, images, code), each failure counted (metal-vmm QUEUE 156(c), 172;
 //! split from chat_store.zig by 174).
+//!
+//! **A SECOND IMPLEMENTATION, FOR NOW** (roc-webbox docs/ROC-CHAT.md C8b): a
+//! send through the Roc router fans out by the Roc's (chat/Fanout.roc), over
+//! the host's `message_parts!`, `append_entry!` and `fanout_failed!`
+//! (chat_router.zig). `fanoutCrossPage` stays for the Zig's own writers,
+//! `appendMessage` (login's welcome DM, docs' post to chat), until they move
+//! (C9-C10), and as the twins' oracle: chat_twin_test.zig holds each encoder
+//! to the Roc's, chat_actions_twin_test.zig a whole send's frames, feeds and
+//! failures both ways. The count and the last failure stay here, the
+//! process's, said on /admin/host by both.
 
 const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
@@ -97,19 +107,10 @@ pub fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key
     const src_url = images_store.imagesSourceURL(alloc, base, msg.id);
 
     // notify text is viewer-invariant (rec_url is the per-conv topic URL, the
-    // notify-strip link). DMs read "X sent you a message on <sid>."; channels
-    // read "X posted to <key> > <sid>."
-    const notify_text = if (meta.kind == .channel)
-        std.fmt.allocPrint(alloc, "{s} posted to {s} > {s}.", .{ msg.from, conv_key, sid })
-    else
-        std.fmt.allocPrint(alloc, "{s} sent you a message on {s}.", .{ msg.from, sid });
+    // notify-strip link).
+    const notify_text = notifyText(alloc, meta.kind, msg.from, conv_key, sid);
     // topic-added (sidebar) — only on the topic's first message; viewer-invariant.
-    const topic_added: Alloc.Error![]const u8 = if (index == 0)
-        std.fmt.allocPrint(alloc, "{{\"kind\":\"topic-added\",\"conv\":{f},\"sid\":{f},\"url\":{f}}}", .{
-            std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}), std.json.fmt(rec_url, .{}),
-        })
-    else
-        "";
+    const topic_added: Alloc.Error![]const u8 = if (index == 0) topicAddedEvent(alloc, conv_key, sid, rec_url) else "";
 
     const fan = Fan{
         .io = io,
@@ -168,12 +169,7 @@ const Fan = struct {
     /// thread you're not actively staring at.
     fn notify(f: *const Fan, uid: []const u8) !void {
         if (std.mem.eql(u8, uid, f.from_id)) return;
-        var nj: std.ArrayList(u8) = .empty;
-        try nj.print(f.alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
-            std.json.fmt(f.conv_key, .{}),        std.json.fmt(f.sid, .{}),
-            std.json.fmt(try f.notify_text, .{}), std.json.fmt(f.rec_url, .{}),
-        });
-        f.bus.publish(try notifyBusKey(f.alloc, uid), nj.items);
+        f.bus.publish(try notifyBusKey(f.alloc, uid), try notifyEvent(f.alloc, f.conv_key, f.sid, try f.notify_text, f.rec_url));
     }
 
     /// topic-added to every member on the first message only.
@@ -217,10 +213,34 @@ const Fan = struct {
     }
 };
 
+/// The notify strip's line: DMs read "X sent you a message on <sid>.";
+/// channels read "X posted to <key> > <sid>.".
+pub fn notifyText(alloc: Alloc, kind: chat_store.ConvKind, from: []const u8, conv_key: []const u8, sid: []const u8) Alloc.Error![]const u8 {
+    return if (kind == .channel)
+        std.fmt.allocPrint(alloc, "{s} posted to {s} > {s}.", .{ from, conv_key, sid })
+    else
+        std.fmt.allocPrint(alloc, "{s} sent you a message on {s}.", .{ from, sid });
+}
+
+/// The notify stream's event (`ntf:<uid>`).
+pub fn notifyEvent(alloc: Alloc, conv_key: []const u8, sid: []const u8, text: []const u8, url: []const u8) Alloc.Error![]const u8 {
+    return std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
+        std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}),
+        std.json.fmt(text, .{}),     std.json.fmt(url, .{}),
+    });
+}
+
+/// The sidebar stream's topic-added (`sb:<uid>`), a topic's first message.
+pub fn topicAddedEvent(alloc: Alloc, conv_key: []const u8, sid: []const u8, url: []const u8) Alloc.Error![]const u8 {
+    return std.fmt.allocPrint(alloc, "{{\"kind\":\"topic-added\",\"conv\":{f},\"sid\":{f},\"url\":{f}}}", .{
+        std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}), std.json.fmt(url, .{}),
+    });
+}
+
 /// recentWhere is the per-recipient context label the What column reads as
 /// "message <where> (<topic>)": a channel names itself ("in <name>"); a DM names
 /// the OTHER party ("to <name>").
-fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
+pub fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
     if (meta.kind == .channel) return std.fmt.allocPrint(alloc, "in {s}", .{conv_key});
     var other: []const u8 = "";
     for (meta.members) |m| {

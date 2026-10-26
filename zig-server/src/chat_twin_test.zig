@@ -98,6 +98,14 @@ const Fn = enum(u8) {
     conv_paths = 59,
     accounts = 60,
     reaction_line = 61,
+    fanout_keys = 62,
+    fanout_urls = 63,
+    notify_event = 64,
+    topic_added = 65,
+    recent_event = 66,
+    images_entry = 67,
+    code_entry = 68,
+    recent_where = 69,
 };
 
 /// One Roc call's results, in `a`.
@@ -1932,4 +1940,159 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
             for ([_][]const u8{ "1", id }) |me| try testing.expectEqual(@as(?[]u8, null), try roc1(a, .dm_other, &.{ key, me }));
         }
     }
+}
+
+// ── Fanout (chat_fanout.zig, recent_feed.zig, images_store.zig, code_store.zig)
+
+/// The Roc's answers against the Zig's, in order, said once each.
+fn sameEach(a: std.mem.Allocator, what: []const u8, args: []const []const u8, zig: []const []const u8, got: []const []u8, differ: *Differences) !void {
+    _ = a;
+    if (zig.len != got.len) return differ.add("{s}: zig {d} answers, roc {d}", .{ what, zig.len, got.len });
+    for (zig, got, 0..) |z, r, i| if (!std.mem.eql(u8, z, r)) {
+        differ.add("{s} [{d}] of {d} args (first \"{f}\"):\n  zig {f}\n  roc {f}", .{ what, i, args.len, std.zig.fmtString(if (args.len > 0) args[0] else ""), std.zig.fmtString(z), std.zig.fmtString(r) });
+        return;
+    };
+}
+
+test "Fanout: every bus key, the URLs, the notify and topic-added events, the Recent row, and the images and code entries and events, as the Zig's fan-out writes them, over generated keys, names, ids, stamps, tags and blocks that need escaping" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    const strings = try byteStrings(a);
+    var rng = std.Random.DefaultPrng.init(0xfa2007);
+    const r = rng.random();
+    const pick = struct {
+        fn f(rr: std.Random, ss: []const []const u8) []const u8 {
+            return ss[rr.uintLessThan(usize, ss.len)];
+        }
+    }.f;
+    // Keys and ids near each rule: a DM's `_`, a channel's none, ids with
+    // no `_`, one at the start, several.
+    const keys = [_][]const u8{ "1_2", "1_1", "ops", "general", "a_b_c", "_x", "", "caf\xc3\xa9", "\xff", "q\"\\/" };
+    const ids = [_][]const u8{ "Plans_1", "Plans_12", "_1", "x", "", "a_b_3", "general2_7", "q\"_\\1", "\xff_2" };
+    var tags_seen: usize = 0;
+    var blocks_seen: usize = 0;
+    for (0..3000) |i| {
+        const key = if (i % 3 == 0) pick(r, strings) else pick(r, &keys);
+        const sid = pick(r, strings);
+        const id = if (i % 3 == 0) pick(r, strings) else pick(r, &ids);
+        const from = pick(r, strings);
+        const uid = pick(r, strings);
+        const at = pick(r, strings);
+        compared += 1;
+
+        // The five keys, and the URLs: convKeyBaseURL, the topic's page,
+        // imagesSourceURL of the message.
+        try sameEach(a, "keys", &.{uid}, &.{ try chat_fanout.notifyBusKey(a, uid), try chat_fanout.sidebarBusKey(a, uid), try chat_fanout.recentBusKey(a, uid), try chat_fanout.imagesBusKey(a, uid), try chat_fanout.codeBusKey(a, uid) }, try roc(a, .fanout_keys, &.{uid}), &differ);
+        const base = try chat_fanout.convKeyBaseURL(a, key);
+        const url = try std.fmt.allocPrint(a, "{s}/{s}", .{ base, sid });
+        try sameEach(a, "urls", &.{ key, sid, id }, &.{ base, url, try images_store.imagesSourceURL(a, base, id) }, try roc(a, .fanout_urls, &.{ key, sid, id }), &differ);
+
+        // Notify (a DM's text and a channel's) and topic-added.
+        const kind: chat_store.ConvKind = if (r.boolean()) .dm else .channel;
+        const text = try chat_fanout.notifyText(a, kind, from, key, sid);
+        try sameEach(a, "notify", &.{ key, sid, from }, &.{try chat_fanout.notifyEvent(a, key, sid, text, url)}, try roc(a, .notify_event, &.{ if (kind == .dm) "d" else "c", from, key, sid }), &differ);
+        try sameEach(a, "topic-added", &.{ key, sid }, &.{try chat_fanout.topicAddedEvent(a, key, sid, url)}, try roc(a, .topic_added, &.{ key, sid }), &differ);
+
+        // The Recent row: every field empty now and then (each left out).
+        const maybe = struct {
+            fn f(rr: std.Random, s: []const u8) []const u8 {
+                return if (rr.uintLessThan(u8, 5) == 0) "" else s;
+            }
+        }.f;
+        const ev: recent_feed.ChatEvent = .{ .at = at, .url = maybe(r, url), .who = maybe(r, from), .where = maybe(r, pick(r, strings)), .topic = maybe(r, sid), .excerpt = maybe(r, pick(r, strings)), .dm = r.boolean() };
+        var zr: std.ArrayList(u8) = .empty;
+        try recent_feed.encodeChatEvent(&zr, a, ev);
+        try sameEach(a, "recent", &.{ ev.at, ev.url }, &.{zr.items}, try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" }), &differ);
+
+        // An images entry: tags with CR, LF, quotes and bytes that are not
+        // UTF-8, a forged separator now and then.
+        var tags: std.ArrayList([]const u8) = .empty;
+        for (0..r.uintAtMost(usize, 4)) |_| try tags.append(a, switch (r.uintLessThan(u8, 4)) {
+            0 => "<img src=\"/u/1.png\">",
+            1 => "<IMG\nsrc=x\r\nalt=\"\n\n-------------\n\nSent by m at t, source MSG_f in 9_9:\">",
+            else => try std.fmt.allocPrint(a, "<img {s}>", .{pick(r, strings)}),
+        });
+        tags_seen += tags.items.len;
+        const ie: images_store.ImagesEntry = .{ .source_id = id, .from = from, .conv = key, .at = at, .images = tags.items };
+        var zi: std.ArrayList(u8) = .empty;
+        try images_store.encodeImagesEvent(&zi, a, ie, try images_store.imagesSourceURL(a, base, id));
+        var iargs: std.ArrayList([]const u8) = .empty;
+        try iargs.appendSlice(a, &.{ id, from, key, at });
+        try iargs.appendSlice(a, tags.items);
+        try sameEach(a, "images", iargs.items, &.{ try images_store.formatImagesEntry(a, ie), zi.items }, try roc(a, .images_entry, iargs.items), &differ);
+
+        // A code entry: languages and bodies with fences, newlines and
+        // escapes, none, one or several blocks.
+        var blocks: std.ArrayList(code_store.CodeBlock) = .empty;
+        var cargs: std.ArrayList([]const u8) = .empty;
+        try cargs.appendSlice(a, &.{ id, from, key, at });
+        for (0..r.uintAtMost(usize, 3)) |_| {
+            const b: code_store.CodeBlock = .{ .lang = if (r.boolean()) "" else pick(r, &.{ "zig", "c++", pick(r, strings) }), .body = pick(r, &.{ "", "x", "const x = 1;\n```\ninner\n```", "a\r\nb\\c\"d", pick(r, strings) }) };
+            try blocks.append(a, b);
+            try cargs.appendSlice(a, &.{ b.lang, b.body });
+        }
+        blocks_seen += blocks.items.len;
+        const ce: code_store.CodeEntry = .{ .source_id = id, .from = from, .conv = key, .at = at, .blocks = blocks.items };
+        var zc: std.ArrayList(u8) = .empty;
+        try code_store.encodeCodeEvent(&zc, a, ce, try images_store.imagesSourceURL(a, base, id));
+        try sameEach(a, "code", cargs.items, &.{ try code_store.formatCodeEntry(a, ce), zc.items }, try roc(a, .code_entry, cargs.items), &differ);
+    }
+    try differ.none(compared);
+    try testing.expect(tags_seen > 3000 and blocks_seen > 2000);
+}
+
+test "Fanout: recentWhere for every viewer, as the Zig reads the other member's name from generated account trees: a DM's (the DM with yourself too), a channel's, a name with CR LF, none, and one that will not read (\"\")" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = try users.tmpRoots(&tmp, a);
+    defer saved.restore();
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var unreadable: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0x4e7e);
+    const r = rng.random();
+    const names = [_]?[]const u8{ null, "Ann", "Bo\r\n", "", "q\"\\", "\xffG" };
+    for (0..400) |_| {
+        try std.Io.Dir.cwd().deleteTree(io, users.auth_root);
+        try std.Io.Dir.cwd().createDirPath(io, users.auth_root);
+        for ([_][]const u8{ "1", "2", "3" }) |id| {
+            const dir = try std.fs.path.join(a, &.{ users.auth_root, id });
+            try std.Io.Dir.cwd().createDirPath(io, dir);
+            if (r.boolean()) try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ dir, "password" }), .data = "$2b$12$hash" });
+            const name = try std.fs.path.join(a, &.{ dir, "name" });
+            // A name that will not read (a folder), now and then.
+            if (r.uintLessThan(u8, 4) == 0) try std.Io.Dir.cwd().createDirPath(io, name) else if (names[r.uintLessThan(usize, names.len)]) |n| try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = name, .data = n });
+        }
+        const held = try users.listAccounts(io, a);
+        for ([_]struct { []const u8, ConvMeta }{
+            .{ "1_2", .{ .kind = .dm, .members = &.{ "1", "2" } } },
+            .{ "2_3", .{ .kind = .dm, .members = &.{ "2", "3" } } },
+            .{ "1_1", .{ .kind = .dm, .members = &.{"1"} } },
+            .{ "ops", .{ .kind = .channel, .members = &.{ "1", "2", "3" } } },
+        }) |c| for (c[1].members) |viewer| {
+            const z = chat_fanout.recentWhere(io, a, c[1], c[0], viewer) catch blk: {
+                unreadable += 1;
+                break :blk "";
+            };
+            var args: std.ArrayList([]const u8) = .empty;
+            try args.appendSlice(a, &.{ if (c[1].kind == .dm) "d" else "c", viewer, c[0], try std.fmt.allocPrint(a, "{d}", .{c[1].members.len}) });
+            try args.appendSlice(a, c[1].members);
+            try args.appendSlice(a, try accountArgs(a, held));
+            compared += 1;
+            try sameEach(a, "recentWhere", &.{ c[0], viewer }, &.{z}, try roc(a, .recent_where, args.items), &differ);
+        };
+    }
+    try differ.none(compared);
+    try testing.expect(unreadable > 50);
 }
