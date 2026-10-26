@@ -11,8 +11,9 @@
 //!
 //! **A TOPIC'S REACTIONS, REACT, PIN AND UNPIN ARE THE ROC'S** (C4): it
 //! serves them itself, asking `Call` (below) for presence, the reads its
-//! lookup of the conversation decides on (O2: an account, a name, a
-//! channel's members, the topics), the body and the store's writes, which
+//! lookup of the conversation decides on (O2: an account, a name; a
+//! channel's member file and the topics' folder by the file primitives,
+//! named and parsed by the Roc), the body and the store's writes, which
 //! stay Zig's until C8, and answers what to send. `handle` sends it once
 //! the call has ended. **THE HOST HOLDS NO CONVERSATION BETWEEN CALLS**:
 //! each operation on one is handed it (`roc_chat.Conv`) by the Roc.
@@ -132,9 +133,7 @@ pub const Call = struct {
             .presence = presence_,
             .account = account,
             .name = nameOf,
-            .channel_members = channelMembers,
             .body = body,
-            .reactions = reactions_,
             .raw = raw,
             .links = links,
             .recent = recentRows,
@@ -142,14 +141,14 @@ pub const Call = struct {
             .read = read,
             .write = write,
             .remove = remove,
+            .list = list,
             .fail = refuse,
+            .malformed_channel = malformedChannel,
             .page = page,
             .srcs = srcs,
             .me = me,
             .viewer = viewerName,
             .now = now_,
-            .topics = topics,
-            .channel_rosters = channelRosters,
             .members = members,
             .append = append,
             .header = header,
@@ -214,15 +213,6 @@ pub const Call = struct {
         return users.getUserName(c.io, c.alloc, id) catch |e| c.nothing(e);
     }
 
-    /// Channel `name_`'s members, or none when there is no such channel.
-    /// A member file that is malformed is the request's failure.
-    fn channelMembers(ctx: *anyopaque, name_: []const u8) []const []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return &.{};
-        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no channel" is none.
-        return (chat_paths.channelMembers(c.io, c.alloc, name_) catch |e| return c.none(e)) orelse &.{};
-    }
-
     /// **THE CONVERSATION THE ROC FOUND, AS THE STORE TAKES IT**: where it
     /// is on disk (the one thing the host adds: a path), its kind and
     /// members, key and base as the Roc handed them, copied out of the
@@ -266,20 +256,6 @@ pub const Call = struct {
         };
     }
 
-    fn reactions_(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) ?[]const u8 {
-        const c = of(ctx);
-        if (c.dead()) return null;
-        const t = c.address(conv_, sid) catch |e| {
-            c.fail(e);
-            return null;
-        };
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return store.readReactions(c.io, c.alloc, t.dir, t.sid) catch |e| {
-            c.fail(e);
-            return null;
-        };
-    }
-
     /// Topic `sid`'s transcript in `conv_`, held for the answer: whether there is
     /// one.
     fn raw(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) bool {
@@ -318,9 +294,11 @@ pub const Call = struct {
         return out.items;
     }
 
-    /// **THE FILE PRIMITIVES** (Host.read!, Host.write!, Host.remove!): a
-    /// file under the chat root, its name and its format the Roc's (the
-    /// member's bookmarks, pins and feeds: ChatState.roc, Feeds.roc). The
+    /// **THE FILE PRIMITIVES** (Host.read!, Host.write!, Host.remove!,
+    /// Host.list!): a file or folder under the chat root, its name and its
+    /// format the Roc's (the member's bookmarks, pins and feeds: ChatState.roc,
+    /// Feeds.roc; a conversation's topics, a channel's members, every
+    /// roster, a topic's reactions: Paths.roc). The
     /// seam has refused a path that would leave the root (roc_chat
     /// `underRoot`); here it is only joined to it. Missing is nothing there
     /// (webbox.store.readOrNull: not found, or through a file); every other
@@ -358,11 +336,50 @@ pub const Call = struct {
         return true;
     }
 
-    /// The seam's failure of the request (a path outside the chat root):
+    /// **A FOLDER UNDER THE CHAT ROOT** (Host.list!): its entries as
+    /// webbox.store.list gives them, in the disk's order. store.list holds a
+    /// folder that is not there empty, and fails one that is a file (or
+    /// through one: error.NotDir), which fails the request here, never read
+    /// as nothing. An empty listing is told apart from a folder not there
+    /// by `store.has`, so `.missing` means nothing there.
+    fn list(ctx: *anyopaque, path: []const u8) roc_chat.Listing {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unlisted(e);
+        // absent-ok: not read as absence: a failed listing is kept and returned once the call ends; only "no folder" is missing.
+        const entries = webbox.store.list(c.io, c.alloc, p) catch |e| return c.unlisted(e);
+        // absent-ok: the same.
+        if (entries.len == 0 and !(webbox.store.has(c.io, c.alloc, p) catch |e| return c.unlisted(e))) return .missing;
+        const out = c.alloc.alloc(roc_chat.Entry, entries.len) catch |e| return c.unlisted(e);
+        for (entries, out) |e, *o| o.* = .{ .name = e.name, .kind = switch (e.kind) {
+            .directory => .dir,
+            .file => .file,
+            .other => .other,
+        } };
+        return .{ .found = out };
+    }
+
+    /// `fail`, answering the Roc that the listing failed.
+    fn unlisted(c: *Call, e: anyerror) roc_chat.Listing {
+        c.fail(e);
+        return .failed;
+    }
+
+    /// The seam's failure of the request (a path outside the chat root), and
+    /// the Roc's own (Host.fail!: a malformed channel on its own route):
     /// kept as every hosted function's is, the first one kept.
     fn refuse(ctx: *anyopaque, e: anyerror) void {
         const c = of(ctx);
         if (!c.dead()) c.fail(e);
+    }
+
+    /// A channel the Roc's listing skipped as malformed, counted for
+    /// /admin/host (chat_paths.countMalformed: the operator's count, kept
+    /// for the process's life).
+    fn malformedChannel(ctx: *anyopaque, name_: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        chat_paths.countMalformed(name_);
     }
 
     fn react(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, msg: u64, emoji: []const u8, on: bool) roc_chat.Reacted {
@@ -444,39 +461,6 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return 0;
         return c.now.unixSecs();
-    }
-
-    fn topics(ctx: *anyopaque, family: roc_chat.Family, key: []const u8) []const []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return &.{};
-        const dir = switch (family) {
-            .dm => chat_paths.dmConvDir(c.alloc, key),
-            .channel => chat_paths.channelConvDir(c.alloc, key),
-            else => std.debug.panic("Host.topics!: family {t}", .{family}),
-        } catch |e| return c.none(e);
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return chat_paths.listTopics(c.io, c.alloc, dir) catch |e| c.none(e);
-    }
-
-    /// Every channel and its members, flat as `name, count, member...` each,
-    /// in the listing's order; a malformed one skipped and counted, as every
-    /// listing does (chat_paths.channelRosters: that bookkeeping is the
-    /// operator's). Which are the member's, and their order, is the Roc's
-    /// (Paths.member_channels). One call hands over every roster, not one
-    /// call per channel: the listing and the reads stay one pass on the
-    /// host, and the Roc asks once however many channels there are.
-    fn channelRosters(ctx: *anyopaque) []const []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return &.{};
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const rosters = chat_paths.channelRosters(c.io, c.alloc) catch |e| return c.none(e);
-        var out: std.ArrayList([]const u8) = .empty;
-        for (rosters) |r| {
-            const count = std.fmt.allocPrint(c.alloc, "{d}", .{r.members.len}) catch |e| return c.none(e);
-            out.appendSlice(c.alloc, &.{ r.name, count }) catch |e| return c.none(e);
-            out.appendSlice(c.alloc, r.members) catch |e| return c.none(e);
-        }
-        return out.items;
     }
 
     fn members(ctx: *anyopaque) []const []const u8 {

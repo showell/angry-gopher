@@ -792,6 +792,88 @@ test "route: a chat request whose asker cannot be read is a 500, never a sign-in
     }
 }
 
+/// The bytes `method target` answered and the error the route returned, the
+/// Roc serving or, with `oracle`, the old Zig.
+fn answeredBy(a: std.mem.Allocator, io: Io, oracle: bool, method: []const u8, target: []const u8, cookies: []const u8) !struct { out: []const u8, err: anyerror } {
+    const chat_router = @import("chat_router.zig");
+    chat_router.test_oracle = oracle;
+    defer chat_router.test_oracle = false;
+    const raw = try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{ method, target, cookies });
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    const err = if (router.route(&req, io, a, &b)) |_| return error.TestExpectedError else |e| e;
+    try out.writer.flush();
+    return .{ .out = out.written(), .err = err };
+}
+
+test "route: a malformed channel on its own route is the old Zig's answer, byte for byte, and its error (the Roc parses the member file and fails the request by its reason)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const file = try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "bad.channel" });
+    try harness.writeTranscript(a, io, "channels/bad", "Standup", &.{"one"});
+    var compared: usize = 0;
+    for ([_][]const u8{ "1\nnot a uid\n", "1\n../../x\n", "1\n3 # Claude\n", "1\n2\n1\n", "007\n", "+7\n" }) |bad| {
+        try harness.UidSite.disk.write(io, a, file, bad, .{});
+        for ([_][2][]const u8{ .{ "GET", "/channel/bad" }, .{ "GET", "/channel/bad/Standup" }, .{ "GET", "/channel/bad/Standup/reactions" }, .{ "POST", "/channel/bad/Standup/pin" }, .{ "POST", "/channel/bad/new" } }) |ask| {
+            const before = chat_paths.malformed_channels;
+            const roc = try answeredBy(a, io, false, ask[0], ask[1], steve);
+            const zig = try answeredBy(a, io, true, ask[0], ask[1], steve);
+            try testing.expectEqual(error.MalformedChannel, roc.err);
+            try testing.expectEqual(zig.err, roc.err);
+            try testing.expectEqualStrings(zig.out, roc.out);
+            try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
+            // Its own route refuses it; only a listing counts it.
+            try testing.expectEqual(before, chat_paths.malformed_channels);
+            compared += 1;
+        }
+    }
+    try testing.expectEqual(@as(usize, 30), compared);
+}
+
+test "route: a topics folder that is not there is no topics; one that is a file fails the request (Host.list!: missing and failed are two answers)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    // 1_2 has no folder at all, 1_3 an empty one: both are the page that
+    // offers a topic, as the old Zig's.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_3"), "sessions" }));
+    for ([_][]const u8{ "/chat/c/1_2", "/chat/c/1_3" }) |target| {
+        const got = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ target, steve }));
+        try testing.expectEqualStrings("200 OK", harness.status(got));
+    }
+    // A folder of channels that is a file: /chat/msg cannot list them.
+    const chat_store = @import("chat_store.zig");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels" }), "", .{});
+    const roc = try answeredBy(a, io, false, "GET", "/chat/msg/Standup_1", steve);
+    try testing.expectEqual(error.NotDir, roc.err);
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
+}
+
 test "route: /chat/msg skips a malformed channel and counts it for /admin/host; a roster that will not read is a 500, never a topic not found" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

@@ -182,6 +182,16 @@ var malformed_last_buf: [64]u8 = undefined;
 
 pub var malformed_last: []const u8 = "";
 
+/// Channel `name` counted as one a listing skipped as malformed: the count,
+/// and the last one's name (its first 64 bytes). The Roc's listing asks it
+/// too (roc-webbox Host.malformed_channel!).
+pub fn countMalformed(name: []const u8) void {
+    malformed_channels += 1;
+    const n = @min(name.len, malformed_last_buf.len);
+    @memcpy(malformed_last_buf[0..n], name[0..n]);
+    malformed_last = malformed_last_buf[0..n];
+}
+
 /// The malformed channels as /admin/host shows them.
 pub fn malformedText(alloc: Alloc) ![]const u8 {
     if (malformed_channels == 0) return "none";
@@ -211,10 +221,7 @@ pub fn channelRosters(io: Io, alloc: Alloc) ![]Roster {
         const name = entry.name[0 .. entry.name.len - ".channel".len];
         const members = (channelMembers(io, alloc, name) catch |e| switch (e) {
             error.MalformedChannel => {
-                malformed_channels += 1;
-                const n = @min(name.len, malformed_last_buf.len);
-                @memcpy(malformed_last_buf[0..n], name[0..n]);
-                malformed_last = malformed_last_buf[0..n];
+                countMalformed(name);
                 continue;
             },
             else => return e,

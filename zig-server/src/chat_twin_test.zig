@@ -90,6 +90,11 @@ const Fn = enum(u8) {
     bookmark = 52,
     bookmark_changed = 53,
     state_paths = 54,
+    topics = 55,
+    channel_members = 56,
+    channel_names = 57,
+    rosters = 58,
+    conv_paths = 59,
 };
 
 /// One Roc call's results, in `a`.
@@ -1455,4 +1460,246 @@ test "Paths: the channels a member is in, sorted by bytes, from every roster in 
     // The generator reaches both: a member in none, a member in several.
     try testing.expect(none > 500);
     try testing.expect(several > 500);
+}
+
+// ── a conversation's topics, a channel's members, every roster: the Roc's
+// files (Host.list!, Host.read!) against the Zig that reads them ──────────
+
+/// A folder's entries as the host hands them to the Roc (chat_router
+/// `list`: webbox.store.list's, in the disk's order), `kind, name` pairs.
+fn listed(a: std.mem.Allocator, io: std.Io, path: []const u8) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for (try disk.list(io, a, path)) |e| try out.appendSlice(a, &.{ switch (e.kind) {
+        .directory => "d",
+        .file => "f",
+        .other => "o",
+    }, e.name });
+    return out.items;
+}
+
+/// A file as the host reads it for the Roc (chat_router `read`:
+/// webbox.store.readOrNull), `how, bytes`: `F` found, `M` missing, `X`
+/// failed.
+fn readFor(a: std.mem.Allocator, io: std.Io, path: []const u8) ![2][]const u8 {
+    const got = disk.readOrNull(io, a, path, .unlimited) catch return .{ "X", "" };
+    return if (got) |b| .{ "F", b } else .{ "M", "" };
+}
+
+fn sameLists(x: []const []const u8, y: []const []const u8) bool {
+    if (x.len != y.len) return false;
+    for (x, y) |p, q| if (!std.mem.eql(u8, p, q)) return false;
+    return true;
+}
+
+fn said(a: std.mem.Allocator, l: []const []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    for (l) |x| try out.print(a, "\"{f}\" ", .{std.zig.fmtString(x)});
+    return out.items;
+}
+
+test "Paths: a conversation's topics, as listTopics lists them, from generated folders: .md files and not, a folder named x.md, .md alone, links, bytes that sort high, and case" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var d: DiskRoot = undefined;
+    try d.init(a);
+    defer d.deinit();
+    const io = d.threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0x70b1c);
+    const r = rng.random();
+    const names = [_][]const u8{ "Plans.md", "plans.md", "PLANS.md", "a.md", "B.md", "b.md", ".md", "x.md", "notes.txt", "md", "a.MD", "a.md.bak", "\xff.md", "\xffa.md", "\xc3\xa9t\xc3\xa9.md", "ete.md", "Zed.md", "zed.md", "2026-10-25.md", "ChitChat.md", "general2.md", "Plans.reactions.jsonl", "Plans.count" };
+    const conv_dir = try chat_paths.dmConvDir(a, "1_2");
+    const sessions = try std.fs.path.join(a, &.{ conv_dir, "sessions" });
+    var folders: usize = 0;
+    var links: usize = 0;
+    var several: usize = 0;
+    for (0..1500) |k| {
+        try std.Io.Dir.cwd().deleteTree(io, conv_dir);
+        // One in thirty: no folder at all.
+        if (k % 30 != 0) {
+            try std.Io.Dir.cwd().createDirPath(io, sessions);
+            var made: std.ArrayList([]const u8) = .empty;
+            for (0..r.uintAtMost(usize, 9)) |_| {
+                const name = names[r.uintLessThan(usize, names.len)];
+                if (hasName(made.items, name)) continue;
+                try made.append(a, name);
+                const p = try std.fs.path.join(a, &.{ sessions, name });
+                switch (r.uintLessThan(u8, 8)) {
+                    0 => {
+                        try std.Io.Dir.cwd().createDirPath(io, p);
+                        if (std.mem.endsWith(u8, name, ".md")) folders += 1;
+                    },
+                    1 => {
+                        try std.Io.Dir.cwd().symLink(io, "elsewhere", p, .{});
+                        links += 1;
+                    },
+                    // Written as named: webbox's write would refuse a name
+                    // FAT cannot hold, or write over one differing in case.
+                    else => try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = p, .data = "" }),
+                }
+            }
+        }
+        const z = try chat_paths.listTopics(io, a, conv_dir);
+        const got = try roc(a, .topics, try listed(a, io, sessions));
+        compared += 1;
+        if (z.len > 1) several += 1;
+        if (!sameLists(z, got)) differ.add("topics: zig {s}, roc {s}", .{ try said(a, z), try said(a, got) });
+    }
+    try differ.none(compared);
+    try testing.expect(folders > 100 and links > 100 and several > 500);
+}
+
+fn hasName(l: []const []const u8, x: []const u8) bool {
+    for (l) |y| if (std.mem.eql(u8, x, y)) return true;
+    return false;
+}
+
+test "Paths: a channel's members, as channelMembers reads its file, over generated files: comments, blank lines, CRLF, spaces and tabs around, a # after a uid, 007, +7, ../x, duplicates, empty" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var d: DiskRoot = undefined;
+    try d.init(a);
+    defer d.deinit();
+    const io = d.threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0xc4a2e1);
+    const r = rng.random();
+    // Lines a member file may hold as meant, padded with what the trim
+    // takes (spaces, tabs, CRs), and comments; and lines that make it
+    // malformed: not canonical, a comment after a uid, a path, bytes the
+    // trim does not take.
+    const good = [_][]const u8{ "1", "2", "3", "10", "100", "# the team", "#", "#1 x", "", " ", "\t", "\r", "  1  ", "\t2\t", " 3\r", "\t\r 10 \t", "\t\t100" };
+    const bad = [_][]const u8{ "007", "0", "+7", "-1", "../x", "../../x", "3 # Claude", "1 2", "abc", "\xff", "1\x0b", "\x0b1", "1\x00", "2#", "1\n\x0c" };
+    const file = try d.at(a, "channels/team.channel");
+    var ok: usize = 0;
+    var malformed: usize = 0;
+    for (0..4000) |k| {
+        var body: std.ArrayList(u8) = .empty;
+        const n: usize = if (k % 50 == 0) 0 else r.uintAtMost(usize, 6);
+        for (0..n) |i| {
+            if (i > 0) try body.appendSlice(a, if (r.boolean()) "\n" else "\r\n");
+            try body.appendSlice(a, if (r.uintLessThan(u8, 10) == 0) bad[r.uintLessThan(usize, bad.len)] else good[r.uintLessThan(usize, good.len)]);
+        }
+        if (r.boolean()) try body.append(a, '\n');
+        try disk.write(io, a, file, body.items, .{});
+        const z = chat_paths.channelMembers(io, a, "team");
+        const got = try roc(a, .channel_members, &.{body.items});
+        compared += 1;
+        const r_bad = std.mem.eql(u8, got[0], "M");
+        if (z) |members| {
+            ok += 1;
+            if (r_bad or !sameLists(members.?, got[1..])) differ.add("members of \"{f}\": zig {s}, roc {s}", .{ std.zig.fmtString(body.items), try said(a, members.?), try said(a, got) });
+        } else |e| {
+            try testing.expectEqual(error.MalformedChannel, e);
+            malformed += 1;
+            if (!r_bad) differ.add("members of \"{f}\": zig malformed, roc {s}", .{ std.zig.fmtString(body.items), try said(a, got) });
+        }
+    }
+    try differ.none(compared);
+    try testing.expect(ok > 1000 and malformed > 1000);
+}
+
+test "Paths: every channel's roster, as channelRosters reads them from generated channel folders: which entries count, the names, the order, a malformed one skipped and counted, one that will not read" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var d: DiskRoot = undefined;
+    try d.init(a);
+    defer d.deinit();
+    const io = d.threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0x5057e5);
+    const r = rng.random();
+    // Entries that count and not: the suffix exact, `.channel` alone (""),
+    // numeric names, bytes that sort high, a doubled suffix, near misses.
+    const names = [_][]const u8{ "ops.channel", "Zed.channel", "zed.channel", ".channel", "7.channel", "10.channel", "\xff.channel", "\xc3\xa9t\xc3\xa9.channel", "a.channel.channel", "ops.channel.bak", "channel", "readme", "ops", "x.CHANNEL", "quiet.channel" };
+    const files = [_][]const u8{ "1\n", "1\n2\n", "# team\n3\r\n", "", "2\n 1\t\n", "1\nnot a uid\n", "1\n1\n", "007\n", "3 # Claude\n" };
+    const channels = try d.at(a, "channels");
+    var failed: usize = 0;
+    var counted: usize = 0;
+    var listed_some: usize = 0;
+    for (0..1500) |k| {
+        try std.Io.Dir.cwd().deleteTree(io, channels);
+        if (k % 30 != 0) {
+            try std.Io.Dir.cwd().createDirPath(io, channels);
+            var made: std.ArrayList([]const u8) = .empty;
+            for (0..r.uintAtMost(usize, 7)) |_| {
+                const name = names[r.uintLessThan(usize, names.len)];
+                if (hasName(made.items, name)) continue;
+                try made.append(a, name);
+                const p = try std.fs.path.join(a, &.{ channels, name });
+                // A folder now and then: it will not read.
+                // A folder now and then: it will not read. A file written as
+                // named (webbox's write refuses a name FAT cannot hold).
+                if (r.uintLessThan(u8, 40) == 0) try std.Io.Dir.cwd().createDirPath(io, p) else try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = p, .data = files[r.uintLessThan(usize, files.len)] });
+            }
+        }
+        const before = chat_paths.malformed_channels;
+        const z = chat_paths.channelRosters(io, a);
+        const z_counted = chat_paths.malformed_channels - before;
+        const z_last = try a.dupe(u8, chat_paths.malformed_last);
+        // The Roc's way: the folder listed, the names it chose read as the
+        // host reads them, its rosters and malformed ones; each malformed
+        // one counted by the host's primitive.
+        const chosen = try roc(a, .channel_names, try listed(a, io, channels));
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.append(a, try std.fmt.allocPrint(a, "{d}", .{chosen.len}));
+        for (chosen) |n| try args.append(a, n);
+        var r_failed = false;
+        for (chosen) |n| {
+            const read = try readFor(a, io, try d.at(a, try std.fmt.allocPrint(a, "channels/{s}.channel", .{n})));
+            if (std.mem.eql(u8, read[0], "X")) r_failed = true;
+            try args.appendSlice(a, &read);
+        }
+        const got = try roc(a, .rosters, args.items);
+        const m = try std.fmt.parseInt(usize, got[0], 10);
+        const before_r = chat_paths.malformed_channels;
+        for (got[1 .. 1 + m]) |n| chat_paths.countMalformed(n);
+        const r_counted = chat_paths.malformed_channels - before_r;
+        compared += 1;
+        counted += z_counted;
+        if (z_counted != r_counted or (z_counted > 0 and !std.mem.eql(u8, z_last, chat_paths.malformed_last)))
+            differ.add("malformed: zig {d} (last \"{f}\"), roc {d} (last \"{f}\")", .{ z_counted, std.zig.fmtString(z_last), r_counted, std.zig.fmtString(chat_paths.malformed_last) });
+        if (z) |rosters| {
+            if (rosters.len > 0) listed_some += 1;
+            var flat: std.ArrayList([]const u8) = .empty;
+            for (rosters) |ro| {
+                try flat.appendSlice(a, &.{ ro.name, try std.fmt.allocPrint(a, "{d}", .{ro.members.len}) });
+                try flat.appendSlice(a, ro.members);
+            }
+            if (r_failed or !sameLists(flat.items, got[1 + m ..])) differ.add("rosters: zig {s}, roc {s}", .{ try said(a, flat.items), try said(a, got) });
+        } else |_| {
+            failed += 1;
+            if (!r_failed) differ.add("rosters: zig failed, roc {s}", .{try said(a, got)});
+        }
+    }
+    try differ.none(compared);
+    try testing.expect(failed > 30 and counted > 500 and listed_some > 500);
+}
+
+test "Paths: a conversation's topics folder, a channel's member file and a topic's sidecar are where the Zig has them" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    for ([_][3][]const u8{ .{ "1_2", "ops", "Plans" }, .{ "10_100", "Zed", "2026-10-25" }, .{ "1_1", "a-b", "general2" } }) |kns| {
+        const got = try roc(a, .conv_paths, &kns);
+        const at = struct {
+            fn at(al: std.mem.Allocator, rel: []const u8) ![]u8 {
+                return std.fs.path.join(al, &.{ chat_store.chat_root, rel });
+            }
+        }.at;
+        try testing.expectEqualStrings(try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, kns[0]), "sessions" }), try at(a, got[0]));
+        try testing.expectEqualStrings(try std.fs.path.join(a, &.{ try chat_paths.channelConvDir(a, kns[1]), "sessions" }), try at(a, got[1]));
+        try testing.expectEqualStrings(try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", try std.fmt.allocPrint(a, "{s}.channel", .{kns[1]}) }), try at(a, got[2]));
+        try testing.expectEqualStrings(try chat_store.reactionsPath(a, try chat_paths.dmConvDir(a, kns[0]), kns[2]), try at(a, got[3]));
+    }
 }
