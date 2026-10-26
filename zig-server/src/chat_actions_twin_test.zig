@@ -93,6 +93,39 @@ const scenario = [_]Ask{
     .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup" },
     .{ .who = .steve, .method = "GET", .target = "/channel/quiet/Nothing" },
     .{ .who = .steve, .method = "GET", .target = "/chat" },
+    // C3: new topics, the conversations, a message's link, /chat resumed.
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=Ideas" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=+general3%0A" },
+    .{ .who = .debbie, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=ideas" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=New" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=bad_id" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=%ZZ" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=a&topic=b" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "other=x" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=Big&pad=" ++ &@as([70000]u8, @splat('x')) },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/new" },
+    // Past the react form's limit, inside a message's.
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=Padded&pad=" ++ &@as([2000]u8, @splat('x')) },
+    .{ .who = .ann, .method = "POST", .target = "/chat/c/1_2/new", .body = "topic=Mine" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_3/new", .body = "topic=First" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/new", .body = "topic=Retro" },
+    .{ .who = .debbie, .method = "POST", .target = "/channel/ops/new", .body = "topic=Hers" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/nothere/new", .body = "topic=X" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/conversations" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/conversations" },
+    .{ .who = .steve, .method = "HEAD", .target = "/chat/conversations" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/conversations" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/Plans_1" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/Standup_1" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/msg/Standup_1" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/plans_1" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/Nowhere_1" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/bad" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/" },
+    .{ .who = .steve, .method = "GET", .target = "/chat" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/default" },
+    .{ .who = .debbie, .method = "POST", .target = "/chat/" },
+    .{ .who = .ann, .method = "GET", .target = "/chat" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -105,8 +138,15 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     const ann = try harness.memberSession(a, io, "3", "Ann");
     try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
     try harness.writeTranscript(a, io, "1_2", "Other", &.{"three"});
+    // Where a new DM topic is announced: the highest general<N> (a tie goes
+    // to the first listed; one past an i64 is no N at all).
+    for ([_][]const u8{ "general", "general2", "general02", "general9223372036854775808" }) |g| try harness.writeTranscript(a, io, "1_2", g, &.{"g"});
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n", .{});
     try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    // A channel's general<N>: a new channel topic is not announced in it.
+    try harness.writeTranscript(a, io, "channels/ops", "general1", &.{"five"});
+    // Ann's bookmark names a DM she is not in: /chat is her empty one.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "last-conv" }), "1_2\n", .{});
     // A channel with no topics, and a DM pair with none: the first-topic shell.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
     @import("presence.zig").forgetForTest();
@@ -154,7 +194,7 @@ fn tree(a: Alloc, io: Io, root: []const u8) ![]const u8 {
     return out.toOwnedSlice();
 }
 
-test "a topic's reactions, react, pin and unpin (C4), a conversation's landing and a topic's page (C3) answer as the Zig they replaced did, and leave the same files" {
+test "a topic's reactions, react, pin and unpin (C4), and a conversation's landing, a topic's page, a new topic, the conversations, a message's link and /chat (C3) answer as the Zig they replaced did, and leave the same files" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -176,8 +216,8 @@ test "a topic's reactions, react, pin and unpin (C4), a conversation's landing a
     }
     try testing.expectEqual(@as(usize, 0), differ);
     // The scenario reached what it means to: stores, every refusal, the 404s.
-    var seen: [7]bool = @splat(false);
-    for (roc.answers) |r| for ([_][]const u8{ "204 No Content", "400 Bad Request", "404 Not Found", "405 Method Not Allowed", "413 Payload Too Large", "303 See Other", "200 OK" }, 0..) |want, k| {
+    var seen: [9]bool = @splat(false);
+    for (roc.answers) |r| for ([_][]const u8{ "204 No Content", "400 Bad Request", "404 Not Found", "405 Method Not Allowed", "413 Payload Too Large", "303 See Other", "200 OK", "302 Found", "409 Conflict" }, 0..) |want, k| {
         if (std.mem.eql(u8, harness.status(r), want)) seen[k] = true;
     };
     try testing.expect(std.mem.allEqual(bool, &seen, true));
@@ -190,4 +230,6 @@ test "a topic's reactions, react, pin and unpin (C4), a conversation's landing a
         if (std.mem.indexOf(u8, r, "chat-first-topic") != null) shells += 1;
     }
     try testing.expect(pages > 0 and shells >= 2);
+    // A new topic was announced where the partner watches.
+    try testing.expect(std.mem.indexOf(u8, roc.files, "New topic: [Ideas](/chat/c/1_2/Ideas)") != null);
 }

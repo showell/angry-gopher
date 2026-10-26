@@ -424,6 +424,67 @@ test "route: a topic's page whose resume pointer will not write, and a landing w
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_3", steve)));
 }
 
+test "route: a new topic whose topics will not list writes nothing more, and /chat, the conversations and a new topic's bookmark that will not read or write are 500s (C3: after a failure the host does nothing more)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    const state = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1" });
+    // 1_3's topics folder is a file: the duplicate check cannot read, and the
+    // bookmark the Roc would go on to write is not written.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_3"), "sessions" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_3/new", steve, "topic=Plans")));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ state, "last-sessions", "1_3" })));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ state, "last-conv" })));
+    // The partner's DM will not list: the conversations are a 500.
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/conversations", steve)));
+    // The bookmarks' folder is a file: a new topic in 1_2 is refused before
+    // it is made.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ state, "last-sessions" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expect((try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Plans")) == null);
+    // The last-conv pointer is a folder: /chat cannot read where to resume.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ state, "last-conv" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat", steve)));
+}
+
+test "route: a new topic whose first message will not append, and /chat whose resume topic will not read, are 500s (C3)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // A folder where the new topic's transcript goes: not a topic (the list
+    // passes folders over), so the topic is made, and its first message
+    // cannot be written.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Ghost.md" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/new", steve, "topic=Ghost")));
+    // A folder where the DM's last-viewed topic goes: /chat cannot resume.
+    const last = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions", "1_2" });
+    try std.Io.Dir.cwd().deleteTree(io, last);
+    try std.Io.Dir.cwd().createDirPath(io, last);
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat", steve)));
+}
+
 /// A request whose handler must fail: the router's error, and the 500 the
 /// site would have sent (here, what went out before it).
 fn askFailing(a: std.mem.Allocator, io: Io, method: []const u8, target: []const u8, cookies: []const u8) ![]const u8 {

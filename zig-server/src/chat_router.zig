@@ -31,6 +31,7 @@ const chat_page = @import("chat_page.zig");
 const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
 const chat_upload = @import("chat_upload.zig");
+const limits = @import("limits.zig");
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -84,6 +85,8 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
         .answered => {},
         // The site's 400 for every malformed form (webbox site.zig).
         .malformed_form => return error.MalformedForm,
+        .not_found => return http.notFound(req),
+        .found => |location| return req.respond("", .{ .status = .found, .extra_headers = &.{.{ .name = "location", .value = location }} }),
     }
 }
 
@@ -104,7 +107,29 @@ pub const Call = struct {
     failed: ?anyerror = null,
 
     pub fn host(c: *Call) roc_chat.Host {
-        return .{ .ctx = c, .member = member, .presence = presence_, .topic = topic, .body = body, .reactions = reactions_, .react = react, .pin = pin, .landing = landing, .page = page, .srcs = srcs };
+        return .{
+            .ctx = c,
+            .member = member,
+            .presence = presence_,
+            .topic = topic,
+            .body = body,
+            .reactions = reactions_,
+            .react = react,
+            .pin = pin,
+            .landing = landing,
+            .page = page,
+            .srcs = srcs,
+            .me = me,
+            .viewer = viewerName,
+            .last_conv = lastConv,
+            .resume_topic = resumeTopic,
+            .topics = topics,
+            .channels = channels,
+            .members = members,
+            .conv = conv,
+            .bookmark = bookmark,
+            .append = append,
+        };
     }
 
     fn of(ctx: *anyopaque) *Call {
@@ -113,6 +138,13 @@ pub const Call = struct {
 
     fn fail(c: *Call, e: anyerror) void {
         c.failed = e;
+    }
+
+    /// **AFTER A FAILURE THE HOST DOES NOTHING MORE** for the call: every
+    /// hosted function but `member` asks this first, and answers its empty
+    /// or "failed" value, so a Roc that goes on writes nothing more.
+    fn dead(c: *Call) bool {
+        return c.failed != null;
     }
 
     pub fn member(ctx: *anyopaque) bool {
@@ -137,11 +169,13 @@ pub const Call = struct {
 
     fn presence_(ctx: *anyopaque) void {
         const c = of(ctx);
+        if (c.dead()) return;
         presence.markActiveAndBroadcast(c.io, c.alloc, c.bus, c.uid, c.now);
     }
 
     fn topic(ctx: *anyopaque, family: u8, key: []const u8, sid: []const u8) bool {
         const c = of(ctx);
+        if (c.dead()) return false;
         const f = std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.topic!: family {d}", .{family});
         const route: roc_chat.Route = .{ .family = f, .part = .topic, .key = c.alloc.dupe(u8, key) catch |e| return c.no(e), .sid = c.alloc.dupe(u8, sid) catch |e| return c.no(e) };
         // absent-ok: not read as absence: a failed lookup is kept and returned once the call ends; only "not found" is false.
@@ -155,11 +189,17 @@ pub const Call = struct {
         return false;
     }
 
-    fn body(ctx: *anyopaque) ?[]const u8 {
+    fn body(ctx: *anyopaque, which: u8) ?[]const u8 {
         const c = of(ctx);
+        if (c.dead()) return null;
+        const limit: usize = switch (which) {
+            0 => reactions.max_body_bytes,
+            1 => limits.body.chat_message,
+            else => std.debug.panic("Host.body!: limit {d}", .{which}),
+        };
         // Null when it answered 413 (or 400) itself.
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return http.readLimitedBody(c.req, c.alloc, reactions.max_body_bytes) catch |e| {
+        return http.readLimitedBody(c.req, c.alloc, limit) catch |e| {
             c.fail(e);
             return null;
         };
@@ -167,6 +207,7 @@ pub const Call = struct {
 
     fn reactions_(ctx: *anyopaque) ?[]const u8 {
         const c = of(ctx);
+        if (c.dead()) return null;
         const t = c.found orelse @panic("Host.reactions!: no topic found");
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         return store.readReactions(c.io, c.alloc, t.dir, t.sid) catch |e| {
@@ -177,6 +218,7 @@ pub const Call = struct {
 
     fn react(ctx: *anyopaque, msg: u64, emoji: []const u8, on: bool) u8 {
         const c = of(ctx);
+        if (c.dead()) return 2;
         const t = c.found orelse @panic("Host.react!: no topic found");
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         const done = reactions.storeReaction(c.io, c.alloc, c.bus, t.address(), c.uid, c.now, .{ .msg = msg, .emoji = emoji, .on = on }) catch |e| {
@@ -191,6 +233,7 @@ pub const Call = struct {
 
     fn pin(ctx: *anyopaque, pinned: bool) bool {
         const c = of(ctx);
+        if (c.dead()) return false;
         const t = c.found orelse @panic("Host.pin!: no topic found");
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         chat_state.setTopicPinned(c.io, c.alloc, c.uid, t.key, t.sid, pinned) catch |e| return c.no(e);
@@ -205,6 +248,7 @@ pub const Call = struct {
 
     fn landing(ctx: *anyopaque, family: u8, key_: []const u8) []const []const u8 {
         const c = of(ctx);
+        if (c.dead()) return &.{};
         const f_ = std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.landing!: family {d}", .{family});
         const key = c.alloc.dupe(u8, key_) catch |e| return c.none(e);
         // absent-ok: not read as absence: a failed lookup is kept and returned once the call ends; only "not the member's" is none.
@@ -223,6 +267,7 @@ pub const Call = struct {
 
     fn page(ctx: *anyopaque) []const []const u8 {
         const c = of(ctx);
+        if (c.dead()) return &.{};
         const f = c.found orelse @panic("Host.page!: no topic found");
         return c.pageFields(f) catch |e| c.none(e);
     }
@@ -246,11 +291,105 @@ pub const Call = struct {
 
     fn srcs(ctx: *anyopaque) []const []const u8 {
         const c = of(ctx);
+        if (c.dead()) return &.{};
         var out: std.ArrayList([]const u8) = .empty;
         inline for (chrome.assets) |a| {
             const src = chrome.src(c.alloc, a.name) catch |e| return c.none(e);
             out.appendSlice(c.alloc, &.{ a.name, src }) catch |e| return c.none(e);
         }
         return out.items;
+    }
+
+    fn me(ctx: *anyopaque) []const u8 {
+        return of(ctx).uid;
+    }
+
+    /// `fail`, answering the Roc "".
+    fn nothing(c: *Call, e: anyerror) []const u8 {
+        c.fail(e);
+        return "";
+    }
+
+    fn viewerName(ctx: *anyopaque) []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return "";
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        return users.getUserName(c.io, c.alloc, c.uid) catch |e| c.nothing(e);
+    }
+
+    fn lastConv(ctx: *anyopaque) []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return "";
+        // absent-ok: the same.
+        return chat_state.lastUserConv(c.io, c.alloc, c.uid) catch |e| c.nothing(e);
+    }
+
+    fn resumeTopic(ctx: *anyopaque, conv_: []const u8) []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return "";
+        // absent-ok: the same.
+        return chat_state.resumeTopic(c.io, c.alloc, c.uid, conv_, c.now) catch |e| c.nothing(e);
+    }
+
+    fn topics(ctx: *anyopaque, family: u8, key: []const u8) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        const dir = switch (std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.topics!: family {d}", .{family})) {
+            .dm => chat_paths.dmConvDir(c.alloc, key),
+            .channel => chat_paths.channelConvDir(c.alloc, key),
+            else => std.debug.panic("Host.topics!: family {d}", .{family}),
+        } catch |e| return c.none(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        return chat_paths.listTopics(c.io, c.alloc, dir) catch |e| c.none(e);
+    }
+
+    fn channels(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        // absent-ok: the same.
+        return chat_paths.listUserChannels(c.io, c.alloc, c.uid) catch |e| c.none(e);
+    }
+
+    fn members(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        // absent-ok: the same.
+        const all = users.listAuthorized(c.io, c.alloc) catch |e| return c.none(e);
+        var out: std.ArrayList([]const u8) = .empty;
+        for (all) |u| out.appendSlice(c.alloc, &.{ u.id, u.name }) catch |e| return c.none(e);
+        return out.items;
+    }
+
+    fn conv(ctx: *anyopaque, family: u8, key_: []const u8) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        const f_ = std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.conv!: family {d}", .{family});
+        const key = c.alloc.dupe(u8, key_) catch |e| return c.none(e);
+        // absent-ok: not read as absence: a failed lookup is kept and returned once the call ends; only "not the member's" is none.
+        const f = (chat.findConv(c.io, c.alloc, c.uid, f_, key) catch |e| return c.none(e)) orelse return &.{};
+        c.found = f;
+        return c.alloc.dupe([]const u8, &.{ f.base, if (f.dm) "1" else "0" }) catch |e| c.none(e);
+    }
+
+    fn bookmark(ctx: *anyopaque, sid: []const u8) bool {
+        const c = of(ctx);
+        if (c.dead()) return false;
+        const f = c.found orelse @panic("Host.bookmark!: no conversation found");
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        chat_state.setLastViewedTopic(c.io, c.alloc, c.uid, f.key, c.alloc.dupe(u8, sid) catch |e| return c.no(e)) catch |e| return c.no(e);
+        return true;
+    }
+
+    fn append(ctx: *anyopaque, sid_: []const u8, name: []const u8, markdown: []const u8) bool {
+        const c = of(ctx);
+        if (c.dead()) return false;
+        var f = c.found orelse @panic("Host.append!: no conversation found");
+        f.sid = c.alloc.dupe(u8, sid_) catch |e| return c.no(e);
+        const t = f.topic(c.alloc) catch |e| return c.no(e);
+        const author: store.Author = .{ .name = c.alloc.dupe(u8, name) catch |e| return c.no(e), .id = c.uid };
+        const md = c.alloc.dupe(u8, markdown) catch |e| return c.no(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        _ = store.appendMessage(c.io, c.alloc, c.bus, c.now, t.conv.meta, f.address(), author, md, "") catch |e| return c.no(e);
+        return true;
     }
 };

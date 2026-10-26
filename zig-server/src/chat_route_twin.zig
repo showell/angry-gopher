@@ -208,6 +208,15 @@ test "the Roc router decides every corpus path as chat.zig's dispatch did, under
         if (got == .serve and ask.marked) got.serve.presence = true;
         // Asked exactly when the old code read who it was: all but a script.
         const old_asked = !(want == .serve and want.serve.route.family == .asset);
+        // A route the Roc answers outright (C3: /chat, the conversations,
+        // a message's link, a new topic) has no Zig route to agree with: its
+        // parse is held by chat_actions_twin_test.zig's answers instead. It
+        // must be one of those, and counted as presence.
+        if (got != .serve and got != .redirect and want == .serve) {
+            const r = want.serve.route;
+            const own = r.family == .default or r.family == .conversations or r.family == .msg or ((r.family == .dm or r.family == .channel) and r.part == .new);
+            if (own and ask.marked and ask.asked) continue;
+        }
         if (!got.eql(want) or ask.asked != old_asked) {
             differ += 1;
             if (differ <= 10) std.debug.print("{s} \"{s}\" member={}: roc {f} (asked {}), zig {f}\n", .{ if (channel) "/channel" else "/chat", sub, member, got, ask.asked, want });

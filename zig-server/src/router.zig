@@ -475,6 +475,9 @@ test "the pre-turn hooks agree with the Roc router: an upload's path gets the up
         roc_chat.use(a);
         var routing: roc_chat.Routing = .{};
         const d = try roc_chat.decide(a, sub, std.mem.eql(u8, area, "/channel"), .GET, routing.host());
+        // A route the Roc answers outright (/chat, the conversations, a
+        // message's link, a new topic) is no upload, stream or doc.
+        if (d != .serve) continue;
         const r = d.serve.route;
         const stream = r.tail == .stream or r.family == .notifications or r.family == .sidebar_stream or
             ((r.family == .recent or r.family == .images or r.family == .code) and std.mem.eql(u8, r.rest, "/stream"));
