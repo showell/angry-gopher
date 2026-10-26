@@ -22,6 +22,9 @@ const chrome = @import("chat_chrome.zig");
 const chat_page = @import("chat_page.zig");
 const chat_upload = @import("chat_upload.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
+const images_store = @import("images_store.zig");
+const code_store = @import("code_store.zig");
+const chat_fanout = @import("chat_fanout.zig");
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -62,6 +65,8 @@ const Fn = enum(u8) {
     conversation_page = 35,
     html_escape = 36,
     script_safe = 37,
+    images_feed = 38,
+    code_feed = 39,
 };
 
 /// One Roc call's results, in `a`.
@@ -815,4 +820,97 @@ test "Html: text escaped and a blob made script-safe, as webbox's html.zig does"
         if (!std.mem.eql(u8, zs, (try roc1(a, .script_safe, &.{t})).?)) differ.add("scriptSafe(\"{f}\")", .{std.zig.fmtString(t)});
     }
     try differ.none(compared);
+}
+
+/// A member's feed file, from pieces near each rule images_store and
+/// code_store read by: separators and near misses, headers well and badly
+/// formed, `<img` tags in every case and spacing, fences of each character,
+/// length, indent and close, quotes, CRs, JSON's escapes, `</script>` and
+/// bytes that are not UTF-8.
+fn feedFile(a: std.mem.Allocator, r: std.Random) ![]const u8 {
+    const seps = [_][]const u8{ "\n\n-------------\n\n", "\n\n-------------\n\n", "\n\n------------\n\n", "\n-------------\n", "\n\n-------------\n\n\n\n-------------\n\n", " \t\n\n-------------\n\n\r\n" };
+    const headers = [_][]const u8{
+        "Sent by ann at 2026-05-29T01:56:58Z, source MSG_general1_5 in 1_2:",
+        "Sent by Bo at 2026-01-01T00:00:00Z, source MSG_Plans_12 in ops:",
+        "Sent by a at b at c, source MSG_x_1 in 1_2 in 3_4:",
+        "Sent by x at y, source MSG_s_1 in c, source MSG_t_2 in d:",
+        "Sent by  at , source MSG_ in :",
+        "Sent by ann at t, source MSG__1 in 1_2:",
+        "Sent by ann at t, source MSG_noid in 1_2:",
+        "Sent by ann at t, source MSG_x_1 in 1_2",
+        "Sent byann at t, source MSG_x_1 in 1_2:",
+        "Sent by ann, source MSG_x_1 in 1_2:",
+        "Sent by ann at t, source MSG_x_1 1_2:",
+        "Sent by \"q\\\" </script> at caf\xc3\xa9, source MSG_a\x01b_3 in o\xffps:",
+        "  Sent by ann at t, source MSG_x_1 in 1_2:",
+        "Sent by ann at t, source MSG_x_1 in 1_2:\r",
+    };
+    const lines = [_][]const u8{
+        "<img src=\"/u/a.png\" alt=\"a\">", "<IMG\tsrc=x>",      "<Img\nsrc=y\n>",     "<img>",            "<imgx src=z>",
+        "<img src=no-close",                "x<img  a>b<img b>", "<img\x0bv>",         "<img\x0cw>",       "```",
+        "```zig",                           "````zig extra",     "~~~ quote",          "~~~~ quote",       "~~~",
+        "~~~~",                             "   ```py",          "    ```indented",    "``` `bad",         "~~~ `fine",
+        "```x\r",                           "`````",             "```````````",        "``` ```",          "```close",
+        "const x = 1;",                     "  code \"q\" \\",   "</script>",          "caf\xc3\xa9 \xff", "\t",
+        "",                                 "\r",                "In MSG_a_1 I said:", "hello <b>",        "~~ two",
+        "```zig\textra",                    "~~~ quote\tx",      "~~~\tquote",
+    };
+    var out: std.ArrayList(u8) = .empty;
+    if (r.boolean()) try out.appendSlice(a, seps[r.uintLessThan(usize, seps.len)]);
+    for (0..r.uintAtMost(usize, 8)) |k| {
+        if (k > 0) try out.appendSlice(a, seps[r.uintLessThan(usize, seps.len)]);
+        if (r.uintLessThan(u8, 8) != 0) try out.appendSlice(a, headers[r.uintLessThan(usize, headers.len)]);
+        for (0..r.uintAtMost(usize, 7)) |_| {
+            try out.append(a, '\n');
+            try out.appendSlice(a, lines[r.uintLessThan(usize, lines.len)]);
+        }
+    }
+    if (r.boolean()) try out.appendSlice(a, " \n\t\r");
+    return out.items;
+}
+
+test "Feeds: a member's images.md and code.md read and sent to their pages as images_store and code_store do, whatever their bytes" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var rng = std.Random.DefaultPrng.init(0xfeed5);
+    const r = rng.random();
+    var compared: usize = 0;
+    var entries_seen: usize = 0;
+    var blocks_seen: usize = 0;
+    for (0..3000) |_| {
+        const text = try feedFile(a, r);
+        // Images: the newest `most`, each as encodeImagesEvent writes it.
+        var images = try images_store.parseImagesFile(a, text);
+        entries_seen += images.len;
+        const most = r.uintAtMost(usize, 10);
+        if (images.len > most) images = images[images.len - most ..];
+        var zi: std.ArrayList(u8) = .empty;
+        try zi.append(a, '[');
+        for (images, 0..) |e, i| {
+            if (i != 0) try zi.append(a, ',');
+            try images_store.encodeImagesEvent(&zi, a, e, try images_store.imagesSourceURL(a, try chat_fanout.convKeyBaseURL(a, e.conv), e.source_id));
+        }
+        try zi.append(a, ']');
+        // Code: every entry, as encodeCodeEvent writes it.
+        const code = try code_store.parseCodeFile(a, text);
+        var zc: std.ArrayList(u8) = .empty;
+        try zc.append(a, '[');
+        for (code, 0..) |e, i| {
+            blocks_seen += e.blocks.len;
+            if (i != 0) try zc.append(a, ',');
+            try code_store.encodeCodeEvent(&zc, a, e, try images_store.imagesSourceURL(a, try chat_fanout.convKeyBaseURL(a, e.conv), e.source_id));
+        }
+        try zc.append(a, ']');
+        compared += 2;
+        const ri = (try roc1(a, .images_feed, &.{ text, try std.fmt.allocPrint(a, "{d}", .{most}) })).?;
+        if (!std.mem.eql(u8, zi.items, ri)) differ.add("images(\"{f}\", {d}):\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(text), most, std.zig.fmtString(zi.items), std.zig.fmtString(ri) });
+        const rc = (try roc1(a, .code_feed, &.{text})).?;
+        if (!std.mem.eql(u8, zc.items, rc)) differ.add("code(\"{f}\"):\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(text), std.zig.fmtString(zc.items), std.zig.fmtString(rc) });
+    }
+    try differ.none(compared);
+    // The corpus reached what it means to: entries of both feeds, and blocks.
+    try testing.expect(entries_seen > 1000 and blocks_seen > 1000);
 }

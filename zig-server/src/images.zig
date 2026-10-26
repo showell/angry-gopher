@@ -1,70 +1,23 @@
-//! images: /chat/images — the per-user image transcript, handler half.
-//! Reads the viewer's images.md (populated by the appendMessage cross-page
-//! fanout in chat_store), keeps the most-recent 20 entries, and ships them as
-//! inline JSON (#images-data) next to #images-mount — the same imagesSSEEvent
-//! shape images.js uses for both first-paint and the live /chat/images/stream
-//! upserts. The stream is a per-uid subscriber on the images bus (live-only; the
-//! server-rendered page is the backlog), now fed for real by the fanout.
+//! images: /chat/images/stream, the per-user image transcript's live half: a
+//! per-uid subscriber on the images bus (live-only; the page is the backlog),
+//! fed by the fanout. The page is the Roc's (roc-webbox chat/main.roc
+//! `feed!`, chat/Feeds.roc), as the same imagesSSEEvent shape images.js uses
+//! for its first paint and for the stream's upserts.
 
 const std = @import("std");
 const chat_fanout = @import("chat_fanout.zig");
-const Io = @import("host_io").Io;
-const http = @import("webbox").http;
-const users = @import("users.zig");
-const images_store = @import("images_store.zig");
 const sse = @import("webbox").sse;
-const chrome = @import("chat_chrome.zig");
-const html = @import("webbox").html;
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-/// imagesPageLimit caps how many of the most-recent entries the page renders —
-/// it's a "what got shared lately" feed and every entry is a full image, so the
-/// tail keeps it light over a slow link.
-const images_page_limit = 20;
-
-/// handle dispatches /chat/images* — `rest` is the path after "/images" ("" or
-/// "/stream").
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
-    if (rest.len == 0) return renderImagesPage(req, io, alloc, uid);
+/// handle serves /chat/images/stream — `rest` is the path after "/images".
+pub fn handle(req: *Request, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (std.mem.eql(u8, rest, "/stream")) {
         return sse.forward(req, bus, try chat_fanout.imagesBusKey(alloc, uid));
     }
-    return http.notFound(req);
-}
-
-fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    const viewer = try users.getUserName(io, alloc, uid);
-    var entries = try images_store.readImagesForUser(io, alloc, uid);
-    // Oldest-first on disk; keep only the most-recent imagesPageLimit (the tail).
-    if (entries.len > images_page_limit) entries = entries[entries.len - images_page_limit ..];
-
-    var page = try chrome.page(alloc, "Images", "Images", viewer, "images");
-    const b = &page.body;
-    try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
-    try b.appendSlice(alloc, "<div id=\"images-mount\"></div>");
-    try emitImagesData(b, alloc, entries);
-    inline for (.{ "styles.js", "chat_image_popup.js", "images.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
-    try page.send(req, .ok);
-}
-
-/// emitImagesData ships the initial transcript as inline JSON. The `</`→`<\/`
-/// pass prevents the JSON from closing the surrounding <script>. Per-entry
-/// source_url is rebuilt from the entry's conv.
-fn emitImagesData(b: *std.ArrayList(u8), alloc: Alloc, entries: []images_store.ImagesEntry) !void {
-    var j: std.ArrayList(u8) = .empty;
-    try j.append(alloc, '[');
-    for (entries, 0..) |e, i| {
-        if (i != 0) try j.append(alloc, ',');
-        const base = try chat_fanout.convKeyBaseURL(alloc, e.conv);
-        const src = try images_store.imagesSourceURL(alloc, base, e.source_id);
-        try images_store.encodeImagesEvent(&j, alloc, e, src);
-    }
-    try j.append(alloc, ']');
-    const safe = try html.scriptSafe(alloc, j.items);
-    try b.appendSlice(alloc, "<script id=\"images-data\" type=\"application/json\">");
-    try b.appendSlice(alloc, safe);
-    try b.appendSlice(alloc, "</script>");
+    // The page and every other path under it are the Roc's (roc-webbox
+    // chat/main.roc `feed!`); only the stream comes here.
+    std.debug.panic("images.handle: {s} is the Roc's", .{rest});
 }

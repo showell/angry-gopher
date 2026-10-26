@@ -119,6 +119,7 @@ pub const Call = struct {
             .reactions = reactions_,
             .raw = raw,
             .links = links,
+            .feed = feed,
             .react = react,
             .pin = pin,
             .landing = landing,
@@ -244,6 +245,21 @@ pub const Call = struct {
         const md = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.none(e)) orelse return &.{};
         const html = markdown.renderTrusted(c.alloc, md) catch |e| return c.none(e);
         return c.alloc.dupe([]const u8, &.{html}) catch |e| c.none(e);
+    }
+
+    /// The member's images.md (0) or code.md (1), as stored, or none.
+    fn feed(ctx: *anyopaque, which: u8) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        const name = switch (which) {
+            0 => "images.md",
+            1 => "code.md",
+            else => std.debug.panic("Host.feed!: file {d}", .{which}),
+        };
+        const path = std.fs.path.join(c.alloc, &.{ store.chat_root, "users", c.uid, name }) catch |e| return c.none(e);
+        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is none.
+        const data = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.none(e)) orelse return &.{};
+        return c.alloc.dupe([]const u8, &.{data}) catch |e| c.none(e);
     }
 
     fn react(ctx: *anyopaque, msg: u64, emoji: []const u8, on: bool) u8 {

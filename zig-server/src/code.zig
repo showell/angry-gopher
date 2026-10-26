@@ -1,63 +1,22 @@
-//! code: /chat/code — the per-user code transcript, handler half.
-//! Reads the viewer's code.md (populated by the appendMessage cross-page fanout),
-//! and ships ALL entries (oldest-first; no page cap, unlike Images) as inline
-//! JSON (#code-data) next to #code-mount — the same codeSSEEvent shape code.js
-//! uses for both first-paint and the live /chat/code/stream upserts. The stream
-//! is a per-uid subscriber on the code bus (live-only; the page is the backlog).
+//! code: /chat/code/stream, the per-user code transcript's live half: a per-uid
+//! subscriber on the code bus (live-only; the page is the backlog). The page
+//! is the Roc's (roc-webbox chat/main.roc `feed!`, chat/Feeds.roc), as the
+//! same codeSSEEvent shape code.js uses for its first paint and upserts.
 
 const std = @import("std");
 const chat_fanout = @import("chat_fanout.zig");
-const Io = @import("host_io").Io;
-const http = @import("webbox").http;
-const users = @import("users.zig");
-const code_store = @import("code_store.zig");
-const images_store = @import("images_store.zig");
 const sse = @import("webbox").sse;
-const chrome = @import("chat_chrome.zig");
-const html = @import("webbox").html;
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-/// handle dispatches /chat/code* — `rest` is the path after "/code" ("" or
-/// "/stream").
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
-    if (rest.len == 0) return renderCodePage(req, io, alloc, uid);
+/// handle serves /chat/code/stream — `rest` is the path after "/code".
+pub fn handle(req: *Request, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (std.mem.eql(u8, rest, "/stream")) {
         return sse.forward(req, bus, try chat_fanout.codeBusKey(alloc, uid));
     }
-    return http.notFound(req);
-}
-
-fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    const viewer = try users.getUserName(io, alloc, uid);
-    const entries = try code_store.readCodeForUser(io, alloc, uid);
-
-    var page = try chrome.page(alloc, "Code", "Code", viewer, "code");
-    const b = &page.body;
-    try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
-    try b.appendSlice(alloc, "<div id=\"code-mount\"></div>");
-    try emitCodeData(b, alloc, entries);
-    inline for (.{ "styles.js", "chat_code_popup.js", "code.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
-    try page.send(req, .ok);
-}
-
-/// emitCodeData ships the initial transcript as inline JSON. The `</`→`<\/` pass
-/// prevents the JSON from closing the surrounding <script>. Per-entry source_url
-/// is rebuilt from the entry's conv (shares images_store's helper).
-fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeEntry) !void {
-    var j: std.ArrayList(u8) = .empty;
-    try j.append(alloc, '[');
-    for (entries, 0..) |e, i| {
-        if (i != 0) try j.append(alloc, ',');
-        const base = try chat_fanout.convKeyBaseURL(alloc, e.conv);
-        const src = try images_store.imagesSourceURL(alloc, base, e.source_id);
-        try code_store.encodeCodeEvent(&j, alloc, e, src);
-    }
-    try j.append(alloc, ']');
-    const safe = try html.scriptSafe(alloc, j.items);
-    try b.appendSlice(alloc, "<script id=\"code-data\" type=\"application/json\">");
-    try b.appendSlice(alloc, safe);
-    try b.appendSlice(alloc, "</script>");
+    // The page and every other path under it are the Roc's (roc-webbox
+    // chat/main.roc `feed!`); only the stream comes here.
+    std.debug.panic("code.handle: {s} is the Roc's", .{rest});
 }

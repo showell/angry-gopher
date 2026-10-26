@@ -7,7 +7,7 @@
 //! `pinTopic` at angry-gopher dc3445e; chat.zig's landings and the page's
 //! tail at ffe98f1; chat.zig's newTopic, chatDefault, chatConversations
 //! and chatMsgLookup at 6324f7c; sendMessage at 3037312; rawTranscript and
-//! chat_links.zig at 51807d8). chat_router.zig runs it when a
+//! chat_links.zig at 51807d8; images.zig's and code.zig's pages at 91db93d). chat_router.zig runs it when a
 //! test sets `test_oracle`; chat_actions_twin_test.zig runs the same
 //! requests both ways, on two copies of one tree, and holds the answers and
 //! the files they leave to each other. Test-only: it goes when the Roc has
@@ -37,6 +37,10 @@ const markdown = @import("markdown.zig");
 const edge = webbox.edge;
 const chrome = @import("chat_chrome.zig");
 const disk = webbox.store;
+const html = webbox.html;
+const chat_fanout = @import("chat_fanout.zig");
+const images_store = @import("images_store.zig");
+const code_store = @import("code_store.zig");
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -61,6 +65,10 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                 .conversations => return chatConversations(req, io, alloc, call.uid, now),
                 .msg => return chatMsgLookup(req, io, alloc, call.uid, r.rest),
                 .links => return linksPage(req, io, alloc, call.uid, r.rest),
+                .images, .code => if (!std.mem.eql(u8, r.rest, "/stream")) {
+                    if (r.rest.len != 0) return http.notFound(req);
+                    return if (r.family == .images) renderImagesPage(req, io, alloc, call.uid) else renderCodePage(req, io, alloc, call.uid);
+                },
                 else => {},
             }
             if ((r.family == .dm or r.family == .channel) and r.part == .topic and (r.tail == .send or r.tail == .invalid_send)) {
@@ -410,3 +418,74 @@ const links_css =
     \\.links-page li { margin: 3px 0; }
     \\</style>
 ;
+
+/// imagesPageLimit caps how many of the most-recent entries the page renders —
+/// it's a "what got shared lately" feed and every entry is a full image, so the
+/// tail keeps it light over a slow link.
+const images_page_limit = 20;
+
+fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+    const viewer = try users.getUserName(io, alloc, uid);
+    var entries = try images_store.readImagesForUser(io, alloc, uid);
+    // Oldest-first on disk; keep only the most-recent imagesPageLimit (the tail).
+    if (entries.len > images_page_limit) entries = entries[entries.len - images_page_limit ..];
+
+    var page = try chrome.page(alloc, "Images", "Images", viewer, "images");
+    const b = &page.body;
+    try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
+    try b.appendSlice(alloc, "<div id=\"images-mount\"></div>");
+    try emitImagesData(b, alloc, entries);
+    inline for (.{ "styles.js", "chat_image_popup.js", "images.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
+    try page.send(req, .ok);
+}
+
+/// emitImagesData ships the initial transcript as inline JSON. The `</`→`<\/`
+/// pass prevents the JSON from closing the surrounding <script>. Per-entry
+/// source_url is rebuilt from the entry's conv.
+fn emitImagesData(b: *std.ArrayList(u8), alloc: Alloc, entries: []images_store.ImagesEntry) !void {
+    var j: std.ArrayList(u8) = .empty;
+    try j.append(alloc, '[');
+    for (entries, 0..) |e, i| {
+        if (i != 0) try j.append(alloc, ',');
+        const base = try chat_fanout.convKeyBaseURL(alloc, e.conv);
+        const src = try images_store.imagesSourceURL(alloc, base, e.source_id);
+        try images_store.encodeImagesEvent(&j, alloc, e, src);
+    }
+    try j.append(alloc, ']');
+    const safe = try html.scriptSafe(alloc, j.items);
+    try b.appendSlice(alloc, "<script id=\"images-data\" type=\"application/json\">");
+    try b.appendSlice(alloc, safe);
+    try b.appendSlice(alloc, "</script>");
+}
+
+fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+    const viewer = try users.getUserName(io, alloc, uid);
+    const entries = try code_store.readCodeForUser(io, alloc, uid);
+
+    var page = try chrome.page(alloc, "Code", "Code", viewer, "code");
+    const b = &page.body;
+    try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
+    try b.appendSlice(alloc, "<div id=\"code-mount\"></div>");
+    try emitCodeData(b, alloc, entries);
+    inline for (.{ "styles.js", "chat_code_popup.js", "code.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
+    try page.send(req, .ok);
+}
+
+/// emitCodeData ships the initial transcript as inline JSON. The `</`→`<\/` pass
+/// prevents the JSON from closing the surrounding <script>. Per-entry source_url
+/// is rebuilt from the entry's conv (shares images_store's helper).
+fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeEntry) !void {
+    var j: std.ArrayList(u8) = .empty;
+    try j.append(alloc, '[');
+    for (entries, 0..) |e, i| {
+        if (i != 0) try j.append(alloc, ',');
+        const base = try chat_fanout.convKeyBaseURL(alloc, e.conv);
+        const src = try images_store.imagesSourceURL(alloc, base, e.source_id);
+        try code_store.encodeCodeEvent(&j, alloc, e, src);
+    }
+    try j.append(alloc, ']');
+    const safe = try html.scriptSafe(alloc, j.items);
+    try b.appendSlice(alloc, "<script id=\"code-data\" type=\"application/json\">");
+    try b.appendSlice(alloc, safe);
+    try b.appendSlice(alloc, "</script>");
+}

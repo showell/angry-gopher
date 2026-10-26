@@ -183,6 +183,21 @@ const scenario = [_]Ask{
     .{ .who = .steve, .method = "GET", .target = "/chat/links/more" },
     .{ .who = .steve, .method = "GET", .target = "/chat/linksX" },
     .{ .who = .nobody, .method = "GET", .target = "/chat/links" },
+    // /chat/images and /chat/code (C7): a code block sent first, to be read.
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=see%0A%60%60%60zig%0Aconst+x+%3D+1%3B%0A%60%60%60" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/images" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/images" },
+    .{ .who = .steve, .method = "HEAD", .target = "/chat/images" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/images" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/images/" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/images/x" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/imagesX" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/code" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/code" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/code" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/code/more" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/code" },
+    .{ .who = .nobody, .method = "GET", .target = "/chat/images" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -208,6 +223,18 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
     // A transcript with a byte that is not UTF-8: raw passes it untouched.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" }), "caf\xe9 \xff\n", .{});
+    // Steve's feeds: more images than the page shows, a malformed block, a
+    // code block, a quote, script in a tag; Debbie has none.
+    {
+        var im: std.ArrayList(u8) = .empty;
+        for (0..25) |k| {
+            if (k > 0) try im.appendSlice(a, "\n\n-------------\n\n");
+            try im.print(a, "Sent by Debbie at 2026-10-0{d}T00:00:00Z, source MSG_Plans_{d} in 1_2:\n<img src=\"/u/{d}.png\" alt=\"</script>\">", .{ k % 9 + 1, k + 1, k });
+        }
+        try im.appendSlice(a, "\n\n-------------\n\nnot a header\n<img src=x>");
+        try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "images.md" }), im.items, .{});
+        try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "code.md" }), "Sent by Steve at 2026-10-01T00:00:00Z, source MSG_Standup_1 in ops:\n```py\nprint(\"hi\")\n```\n```\nplain\n```", .{});
+    }
     // Steve's curated links; Debbie has none.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "links.md" }), "## Reading\n\n- [Zig](https://ziglang.org) & [Roc](https://www.roc-lang.org)\n- <b>bold?</b> a *point*\n", .{});
     @import("presence.zig").forgetForTest();
@@ -292,6 +319,14 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     }
     try testing.expectEqual(@as(usize, 1), raws);
     try testing.expect(linked >= 1);
+    // The feeds were the real ones: twenty images of twenty-five, the code
+    // block sent above beside the stored ones.
+    var feeds: usize = 0;
+    for (roc.answers) |r| {
+        if (std.mem.indexOf(u8, r, "\"source_id\":\"Plans_25\"") != null and std.mem.indexOf(u8, r, "\"source_id\":\"Plans_5\"") == null and std.mem.indexOf(u8, r, "\"source_id\":\"Plans_6\"") != null) feeds += 1;
+        if (std.mem.indexOf(u8, r, "const x = 1;") != null and std.mem.indexOf(u8, r, "print(\\\"hi\\\")") != null) feeds += 1;
+    }
+    try testing.expect(feeds >= 2);
     // The pages were the real ones: a sidebar with a pinned topic, the shell.
     var pages: usize = 0;
     var shells: usize = 0;
