@@ -158,12 +158,17 @@ pub fn listAccounts(io: Io, alloc: Alloc) ![]Account {
         if (entry.kind != .directory) continue;
         if (!allDigits(entry.name)) continue; // canonical only (156(i)), as listAuthorized and listUserIDs
         const id = try alloc.dupe(u8, entry.name);
-        // absent-ok: not read as absence: a failed stat or read is kept as the account's own error, returned when a lookup needs it.
+        // absent-ok: not read as absence: a failed stat or read is kept as the account's own error, returned when a lookup needs it; memory is the list's.
         const kind: AccountKind = if (userIsMember(io, alloc, id)) |member|
             (if (isAgent(id)) .agent else if (member) .member else .guest)
-        else |e|
-            .{ .unreadable = e };
-        const name: AccountName = if (readAuthFile(io, alloc, id, "name")) |b| .{ .found = b orelse "" } else |e| .{ .unreadable = e };
+        else |e| switch (e) {
+            error.OutOfMemory => return e,
+            else => .{ .unreadable = e },
+        };
+        const name: AccountName = if (readAuthFile(io, alloc, id, "name")) |b| .{ .found = b orelse "" } else |e| switch (e) {
+            error.OutOfMemory => return e,
+            else => .{ .unreadable = e },
+        };
         try out.append(alloc, .{ .id = id, .kind = kind, .name = name });
     }
     return out.toOwnedSlice(alloc);
