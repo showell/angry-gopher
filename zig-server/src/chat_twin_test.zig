@@ -84,6 +84,7 @@ const Fn = enum(u8) {
     topic_title = 48,
     has_topic = 49,
     conv_bases = 50,
+    member_channels = 51,
 };
 
 /// One Roc call's results, in `a`.
@@ -1227,4 +1228,65 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     }
     try differ.none(compared);
     try testing.expect(hits > 300);
+}
+
+// ── a member's channels (chat_paths.zig) ───────────────────────────────────
+
+test "Paths: the channels a member is in, sorted by bytes, from every roster in any order" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0xc4a7);
+    const r = rng.random();
+    // Names that sort apart by byte (`Z` before `a`, a prefix first, bytes
+    // past ASCII last), a name that is only ".channel" with its suffix cut
+    // (""), names that are numbers as a count or a uid is (a roster read
+    // out of step shows), and, picked with replacement, duplicates.
+    const names = [_][]const u8{ "2", "10", "0", "ops", "op", "ops2", "Zed", "zed", "a", "a b", "general", "\xc3\xa9t\xc3\xa9", "\xff", "\xffa", "", "quiet", "Ops" };
+    // Uids that are prefixes of each other, so a match must be whole.
+    const uids = [_][]const u8{ "1", "2", "3", "10", "11", "100" };
+    var none: usize = 0;
+    var several: usize = 0;
+    for (0..4000) |k| {
+        var rosters: std.ArrayList(chat_paths.Roster) = .empty;
+        var flat: std.ArrayList([]const u8) = .empty;
+        // The first few: no channels at all; then up to eight, members up
+        // to five each (none too), a member now and then listed twice.
+        const n: usize = if (k < 20) 0 else r.uintAtMost(usize, 8);
+        for (0..n) |_| {
+            const name = names[r.uintLessThan(usize, names.len)];
+            var members: std.ArrayList([]const u8) = .empty;
+            for (0..r.uintAtMost(usize, 5)) |_| try members.append(a, uids[r.uintLessThan(usize, uids.len)]);
+            try rosters.append(a, .{ .name = name, .members = members.items });
+            try flat.appendSlice(a, &.{ name, try std.fmt.allocPrint(a, "{d}", .{members.items.len}) });
+            try flat.appendSlice(a, members.items);
+        }
+        const uid = uids[r.uintLessThan(usize, uids.len)];
+        const z = try chat_paths.memberChannels(a, rosters.items, uid);
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.append(a, uid);
+        try args.appendSlice(a, flat.items);
+        const got = try roc(a, .member_channels, args.items);
+        compared += 1;
+        if (z.len == 0) none += 1;
+        if (z.len > 1) several += 1;
+        var same = z.len == got.len;
+        if (same) for (z, got) |x, y| {
+            if (!std.mem.eql(u8, x, y)) same = false;
+        };
+        if (!same) {
+            var zs: std.ArrayList(u8) = .empty;
+            for (z) |x| try zs.print(a, "\"{f}\" ", .{std.zig.fmtString(x)});
+            var rs: std.ArrayList(u8) = .empty;
+            for (got) |x| try rs.print(a, "\"{f}\" ", .{std.zig.fmtString(x)});
+            differ.add("member_channels(uid {s}, {d} rosters): zig {s}, roc {s}", .{ uid, rosters.items.len, zs.items, rs.items });
+        }
+    }
+    try differ.none(compared);
+    // The generator reaches both: a member in none, a member in several.
+    try testing.expect(none > 500);
+    try testing.expect(several > 500);
 }

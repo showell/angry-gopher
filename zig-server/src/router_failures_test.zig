@@ -762,3 +762,34 @@ test "route: a chat request whose asker cannot be read is a 500, never a sign-in
         try testing.expect(std.mem.startsWith(u8, harness.status(answered), "500"));
     }
 }
+
+test "route: /chat/msg skips a malformed channel and counts it for /admin/host; a roster that will not read is a 500, never a topic not found" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    // The rosters are the host's to read and its bookkeeping the operator's
+    // (the Roc decides only which are the member's): a malformed channel
+    // that would be first by bytes is skipped, counted and named, and the
+    // next of the member's answers.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "Abad.channel" }), "1\nnot a uid\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "ops.channel" }), "1\n", .{});
+    for ([_][]const u8{ "channels/Abad", "channels/ops" }) |d| try harness.writeTranscript(a, io, d, "Standup", &.{"one"});
+    const before = chat_paths.malformed_channels;
+    const got = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET /chat/msg/Standup_1 HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{steve}));
+    try testing.expectEqualStrings("302 Found", harness.status(got));
+    try testing.expectEqualStrings("/channel/ops/Standup#msg-Standup_1", harness.responseHeader(got, "Location").?);
+    try testing.expectEqual(before + 1, chat_paths.malformed_channels);
+    try testing.expectEqualStrings("Abad", chat_paths.malformed_last);
+    // A member file that is a folder will not read at all: the request's failure.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "gone.channel" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/msg/Standup_1", steve)));
+}

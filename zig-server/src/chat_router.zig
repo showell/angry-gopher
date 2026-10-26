@@ -152,7 +152,7 @@ pub const Call = struct {
             .last_viewed = lastViewed,
             .now = now_,
             .topics = topics,
-            .channels = channels,
+            .channel_rosters = channelRosters,
             .members = members,
             .bookmark = bookmark,
             .append = append,
@@ -473,11 +473,25 @@ pub const Call = struct {
         return chat_paths.listTopics(c.io, c.alloc, dir) catch |e| c.none(e);
     }
 
-    fn channels(ctx: *anyopaque) []const []const u8 {
+    /// Every channel and its members, flat as `name, count, member...` each,
+    /// in the listing's order; a malformed one skipped and counted, as every
+    /// listing does (chat_paths.channelRosters: that bookkeeping is the
+    /// operator's). Which are the member's, and their order, is the Roc's
+    /// (Paths.member_channels). One call hands over every roster, not one
+    /// call per channel: the listing and the reads stay one pass on the
+    /// host, and the Roc asks once however many channels there are.
+    fn channelRosters(ctx: *anyopaque) []const []const u8 {
         const c = of(ctx);
         if (c.dead()) return &.{};
-        // absent-ok: the same.
-        return chat_paths.listUserChannels(c.io, c.alloc, c.uid) catch |e| c.none(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const rosters = chat_paths.channelRosters(c.io, c.alloc) catch |e| return c.none(e);
+        var out: std.ArrayList([]const u8) = .empty;
+        for (rosters) |r| {
+            const count = std.fmt.allocPrint(c.alloc, "{d}", .{r.members.len}) catch |e| return c.none(e);
+            out.appendSlice(c.alloc, &.{ r.name, count }) catch |e| return c.none(e);
+            out.appendSlice(c.alloc, r.members) catch |e| return c.none(e);
+        }
+        return out.items;
     }
 
     fn members(ctx: *anyopaque) []const []const u8 {

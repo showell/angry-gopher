@@ -122,6 +122,13 @@ const scenario = [_]Ask{
     .{ .who = .debbie, .method = "GET", .target = "/chat/msg/Standup_1" },
     .{ .who = .steve, .method = "GET", .target = "/chat/msg/plans_1" },
     .{ .who = .steve, .method = "GET", .target = "/chat/msg/Nowhere_1" },
+    // A topic in several channels: the first of the member's by bytes
+    // (Zed before aaa before ops), never one they are not in; a member in
+    // no channel (Debbie).
+    .{ .who = .steve, .method = "GET", .target = "/chat/msg/Shared_1" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/msg/Shared_1" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/msg/Shared_1" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/msg/Standup_1" },
     .{ .who = .steve, .method = "GET", .target = "/chat/msg/bad" },
     .{ .who = .steve, .method = "GET", .target = "/chat/msg/" },
     .{ .who = .steve, .method = "GET", .target = "/chat" },
@@ -250,6 +257,11 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "last-conv" }), "1_2\n", .{});
     // A channel with no topics, and a DM pair with none: the first-topic shell.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
+    // Channels a topic is in several of, listed in no order: Steve is in
+    // Zed and ops, Ann in aaa (and quiet).
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "Zed.channel" }), "1\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "aaa.channel" }), "3\n", .{});
+    for ([_][]const u8{ "channels/Zed", "channels/aaa", "channels/ops" }) |d| try harness.writeTranscript(a, io, d, "Shared", &.{"s"});
     // An account with no name (a release cut short).
     try users.setUserPassword(io, a, "4", "pw");
     // A transcript with a byte that is not UTF-8: raw passes it untouched.

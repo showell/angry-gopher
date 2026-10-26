@@ -188,13 +188,24 @@ pub fn malformedText(alloc: Alloc) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{d}; the last: #{s}", .{ malformed_channels, malformed_last });
 }
 
-/// listUserChannels returns the names of channels `uid` is a member of, sorted.
-/// Scans {chat_store.chat_root}/channels/*.channel. Missing dir → empty.
+/// listUserChannels returns the names of channels `uid` is a member of, sorted:
+/// every channel's roster read (channelRosters), then memberChannels.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
+    return memberChannels(alloc, try channelRosters(io, alloc), uid);
+}
+
+/// A channel and its members, as channelMembers read them.
+pub const Roster = struct { name: []const u8, members: [][]const u8 };
+
+/// Every channel's roster, in the listing's order: scans
+/// {chat_store.chat_root}/channels/*.channel (missing dir → none). A
+/// malformed one is skipped and counted (`malformed_channels`), a file gone
+/// since the listing skipped.
+pub fn channelRosters(io: Io, alloc: Alloc) ![]Roster {
     const dir_path = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels" });
     const entries = try store.list(io, alloc, dir_path);
 
-    var out: std.ArrayList([]const u8) = .empty;
+    var out: std.ArrayList(Roster) = .empty;
     for (entries) |entry| {
         if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
         const name = entry.name[0 .. entry.name.len - ".channel".len];
@@ -208,8 +219,19 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
             },
             else => return e,
         }) orelse continue;
-        if (!hasMember(members, uid)) continue;
-        try out.append(alloc, try alloc.dupe(u8, name));
+        try out.append(alloc, .{ .name = try alloc.dupe(u8, name), .members = members });
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+/// memberChannels is listUserChannels's decision, pure: the names of the
+/// rosters `uid` is in, sorted by bytes. The Roc chat makes the same choice
+/// (roc-webbox chat/Paths.roc `member_channels`); chat_twin_test.zig holds
+/// it to this.
+pub fn memberChannels(alloc: Alloc, rosters: []const Roster, uid: []const u8) ![][]const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for (rosters) |r| {
+        if (hasMember(r.members, uid)) try out.append(alloc, r.name);
     }
     const slice = try out.toOwnedSlice(alloc);
     std.mem.sort([]const u8, slice, {}, lessThanStr);
