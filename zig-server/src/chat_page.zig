@@ -189,8 +189,12 @@ pub fn sidebarJSON(alloc: Alloc, sb: Sidebar) ![]const u8 {
         first = false;
         const pk = try chat_paths.chatPairKey(alloc, sb.uid, u.id);
         const active = sb.dm and std.mem.eql(u8, pk, sb.key);
-        try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}", .{
-            u.id, std.json.fmt(u.name, .{}), pk, active,
+        // Every string escaped, ids and URLs too: a name the store would
+        // never take must still make JSON, not break the page's script.
+        const id = try std.fmt.allocPrint(alloc, "uid:{s}", .{u.id});
+        const url = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pk});
+        try b.print(alloc, "{{\"id\":{f},\"label\":{f},\"url\":{f},\"active\":{}", .{
+            std.json.fmt(id, .{}), std.json.fmt(u.name, .{}), std.json.fmt(url, .{}), active,
         });
         // online (omitted when false).
         if (u.online) try b.appendSlice(alloc, ",\"online\":true");
@@ -201,8 +205,10 @@ pub fn sidebarJSON(alloc: Alloc, sb: Sidebar) ![]const u8 {
         first = false;
         const active = !sb.dm and std.mem.eql(u8, name, sb.key);
         const label = try std.fmt.allocPrint(alloc, "# {s}", .{name});
-        try b.print(alloc, "{{\"id\":\"ch:{s}\",\"label\":{f},\"url\":\"/channel/{s}\",\"active\":{}}}", .{
-            name, std.json.fmt(label, .{}), name, active,
+        const id = try std.fmt.allocPrint(alloc, "ch:{s}", .{name});
+        const url = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
+        try b.print(alloc, "{{\"id\":{f},\"label\":{f},\"url\":{f},\"active\":{}}}", .{
+            std.json.fmt(id, .{}), std.json.fmt(label, .{}), std.json.fmt(url, .{}), active,
         });
     }
 
