@@ -365,3 +365,56 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     // A new topic was announced where the partner watches.
     try testing.expect(std.mem.indexOf(u8, roc.files, "New topic: [Ideas](/chat/c/1_2/Ideas)") != null);
 }
+
+/// The most one request's memory held, served the old way or the Roc's: the
+/// bytes its allocator was asked for at once (the response is written
+/// elsewhere, as the kernel sends it).
+fn requestPeak(a: Alloc, io: Io, oracle: bool, raw: []const u8) !struct { peak: usize, answer: []const u8 } {
+    // The bytes the request asks for, counted above an arena (below it,
+    // the arena's slack would hide a copy that fits in a node it grew).
+    var pages = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer pages.deinit();
+    var request: @import("peak_alloc.zig").Peak = .{ .child = pages.allocator() };
+    chat_router.test_oracle = oracle;
+    defer chat_router.test_oracle = false;
+    // As harness.serve, but what is written out is the connection's (the
+    // kernel sends it as it goes), not the request heap's.
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = webbox.bus.Hub.init(io, a);
+    var b = webbox.bus.Bus.of(&hub);
+    _ = try @import("router.zig").route(&req, io, request.allocator(), &b);
+    try out.writer.flush();
+    return .{ .peak = request.most, .answer = out.written() };
+}
+
+test "a large topic's raw transcript costs one request what the old Zig's did, not a multiple of it (metal-vmm FEEDBACK 2026-10-26: 6x, and out of memory at 16 MB)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    // About 8 MB: two hundred messages of 40 KB.
+    const msgs = try a.alloc([]const u8, 200);
+    for (msgs, 0..) |*m, k| m.* = try std.fmt.allocPrint(a, "{d} {s}", .{ k, &@as([40_000]u8, @splat('x')) });
+    try harness.writeTranscript(a, io, "1_2", "Big", msgs);
+    @import("presence.zig").forgetForTest();
+    const raw = try std.fmt.allocPrint(a, "GET /chat/c/1_2/Big/raw HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{steve});
+    const old = try requestPeak(a, io, true, raw);
+    const roc = try requestPeak(a, io, false, raw);
+    try testing.expectEqualStrings(old.answer, roc.answer);
+    try testing.expect(old.answer.len > 8_000_000);
+    std.log.info("raw of {d} bytes: the old Zig held {d}, the Roc's {d}", .{ old.answer.len, old.peak, roc.peak });
+    // The same, but for the Roc call's own small change.
+    try testing.expect(roc.peak <= old.peak + 256 * 1024);
+}

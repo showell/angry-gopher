@@ -64,9 +64,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     // (request_time.zig).
     const now = requestTime(io);
     var call: Call = .{ .req = req, .io = io, .alloc = alloc, .bus = bus, .now = now };
-    // **THE ROC'S MEMORY IS THE REQUEST'S**: its call's arena is made from
-    // this request's allocator, so nothing it took outlives the request.
-    roc_chat.use(alloc);
+    // **THE ROC'S MEMORY IS THE REQUEST'S**: it allocates on this request's
+    // allocator itself (freed whole with the request: the kernel's request
+    // heap, webbox's arena per request on Linux), with no arena over it, so
+    // nothing it took outlives the request and nothing is taken twice.
+    roc_chat.useRequest(alloc);
     const decision = try roc_chat.decide(alloc, sub, channel, req.head.method, call.host());
     // A failure the Roc could not be told (the store, reading who it is)
     // fails the request, as it did before the router.
@@ -91,6 +93,14 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
         .malformed_form => return error.MalformedForm,
         .not_found => return http.notFound(req),
         .found => |location| return req.respond("", .{ .status = .found, .extra_headers = &.{.{ .name = "location", .value = location }} }),
+        // The host's bytes between the Roc's: a transcript (nothing around
+        // it, so it goes out as read) or a page around rendered links.
+        .held => |h| {
+            const headers = [_]std.http.Header{ .{ .name = "content-type", .value = h.content_type }, .{ .name = "x-content-type-options", .value = "nosniff" } };
+            const n: usize = if (h.content_type.len == 0) 0 else if (h.nosniff) 2 else 1;
+            const body = if (h.before.len == 0 and h.after.len == 0) call.held else try std.mem.concat(alloc, u8, &.{ h.before, call.held, h.after });
+            return req.respond(body, .{ .status = @fromBackingInt(@intCast(h.status)), .extra_headers = headers[0..n] });
+        },
     }
 }
 
@@ -108,6 +118,9 @@ pub const Call = struct {
     asked: bool = false,
     /// The topic `topic` found, for the calls after it.
     found: ?chat.Found = null,
+    /// The bytes a `held` answer carries (Host.raw!, Host.links!), read or
+    /// rendered here and never copied into the Roc and out.
+    held: []const u8 = "",
     failed: ?anyerror = null,
 
     pub fn host(c: *Call) roc_chat.Host {
@@ -227,26 +240,28 @@ pub const Call = struct {
         };
     }
 
-    fn raw(ctx: *anyopaque) []const []const u8 {
+    /// The found topic's transcript, held for the answer: whether there is
+    /// one.
+    fn raw(ctx: *anyopaque) bool {
         const c = of(ctx);
-        if (c.dead()) return &.{};
+        if (c.dead()) return false;
         const t = c.found orelse @panic("Host.raw!: no topic found");
         // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no transcript" is none.
-        const data = (chat_paths.readTranscript(c.io, c.alloc, t.dir, t.sid) catch |e| return c.none(e)) orelse return &.{};
-        return c.alloc.dupe([]const u8, &.{data}) catch |e| c.none(e);
+        c.held = (chat_paths.readTranscript(c.io, c.alloc, t.dir, t.sid) catch |e| return c.no(e)) orelse return false;
+        return true;
     }
 
     /// The member's links.md, rendered as the server's own markdown
     /// (`renderTrusted`: a curated page has far more links than a message
-    /// may), or none.
-    fn links(ctx: *anyopaque) []const []const u8 {
+    /// may), held for the answer: whether there is one.
+    fn links(ctx: *anyopaque) bool {
         const c = of(ctx);
-        if (c.dead()) return &.{};
-        const path = std.fs.path.join(c.alloc, &.{ store.chat_root, "users", c.uid, "links.md" }) catch |e| return c.none(e);
+        if (c.dead()) return false;
+        const path = std.fs.path.join(c.alloc, &.{ store.chat_root, "users", c.uid, "links.md" }) catch |e| return c.no(e);
         // absent-ok: the same; only "no file" is none.
-        const md = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.none(e)) orelse return &.{};
-        const html = markdown.renderTrusted(c.alloc, md) catch |e| return c.none(e);
-        return c.alloc.dupe([]const u8, &.{html}) catch |e| c.none(e);
+        const md = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.no(e)) orelse return false;
+        c.held = markdown.renderTrusted(c.alloc, md) catch |e| return c.no(e);
+        return true;
     }
 
     /// The member's recent feed as recent.zig gathers it, nine fields a row.
