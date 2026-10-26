@@ -6,7 +6,7 @@
 //! as they were (reactions.zig `serveFile` and `handleReact`, chat.zig
 //! `pinTopic` at angry-gopher dc3445e; chat.zig's landings and the page's
 //! tail at ffe98f1; chat.zig's newTopic, chatDefault, chatConversations
-//! and chatMsgLookup at 6324f7c). chat_router.zig runs it when a
+//! and chatMsgLookup at 6324f7c; sendMessage at 3037312). chat_router.zig runs it when a
 //! test sets `test_oracle`; chat_actions_twin_test.zig runs the same
 //! requests both ways, on two copies of one tree, and holds the answers and
 //! the files they leave to each other. Test-only: it goes when the Roc has
@@ -31,6 +31,9 @@ const users = @import("users.zig");
 const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Conv = @import("chat_conv.zig").Conv;
+const Topic = @import("chat_conv.zig").Topic;
+const markdown = @import("markdown.zig");
+const edge = webbox.edge;
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -55,6 +58,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                 .conversations => return chatConversations(req, io, alloc, call.uid, now),
                 .msg => return chatMsgLookup(req, io, alloc, call.uid, r.rest),
                 else => {},
+            }
+            if ((r.family == .dm or r.family == .channel) and r.part == .topic and (r.tail == .send or r.tail == .invalid_send)) {
+                var f = (try chat.findConv(io, alloc, call.uid, r.family, r.key)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
+                f.sid = r.sid;
+                f.title = try chat.convTitle(io, alloc, call.uid, f);
+                if (r.tail == .invalid_send) return http.notFound(req);
+                return sendMessage(req, io, alloc, bus, try f.topic(alloc), call.uid, now);
             }
             if ((r.family == .dm or r.family == .channel) and r.part == .new) {
                 const f = (try chat.findConv(io, alloc, call.uid, r.family, r.key)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
@@ -287,4 +297,66 @@ fn redirectFound(req: *Request, location: []const u8) !void {
         .status = .found,
         .extra_headers = &.{.{ .name = "location", .value = location }},
     });
+}
+
+/// sendMessage handles POST /<…>/<sid>/send: parse the markdown+cid form, then
+/// append (which fans out live to
+/// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
+/// a plain form post → 303 back to the topic.
+///
+/// **A SEND STORES WHAT WAS SENT, OR IS REFUSED** (metal-vmm QUEUE 156(b)):
+/// no `markdown` field, or one that is only whitespace, is a 400, where it
+/// answered success having stored nothing; the text is stored as sent (a
+/// trim, once, stripped a code block's first indentation), and trimmed only
+/// to ask whether it is empty. (`DROP_ON_FLOOR`, which dropped a real
+/// message that began with it, is gone: nothing used it.)
+fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8, now: Now) !void {
+    const conv = topic.conv;
+    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
+
+    // Read headers BEFORE the body: reading the request body advances the
+    // std.http.Server reader past `received_head`, after which iterateHeaders
+    // asserts. So capture X-Chat-Async first, then drain the body.
+    const is_async = if (try http.header(req, alloc, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
+
+    const body = (try http.readLimitedBody(req, alloc, limits.body.chat_message)) orelse return;
+    const md = (try chat.formField(alloc, body, "markdown")) orelse
+        return req.respond("not sent: no message (the form has no markdown field)\n", .{ .status = .bad_request });
+    const cid = (try chat.formField(alloc, body, "cid")) orelse "";
+    if (std.mem.trim(u8, md, " \t\r\n").len == 0) {
+        return req.respond("not sent: the message is empty\n", .{ .status = .bad_request });
+    }
+    // **A MESSAGE IS TEXT**: its bytes are UTF-8. Stored otherwise, every
+    // stream would send it as JSON's array of numbers where the client reads a
+    // string. A browser always sends UTF-8; only a hand-made request is refused.
+    if (!std.unicode.utf8ValidateSlice(md)) {
+        return req.respond("not sent: the message is not UTF-8 text\n", .{ .status = .bad_request });
+    }
+
+    // Refuse hostile / absurdly over-formatted markdown at the door rather than
+    // store it: fail loud to the author (a 400) instead of fanning out content
+    // that every reader would render as the malformed placeholder anyway.
+    if (try markdown.hostileReason(alloc, md)) |_| {
+        return edge.reject(req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n");
+    }
+
+    const from_name = try users.getUserName(io, alloc, uid);
+    // The bookmark first (metal-vmm QUEUE 156(g)): one that fails is a 500
+    // with nothing stored, never a 500 for a message that was, which the
+    // client would send again.
+    if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
+    // Where a plain form post goes back to, made before the store (177.1):
+    // made after, an allocation that failed was a 500 for a stored message.
+    const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
+    _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
+    return sendDone(req, is_async, back);
+}
+
+/// sendDone reports a send: 204 for async fetch callers, else a
+/// 303 back to the topic page (the no-JS form-post fallback).
+/// The answer to a stored send: allocates nothing, so a send stored is never
+/// answered 500 for memory (177.1).
+fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
+    if (is_async) return req.respond("", .{ .status = .no_content });
+    return http.redirect(req, back);
 }

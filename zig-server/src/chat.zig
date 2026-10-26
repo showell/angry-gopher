@@ -108,8 +108,8 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .links => return links.handle(req, io, alloc, uid, route.rest),
         // /chat/search/words, /chat/search/messages (chat_search.zig), JSON.
         .search => return chat_search.handle(req, io, alloc, uid, route.rest, now),
-        .dm => return convRoute(req, io, alloc, bus, uid, route, now),
-        .channel => return channelRoute(req, io, alloc, bus, uid, route, now),
+        .dm => return convRoute(req, io, alloc, bus, uid, route),
+        .channel => return channelRoute(req, io, alloc, bus, uid, route),
         // The two cross-page attention streams the prod JS opens on boot,
         // per-uid bus subscribers forwarding the published event JSON
         // verbatim (notify: status-strip pings + came-online; sidebar:
@@ -189,7 +189,7 @@ pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?Found {
 
 /// channelRoute serves /channel/<name>[/<sid>[/...]]: `route.key` is a
 /// valid channel name (the router checked its shape).
-fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route, now: Now) !void {
+fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route) !void {
     const name = route.key;
     // **ONE ANSWER, THAT SAYS WHY** (metal-vmm QUEUE 156(j)): a channel that
     // is not there and one the viewer is not in (or was removed from) read
@@ -214,14 +214,14 @@ fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8,
         .invalid => return http.notFound(req),
         .topic => {
             const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, route.sid });
-            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title }, now);
+            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title });
         },
     }
 }
 
 /// convRoute serves /chat/c/<conv>[/<sid>[/...]]: `route.key` is the pair
 /// as written.
-fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route, now: Now) !void {
+fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route) !void {
     const pair = route.key;
     if (!try chat_paths.chatKeyParticipant(alloc, pair, uid)) return http.notFound(req);
 
@@ -248,7 +248,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .topic => {
             const partner = try partnerName(io, alloc, conv.key, uid);
             const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, route.sid });
-            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title }, now);
+            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title });
         },
     }
 }
@@ -256,7 +256,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
 /// topicRoute serves the per-topic tail shared by DMs and channels: the bare
 /// page, `/stream` (SSE), `/send` (POST a message), `/raw` (literal bytes),
 /// and the rest. `title` is the top-bar title.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid: []const u8, topic: Topic, now: Now) !void {
+fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid: []const u8, topic: Topic) !void {
     const conv = topic.conv;
     // **A TOPIC THAT IS NOT THERE IS A 404 THAT SAYS SO** (metal-vmm QUEUE
     // 156(j)), where its page was served as an empty one and became where
@@ -277,7 +277,9 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
             return upload.serveUpload(req, io, alloc, conv.dir, topic.sid, route.rest);
         },
         .stream => try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }),
-        .send => try sendMessage(req, io, alloc, bus, topic, uid, now),
+        // A send: the Roc's (roc-webbox chat/main.roc `send!`), handed back
+        // only when the conversation was not found, which was answered above.
+        .send, .invalid_send => std.debug.panic("chat.topicRoute: a send is the Roc's, and its conversation was here", .{}),
         .upload => try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid),
         // The Roc's (roc-webbox chat/main.roc `act!`, docs/ROC-CHAT.md C4):
         // it hands one back only when `findTopic` did not find it, and that
@@ -296,7 +298,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
             try savedIds(req, io, alloc, uid, conv.key, topic.sid);
         },
         // No tail served here, or one with segments after it.
-        .invalid, .invalid_send => try http.notFound(req),
+        .invalid => try http.notFound(req),
     }
 }
 
@@ -330,68 +332,6 @@ fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 }
 
 // ── send (write path) ────────────────────────────────────────────────────────
-
-/// sendMessage handles POST /<…>/<sid>/send: parse the markdown+cid form, then
-/// append (which fans out live to
-/// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
-/// a plain form post → 303 back to the topic.
-///
-/// **A SEND STORES WHAT WAS SENT, OR IS REFUSED** (metal-vmm QUEUE 156(b)):
-/// no `markdown` field, or one that is only whitespace, is a 400, where it
-/// answered success having stored nothing; the text is stored as sent (a
-/// trim, once, stripped a code block's first indentation), and trimmed only
-/// to ask whether it is empty. (`DROP_ON_FLOOR`, which dropped a real
-/// message that began with it, is gone: nothing used it.)
-fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8, now: Now) !void {
-    const conv = topic.conv;
-    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
-
-    // Read headers BEFORE the body: reading the request body advances the
-    // std.http.Server reader past `received_head`, after which iterateHeaders
-    // asserts. So capture X-Chat-Async first, then drain the body.
-    const is_async = if (try http.header(req, alloc, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
-
-    const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
-    const md = (try formField(alloc, body, "markdown")) orelse
-        return req.respond("not sent: no message (the form has no markdown field)\n", .{ .status = .bad_request });
-    const cid = (try formField(alloc, body, "cid")) orelse "";
-    if (std.mem.trim(u8, md, " \t\r\n").len == 0) {
-        return req.respond("not sent: the message is empty\n", .{ .status = .bad_request });
-    }
-    // **A MESSAGE IS TEXT**: its bytes are UTF-8. Stored otherwise, every
-    // stream would send it as JSON's array of numbers where the client reads a
-    // string. A browser always sends UTF-8; only a hand-made request is refused.
-    if (!std.unicode.utf8ValidateSlice(md)) {
-        return req.respond("not sent: the message is not UTF-8 text\n", .{ .status = .bad_request });
-    }
-
-    // Refuse hostile / absurdly over-formatted markdown at the door rather than
-    // store it: fail loud to the author (a 400) instead of fanning out content
-    // that every reader would render as the malformed placeholder anyway.
-    if (try markdown.hostileReason(alloc, md)) |_| {
-        return edge.reject(req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n");
-    }
-
-    const from_name = try users.getUserName(io, alloc, uid);
-    // The bookmark first (metal-vmm QUEUE 156(g)): one that fails is a 500
-    // with nothing stored, never a 500 for a message that was, which the
-    // client would send again.
-    if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
-    // Where a plain form post goes back to, made before the store (177.1):
-    // made after, an allocation that failed was a 500 for a stored message.
-    const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
-    _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
-    return sendDone(req, is_async, back);
-}
-
-/// sendDone reports a send: 204 for async fetch callers, else a
-/// 303 back to the topic page (the no-JS form-post fallback).
-/// The answer to a stored send: allocates nothing, so a send stored is never
-/// answered 500 for memory (177.1).
-fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
-    if (is_async) return req.respond("", .{ .status = .no_content });
-    return http.redirect(req, back);
-}
 
 // ── raw + index ──────────────────────────────────────────────────────────────
 

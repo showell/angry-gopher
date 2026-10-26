@@ -32,6 +32,8 @@ const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
 const chat_upload = @import("chat_upload.zig");
 const limits = @import("limits.zig");
+const markdown = @import("markdown.zig");
+const edge = webbox.edge;
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -129,6 +131,9 @@ pub const Call = struct {
             .conv = conv,
             .bookmark = bookmark,
             .append = append,
+            .send_conv = sendConv,
+            .header = header,
+            .hostile = hostile,
         };
     }
 
@@ -380,16 +385,54 @@ pub const Call = struct {
         return true;
     }
 
-    fn append(ctx: *anyopaque, sid_: []const u8, name: []const u8, markdown: []const u8) bool {
+    fn append(ctx: *anyopaque, sid_: []const u8, name: []const u8, markdown_: []const u8, cid_: []const u8) bool {
         const c = of(ctx);
         if (c.dead()) return false;
         var f = c.found orelse @panic("Host.append!: no conversation found");
         f.sid = c.alloc.dupe(u8, sid_) catch |e| return c.no(e);
         const t = f.topic(c.alloc) catch |e| return c.no(e);
         const author: store.Author = .{ .name = c.alloc.dupe(u8, name) catch |e| return c.no(e), .id = c.uid };
-        const md = c.alloc.dupe(u8, markdown) catch |e| return c.no(e);
+        const md = c.alloc.dupe(u8, markdown_) catch |e| return c.no(e);
+        const cid = c.alloc.dupe(u8, cid_) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        _ = store.appendMessage(c.io, c.alloc, c.bus, c.now, t.conv.meta, f.address(), author, md, "") catch |e| return c.no(e);
+        _ = store.appendMessage(c.io, c.alloc, c.bus, c.now, t.conv.meta, f.address(), author, md, cid) catch |e| return c.no(e);
         return true;
+    }
+
+    fn sendConv(ctx: *anyopaque, family: u8, key_: []const u8, sid: []const u8) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        const f_ = std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.send_conv!: family {d}", .{family});
+        const key = c.alloc.dupe(u8, key_) catch |e| return c.none(e);
+        // absent-ok: not read as absence: a failed lookup is kept and returned once the call ends; only "not the member's" is none.
+        var f = (chat.findConv(c.io, c.alloc, c.uid, f_, key) catch |e| return c.none(e)) orelse return &.{};
+        f.sid = c.alloc.dupe(u8, sid) catch |e| return c.none(e);
+        // The topic's title (a DM's partner read), as convRoute read it.
+        // absent-ok: the same.
+        f.title = chat.convTitle(c.io, c.alloc, c.uid, f) catch |e| return c.none(e);
+        c.found = f;
+        return c.alloc.dupe([]const u8, &.{ f.base, if (f.dm) "1" else "0" }) catch |e| c.none(e);
+    }
+
+    fn header(ctx: *anyopaque, name: []const u8) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const v = (http.header(c.req, c.alloc, name) catch |e| return c.none(e)) orelse return &.{};
+        return c.alloc.dupe([]const u8, &.{v}) catch |e| c.none(e);
+    }
+
+    fn hostile(ctx: *anyopaque, md: []const u8) u8 {
+        const c = of(ctx);
+        if (c.dead()) return 2;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const reason = markdown.hostileReason(c.alloc, md) catch |e| {
+            c.fail(e);
+            return 2;
+        };
+        if (reason == null) return 0;
+        // absent-ok: the same: a refusal that will not send is the request's failure.
+        edge.reject(c.req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n") catch |e| c.fail(e);
+        return 1;
     }
 };

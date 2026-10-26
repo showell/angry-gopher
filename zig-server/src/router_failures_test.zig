@@ -485,6 +485,28 @@ test "route: a new topic whose first message will not append, and /chat whose re
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat", steve)));
 }
 
+test "route: a send whose message will not append, or whose channel's members will not read, is a 500, never a 303 or a 404 (O1: the Roc's send keeps the host's errors)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    // A folder where the topic's transcript goes: the append cannot write.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Ghost.md" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Ghost/send", steve, "markdown=hello")));
+    // The channel's member file is a folder: who may send cannot be read.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "ops.channel" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/channel/ops/Standup/send", steve, "markdown=hello")));
+}
+
 /// A request whose handler must fail: the router's error, and the 500 the
 /// site would have sent (here, what went out before it).
 fn askFailing(a: std.mem.Allocator, io: Io, method: []const u8, target: []const u8, cookies: []const u8) ![]const u8 {

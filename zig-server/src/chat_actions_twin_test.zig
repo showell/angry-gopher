@@ -1,5 +1,5 @@
 //! **THE ROC'S TOPIC ROUTES AGAINST THE ZIG THEY REPLACED** (roc-webbox
-//! docs/ROC-CHAT.md C4): one scenario of requests, served the old way
+//! docs/ROC-CHAT.md C4, C3, O1): one scenario of requests, served the old way
 //! (chat_actions_twin.zig) on one fresh site and the Roc's on another, at
 //! one fixed time; every answer and every file left must be the same.
 
@@ -126,6 +126,41 @@ const scenario = [_]Ask{
     .{ .who = .steve, .method = "GET", .target = "/chat/default" },
     .{ .who = .debbie, .method = "POST", .target = "/chat/" },
     .{ .who = .ann, .method = "GET", .target = "/chat" },
+    // O1: the send, stored (to a topic there, to one it makes, async with a
+    // cid), refused for each reason, a method, a stranger, a channel.
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=hello+**there**" },
+    .{ .who = .debbie, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "cid=c-7&markdown=hi", .extra = "X-Chat-Async: 1\r\n" },
+    .{ .who = .debbie, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=sync", .extra = "X-Chat-Async: yes\r\n" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Fresh/send", .body = "markdown=first" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/plans/send", .body = "markdown=case" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_3/Begin/send", .body = "markdown=to+Ann" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=with+a+cid&cid=c-8" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=x&cid=%ZZ" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "cid=1" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=+%0A%09" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=%FF" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=%ZZ" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=a&markdown=b" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=big&pad=" ++ &@as([70000]u8, @splat('x')) },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=padded&pad=" ++ &@as([2000]u8, @splat('x')) },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/send" },
+    .{ .who = .steve, .method = "PUT", .target = "/chat/c/1_2/Plans/send", .body = "markdown=x" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/send/x", .body = "markdown=x" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/send/x" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_9/Plans/send", .body = "markdown=x" },
+    .{ .who = .ann, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=x" },
+    .{ .who = .nobody, .method = "POST", .target = "/chat/c/1_2/Plans/send", .body = "markdown=x" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/Standup/send", .body = "markdown=standing" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/Later/send", .body = "markdown=new+one", .extra = "X-Chat-Async: 1\r\n" },
+    .{ .who = .debbie, .method = "POST", .target = "/channel/ops/Standup/send", .body = "markdown=x" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/nothere/Standup/send", .body = "markdown=x" },
+    // What the sends left, read back.
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Fresh" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/conversations" },
+    .{ .who = .ann, .method = "GET", .target = "/chat" },
+    .{ .who = .steve, .method = "GET", .target = "/chat" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
