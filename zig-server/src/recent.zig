@@ -1,7 +1,8 @@
 //! recent: /chat/recent — a flat reverse-chronological feed of activity across
-//! the signed-in user's chat topics (DMs + channels) and personal docs. The
-//! initial-load source is file mtime: on every GET the server walks the convs the
-//! viewer participates in plus their docs dir, stats each session/doc file, and
+//! the signed-in user's chat topics (DMs + channels) and personal docs. This
+//! is its reads (`gatherRows`: the convs the viewer is in, each topic's last
+//! message, a file's time where there is no date, their docs) and its
+//! stream; the page is the Roc's (roc-webbox chat/main.roc `recent!`), which
 //! ships the rows newest-first as inline JSON (the same recentEvent shape the
 //! live stream pushes, so recent.js uses one row builder for both paint and
 //! upsert).
@@ -18,105 +19,57 @@ const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const Io = @import("host_io").Io;
-const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
 const disk = @import("webbox").store;
 const sse = @import("webbox").sse;
-const chrome = @import("chat_chrome.zig");
-const html = @import("webbox").html;
 const timefmt = @import("timefmt.zig");
-const feed = @import("recent_feed.zig");
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-const Kind = enum { chat, doc };
-
-/// RecentItem is one row before JSON encoding. `at_ns` (file mtime) is the sort
-/// key; `at` is its RFC3339 rendering for the wire. Chat-only fields are
-/// pre-resolved per viewer, so DM and channel rows are shaped identically.
-const RecentItem = struct {
-    kind: Kind,
-    at_ns: i96,
-    at: []const u8,
-    // who: author display name, already "You" for the viewer (chat + doc).
-    who: []const u8 = "",
-    // chat-only
-    url: []const u8 = "",
-    where: []const u8 = "",
+/// **ONE ROW OF THE FEED, AS GATHERED**: what the page is built from, with
+/// every read it needs done. `secs` orders the row and dates it: a message's
+/// own date, or its file's (in even seconds, below). `uid` is who wrote the
+/// topic's last message ("" where the sidecar does not know, or for a row
+/// dated by its file), and `name` theirs, read only for someone other than
+/// the viewer; a doc's `uid` is the viewer's own. `key` is a chat row's URL
+/// or a doc's slug, `label` its "to <name>"/"in <channel>" or the doc's
+/// title. The Roc builds the page from these (roc-webbox chat/main.roc
+/// `recent!`, chat/Recent.roc): the "You", the excerpt, the order, the JSON.
+pub const Row = struct {
+    doc: bool = false,
+    secs: i64,
+    uid: []const u8 = "",
+    name: []const u8 = "",
+    key: []const u8,
+    label: []const u8 = "",
     topic: []const u8 = "",
-    excerpt: []const u8 = "",
-    dm: bool = false, // 1:1 conv (vs channel) — drives the "(DM)" label
-
-    // doc-only
-    slug: []const u8 = "",
-    title: []const u8 = "",
+    markdown: []const u8 = "",
+    dm: bool = false,
 };
 
-/// handle dispatches /chat/recent* — `rest` is the path after "/recent" ("" or
-/// "/stream"); anything else 404s.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
-    if (rest.len == 0) return renderRecentPage(req, io, alloc, uid);
+/// handle dispatches /chat/recent* — `rest` is the path after "/recent"; only
+/// the stream comes here, the page and the rest being the Roc's.
+pub fn handle(req: *Request, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     // Live: a per-uid subscriber on the recent bus. The server-rendered page IS
     // the backlog, so the stream is live-only (no replay). Fed by the
     // appendMessage cross-page fanout + docs save/create.
     if (std.mem.eql(u8, rest, "/stream")) {
         return sse.forward(req, bus, try chat_fanout.recentBusKey(alloc, uid));
     }
-    return http.notFound(req);
-}
-
-fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    const viewer = try users.getUserName(io, alloc, uid);
-    const items = try gatherRecentItems(io, alloc, uid);
-
-    var page = try chrome.page(alloc, "Recent", "Recent", viewer, "recent");
-    const b = &page.body;
-    // Cross-page attention strip + favicon alert on incoming pings (notify.js
-    // no-ops when #chat-notify is absent). Recent users camp here, so the tab
-    // needs to alert too.
-    try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
-    try b.appendSlice(alloc, "<div id=\"recent-mount\"></div>");
-    try emitRecentData(b, alloc, items);
-    inline for (.{ "recent.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
-    try page.send(req, .ok);
-}
-
-/// emitRecentData ships the initial feed as inline JSON next to the mount slot.
-/// The `</`→`<\/` pass prevents the JSON from closing the surrounding <script>.
-fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !void {
-    var j: std.ArrayList(u8) = .empty;
-    try j.append(alloc, '[');
-    for (items, 0..) |it, i| {
-        if (i != 0) try j.append(alloc, ',');
-        try encodeEvent(&j, alloc, it);
-    }
-    try j.append(alloc, ']');
-    const safe = try html.scriptSafe(alloc, j.items);
-    try b.appendSlice(alloc, "<script id=\"recent-data\" type=\"application/json\">");
-    try b.appendSlice(alloc, safe);
-    try b.appendSlice(alloc, "</script>");
-}
-
-/// encodeEvent writes one recentEvent JSON object, delegating to the shared
-/// recent_feed encoder so the backlog and the live fanout emit one shape.
-fn encodeEvent(j: *std.ArrayList(u8), alloc: Alloc, it: RecentItem) !void {
-    switch (it.kind) {
-        .chat => try feed.encodeChatEvent(j, alloc, .{ .at = it.at, .url = it.url, .who = it.who, .where = it.where, .topic = it.topic, .excerpt = it.excerpt, .dm = it.dm }),
-        .doc => try feed.encodeDocEvent(j, alloc, it.at, it.who, it.slug, it.title),
-    }
+    std.debug.panic("recent.handle: {s} is the Roc's", .{rest});
 }
 
 // ── gather ───────────────────────────────────────────
 
-/// gatherRecentItems walks every conv that includes the viewer — DMs (every
-/// other authorized principal) AND the channels they're a member of — plus their
-/// docs dir, statting each file for its mtime. Returned newest-first.
-fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
-    var items: std.ArrayList(RecentItem) = .empty;
+/// gatherRows walks every conv that includes the viewer — DMs (every other
+/// authorized principal) AND the channels they're a member of — plus their
+/// docs dir, in that order.
+pub fn gatherRows(io: Io, alloc: Alloc, uid: []const u8) ![]Row {
+    var rows: std.ArrayList(Row) = .empty;
 
     // DMs: one conv per other authorized principal.
     for (try users.listAuthorized(io, alloc)) |u| {
@@ -125,7 +78,7 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
         const dir = try chat_paths.dmConvDir(alloc, conv);
         const base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv});
         const where = try std.fmt.allocPrint(alloc, "to {s}", .{u.name});
-        try gatherConvTopics(io, alloc, &items, dir, base, where, uid, .dm);
+        try gatherConvTopics(io, alloc, &rows, dir, base, where, uid, .dm);
     }
 
     // Channels the viewer is a member of.
@@ -133,45 +86,34 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
         const dir = try chat_paths.channelConvDir(alloc, name);
         const base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
         const where = try std.fmt.allocPrint(alloc, "in {s}", .{name});
-        try gatherConvTopics(io, alloc, &items, dir, base, where, uid, .channel);
+        try gatherConvTopics(io, alloc, &rows, dir, base, where, uid, .channel);
     }
 
     // The viewer's own docs.
     for (try docs_store.listUserDocs(io, alloc, uid)) |d| {
         const path = docs_store.docPath(alloc, uid, d.slug) catch continue;
         const st = (try disk.statOrNull(io, alloc, path)) orelse continue;
-        const secs = fileSeconds(st.mtime);
-        try items.append(alloc, .{
-            .kind = .doc,
-            .at_ns = @as(i96, secs) * std.time.ns_per_s,
-            .at = try timefmt.formatRFC3339UTC(alloc, secs),
-            .who = "You",
-            .slug = d.slug,
-            .title = d.title,
-        });
+        try rows.append(alloc, .{ .doc = true, .secs = fileSeconds(st.mtime), .uid = uid, .key = d.slug, .label = d.title });
     }
-
-    const slice = try items.toOwnedSlice(alloc);
-    std.mem.sort(RecentItem, slice, {}, newestFirst);
-    return slice;
+    return rows.toOwnedSlice(alloc);
 }
 
-/// gatherConvTopics appends a chat row for each topic in one conv: its last
-/// message, when it was sent and by whom, and a one-line excerpt of it.
-/// `base`/`where` are the conv's pre-resolved URL base and per-viewer context
-/// label; `kind` says a 1:1 conv from a channel, for the wire.
+/// gatherConvTopics appends a row for each topic in one conv: its last
+/// message, when it was sent and by whom. `base`/`where` are the conv's
+/// pre-resolved URL base and per-viewer context label; `kind` says a 1:1
+/// conv from a channel, for the wire.
 ///
 /// **NEITHER A STAT NOR A TRANSCRIPT READ.** Both were per-topic costs that
 /// grew with the conversation: this page used to read and decode every
 /// transcript in full to take the last message of each. `chat_count.lastMessage`
 /// answers from the topic's sidecar, and the date it carries is the message's
 /// own — which is also the order, so there is no mtime to stat for.
-fn gatherConvTopics(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, kind: store.ConvKind) !void {
+fn gatherConvTopics(io: Io, alloc: Alloc, rows: *std.ArrayList(Row), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, kind: store.ConvKind) !void {
     for (try chat_paths.listTopics(io, alloc, dir)) |sid| {
         const url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
         const last = (try chat_count.lastMessage(io, alloc, dir, sid)) orelse {
             // A topic nobody has written to yet: it still belongs on the page.
-            try byFileTime(io, alloc, items, dir, sid, url, where, kind);
+            try byFileTime(io, alloc, rows, dir, sid, url, where, kind);
             continue;
         };
         const at = timefmt.unixFromRFC3339(last.at) orelse {
@@ -179,20 +121,17 @@ fn gatherConvTopics(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir
             // transcript written by something other than this server. Ordering
             // it at the epoch would bury it, and shipping its empty date to
             // the client renders as "NaNd", so it falls back to the file.
-            try byFileTime(io, alloc, items, dir, sid, url, where, kind);
+            try byFileTime(io, alloc, rows, dir, sid, url, where, kind);
             continue;
         };
-        try items.append(alloc, .{
-            .kind = .chat,
-            .at_ns = @as(i96, at) * std.time.ns_per_s,
-            // Normalized, so a date written with an offset reads as this
-            // server's own do; for those it is the same text.
-            .at = try timefmt.formatRFC3339UTC(alloc, at),
-            .who = try authorName(io, alloc, viewer, last.uid),
-            .url = url,
-            .where = where,
+        try rows.append(alloc, .{
+            .secs = at,
+            .uid = last.uid,
+            .name = try authorName(io, alloc, viewer, last.uid),
+            .key = url,
+            .label = where,
             .topic = sid,
-            .excerpt = try feed.recentExcerpt(alloc, last.markdown),
+            .markdown = last.markdown,
             .dm = kind == .dm,
         });
     }
@@ -210,42 +149,22 @@ fn fileSeconds(mtime_ns: i96) i64 {
     return secs - @mod(secs, 2);
 }
 
-/// newestFirst orders the feed. **A TIE IS BROKEN BY THE URL**, because a
-/// message's date is recorded to the second: two topics written inside one
-/// second must still come out in the same order on every host that serves this
-/// data, or the two builds of this application would disagree about a page.
-fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
-    if (a.at_ns != b.at_ns) return a.at_ns > b.at_ns;
-    const ka = if (a.url.len > 0) a.url else a.slug;
-    const kb = if (b.url.len > 0) b.url else b.slug;
-    return std.mem.lessThan(u8, ka, kb);
-}
-
-/// byFileTime appends a row ordered by the topic file's own mtime, with no
-/// excerpt: for a topic with no messages, and for one whose last message
-/// carries no date this server can read.
-fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, kind: store.ConvKind) !void {
+/// byFileTime appends a row dated by the topic file's own mtime, with no
+/// author and no message: for a topic with no messages, and for one whose
+/// last message carries no date this server can read.
+fn byFileTime(io: Io, alloc: Alloc, rows: *std.ArrayList(Row), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, kind: store.ConvKind) !void {
     const path = try chat_paths.transcriptPath(alloc, dir, sid);
     const st = (try disk.statOrNull(io, alloc, path)) orelse return;
-    const secs = fileSeconds(st.mtime);
-    try items.append(alloc, .{
-        .kind = .chat,
-        .at_ns = @as(i96, secs) * std.time.ns_per_s,
-        .at = try timefmt.formatRFC3339UTC(alloc, secs),
-        .url = url,
-        .where = where,
-        .topic = sid,
-        .dm = kind == .dm,
-    });
+    try rows.append(alloc, .{ .secs = fileSeconds(st.mtime), .key = url, .label = where, .topic = sid, .dm = kind == .dm });
 }
 
-/// authorName renders the most-recent author's display name, "You" when that is
-/// the viewer. `uid` is what the topic's sidecar recorded, and "" where it
-/// does not know: an empty Who cell, never an older author, which could be a
-/// "You" the viewer did not write (zig-metal-unikernel 153(1)).
+/// authorName reads the most-recent author's display name, for someone other
+/// than the viewer ("" for the viewer, whom the page calls "You", and where
+/// the sidecar does not know: an empty Who cell, never an older author,
+/// which could be a "You" the viewer did not write, zig-metal-unikernel
+/// 153(1)).
 fn authorName(io: Io, alloc: Alloc, viewer: []const u8, uid: []const u8) ![]const u8 {
-    if (uid.len == 0) return "";
-    if (std.mem.eql(u8, uid, viewer)) return "You";
+    if (uid.len == 0 or std.mem.eql(u8, uid, viewer)) return "";
     return users.getUserName(io, alloc, uid);
 }
 
@@ -278,9 +197,8 @@ test "fs: a session with no messages, written at an odd second, shows the even s
     try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = odd } } });
     f.close(io);
 
-    var items: std.ArrayList(RecentItem) = .empty;
-    try byFileTime(io, a, &items, dir, "empty", "/chat/c/1_2/empty", "to Bob", .dm);
-    try testing.expectEqual(@as(usize, 1), items.items.len);
-    try testing.expectEqualStrings(try timefmt.formatRFC3339UTC(a, 1790000000), items.items[0].at);
-    try testing.expectEqual(@as(i96, 1790000000) * std.time.ns_per_s, items.items[0].at_ns);
+    var rows: std.ArrayList(Row) = .empty;
+    try byFileTime(io, a, &rows, dir, "empty", "/chat/c/1_2/empty", "to Bob", .dm);
+    try testing.expectEqual(@as(usize, 1), rows.items.len);
+    try testing.expectEqual(@as(i64, 1790000000), rows.items[0].secs);
 }

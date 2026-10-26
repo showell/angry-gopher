@@ -25,6 +25,9 @@ const ChatMessage = @import("chat_store.zig").ChatMessage;
 const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
 const chat_fanout = @import("chat_fanout.zig");
+const recent_feed = @import("recent_feed.zig");
+const recent = @import("recent.zig");
+const chat_actions_twin = @import("chat_actions_twin.zig");
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -67,6 +70,8 @@ const Fn = enum(u8) {
     script_safe = 37,
     images_feed = 38,
     code_feed = 39,
+    recent_excerpt = 40,
+    recent_json = 41,
 };
 
 /// One Roc call's results, in `a`.
@@ -913,4 +918,87 @@ test "Feeds: a member's images.md and code.md read and sent to their pages as im
     try differ.none(compared);
     // The corpus reached what it means to: entries of both feeds, and blocks.
     try testing.expect(entries_seen > 1000 and blocks_seen > 1000);
+}
+
+/// A message's markdown from pieces near each rule recentExcerpt reads by:
+/// quote fences of every length (one in another), code fences, `<img` and
+/// `![…](…)` whole and broken, every whitespace, long runs past the cap,
+/// codepoints of each length and bytes that start none.
+fn excerptText(a: std.mem.Allocator, r: std.Random) ![]const u8 {
+    const parts = [_][]const u8{
+        "In MSG_x_1 I said:", "~~~ quote",   "~~~~ quote",   "~~~",      "~~~~",                                     "```",                                                                                                                                                                                                                                              "```zig",      "   ```",
+        "    ```",            "<img src=x>", "<IMG\nsrc=y>", "<imgx a>", "<img_ b>",                                 "<img",                                                                                                                                                                                                                                             "<img>",       "<img9>",
+        "![alt](u.png)",      "![a](b",      "![](x)",       "![a] (x)", "!",                                        "[",                                                                                                                                                                                                                                                "hi",          "there",
+        " ",                  "\t",          "\r",           "\x0b",     "\x0c",                                     "  ",                                                                                                                                                                                                                                               "caf\xc3\xa9", "\xe2\x82\xac",
+        "\xf0\x9f\x91\x8d",   "\xff",        "\x80",         "\xc3",     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9", "</script>",   "\"q\\",
+    };
+    var out: std.ArrayList(u8) = .empty;
+    for (0..r.uintAtMost(usize, 30)) |_| {
+        try out.appendSlice(a, parts[r.uintLessThan(usize, parts.len)]);
+        try out.append(a, if (r.uintLessThan(u8, 3) == 0) '\n' else if (r.boolean()) ' ' else 'x');
+    }
+    // Sometimes far past the cap.
+    if (r.uintLessThan(u8, 6) == 0) for (0..r.uintAtMost(usize, 40)) |_| try out.appendSlice(a, if (r.boolean()) "word \xc3\xa9t\xc3\xa9 " else "\xc0x\xc1y \xf8z ");
+    return out.items;
+}
+
+test "Recent: a message's excerpt as recentExcerpt makes it, whatever its bytes" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var rng = std.Random.DefaultPrng.init(0x4ecee7);
+    const r = rng.random();
+    var compared: usize = 0;
+    var cut: usize = 0;
+    for (0..3000) |_| {
+        const md = try excerptText(a, r);
+        const z = try recent_feed.recentExcerpt(a, md);
+        if (std.mem.endsWith(u8, z, "\xe2\x80\xa6")) cut += 1;
+        compared += 1;
+        const got = (try roc1(a, .recent_excerpt, &.{md})).?;
+        if (!std.mem.eql(u8, z, got)) differ.add("excerpt(\"{f}\"):\n  zig \"{f}\"\n  roc \"{f}\"", .{ std.zig.fmtString(md), std.zig.fmtString(z), std.zig.fmtString(got) });
+    }
+    try differ.none(compared);
+    try testing.expect(cut > 50);
+}
+
+test "Recent: the feed's JSON from the rows gathered, named, dated and ordered as recent.zig did, ties and all" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var rng = std.Random.DefaultPrng.init(0x4ece47);
+    const r = rng.random();
+    const secs = [_]i64{ 0, 1, 1_790_000_000, 1_790_000_000, 1_790_000_001, -86_401, 253_402_300_799 };
+    const keys = [_][]const u8{ "/chat/c/1_2/Plans", "/chat/c/1_2/plans", "/chat/c/1_2/Plan", "/channel/ops/a", "/channel/ops/a", "notes", "notes-2", "", "/chat/c/1_2/caf\xc3\xa9" };
+    const uids = [_][]const u8{ "", "1", "2", "3" };
+    const names = [_][]const u8{ "", "Debbie", "Ann \"A\" </script>", "\xff" };
+    const labels = [_][]const u8{ "", "to Debbie", "in ops", "My \"doc\"" };
+    var compared: usize = 0;
+    for (0..1500) |_| {
+        var rows: std.ArrayList(recent.Row) = .empty;
+        for (0..r.uintAtMost(usize, 9)) |_| try rows.append(a, .{
+            .doc = r.uintLessThan(u8, 4) == 0,
+            .secs = secs[r.uintLessThan(usize, secs.len)],
+            .uid = uids[r.uintLessThan(usize, uids.len)],
+            .name = names[r.uintLessThan(usize, names.len)],
+            .key = keys[r.uintLessThan(usize, keys.len)],
+            .label = labels[r.uintLessThan(usize, labels.len)],
+            .topic = if (r.boolean()) "Plans" else "",
+            .markdown = if (r.boolean()) try excerptText(a, r) else "",
+            .dm = r.boolean(),
+        });
+        const me = uids[1 + r.uintLessThan(usize, 3)];
+        const z = try chat_actions_twin.recentJSON(a, try chat_actions_twin.recentItems(a, me, rows.items));
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.append(a, me);
+        for (rows.items) |w| try args.appendSlice(a, &.{ if (w.doc) "1" else "0", try std.fmt.allocPrint(a, "{d}", .{w.secs}), w.uid, w.name, w.key, w.label, w.topic, w.markdown, if (w.dm) "1" else "0" });
+        compared += 1;
+        const got = (try roc1(a, .recent_json, args.items)).?;
+        if (!std.mem.eql(u8, z, got)) differ.add("recent:\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
+    }
+    try differ.none(compared);
 }

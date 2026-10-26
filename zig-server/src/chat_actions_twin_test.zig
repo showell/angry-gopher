@@ -198,6 +198,15 @@ const scenario = [_]Ask{
     .{ .who = .steve, .method = "GET", .target = "/chat/code/more" },
     .{ .who = .ann, .method = "GET", .target = "/chat/code" },
     .{ .who = .nobody, .method = "GET", .target = "/chat/images" },
+    // /chat/recent (C7): every topic the sends above touched, by its last
+    // message, and the ones nobody wrote to by their file.
+    .{ .who = .steve, .method = "GET", .target = "/chat/recent" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/recent" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/recent" },
+    .{ .who = .steve, .method = "HEAD", .target = "/chat/recent" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/recent" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/recent/" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/recentX" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -222,7 +231,15 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     // A channel with no topics, and a DM pair with none: the first-topic shell.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
     // A transcript with a byte that is not UTF-8: raw passes it untouched.
-    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" }), "caf\xe9 \xff\n", .{});
+    const bytes_md = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" });
+    try harness.UidSite.disk.write(io, a, bytes_md, "caf\xe9 \xff\n", .{});
+    // No message dates it, so /chat/recent dates it by its file: the same
+    // second for both sites, not the clock's.
+    {
+        var f = try std.Io.Dir.cwd().openFile(io, bytes_md, .{ .mode = .read_write });
+        defer f.close(io);
+        try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = @as(i96, 1_767_225_600) * std.time.ns_per_s } } });
+    }
     // Steve's feeds: more images than the page shows, a malformed block, a
     // code block, a quote, script in a tag; Debbie has none.
     {
@@ -327,6 +344,16 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
         if (std.mem.indexOf(u8, r, "const x = 1;") != null and std.mem.indexOf(u8, r, "print(\\\"hi\\\")") != null) feeds += 1;
     }
     try testing.expect(feeds >= 2);
+    // Recent was the real feed: the viewer's own last message as "You" on
+    // one page, the same author by name on another's, an excerpt, a row
+    // dated by its file.
+    var yours = false;
+    var named = false;
+    for (roc.answers) |r| if (std.mem.indexOf(u8, r, "id=\"recent-data\"") != null) {
+        if (std.mem.indexOf(u8, r, "\"who\":\"You\",\"where\":\"to Debbie\",\"topic\":\"Fresh\",\"excerpt\":\"first\"") != null) yours = true;
+        if (std.mem.indexOf(u8, r, "\"who\":\"Steve\",\"where\":\"to Steve\",\"topic\":\"Fresh\"") != null and std.mem.indexOf(u8, r, "\"at\":\"2026-01-01T00:00:00Z\",\"url\":\"/chat/c/1_2/Bytes\"") != null) named = true;
+    };
+    try testing.expect(yours and named);
     // The pages were the real ones: a sidebar with a pinned topic, the shell.
     var pages: usize = 0;
     var shells: usize = 0;

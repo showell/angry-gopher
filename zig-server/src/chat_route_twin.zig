@@ -209,13 +209,13 @@ test "the Roc router decides every corpus path as chat.zig's dispatch did, under
         // Asked exactly when the old code read who it was: all but a script.
         const old_asked = !(want == .serve and want.serve.route.family == .asset);
         // A route the Roc answers outright (C3: /chat, the conversations,
-        // a message's link, a new topic; /chat/links, /chat/images and
-        // /chat/code but their streams) has no Zig route to agree with: its
+        // a message's link, a new topic; /chat/links, /chat/recent,
+        // /chat/images and /chat/code but their streams) has no Zig route to agree with: its
         // parse is held by chat_actions_twin_test.zig's answers instead. It
         // must be one of those, and counted as presence.
         if (got != .serve and got != .redirect and want == .serve) {
             const r = want.serve.route;
-            const own = r.family == .default or r.family == .conversations or r.family == .msg or r.family == .links or ((r.family == .images or r.family == .code) and !std.mem.eql(u8, r.rest, "/stream")) or ((r.family == .dm or r.family == .channel) and r.part == .new);
+            const own = r.family == .default or r.family == .conversations or r.family == .msg or r.family == .links or ((r.family == .recent or r.family == .images or r.family == .code) and !std.mem.eql(u8, r.rest, "/stream")) or ((r.family == .dm or r.family == .channel) and r.part == .new);
             if (own and ask.marked and ask.asked) continue;
         }
         if (!got.eql(want) or ask.asked != old_asked) {

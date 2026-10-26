@@ -7,7 +7,8 @@
 //! `pinTopic` at angry-gopher dc3445e; chat.zig's landings and the page's
 //! tail at ffe98f1; chat.zig's newTopic, chatDefault, chatConversations
 //! and chatMsgLookup at 6324f7c; sendMessage at 3037312; rawTranscript and
-//! chat_links.zig at 51807d8; images.zig's and code.zig's pages at 91db93d). chat_router.zig runs it when a
+//! chat_links.zig at 51807d8; images.zig's and code.zig's pages at 91db93d;
+//! recent.zig's page at 43fb217, from the rows it gathered then). chat_router.zig runs it when a
 //! test sets `test_oracle`; chat_actions_twin_test.zig runs the same
 //! requests both ways, on two copies of one tree, and holds the answers and
 //! the files they leave to each other. Test-only: it goes when the Roc has
@@ -41,6 +42,9 @@ const html = webbox.html;
 const chat_fanout = @import("chat_fanout.zig");
 const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
+const recent = @import("recent.zig");
+const recent_feed = @import("recent_feed.zig");
+const timefmt = @import("timefmt.zig");
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -65,6 +69,10 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                 .conversations => return chatConversations(req, io, alloc, call.uid, now),
                 .msg => return chatMsgLookup(req, io, alloc, call.uid, r.rest),
                 .links => return linksPage(req, io, alloc, call.uid, r.rest),
+                .recent => if (!std.mem.eql(u8, r.rest, "/stream")) {
+                    if (r.rest.len != 0) return http.notFound(req);
+                    return renderRecentPage(req, io, alloc, call.uid);
+                },
                 .images, .code => if (!std.mem.eql(u8, r.rest, "/stream")) {
                     if (r.rest.len != 0) return http.notFound(req);
                     return if (r.family == .images) renderImagesPage(req, io, alloc, call.uid) else renderCodePage(req, io, alloc, call.uid);
@@ -486,6 +494,99 @@ fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeE
     try j.append(alloc, ']');
     const safe = try html.scriptSafe(alloc, j.items);
     try b.appendSlice(alloc, "<script id=\"code-data\" type=\"application/json\">");
+    try b.appendSlice(alloc, safe);
+    try b.appendSlice(alloc, "</script>");
+}
+
+const Kind = enum { chat, doc };
+
+/// RecentItem is one row before JSON encoding. `at_ns` (file mtime) is the sort
+/// key; `at` is its RFC3339 rendering for the wire. Chat-only fields are
+/// pre-resolved per viewer, so DM and channel rows are shaped identically.
+pub const RecentItem = struct {
+    kind: Kind,
+    at_ns: i96,
+    at: []const u8,
+    // who: author display name, already "You" for the viewer (chat + doc).
+    who: []const u8 = "",
+    // chat-only
+    url: []const u8 = "",
+    where: []const u8 = "",
+    topic: []const u8 = "",
+    excerpt: []const u8 = "",
+    dm: bool = false, // 1:1 conv (vs channel) — drives the "(DM)" label
+
+    // doc-only
+    slug: []const u8 = "",
+    title: []const u8 = "",
+};
+
+/// The items gatherRecentItems made of what it read (recent.zig `Row`):
+/// "You" for the viewer, the date as RFC3339, a message's excerpt.
+pub fn recentItems(alloc: Alloc, viewer: []const u8, rows: []const recent.Row) ![]RecentItem {
+    var items: std.ArrayList(RecentItem) = .empty;
+    for (rows) |w| {
+        const at_ns = @as(i96, w.secs) * std.time.ns_per_s;
+        const at = try timefmt.formatRFC3339UTC(alloc, w.secs);
+        if (w.doc) {
+            try items.append(alloc, .{ .kind = .doc, .at_ns = at_ns, .at = at, .who = "You", .slug = w.key, .title = w.label });
+            continue;
+        }
+        const who = if (w.uid.len == 0) "" else if (std.mem.eql(u8, w.uid, viewer)) "You" else w.name;
+        try items.append(alloc, .{ .kind = .chat, .at_ns = at_ns, .at = at, .who = who, .url = w.key, .where = w.label, .topic = w.topic, .excerpt = try recent_feed.recentExcerpt(alloc, w.markdown), .dm = w.dm });
+    }
+    const slice = try items.toOwnedSlice(alloc);
+    std.mem.sort(RecentItem, slice, {}, newestFirst);
+    return slice;
+}
+
+/// newestFirst orders the feed. **A TIE IS BROKEN BY THE URL**, because a
+/// message's date is recorded to the second: two topics written inside one
+/// second must still come out in the same order on every host that serves this
+/// data, or the two builds of this application would disagree about a page.
+fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
+    if (a.at_ns != b.at_ns) return a.at_ns > b.at_ns;
+    const ka = if (a.url.len > 0) a.url else a.slug;
+    const kb = if (b.url.len > 0) b.url else b.slug;
+    return std.mem.lessThan(u8, ka, kb);
+}
+
+fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+    const viewer = try users.getUserName(io, alloc, uid);
+    const items = try recentItems(alloc, uid, try recent.gatherRows(io, alloc, uid));
+
+    var page = try chrome.page(alloc, "Recent", "Recent", viewer, "recent");
+    const b = &page.body;
+    // Cross-page attention strip + favicon alert on incoming pings (notify.js
+    // no-ops when #chat-notify is absent). Recent users camp here, so the tab
+    // needs to alert too.
+    try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
+    try b.appendSlice(alloc, "<div id=\"recent-mount\"></div>");
+    try emitRecentData(b, alloc, items);
+    inline for (.{ "recent.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
+    try page.send(req, .ok);
+}
+
+/// recentJSON: the feed as the page ships it, before the script-safe pass.
+pub fn recentJSON(alloc: Alloc, items: []RecentItem) ![]u8 {
+    var j: std.ArrayList(u8) = .empty;
+    try j.append(alloc, '[');
+    for (items, 0..) |it, i| {
+        if (i != 0) try j.append(alloc, ',');
+        switch (it.kind) {
+            .chat => try recent_feed.encodeChatEvent(&j, alloc, .{ .at = it.at, .url = it.url, .who = it.who, .where = it.where, .topic = it.topic, .excerpt = it.excerpt, .dm = it.dm }),
+            .doc => try recent_feed.encodeDocEvent(&j, alloc, it.at, it.who, it.slug, it.title),
+        }
+    }
+    try j.append(alloc, ']');
+    return j.items;
+}
+
+/// emitRecentData ships the initial feed as inline JSON next to the mount slot.
+/// The `</`→`<\/` pass prevents the JSON from closing the surrounding <script>.
+fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !void {
+    const safe = try html.scriptSafe(alloc, try recentJSON(alloc, items));
+    try b.appendSlice(alloc, "<script id=\"recent-data\" type=\"application/json\">");
     try b.appendSlice(alloc, safe);
     try b.appendSlice(alloc, "</script>");
 }

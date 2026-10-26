@@ -25,6 +25,7 @@ const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
 const reactions = @import("reactions.zig");
+const recent = @import("recent.zig");
 const chat_state = @import("chat_state.zig");
 const store = @import("chat_store.zig");
 const chat_page = @import("chat_page.zig");
@@ -120,6 +121,7 @@ pub const Call = struct {
             .raw = raw,
             .links = links,
             .feed = feed,
+            .recent = recentRows,
             .react = react,
             .pin = pin,
             .landing = landing,
@@ -245,6 +247,20 @@ pub const Call = struct {
         const md = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.none(e)) orelse return &.{};
         const html = markdown.renderTrusted(c.alloc, md) catch |e| return c.none(e);
         return c.alloc.dupe([]const u8, &.{html}) catch |e| c.none(e);
+    }
+
+    /// The member's recent feed as recent.zig gathers it, nine fields a row.
+    fn recentRows(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        // absent-ok: not read as absence: a failed read is kept and returned once the call ends.
+        const rows = recent.gatherRows(c.io, c.alloc, c.uid) catch |e| return c.none(e);
+        var out: std.ArrayList([]const u8) = .empty;
+        for (rows) |w| {
+            const secs = std.fmt.allocPrint(c.alloc, "{d}", .{w.secs}) catch |e| return c.none(e);
+            out.appendSlice(c.alloc, &.{ if (w.doc) "1" else "0", secs, w.uid, w.name, w.key, w.label, w.topic, w.markdown, if (w.dm) "1" else "0" }) catch |e| return c.none(e);
+        }
+        return out.items;
     }
 
     /// The member's images.md (0) or code.md (1), as stored, or none.

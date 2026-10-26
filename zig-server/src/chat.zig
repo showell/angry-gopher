@@ -101,7 +101,7 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .docs => return docs.handle(req, io, alloc, bus, uid, route.rest, now),
         // /chat/recent, /images, /code [/stream]: the activity feed and the
         // per-user transcripts.
-        .recent => return recent.handle(req, io, alloc, bus, uid, route.rest),
+        .recent => return recent.handle(req, alloc, bus, uid, route.rest),
         .images => return images.handle(req, alloc, bus, uid, route.rest),
         .code => return code.handle(req, alloc, bus, uid, route.rest),
         // /chat/links: the Roc's (roc-webbox chat/main.roc `links!`).
