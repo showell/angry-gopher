@@ -33,6 +33,7 @@ const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
 const chat_store = @import("chat_store.zig");
 const disk = @import("webbox").store;
+const users = @import("users.zig");
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -95,6 +96,7 @@ const Fn = enum(u8) {
     channel_names = 57,
     rosters = 58,
     conv_paths = 59,
+    accounts = 60,
 };
 
 /// One Roc call's results, in `a`.
@@ -1701,5 +1703,113 @@ test "Paths: a conversation's topics folder, a channel's member file and a topic
         try testing.expectEqualStrings(try std.fs.path.join(a, &.{ try chat_paths.channelConvDir(a, kns[1]), "sessions" }), try at(a, got[1]));
         try testing.expectEqualStrings(try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", try std.fmt.allocPrint(a, "{s}.channel", .{kns[1]}) }), try at(a, got[2]));
         try testing.expectEqualStrings(try chat_store.reactionsPath(a, try chat_paths.dmConvDir(a, kns[0]), kns[2]), try at(a, got[3]));
+    }
+}
+
+// ── who has an account: the Roc's lookups (chat/Accounts.roc) over what
+// Host.accounts! hands it, against users.zig ────────────────────────────────
+
+/// The accounts as the host hands them to the Roc (chat_router `accounts`:
+/// users.listAccounts), `id, kind, name` triples, the kind `a`, `g` or `m`.
+fn accountArgs(a: std.mem.Allocator, all: []const users.Account) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for (all) |u| try out.appendSlice(a, &.{ u.id, switch (u.kind) {
+        .agent => "a",
+        .guest => "g",
+        .member => "m",
+    }, u.name });
+    return out.items;
+}
+
+test "Accounts: whether an account exists, its name and the authorized roster, as principalExists, getUserName and listAuthorized read them from generated account trees: canonical and not, files where folders belong, passwords or none, the agent, names with CR LF, and ids that sort by number, not bytes" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = try users.tmpRoots(&tmp, a);
+    defer saved.restore();
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0xacc075);
+    const r = rng.random();
+    // Folder names: canonical ids (the agent's 3 among them; 9 and 10, 99
+    // and 100, sorting one way by number and the other by bytes; ids past
+    // an i64, which count as 0, and the largest that is not), and names
+    // that are no account (007, +7, 0, a word, the counter's file).
+    const ids = [_][]const u8{ "1", "2", "3", "9", "10", "99", "100", "12", "9223372036854775807", "9223372036854775808", "99999999999999999999", "007", "+7", "0", "x", "next-id.txt" };
+    const names = [_]?[]const u8{ null, "Ann", "Ann\r\n", "Bo\r", "  Cy  d \t", "", "Dee\n\n", "\r\nEve", "Fay\r\r\n", "\n", "\xffG", "H\x00i" };
+    // Asked of both, besides every name above: an id with no folder, empty
+    // ones, and the agent's.
+    const asked_too = [_][]const u8{ "5", "", " ", "\t\r\n", "3" };
+    var huge_ties: usize = 0;
+    var guests: usize = 0;
+    var agents_bare: usize = 0;
+    var skipped: usize = 0;
+    for (0..1500) |k| {
+        try std.Io.Dir.cwd().deleteTree(io, users.auth_root);
+        // One in thirty: no account store at all.
+        if (k % 30 != 0) {
+            try std.Io.Dir.cwd().createDirPath(io, users.auth_root);
+            var made: std.ArrayList([]const u8) = .empty;
+            for (0..r.uintAtMost(usize, 9)) |_| {
+                const id = ids[r.uintLessThan(usize, ids.len)];
+                if (hasName(made.items, id)) continue;
+                try made.append(a, id);
+                const dir = try std.fs.path.join(a, &.{ users.auth_root, id });
+                // A file where a folder belongs, now and then.
+                if (r.uintLessThan(u8, 8) == 0) {
+                    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = dir, .data = "1" });
+                    continue;
+                }
+                try std.Io.Dir.cwd().createDirPath(io, dir);
+                if (r.boolean()) try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ dir, "password" }), .data = "$2b$12$hash" }) else {
+                    guests += 1;
+                    if (std.mem.eql(u8, id, "3")) agents_bare += 1;
+                }
+                if (names[r.uintLessThan(usize, names.len)]) |n| try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ dir, "name" }), .data = n });
+            }
+            if (hasName(made.items, "9223372036854775808") and hasName(made.items, "99999999999999999999")) huge_ties += 1;
+        }
+        // The ids that can reach a lookup: canonical ones (a DM's halves pass
+        // Paths.participant; the member's own is a session's, signed only for
+        // a counter's id). A non-canonical one never asks, so is not compared.
+        var queries: std.ArrayList([]const u8) = .empty;
+        for (ids ++ asked_too) |id| {
+            if (users.validUid(id) or std.mem.trim(u8, id, " \t\r\n").len == 0) try queries.append(a, id) else skipped += 1;
+        }
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.append(a, try std.fmt.allocPrint(a, "{d}", .{queries.items.len}));
+        try args.appendSlice(a, queries.items);
+        try args.appendSlice(a, try accountArgs(a, try users.listAccounts(io, a)));
+        const got = try roc(a, .accounts, args.items);
+        compared += 1;
+        for (queries.items, 0..) |id, i| {
+            const z_exists = try users.principalExists(io, a, id);
+            const z_name = try users.getUserName(io, a, id);
+            const r_exists = std.mem.eql(u8, got[2 * i], "1");
+            if (z_exists != r_exists or !std.mem.eql(u8, z_name, got[2 * i + 1]))
+                differ.add("account \"{f}\": zig {} \"{f}\", roc {} \"{f}\"", .{ std.zig.fmtString(id), z_exists, std.zig.fmtString(z_name), r_exists, std.zig.fmtString(got[2 * i + 1]) });
+        }
+        var flat: std.ArrayList([]const u8) = .empty;
+        for (try users.listAuthorized(io, a)) |u| try flat.appendSlice(a, &.{ u.id, u.name });
+        const r_flat = got[2 * queries.items.len ..];
+        if (!sameLists(flat.items, r_flat)) differ.add("authorized: zig {s}, roc {s}", .{ try said(a, flat.items), try said(a, r_flat) });
+    }
+    try differ.none(compared);
+    try testing.expect(huge_ties > 30 and guests > 1000 and agents_bare > 30 and skipped > 0);
+    // **WHY ONLY CANONICAL IDS ARE COMPARED**: no other reaches a lookup.
+    // A DM's other half and its partner come from a pair Paths.participant
+    // passed (dm_other), which takes canonical halves only, so a 007 folder,
+    // an account to principalExists, is never asked after.
+    for (ids) |id| {
+        if (users.validUid(id)) continue;
+        for ([_][]const u8{ try std.mem.concat(a, u8, &.{ id, "_1" }), try std.mem.concat(a, u8, &.{ "1_", id }) }) |key| {
+            for ([_][]const u8{ "1", id }) |me| try testing.expectEqual(@as(?[]u8, null), try roc1(a, .dm_other, &.{ key, me }));
+        }
     }
 }

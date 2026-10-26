@@ -124,6 +124,36 @@ pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
     return slice;
 }
 
+/// An account's kind, as the chat's Roc takes it: the agent (`isAgent`,
+/// decided here alone), a member (a password), or a guest (neither).
+pub const AccountKind = enum { agent, guest, member };
+
+/// One account as the chat's Roc takes it: its id, its kind, and its name
+/// file's bytes as stored ("" when it has none); the Roc cuts them as
+/// getUserName does (roc-webbox chat/Accounts.roc).
+pub const Account = struct { id: []const u8, name: []const u8, kind: AccountKind };
+
+/// **EVERY ACCOUNT, FOR THE CHAT'S ROC, AND NOTHING SECRET** (roc-webbox
+/// Host.accounts!): each canonical account folder under auth_root, in the
+/// disk's order, its kind and its name file. Two reads an account: whether
+/// it has a password (a stat, made for the agent too, as listAuthorized
+/// makes it) and its name; never a password's or a key's bytes. A read that
+/// failed is the error, never a guest or a name of "". Missing auth_root →
+/// none.
+pub fn listAccounts(io: Io, alloc: Alloc) ![]Account {
+    const entries = try store.list(io, alloc, auth_root);
+    var out: std.ArrayList(Account) = .empty;
+    for (entries) |entry| {
+        if (entry.kind != .directory) continue;
+        if (!allDigits(entry.name)) continue; // canonical only (156(i)), as listAuthorized and listUserIDs
+        const id = try alloc.dupe(u8, entry.name);
+        const member = try userIsMember(io, alloc, id);
+        const name = (try readAuthFile(io, alloc, id, "name")) orelse "";
+        try out.append(alloc, .{ .id = id, .name = name, .kind = if (isAgent(id)) .agent else if (member) .member else .guest });
+    }
+    return out.toOwnedSlice(alloc);
+}
+
 fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
     return (std.fmt.parseInt(i64, a.id, 10) catch 0) < (std.fmt.parseInt(i64, b.id, 10) catch 0);
 }

@@ -11,9 +11,10 @@
 //!
 //! **A TOPIC'S REACTIONS, REACT, PIN AND UNPIN ARE THE ROC'S** (C4): it
 //! serves them itself, asking `Call` (below) for presence, the reads its
-//! lookup of the conversation decides on (O2: an account, a name; a
-//! channel's member file and the topics' folder by the file primitives,
-//! named and parsed by the Roc), the body and the store's writes, which
+//! lookup of the conversation decides on (O2: every account, once, looked
+//! up by the Roc; a channel's member file and the topics' folder by the
+//! file primitives, named and parsed by the Roc), the body and the store's
+//! writes, which
 //! stay Zig's until C8, and answers what to send. `handle` sends it once
 //! the call has ended. **THE HOST HOLDS NO CONVERSATION BETWEEN CALLS**:
 //! each operation on one is handed it (`roc_chat.Conv`) by the Roc.
@@ -131,8 +132,7 @@ pub const Call = struct {
             .ctx = c,
             .member = member,
             .presence = presence_,
-            .account = account,
-            .name = nameOf,
+            .accounts = accounts,
             .body = body,
             .raw = raw,
             .links = links,
@@ -147,9 +147,7 @@ pub const Call = struct {
             .page = page,
             .srcs = srcs,
             .me = me,
-            .viewer = viewerName,
             .now = now_,
-            .members = members,
             .append = append,
             .header = header,
             .hostile = hostile,
@@ -197,20 +195,29 @@ pub const Call = struct {
         presence.markActiveAndBroadcast(c.io, c.alloc, c.bus, c.uid, c.now);
     }
 
-    /// Whether account `id` exists.
-    fn account(ctx: *anyopaque, id: []const u8) bool {
+    /// **EVERY ACCOUNT, THE ROC'S ONE IDENTITY READ** (Host.accounts!):
+    /// users.listAccounts, which reads each canonical folder's password
+    /// stat and name and nothing else of the auth root; the agent's kind is
+    /// its. The Roc does every lookup (exists, a name, the roster) and asks
+    /// at most once a request. A read that failed fails the request.
+    fn accounts(ctx: *anyopaque) roc_chat.Accounts {
         const c = of(ctx);
-        if (c.dead()) return false;
-        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no account" is false.
-        return users.principalExists(c.io, c.alloc, id) catch |e| c.no(e);
-    }
-
-    /// Account `id`'s name, or "".
-    fn nameOf(ctx: *anyopaque, id: []const u8) []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return "";
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return users.getUserName(c.io, c.alloc, id) catch |e| c.nothing(e);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: a failed read is kept and returned once the call ends.
+        const all = users.listAccounts(c.io, c.alloc) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        const out = c.alloc.alloc(roc_chat.Account, all.len) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        for (all, out) |u, *o| o.* = .{ .id = u.id, .name = u.name, .kind = switch (u.kind) {
+            .agent => .agent,
+            .guest => .guest,
+            .member => .member,
+        } };
+        return .{ .found = out };
     }
 
     /// **THE CONVERSATION THE ROC FOUND, AS THE STORE TAKES IT**: where it
@@ -444,33 +451,10 @@ pub const Call = struct {
         return of(ctx).uid;
     }
 
-    /// `fail`, answering the Roc "".
-    fn nothing(c: *Call, e: anyerror) []const u8 {
-        c.fail(e);
-        return "";
-    }
-
-    fn viewerName(ctx: *anyopaque) []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return "";
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return users.getUserName(c.io, c.alloc, c.uid) catch |e| c.nothing(e);
-    }
-
     fn now_(ctx: *anyopaque) i64 {
         const c = of(ctx);
         if (c.dead()) return 0;
         return c.now.unixSecs();
-    }
-
-    fn members(ctx: *anyopaque) []const []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return &.{};
-        // absent-ok: the same.
-        const all = users.listAuthorized(c.io, c.alloc) catch |e| return c.none(e);
-        var out: std.ArrayList([]const u8) = .empty;
-        for (all) |u| out.appendSlice(c.alloc, &.{ u.id, u.name }) catch |e| return c.none(e);
-        return out.items;
     }
 
     fn append(ctx: *anyopaque, conv_: roc_chat.Conv, sid_: []const u8, name: []const u8, markdown_: []const u8, cid_: []const u8) bool {

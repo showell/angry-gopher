@@ -874,6 +874,50 @@ test "route: a topics folder that is not there is no topics; one that is a file 
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
 }
 
+test "route: an account whose name will not read fails the request (Host.accounts!), never a name of \"\" or no such account; as the old Zig failed the DM it titled" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    // Debbie's name a folder: there, and unreadable.
+    const name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
+    try harness.UidSite.disk.remove(io, a, name);
+    try std.Io.Dir.cwd().createDirPath(io, name);
+    // Her DM's topics: the old Zig read her name for the title and failed
+    // the same, byte for byte.
+    for ([_][2][]const u8{ .{ "GET", "/chat/c/1_2/Plans" }, .{ "POST", "/chat/c/1_2/Plans/pin" }, .{ "GET", "/chat/c/1_2/Plans/reactions" } }) |ask| {
+        const roc = try answeredBy(a, io, false, ask[0], ask[1], steve);
+        const zig = try answeredBy(a, io, true, ask[0], ask[1], steve);
+        try testing.expectEqual(zig.err, roc.err);
+        try testing.expectEqualStrings(zig.out, roc.out);
+        try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
+    }
+    // **WHAT CHANGED**: every account is read in one asking, names and all,
+    // so the DM's landing and the roster, the conversations, a message's
+    // topic and every page that names the member fail too, where the old
+    // Zig read only the names it showed (its landing, with a topic, read
+    // none). One account that will not read is never left out.
+    for ([_][]const u8{ "/chat/c/1_2", "/chat/conversations", "/chat/msg/Plans_1", "/chat/links", "/chat/images" }) |target| {
+        const roc = try answeredBy(a, io, false, "GET", target, steve);
+        try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
+    }
+    // The disk willing again: served.
+    try std.Io.Dir.cwd().deleteTree(io, name);
+    try users.setUserName(io, a, "2", "Debbie");
+    const ok = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET /chat/conversations HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{steve}));
+    try testing.expectEqualStrings("200 OK", harness.status(ok));
+    try testing.expect(std.mem.indexOf(u8, ok, "Debbie") != null);
+}
+
 test "route: /chat/msg skips a malformed channel and counts it for /admin/host; a roster that will not read is a 500, never a topic not found" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
