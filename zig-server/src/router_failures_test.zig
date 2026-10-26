@@ -507,6 +507,24 @@ test "route: a send whose message will not append, or whose channel's members wi
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/channel/ops/Standup/send", steve, "markdown=hello")));
 }
 
+test "route: a links page whose links.md will not read is a 500, never the stub that says there are none" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    // A folder where the links page goes: it cannot be read.
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "links.md" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/links", steve)));
+}
+
 /// A request whose handler must fail: the router's error, and the 500 the
 /// site would have sent (here, what went out before it).
 fn askFailing(a: std.mem.Allocator, io: Io, method: []const u8, target: []const u8, cookies: []const u8) ![]const u8 {

@@ -79,8 +79,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
             return chat.serve(req, io, alloc, bus, call.uid, s.route, now);
         },
         .respond => |r| {
-            const typed = [_]std.http.Header{.{ .name = "content-type", .value = r.content_type }};
-            return req.respond(r.body, .{ .status = @fromBackingInt(@intCast(r.status)), .extra_headers = if (r.content_type.len > 0) &typed else &.{} });
+            const headers = [_]std.http.Header{ .{ .name = "content-type", .value = r.content_type }, .{ .name = "x-content-type-options", .value = "nosniff" } };
+            const n: usize = if (r.content_type.len == 0) 0 else if (r.nosniff) 2 else 1;
+            return req.respond(r.body, .{ .status = @fromBackingInt(@intCast(r.status)), .extra_headers = headers[0..n] });
         },
         .not_allowed => |m| return http.methodNotAllowed(req, m),
         // The host answered inside the call (a body too big): nothing more.
@@ -116,6 +117,8 @@ pub const Call = struct {
             .topic = topic,
             .body = body,
             .reactions = reactions_,
+            .raw = raw,
+            .links = links,
             .react = react,
             .pin = pin,
             .landing = landing,
@@ -219,6 +222,28 @@ pub const Call = struct {
             c.fail(e);
             return null;
         };
+    }
+
+    fn raw(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        const t = c.found orelse @panic("Host.raw!: no topic found");
+        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no transcript" is none.
+        const data = (chat_paths.readTranscript(c.io, c.alloc, t.dir, t.sid) catch |e| return c.none(e)) orelse return &.{};
+        return c.alloc.dupe([]const u8, &.{data}) catch |e| c.none(e);
+    }
+
+    /// The member's links.md, rendered as the server's own markdown
+    /// (`renderTrusted`: a curated page has far more links than a message
+    /// may), or none.
+    fn links(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        const path = std.fs.path.join(c.alloc, &.{ store.chat_root, "users", c.uid, "links.md" }) catch |e| return c.none(e);
+        // absent-ok: the same; only "no file" is none.
+        const md = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.none(e)) orelse return &.{};
+        const html = markdown.renderTrusted(c.alloc, md) catch |e| return c.none(e);
+        return c.alloc.dupe([]const u8, &.{html}) catch |e| c.none(e);
     }
 
     fn react(ctx: *anyopaque, msg: u64, emoji: []const u8, on: bool) u8 {

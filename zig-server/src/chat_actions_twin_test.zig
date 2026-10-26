@@ -1,5 +1,5 @@
 //! **THE ROC'S TOPIC ROUTES AGAINST THE ZIG THEY REPLACED** (roc-webbox
-//! docs/ROC-CHAT.md C4, C3, O1): one scenario of requests, served the old way
+//! docs/ROC-CHAT.md C4, C3, O1, raw, links): one scenario of requests, served the old way
 //! (chat_actions_twin.zig) on one fresh site and the Roc's on another, at
 //! one fixed time; every answer and every file left must be the same.
 
@@ -8,6 +8,7 @@ const Io = @import("host_io").Io;
 const webbox = @import("webbox");
 const chat_router = @import("chat_router.zig");
 const store = @import("chat_store.zig");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const Alloc = std.mem.Allocator;
 
@@ -161,6 +162,27 @@ const scenario = [_]Ask{
     .{ .who = .steve, .method = "GET", .target = "/chat/conversations" },
     .{ .who = .ann, .method = "GET", .target = "/chat" },
     .{ .who = .steve, .method = "GET", .target = "/chat" },
+    // A topic's raw transcript and /chat/links.
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Bytes/raw" },
+    .{ .who = .debbie, .method = "HEAD", .target = "/chat/c/1_2/Plans/raw" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/plans/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Fresh/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/raw/x" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_9/Plans/raw" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup/raw" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/raw" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/links" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/links" },
+    .{ .who = .steve, .method = "HEAD", .target = "/chat/links" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/links", .body = "x=1" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/links/" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/links/more" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/linksX" },
+    .{ .who = .nobody, .method = "GET", .target = "/chat/links" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -184,6 +206,10 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "last-conv" }), "1_2\n", .{});
     // A channel with no topics, and a DM pair with none: the first-topic shell.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
+    // A transcript with a byte that is not UTF-8: raw passes it untouched.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" }), "caf\xe9 \xff\n", .{});
+    // Steve's curated links; Debbie has none.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "links.md" }), "## Reading\n\n- [Zig](https://ziglang.org) & [Roc](https://www.roc-lang.org)\n- <b>bold?</b> a *point*\n", .{});
     @import("presence.zig").forgetForTest();
 
     chat_router.test_oracle = oracle;
@@ -229,7 +255,7 @@ fn tree(a: Alloc, io: Io, root: []const u8) ![]const u8 {
     return out.toOwnedSlice();
 }
 
-test "a topic's reactions, react, pin and unpin (C4), and a conversation's landing, a topic's page, a new topic, the conversations, a message's link and /chat (C3) answer as the Zig they replaced did, and leave the same files" {
+test "a topic's reactions, react, pin and unpin (C4), and a conversation's landing, a topic's page, a new topic, the conversations, a message's link and /chat (C3), the send (O1), raw and links answer as the Zig they replaced did, and leave the same files" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -257,6 +283,15 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     };
     try testing.expect(std.mem.allEqual(bool, &seen, true));
     try testing.expect(std.mem.indexOf(u8, roc.files, "\"on\":false") != null);
+    // Raw was the bytes as stored, not UTF-8 and nosniff; links the curated page.
+    var raws: usize = 0;
+    var linked: usize = 0;
+    for (roc.answers) |r| {
+        if (std.mem.endsWith(u8, r, "\r\n\r\ncaf\xe9 \xff\n") and std.mem.indexOf(u8, r, "x-content-type-options: nosniff") != null) raws += 1;
+        if (std.mem.indexOf(u8, r, "<a href=\"https://ziglang.org\"") != null) linked += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), raws);
+    try testing.expect(linked >= 1);
     // The pages were the real ones: a sidebar with a pinned topic, the shell.
     var pages: usize = 0;
     var shells: usize = 0;

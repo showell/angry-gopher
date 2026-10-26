@@ -6,7 +6,8 @@
 //! as they were (reactions.zig `serveFile` and `handleReact`, chat.zig
 //! `pinTopic` at angry-gopher dc3445e; chat.zig's landings and the page's
 //! tail at ffe98f1; chat.zig's newTopic, chatDefault, chatConversations
-//! and chatMsgLookup at 6324f7c; sendMessage at 3037312). chat_router.zig runs it when a
+//! and chatMsgLookup at 6324f7c; sendMessage at 3037312; rawTranscript and
+//! chat_links.zig at 51807d8). chat_router.zig runs it when a
 //! test sets `test_oracle`; chat_actions_twin_test.zig runs the same
 //! requests both ways, on two copies of one tree, and holds the answers and
 //! the files they leave to each other. Test-only: it goes when the Roc has
@@ -34,6 +35,8 @@ const Conv = @import("chat_conv.zig").Conv;
 const Topic = @import("chat_conv.zig").Topic;
 const markdown = @import("markdown.zig");
 const edge = webbox.edge;
+const chrome = @import("chat_chrome.zig");
+const disk = webbox.store;
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -57,6 +60,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                 .default => return chatDefault(req, io, alloc, call.uid, now),
                 .conversations => return chatConversations(req, io, alloc, call.uid, now),
                 .msg => return chatMsgLookup(req, io, alloc, call.uid, r.rest),
+                .links => return linksPage(req, io, alloc, call.uid, r.rest),
                 else => {},
             }
             if ((r.family == .dm or r.family == .channel) and r.part == .topic and (r.tail == .send or r.tail == .invalid_send)) {
@@ -91,6 +95,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                         .pin => pinTopic(req, io, alloc, call.uid, t.key, t.sid, true),
                         else => pinTopic(req, io, alloc, call.uid, t.key, t.sid, false),
                     };
+                },
+                .raw => {
+                    const t = (try chat.findTopic(io, alloc, call.uid, r)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
+                    if (req.head.method != .GET and req.head.method != .HEAD) return http.methodNotAllowed(req, .GET);
+                    return rawTranscript(req, io, alloc, t.dir, r.sid);
                 },
                 else => {},
             };
@@ -360,3 +369,44 @@ fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
     if (is_async) return req.respond("", .{ .status = .no_content });
     return http.redirect(req, back);
 }
+
+/// rawTranscript serves the literal on-disk .md bytes (text/plain, nosniff).
+fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
+    const data = (try chat_paths.readTranscript(io, alloc, conv_dir, sid)) orelse return http.notFound(req);
+    try req.respond(data, .{ .extra_headers = &.{
+        .{ .name = "content-type", .value = "text/plain; charset=utf-8" },
+        .{ .name = "x-content-type-options", .value = "nosniff" },
+    } });
+}
+
+/// linksPage serves /chat/links — `rest` must be empty (no sub-routes).
+fn linksPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
+    if (rest.len != 0) return http.notFound(req);
+    const viewer = try users.getUserName(io, alloc, uid);
+    const path = try std.fs.path.join(alloc, &.{ store.chat_root, "users", uid, "links.md" });
+    const md: ?[]u8 = try disk.readOrNull(io, alloc, path, .unlimited);
+
+    var page = try chrome.page(alloc, "Links", "Links", viewer, "links");
+    const b = &page.body;
+    try b.appendSlice(alloc, links_css ++ "<div class=\"links-page\">");
+    if (md) |src| {
+        // renderTrusted: links.md is server-curated (Steve scp's it), not request
+        // input, so it's exempt from render()'s hostile-token cap — a links page
+        // has far more than 256 link tokens. Same pipeline otherwise.
+        try b.appendSlice(alloc, try markdown.renderTrusted(alloc, src));
+    } else {
+        try b.appendSlice(alloc, "<p>No links yet — ask Steve to curate links.</p>");
+    }
+    try b.appendSlice(alloc, "</div>"); // close .links-page
+    try page.send(req, .ok);
+}
+
+// A readable text column — .app-body-wrap is the full-width chat-layout shell,
+// so this static page supplies its own narrow column. Tiny + scoped on purpose.
+const links_css =
+    \\<style>
+    \\.links-page { max-width: 46rem; margin: 0 auto; line-height: 1.55; }
+    \\.links-page h2 { margin-top: 1.6rem; }
+    \\.links-page li { margin: 3px 0; }
+    \\</style>
+;

@@ -57,7 +57,6 @@ const recent = @import("recent.zig");
 const chat_search = @import("chat_search.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
-const links = @import("chat_links.zig");
 const upload = @import("chat_upload.zig");
 const presence = @import("presence.zig");
 const chat_state = @import("chat_state.zig");
@@ -101,11 +100,12 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         // /chat/docs[/...]: the three-pane authoring surface (docs.zig).
         .docs => return docs.handle(req, io, alloc, bus, uid, route.rest, now),
         // /chat/recent, /images, /code [/stream]: the activity feed and the
-        // per-user transcripts; /chat/links, a static page.
+        // per-user transcripts.
         .recent => return recent.handle(req, io, alloc, bus, uid, route.rest),
         .images => return images.handle(req, io, alloc, bus, uid, route.rest),
         .code => return code.handle(req, io, alloc, bus, uid, route.rest),
-        .links => return links.handle(req, io, alloc, uid, route.rest),
+        // /chat/links: the Roc's (roc-webbox chat/main.roc `links!`).
+        .links => std.debug.panic("chat.serve: /chat/links is the Roc's", .{}),
         // /chat/search/words, /chat/search/messages (chat_search.zig), JSON.
         .search => return chat_search.handle(req, io, alloc, uid, route.rest, now),
         .dm => return convRoute(req, io, alloc, bus, uid, route),
@@ -285,10 +285,9 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
         // it hands one back only when `findTopic` did not find it, and that
         // was answered above.
         .pin, .unpin, .reactions, .react => std.debug.panic("chat.topicRoute: {t} is the Roc's, and its topic was here", .{route.tail}),
-        .raw => {
-            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            try rawTranscript(req, io, alloc, conv.dir, topic.sid);
-        },
+        // The Roc's (chat/main.roc `act!`), handed back only when the topic
+        // was not found, which was answered above.
+        .raw => std.debug.panic("chat.topicRoute: raw is the Roc's, and its topic was here", .{}),
         .download => {
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
             try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
@@ -333,16 +332,7 @@ fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 
 // ── send (write path) ────────────────────────────────────────────────────────
 
-// ── raw + index ──────────────────────────────────────────────────────────────
-
-/// rawTranscript serves the literal on-disk .md bytes (text/plain, nosniff).
-fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
-    const data = (try chat_paths.readTranscript(io, alloc, conv_dir, sid)) orelse return http.notFound(req);
-    try req.respond(data, .{ .extra_headers = &.{
-        .{ .name = "content-type", .value = "text/plain; charset=utf-8" },
-        .{ .name = "x-content-type-options", .value = "nosniff" },
-    } });
-}
+// ── assets ───────────────────────────────────────────────────────────────────
 
 /// serveAsset serves an embedded client bundle by file name (no leading slash).
 fn serveAsset(req: *Request, name: []const u8) !void {
