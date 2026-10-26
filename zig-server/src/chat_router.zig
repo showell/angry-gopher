@@ -29,7 +29,6 @@ const users = @import("users.zig");
 const presence = @import("presence.zig");
 const reactions = @import("reactions.zig");
 const recent = @import("recent.zig");
-const chat_state = @import("chat_state.zig");
 const store = @import("chat_store.zig");
 const chat_page = @import("chat_page.zig");
 const chat_paths = @import("chat_paths.zig");
@@ -138,23 +137,20 @@ pub const Call = struct {
             .reactions = reactions_,
             .raw = raw,
             .links = links,
-            .feed = feed,
             .recent = recentRows,
             .react = react,
-            .pins = pins,
-            .write_pins = writePins,
-            .remove_pins = removePins,
+            .read = read,
+            .write = write,
+            .remove = remove,
+            .fail = refuse,
             .page = page,
             .srcs = srcs,
             .me = me,
             .viewer = viewerName,
-            .last_conv = lastConv,
-            .last_viewed = lastViewed,
             .now = now_,
             .topics = topics,
             .channel_rosters = channelRosters,
             .members = members,
-            .bookmark = bookmark,
             .append = append,
             .header = header,
             .hostile = hostile,
@@ -322,18 +318,51 @@ pub const Call = struct {
         return out.items;
     }
 
-    /// The member's images.md or code.md, as stored, or none.
-    fn feed(ctx: *anyopaque, which: roc_chat.Feed) []const []const u8 {
+    /// **THE FILE PRIMITIVES** (Host.read!, Host.write!, Host.remove!): a
+    /// file under the chat root, its name and its format the Roc's (the
+    /// member's bookmarks, pins and feeds: ChatState.roc, Feeds.roc). The
+    /// seam has refused a path that would leave the root (roc_chat
+    /// `underRoot`); here it is only joined to it. Missing is nothing there
+    /// (webbox.store.readOrNull: not found, or through a file); every other
+    /// failure fails the request.
+    fn read(ctx: *anyopaque, path: []const u8) roc_chat.Read {
         const c = of(ctx);
-        if (c.dead()) return &.{};
-        const name = switch (which) {
-            .images => "images.md",
-            .code => "code.md",
-        };
-        const path = std.fs.path.join(c.alloc, &.{ store.chat_root, "users", c.uid, name }) catch |e| return c.none(e);
-        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is none.
-        const data = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.none(e)) orelse return &.{};
-        return c.alloc.dupe([]const u8, &.{data}) catch |e| c.none(e);
+        if (c.dead()) return .failed;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unread(e);
+        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is missing.
+        const data = (webbox.store.readOrNull(c.io, c.alloc, p, .unlimited) catch |e| return c.unread(e)) orelse return .missing;
+        return .{ .found = data };
+    }
+
+    /// `fail`, answering the Roc that the read failed.
+    fn unread(c: *Call, e: anyerror) roc_chat.Read {
+        c.fail(e);
+        return .failed;
+    }
+
+    fn write(ctx: *anyopaque, path: []const u8, bytes: []const u8) bool {
+        const c = of(ctx);
+        if (c.dead()) return false;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e| return c.no(e);
+        return true;
+    }
+
+    fn remove(ctx: *anyopaque, path: []const u8) bool {
+        const c = of(ctx);
+        if (c.dead()) return false;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends; a file not there is gone already.
+        webbox.store.remove(c.io, c.alloc, p) catch |e| return c.no(e);
+        return true;
+    }
+
+    /// The seam's failure of the request (a path outside the chat root):
+    /// kept as every hosted function's is, the first one kept.
+    fn refuse(ctx: *anyopaque, e: anyerror) void {
+        const c = of(ctx);
+        if (!c.dead()) c.fail(e);
     }
 
     fn react(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, msg: u64, emoji: []const u8, on: bool) roc_chat.Reacted {
@@ -352,36 +381,6 @@ pub const Call = struct {
             .stored => .stored,
             .no_such_message => .no_such_message,
         };
-    }
-
-    /// The member's pinned file for `conv_`, as
-    /// stored ("" for none). **A SET THAT WILL NOT READ IS NOT AN EMPTY SET**
-    /// (chat_state.setTopicPinned): a failed read is null, never "", so the
-    /// Roc writes nothing over the pins it could not see.
-    fn pins(ctx: *anyopaque, conv_: roc_chat.Conv) ?[]const u8 {
-        const c = of(ctx);
-        if (c.dead()) return null;
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return chat_state.readPinnedFile(c.io, c.alloc, c.uid, conv_.key) catch |e| {
-            c.fail(e);
-            return null;
-        };
-    }
-
-    fn writePins(ctx: *anyopaque, conv_: roc_chat.Conv, bytes: []const u8) bool {
-        const c = of(ctx);
-        if (c.dead()) return false;
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        chat_state.writePinnedFile(c.io, c.alloc, c.uid, conv_.key, bytes) catch |e| return c.no(e);
-        return true;
-    }
-
-    fn removePins(ctx: *anyopaque, conv_: roc_chat.Conv) bool {
-        const c = of(ctx);
-        if (c.dead()) return false;
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        chat_state.removePinnedFile(c.io, c.alloc, c.uid, conv_.key) catch |e| return c.no(e);
-        return true;
     }
 
     /// `fail`, answering the Roc nothing.
@@ -441,20 +440,6 @@ pub const Call = struct {
         return users.getUserName(c.io, c.alloc, c.uid) catch |e| c.nothing(e);
     }
 
-    fn lastConv(ctx: *anyopaque) []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return "";
-        // absent-ok: the same.
-        return chat_state.lastUserConv(c.io, c.alloc, c.uid) catch |e| c.nothing(e);
-    }
-
-    fn lastViewed(ctx: *anyopaque, conv_: []const u8) []const u8 {
-        const c = of(ctx);
-        if (c.dead()) return "";
-        // absent-ok: the same.
-        return chat_state.lastViewedTopic(c.io, c.alloc, c.uid, conv_) catch |e| c.nothing(e);
-    }
-
     fn now_(ctx: *anyopaque) i64 {
         const c = of(ctx);
         if (c.dead()) return 0;
@@ -502,15 +487,6 @@ pub const Call = struct {
         var out: std.ArrayList([]const u8) = .empty;
         for (all) |u| out.appendSlice(c.alloc, &.{ u.id, u.name }) catch |e| return c.none(e);
         return out.items;
-    }
-
-    fn bookmark(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) bool {
-        const c = of(ctx);
-        if (c.dead()) return false;
-        const key = c.alloc.dupe(u8, conv_.key) catch |e| return c.no(e);
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        chat_state.setLastViewedTopic(c.io, c.alloc, c.uid, key, c.alloc.dupe(u8, sid) catch |e| return c.no(e)) catch |e| return c.no(e);
-        return true;
     }
 
     fn append(ctx: *anyopaque, conv_: roc_chat.Conv, sid_: []const u8, name: []const u8, markdown_: []const u8, cid_: []const u8) bool {

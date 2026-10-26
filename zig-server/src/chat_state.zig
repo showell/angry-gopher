@@ -61,7 +61,11 @@ pub fn setLastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []con
     try writeIfChanged(io, alloc, try std.fs.path.join(alloc, &.{ dir, "last-conv" }), conv_key);
 }
 
-/// `value` and a newline at `path`, unless it already holds `value`.
+/// `value` and a newline at `path`, unless it already holds `value`. The
+/// Roc chat reads and writes these files itself (roc-webbox
+/// chat/ChatState.roc: `bookmark` reads them as lastUserConv and
+/// lastViewedTopic do, `changed` is this decision); chat_twin_test.zig
+/// holds both to this, on disk.
 fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) !void {
     // absent-ok: a bookmark that cannot be read is written again; the write says whether it can be.
     const was = disk.readOrNull(io, alloc, path, .limited(256)) catch null;
@@ -147,14 +151,14 @@ pub fn nextPinned(alloc: Alloc, existing: []const u8, sid: []const u8, pinned: b
 }
 
 /// The member's pinned file for `conv_key` written as `body` (nextPinned's).
-pub fn writePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, body: []const u8) !void {
+fn writePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, body: []const u8) !void {
     const path = try pinnedPath(alloc, uid, conv_key);
     if (std.fs.path.dirname(path)) |d| try disk.makeDir(io, alloc, d);
     try disk.write(io, alloc, path, body, .{});
 }
 
 /// The member's pinned file for `conv_key` removed: no pin is left.
-pub fn removePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) !void {
+fn removePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) !void {
     return disk.remove(io, alloc, try pinnedPath(alloc, uid, conv_key));
 }
 
@@ -165,7 +169,7 @@ fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
 
 /// The member's pinned file for `conv_key`, as stored: "" when there is
 /// none; an error when it will not read, never "".
-pub fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
+fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
     const path = try pinnedPath(alloc, uid, conv_key);
     return disk.readOrEmpty(io, alloc, path, .unlimited);
 }

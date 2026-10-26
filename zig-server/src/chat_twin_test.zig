@@ -31,6 +31,8 @@ const chat_actions_twin = @import("chat_actions_twin.zig");
 const chat_state = @import("chat_state.zig");
 const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
+const chat_store = @import("chat_store.zig");
+const disk = @import("webbox").store;
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -85,6 +87,9 @@ const Fn = enum(u8) {
     has_topic = 49,
     conv_bases = 50,
     member_channels = 51,
+    bookmark = 52,
+    bookmark_changed = 53,
+    state_paths = 54,
 };
 
 /// One Roc call's results, in `a`.
@@ -1100,6 +1105,167 @@ test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte,
     }
     try differ.none(compared);
     try testing.expect(removed > 100);
+}
+
+/// **A CHAT ROOT ON DISK, FOR THE TWINS WHOSE ZIG READS AND WRITES**: the
+/// bookmarks' Zig is held as it runs, files and all; `deinit` puts the root
+/// back.
+const DiskRoot = struct {
+    tmp: testing.TmpDir,
+    saved: []const u8,
+    threaded: std.Io.Threaded,
+
+    fn init(d: *DiskRoot, a: std.mem.Allocator) !void {
+        d.tmp = testing.tmpDir(.{});
+        d.saved = chat_store.chat_root;
+        chat_store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &d.tmp.sub_path, "chat" });
+        d.threaded = std.Io.Threaded.init(testing.allocator, .{});
+    }
+    fn deinit(d: *DiskRoot) void {
+        d.threaded.deinit();
+        chat_store.chat_root = d.saved;
+        d.tmp.cleanup();
+    }
+    fn at(_: *DiskRoot, a: std.mem.Allocator, rel: []const u8) ![]u8 {
+        return std.fs.path.join(a, &.{ chat_store.chat_root, rel });
+    }
+};
+
+/// A bookmark file as it may be found: the value, padded with every byte
+/// the trim takes and some it does not, CRLF, blank, a lone newline, lines
+/// after it, and longer than the 256 bytes the Zig's bounded read takes.
+fn bookmarkFile(a: std.mem.Allocator, r: std.Random, value: []const u8) ![]const u8 {
+    const pads = [_][]const u8{ "", " ", "\t", "\r", "\n", "\r\n", "  \t", "\x0b", "\x00", "\n\n" };
+    switch (r.uintLessThan(u8, 10)) {
+        0 => return "",
+        1 => return "\n",
+        2 => return try std.mem.concat(a, u8, &.{ value, "\n", "other\n" }),
+        3 => {
+            // Around 256 bytes: the value, padded to 250-262.
+            const n = 250 + r.uintAtMost(usize, 12);
+            const out = try a.alloc(u8, @max(n, value.len + 1));
+            @memset(out, ' ');
+            @memcpy(out[0..value.len], value);
+            out[out.len - 1] = '\n';
+            return out;
+        },
+        else => return try std.mem.concat(a, u8, &.{ pads[r.uintLessThan(usize, pads.len)], if (r.uintLessThan(u8, 6) == 0) "Other" else value, pads[r.uintLessThan(usize, pads.len)], pads[r.uintLessThan(usize, pads.len)] }),
+    }
+}
+
+const bookmark_values = [_][]const u8{ "1_2", "Plans", "a", "2026-10-25", "general2", "\xff", "a b", x256[0..255], &x256 };
+const x256: [256]u8 = @splat('x');
+
+test "ChatState: the last-conv and last-sessions files read back as lastUserConv and lastViewedTopic read them, whatever they hold, and none when there is none" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var d: DiskRoot = undefined;
+    try d.init(a);
+    defer d.deinit();
+    const io = d.threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0xb00c);
+    const r = rng.random();
+    const lc = try d.at(a, "users/1/last-conv");
+    const ls = try d.at(a, "users/1/last-sessions/1_2");
+    for (0..3000) |k| {
+        const missing = k % 20 == 0;
+        const file = try bookmarkFile(a, r, bookmark_values[r.uintLessThan(usize, bookmark_values.len)]);
+        for ([_][]const u8{ lc, ls }) |p| {
+            if (missing) try disk.remove(io, a, p) else try disk.write(io, a, p, file, .{});
+        }
+        const zc = try chat_state.lastUserConv(io, a, "1");
+        const zv = try chat_state.lastViewedTopic(io, a, "1", "1_2");
+        const got = (try roc1(a, .bookmark, if (missing) &.{ "M", "" } else &.{ "F", file })).?;
+        compared += 2;
+        if (!std.mem.eql(u8, zc, got)) differ.add("last-conv \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(file), std.zig.fmtString(zc), std.zig.fmtString(got) });
+        if (!std.mem.eql(u8, zv, got)) differ.add("last-sessions \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(file), std.zig.fmtString(zv), std.zig.fmtString(got) });
+    }
+    try differ.none(compared);
+}
+
+test "ChatState: whether a bookmark is written, and as what, as setLastViewedTopic decides on disk: unchanged, changed, missing, past 256 bytes, or unreadable" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var d: DiskRoot = undefined;
+    try d.init(a);
+    defer d.deinit();
+    const io = d.threaded.io();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var ways = [_]usize{ 0, 0 };
+    var rng = std.Random.DefaultPrng.init(0xc4a9);
+    const r = rng.random();
+    const lc = try d.at(a, "users/1/last-conv");
+    const ls = try d.at(a, "users/1/last-sessions/1_2");
+    for (0..3000) |k| {
+        const value = bookmark_values[r.uintLessThan(usize, bookmark_values.len)];
+        // The DM last in already says so: only the topic's file can change.
+        try disk.write(io, a, lc, "1_2\n", .{});
+        const How = enum { found, missing, unreadable };
+        const how: How = if (k % 25 == 0) .missing else if (k % 25 == 1) .unreadable else .found;
+        const file = try bookmarkFile(a, r, value);
+        try std.Io.Dir.cwd().deleteTree(io, ls);
+        switch (how) {
+            .found => try disk.write(io, a, ls, file, .{}),
+            .missing => {},
+            // A folder: it will not read, and will not be written either.
+            .unreadable => try std.Io.Dir.cwd().createDirPath(io, ls),
+        }
+        const before = disk.changes.load(.acquire);
+        // The Zig tried to write when it changed the disk, or when its
+        // write failed (only a write fails on a folder it read past).
+        const z_wrote = if (chat_state.setLastViewedTopic(io, a, "1", "1_2", value)) |_| disk.changes.load(.acquire) > before else |_| true;
+        const args: []const []const u8 = switch (how) {
+            .found => &.{ "F", file, value },
+            .missing => &.{ "M", "", value },
+            .unreadable => &.{ "X", "", value },
+        };
+        const got = try roc(a, .bookmark_changed, args);
+        compared += 1;
+        const r_wrote = std.mem.eql(u8, got[0], "1");
+        ways[@intFromBool(z_wrote)] += 1;
+        if (z_wrote != r_wrote) differ.add("changed({t}, {d} bytes \"{f}\", \"{f}\"): zig {}, roc {}", .{ how, file.len, std.zig.fmtString(file[0..@min(file.len, 40)]), std.zig.fmtString(value[0..@min(value.len, 40)]), z_wrote, r_wrote });
+        // What the Roc writes is what the Zig wrote.
+        if (z_wrote and how != .unreadable) {
+            const now = try disk.read(io, a, ls, .unlimited);
+            if (!std.mem.eql(u8, now, got[1])) differ.add("written for \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(value), std.zig.fmtString(now), std.zig.fmtString(got[1]) });
+        }
+    }
+    try differ.none(compared);
+    for (ways) |w| try testing.expect(w > 300);
+}
+
+test "ChatState: the member's files are where the Zig writes them: the DM last in, the topic last viewed, the pins" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var d: DiskRoot = undefined;
+    try d.init(a);
+    defer d.deinit();
+    const io = d.threaded.io();
+    for ([_][2][]const u8{ .{ "1", "1_2" }, .{ "7", "7_12" }, .{ "12", "12_12" }, .{ "3", "ops" } }) |uc| {
+        const uid = uc[0];
+        const conv = uc[1];
+        try chat_state.setLastViewedTopic(io, a, uid, conv, "Plans");
+        try chat_state.setTopicPinned(io, a, uid, conv, "Plans", true);
+        const got = try roc(a, .state_paths, &.{ uid, conv });
+        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n", .{conv}), try disk.read(io, a, try d.at(a, got[0]), .unlimited));
+        try testing.expectEqualStrings("Plans\n", try disk.read(io, a, try d.at(a, got[1]), .unlimited));
+        try testing.expectEqualStrings("Plans", (try chat_state.pinnedTopics(io, a, uid, conv))[0]);
+        try testing.expectEqualStrings("Plans\n", try disk.read(io, a, try d.at(a, got[2]), .unlimited));
+        // And the pins' file is the one the Zig removes when the last goes.
+        try chat_state.setTopicPinned(io, a, uid, conv, "Plans", false);
+        try testing.expect(!try disk.has(io, a, try d.at(a, got[2])));
+        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/images.md", .{uid}), got[3]);
+        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/code.md", .{uid}), got[4]);
+    }
 }
 
 // ── Conversation (chat.zig's lookup: findConv, convTitle, findTopic) ──────

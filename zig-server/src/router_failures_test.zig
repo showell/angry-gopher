@@ -376,6 +376,35 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
 }
 
+test "route: a pins file that will not read is a 500, never read as no pins; a missing one is no pins (the Roc's files: missing and failed are two answers)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_3/new", steve, "topic=Plans")));
+    // 1_2's pins file is a folder, a pin inside it: it cannot be read, and
+    // the pin is not written over it, as "no pins" would be.
+    const pins = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions", "1_2" });
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ pins, "kept" }));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
+    try testing.expect(try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ pins, "kept" })));
+    // 1_3's is missing: no pins, and the pin is the file's one line.
+    try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_3/Plans/pin", steve, "")));
+    try testing.expectEqualStrings("Plans\n", try harness.UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions", "1_3" }), .unlimited));
+}
+
 test "route: a reaction that will not store, and a sidecar that will not read, are 500s, never a quiet answer (C4: the Roc's routes keep the host's errors)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
