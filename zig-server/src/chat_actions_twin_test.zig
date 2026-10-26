@@ -14,6 +14,7 @@ const Alloc = std.mem.Allocator;
 
 const testing = std.testing;
 const harness = @import("router_harness.zig");
+const users = @import("users.zig");
 const mem_meter = webbox.mem_meter;
 
 /// One request of the scenario: as whom, and the raw method, target, body
@@ -207,6 +208,25 @@ const scenario = [_]Ask{
     .{ .who = .steve, .method = "POST", .target = "/chat/recent" },
     .{ .who = .steve, .method = "GET", .target = "/chat/recent/" },
     .{ .who = .steve, .method = "GET", .target = "/chat/recentX" },
+    // O2: the conversation found by the Roc. The DM with yourself (one
+    // member, titled by your own name); keys that are not a canonical pair
+    // of uids; a partner whose account has no name (titled by the id). A
+    // channel whose member file is malformed is router_failures_test's.
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_1" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_1/new", .body = "topic=Me" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_1/Me" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_1/Me/send", .body = "markdown=note+to+self" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_1/Me/pin" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_1/me/reactions" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/2_1" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/01_2/Plans" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_02/Plans/raw" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/2_1/Plans/send", .body = "markdown=x" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_x/new", .body = "topic=X" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_4" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_4/Hello/send", .body = "markdown=hi+4" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_4/Hello" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_4" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -230,6 +250,8 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "last-conv" }), "1_2\n", .{});
     // A channel with no topics, and a DM pair with none: the first-topic shell.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
+    // An account with no name (a release cut short).
+    try users.setUserPassword(io, a, "4", "pw");
     // A transcript with a byte that is not UTF-8: raw passes it untouched.
     const bytes_md = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" });
     try harness.UidSite.disk.write(io, a, bytes_md, "caf\xe9 \xff\n", .{});

@@ -505,6 +505,24 @@ test "route: a send whose message will not append, or whose channel's members wi
     // The channel's member file is a folder: who may send cannot be read.
     try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "ops.channel" }));
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/channel/ops/Standup/send", steve, "markdown=hello")));
+    // A member file that names no uid is malformed: the lookup is a 500 for
+    // its landing, a topic's page and a pin, never the 404 of a channel
+    // that is not the member's (O2: the Roc's lookup keeps the host's errors).
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "bad.channel" }), "1\nnot a uid\n", .{});
+    try harness.writeTranscript(a, io, "channels/bad", "Standup", &.{"one"});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/channel/bad", steve)));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/channel/bad/Standup", steve)));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/channel/bad/Standup/pin", steve, "")));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions", "bad" })));
+    // The partner's name will not read: a DM's topic page and a send to it
+    // are 500s, the title read before either, as the Zig's lookup read it.
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    const name_file = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
+    try std.Io.Dir.cwd().deleteFile(io, name_file);
+    try std.Io.Dir.cwd().createDirPath(io, name_file);
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_2/Plans", steve)));
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello")));
+    try testing.expectEqual(@as(usize, 1), (try chat_codec.decodeChatFile(a, (try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Plans")).?)).len);
 }
 
 test "route: a links page whose links.md will not read is a 500, never the stub that says there are none" {

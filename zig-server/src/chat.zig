@@ -16,7 +16,7 @@
 //!   .../<sid>/{upload,uploads,download,saved}   see topicRoute
 //!   .../<sid>/{reactions,react,pin,unpin}   the Roc's (roc-webbox chat/main.roc
 //!                                      `act!`, over chat_router.zig's hosted
-//!                                      functions and `findTopic` here)
+//!                                      functions)
 //!   {GET,POST} /channel/<name>/<topic>{,/stream,/send,/raw}   the channel equivalents
 //!   GET  /chat/notifications           SSE: per-uid notify strip (status pings +
 //!                                      came-online), a notifyBusKey subscriber
@@ -121,7 +121,8 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
     }
 }
 
-/// **A CONVERSATION THE VIEWER MAY USE, AS THE ROC'S HOSTED FUNCTIONS ASK**:
+/// **A CONVERSATION THE VIEWER MAY USE, AS THE OLD ZIG FINDS IT** (the
+/// oracle, chat_actions_twin.zig):
 /// where it is, its key and URL base, its kind and, for a channel, its
 /// members. `title` is the page's (empty until a topic's is known).
 pub const Found = struct {
@@ -145,23 +146,23 @@ pub const Found = struct {
     }
 };
 
-/// **THE CONVERSATION OF A DM OR CHANNEL ROUTE, IF IT IS THE VIEWER'S**
-/// (the Roc's `Host.landing!` and `Host.topic!`): what convRoute and
-/// channelRoute look up first, in their order, answering nothing. Null for
-/// any of their 404s: the Roc hands the route back, and they answer it.
+/// **THE CONVERSATION OF A DM OR CHANNEL ROUTE, IF IT IS THE VIEWER'S**:
+/// what convRoute and channelRoute look up first, in their order,
+/// answering nothing. Null for any of their 404s. The Roc chat's own
+/// lookup is roc-webbox chat/main.roc `find!`, over the pure parts below
+/// (chat/Conversation.roc, held to them by chat_twin_test.zig); this one
+/// serves the old Zig's oracle (chat_actions_twin.zig).
 pub fn findConv(io: Io, alloc: Alloc, uid: []const u8, family: roc_chat.Family, key: []const u8) !?Found {
     switch (family) {
         .dm => {
-            if (!try chat_paths.chatKeyParticipant(alloc, key, uid)) return null;
-            const us = std.mem.indexOfScalar(u8, key, '_').?;
-            const other = if (std.mem.eql(u8, key[0..us], uid)) key[us + 1 ..] else key[0..us];
+            const other = (try dmOther(alloc, key, uid)) orelse return null;
             if (!try users.principalExists(io, alloc, other)) return null;
-            return .{ .dir = try chat_paths.dmConvDir(alloc, key), .key = key, .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{key}), .dm = true };
+            return .{ .dir = try chat_paths.dmConvDir(alloc, key), .key = key, .base = try dmBase(alloc, key), .dm = true };
         },
         .channel => {
             const members = (try chat_paths.channelMembers(io, alloc, key)) orelse return null;
             if (!chat_paths.hasMember(members, uid)) return null;
-            return .{ .dir = try chat_paths.channelConvDir(alloc, key), .key = key, .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{key}), .dm = false, .members = members };
+            return .{ .dir = try chat_paths.channelConvDir(alloc, key), .key = key, .base = try channelBase(alloc, key), .dm = false, .members = members };
         },
         else => unreachable,
     }
@@ -170,21 +171,76 @@ pub fn findConv(io: Io, alloc: Alloc, uid: []const u8, family: roc_chat.Family, 
 /// A conversation's title, as its pages show it: "Chat w/<partner>" or
 /// "#<name>" (reading the partner's name).
 pub fn convTitle(io: Io, alloc: Alloc, uid: []const u8, f: Found) ![]const u8 {
-    if (f.dm) return std.fmt.allocPrint(alloc, "Chat w/{s}", .{try partnerName(io, alloc, f.key, uid)});
-    return std.fmt.allocPrint(alloc, "#{s}", .{f.key});
+    if (f.dm) {
+        const other = partnerOf(f.key, uid);
+        return dmTitle(alloc, try users.getUserName(io, alloc, other), other);
+    }
+    return channelTitle(alloc, f.key);
 }
 
-/// **WHERE A TOPIC ROUTE'S TOPIC IS, IF IT IS ONE THE VIEWER MAY USE**
-/// (the Roc's `Host.topic!`): `findConv`, the topic's title (the partner's
-/// name read, as convRoute reads it), then whether topicRoute would find
-/// the topic. Null for any of their 404s.
+/// **WHERE A TOPIC ROUTE'S TOPIC IS, IF IT IS ONE THE VIEWER MAY USE**:
+/// `findConv`, the topic's title (the partner's name read, as convRoute
+/// reads it), then whether topicRoute would find the topic. Null for any
+/// of their 404s.
 pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?Found {
     std.debug.assert(route.part == .topic);
     var f = (try findConv(io, alloc, uid, route.family, route.key)) orelse return null;
     f.sid = route.sid;
-    f.title = try std.fmt.allocPrint(alloc, "{s}: {s}", .{ try convTitle(io, alloc, uid, f), route.sid });
+    f.title = try topicTitle(alloc, try convTitle(io, alloc, uid, f), route.sid);
     if (!try topicExists(io, alloc, f.dir, route.sid)) return null;
     return f;
+}
+
+// ── the lookup's pure decisions (the Roc's twins: chat/Conversation.roc) ──
+
+/// The other of DM pair `key` when `uid` is one of the pair, by
+/// chatKeyParticipant's rule (a canonical pair of uids); null otherwise.
+pub fn dmOther(alloc: Alloc, key: []const u8, uid: []const u8) !?[]const u8 {
+    if (!try chat_paths.chatKeyParticipant(alloc, key, uid)) return null;
+    return partnerOf(key, uid);
+}
+
+/// The side of `key`'s first `_` that is not `me` (the second when the
+/// first is `me`, so `1_1`'s partner is `1`); the whole key when it has
+/// no `_`.
+pub fn partnerOf(key: []const u8, me: []const u8) []const u8 {
+    const us = std.mem.indexOfScalar(u8, key, '_') orelse return key;
+    return if (std.mem.eql(u8, key[0..us], me)) key[us + 1 ..] else key[0..us];
+}
+
+/// A DM's URL base.
+pub fn dmBase(alloc: Alloc, key: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(alloc, "/chat/c/{s}", .{key});
+}
+
+/// A channel's URL base.
+pub fn channelBase(alloc: Alloc, name: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
+}
+
+/// A DM's title: the partner's `name`, or their id `other` when the
+/// account has none (getUserName's "").
+pub fn dmTitle(alloc: Alloc, name: []const u8, other: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(alloc, "Chat w/{s}", .{if (name.len == 0) other else name});
+}
+
+/// A channel's title.
+pub fn channelTitle(alloc: Alloc, name: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(alloc, "#{s}", .{name});
+}
+
+/// A topic's title: its conversation's, ": ", its id.
+pub fn topicTitle(alloc: Alloc, title: []const u8, sid: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(alloc, "{s}: {s}", .{ title, sid });
+}
+
+/// Whether a topic named `sid` without case is among `topics` (case does
+/// not tell topics apart, on FAT or on Linux).
+pub fn hasTopic(topics: []const []const u8, sid: []const u8) bool {
+    for (topics) |s| {
+        if (std.ascii.eqlIgnoreCase(s, sid)) return true;
+    }
+    return false;
 }
 
 /// channelRoute serves /channel/<name>[/<sid>[/...]]: `route.key` is a
@@ -206,9 +262,10 @@ fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8,
     };
     switch (route.part) {
         // The Roc's (roc-webbox chat/main.roc), handed back only when
-        // `findConv` did not find it, which was answered above.
+        // the Roc's `find!` (chat.zig `findConv`'s rule) did not find it, which
+        // was answered above.
         .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
-        // A new topic: the Roc's, handed back only when `findConv` did not
+        // A new topic: the Roc's, handed back only when the Roc's `find!` did not
         // find the conversation, which was answered above.
         .new => std.debug.panic("chat: a new topic is the Roc's, and its conversation was here", .{}),
         .invalid => return http.notFound(req),
@@ -239,9 +296,10 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
     };
     switch (route.part) {
         // The Roc's (roc-webbox chat/main.roc), handed back only when
-        // `findConv` did not find it, which was answered above.
+        // the Roc's `find!` (chat.zig `findConv`'s rule) did not find it, which
+        // was answered above.
         .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
-        // A new topic: the Roc's, handed back only when `findConv` did not
+        // A new topic: the Roc's, handed back only when the Roc's `find!` did not
         // find the conversation, which was answered above.
         .new => std.debug.panic("chat: a new topic is the Roc's, and its conversation was here", .{}),
         .invalid => return http.notFound(req),
@@ -282,7 +340,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
         .send, .invalid_send => std.debug.panic("chat.topicRoute: a send is the Roc's, and its conversation was here", .{}),
         .upload => try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid),
         // The Roc's (roc-webbox chat/main.roc `act!`, docs/ROC-CHAT.md C4):
-        // it hands one back only when `findTopic` did not find it, and that
+        // it hands one back only when its `find!` or the topic did not, and that
         // was answered above.
         .pin, .unpin, .reactions, .react => std.debug.panic("chat.topicRoute: {t} is the Roc's, and its topic was here", .{route.tail}),
         // The Roc's (chat/main.roc `act!`), handed back only when the topic
@@ -309,10 +367,7 @@ fn isRead(req: *const Request) bool {
 }
 
 fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !bool {
-    for (try chat_paths.listTopics(io, alloc, conv_dir)) |s| {
-        if (std.ascii.eqlIgnoreCase(s, sid)) return true;
-    }
-    return false;
+    return hasTopic(try chat_paths.listTopics(io, alloc, conv_dir), sid);
 }
 
 /// savedIds answers GET /<conv>/<sid>/saved → JSON array of the message ids the
@@ -347,10 +402,8 @@ fn serveAsset(req: *Request, name: []const u8) !void {
 // ── small helpers ─────────────────────────────────────────────────────────────
 
 fn partnerName(io: Io, alloc: Alloc, conv: []const u8, me: []const u8) ![]const u8 {
-    const us = std.mem.indexOfScalar(u8, conv, '_') orelse return conv;
-    const a = conv[0..us];
-    const b = conv[us + 1 ..];
-    const other = if (std.mem.eql(u8, a, me)) b else a;
+    if (std.mem.indexOfScalar(u8, conv, '_') == null) return conv;
+    const other = partnerOf(conv, me);
     const name = try users.getUserName(io, alloc, other);
     return if (name.len == 0) other else name;
 }

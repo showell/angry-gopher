@@ -29,6 +29,8 @@ const recent_feed = @import("recent_feed.zig");
 const recent = @import("recent.zig");
 const chat_actions_twin = @import("chat_actions_twin.zig");
 const chat_state = @import("chat_state.zig");
+const chat = @import("chat.zig");
+const ConvMeta = @import("chat_store.zig").ConvMeta;
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -75,6 +77,13 @@ const Fn = enum(u8) {
     recent_json = 41,
     resume_topic = 42,
     pinned = 43,
+    dm_other = 44,
+    dm_members = 45,
+    dm_title = 46,
+    channel_title = 47,
+    topic_title = 48,
+    has_topic = 49,
+    conv_bases = 50,
 };
 
 /// One Roc call's results, in `a`.
@@ -1090,4 +1099,132 @@ test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte,
     }
     try differ.none(compared);
     try testing.expect(removed > 100);
+}
+
+// ── Conversation (chat.zig's lookup: findConv, convTitle, findTopic) ──────
+
+/// Halves of a DM key as a path may write them: uids, a zero, leading
+/// zeros, numbers past i64, signs, letters, `..`, an underscore, a byte
+/// that is not UTF-8, nothing.
+const key_halves = [_][]const u8{ "", "0", "1", "2", "3", "9", "10", "01", "007", "12", "21", "99999999999999999999", "9223372036854775807", "9223372036854775808", "a", "..", "1a", "-1", "+1", "1_2", "\xff", " 1" };
+
+test "Conversation: who a DM's other half is, for the member or not, over every key tried, malformed ones too, and its members" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var found: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0xd0_07e5);
+    const r = rng.random();
+    var keys: std.ArrayList([]const u8) = .empty;
+    for (key_halves) |x| for (key_halves) |y| {
+        try keys.appendSlice(a, &.{ try std.fmt.allocPrint(a, "{s}_{s}", .{ x, y }), try std.fmt.allocPrint(a, "{s}__{s}", .{ x, y }), try std.fmt.allocPrint(a, "{s}{s}", .{ x, y }) });
+    };
+    // And pairs of small uids as a path may write them: either order, a
+    // leading zero now and then, the separator doubled or missing.
+    for (0..3000) |_| {
+        const x = r.uintAtMost(u8, 12);
+        const y = r.uintAtMost(u8, 12);
+        const zx: []const u8 = if (r.uintLessThan(u8, 8) == 0) "0" else "";
+        const zy: []const u8 = if (r.uintLessThan(u8, 8) == 0) "0" else "";
+        const sep: []const u8 = switch (r.uintLessThan(u8, 10)) {
+            0 => "__",
+            1 => "",
+            else => "_",
+        };
+        try keys.append(a, try std.fmt.allocPrint(a, "{s}{d}{s}{s}{d}", .{ zx, x, sep, zy, y }));
+    }
+    for (keys.items) |key| {
+        for ([_][]const u8{ "1", "2", "3", "", "01", "9223372036854775808" }) |me| {
+            const z = try chat.dmOther(a, key, me);
+            const got = try roc(a, .dm_other, &.{ key, me });
+            compared += 1;
+            const rz: ?[]const u8 = switch (got.len) {
+                0 => null,
+                1 => got[0],
+                else => return error.TwinGaveMore,
+            };
+            if (z != null) found += 1;
+            const same = if (z) |zb| (rz != null and std.mem.eql(u8, zb, rz.?)) else rz == null;
+            if (!same) differ.add("dmOther(\"{f}\", \"{f}\"): zig \"{f}\" ({}), roc \"{f}\" ({})", .{ std.zig.fmtString(key), std.zig.fmtString(me), std.zig.fmtString(z orelse ""), z != null, std.zig.fmtString(rz orelse ""), rz != null });
+            // The members the fan-out writes for, once each (ConvMeta.dm),
+            // for every key the member is in.
+            if (z != null) {
+                const us = std.mem.indexOfScalar(u8, key, '_').?;
+                const meta = try ConvMeta.dm(a, key[0..us], key[us + 1 ..]);
+                const rm = try roc(a, .dm_members, &.{key});
+                compared += 1;
+                var same_members = rm.len == meta.members.len;
+                if (same_members) for (meta.members, rm) |zm, m| {
+                    if (!std.mem.eql(u8, zm, m)) same_members = false;
+                };
+                if (!same_members) differ.add("dm members of \"{f}\": zig {d}, roc {d}", .{ std.zig.fmtString(key), meta.members.len, rm.len });
+            }
+        }
+    }
+    try differ.none(compared);
+    // The generator reaches the member's DMs, the self-DM among them.
+    try testing.expect(found > 300);
+}
+
+test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over hostile names, and a topic found without case" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    // Names as an account may hold them, and as it must not: markup, quotes,
+    // a script's end, bytes that are not UTF-8, a newline, nothing.
+    const names = [_][]const u8{ "", "Debbie", "<b>x</b>", "</script><script>alert(1)</script>", "a\"b'c&d", "\xff\xfe", "line\nbreak", "  ", "Chat w/", ": ", "\u{1F44D}", "#" };
+    const ids = [_][]const u8{ "", "2", "10", "\xff", "a b" };
+    for (names) |n| for (ids) |id| {
+        const z = try chat.dmTitle(a, n, id);
+        const got = (try roc1(a, .dm_title, &.{ n, id })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, got)) differ.add("dmTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(n), std.zig.fmtString(id), std.zig.fmtString(z), std.zig.fmtString(got) });
+        for (names) |sid| {
+            const zt = try chat.topicTitle(a, z, sid);
+            const rt = (try roc1(a, .topic_title, &.{ z, sid })).?;
+            compared += 1;
+            if (!std.mem.eql(u8, zt, rt)) differ.add("topicTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(sid), std.zig.fmtString(zt), std.zig.fmtString(rt) });
+        }
+    };
+    for (names ++ ids) |key| {
+        const zc = try chat.channelTitle(a, key);
+        const rc = (try roc1(a, .channel_title, &.{key})).?;
+        const bases = try roc(a, .conv_bases, &.{key});
+        compared += 3;
+        if (!std.mem.eql(u8, zc, rc)) differ.add("channelTitle(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(zc), std.zig.fmtString(rc) });
+        if (!std.mem.eql(u8, try chat.dmBase(a, key), bases[0])) differ.add("dmBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[0]) });
+        if (!std.mem.eql(u8, try chat.channelBase(a, key), bases[1])) differ.add("channelBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[1]) });
+    }
+    // A topic among topics, without case: every byte, ASCII letters in both
+    // cases and bytes past them (which have no case here).
+    var rng = std.Random.DefaultPrng.init(0x70_91c);
+    const r = rng.random();
+    const topic_bytes = "aAbBzZ@[`{-09\xc3\xa9\xff";
+    var hits: usize = 0;
+    for (0..4000) |_| {
+        var topics: std.ArrayList([]const u8) = .empty;
+        for (0..r.uintAtMost(usize, 4)) |_| {
+            const t = try a.alloc(u8, r.uintAtMost(usize, 3));
+            for (t) |*c| c.* = topic_bytes[r.uintLessThan(usize, topic_bytes.len)];
+            try topics.append(a, t);
+        }
+        const sid = try a.alloc(u8, r.uintAtMost(usize, 3));
+        for (sid) |*c| c.* = topic_bytes[r.uintLessThan(usize, topic_bytes.len)];
+        const z = chat.hasTopic(topics.items, sid);
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.append(a, sid);
+        try args.appendSlice(a, topics.items);
+        const got = yes((try roc1(a, .has_topic, args.items)).?);
+        compared += 1;
+        if (z) hits += 1;
+        if (z != got) differ.add("hasTopic(\"{f}\", {d} topics): zig {}, roc {}", .{ std.zig.fmtString(sid), topics.items.len, z, got });
+    }
+    try differ.none(compared);
+    try testing.expect(hits > 300);
 }
