@@ -126,6 +126,9 @@ pub const Call = struct {
     /// rendered here and never copied into the Roc and out.
     held: []const u8 = "",
     failed: ?anyerror = null,
+    /// The accounts as `accounts` listed them, each read that failed kept
+    /// with its error, for `failAccount`.
+    listed: []const users.Account = &.{},
 
     pub fn host(c: *Call) roc_chat.Host {
         return .{
@@ -133,6 +136,7 @@ pub const Call = struct {
             .member = member,
             .presence = presence_,
             .accounts = accounts,
+            .fail_account = failAccount,
             .body = body,
             .raw = raw,
             .links = links,
@@ -199,11 +203,15 @@ pub const Call = struct {
     /// users.listAccounts, which reads each canonical folder's password
     /// stat and name and nothing else of the auth root; the agent's kind is
     /// its. The Roc does every lookup (exists, a name, the roster) and asks
-    /// at most once a request. A read that failed fails the request.
+    /// at most once a request. A listing of the accounts that failed fails
+    /// the request. **ONE ACCOUNT THAT WILL NOT READ DOES NOT**: it crosses
+    /// as unreadable, its error kept (`listed`), and the request fails with
+    /// that error only when the Roc's lookup needs it (`failAccount`), as
+    /// the Zig's own lookups failed only when they read it.
     fn accounts(ctx: *anyopaque) roc_chat.Accounts {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        // absent-ok: not read as absence: a failed read is kept and returned once the call ends.
+        // absent-ok: not read as absence: a failed listing is kept and returned once the call ends.
         const all = users.listAccounts(c.io, c.alloc) catch |e| {
             c.fail(e);
             return .failed;
@@ -212,12 +220,41 @@ pub const Call = struct {
             c.fail(e);
             return .failed;
         };
-        for (all, out) |u, *o| o.* = .{ .id = u.id, .name = u.name, .kind = switch (u.kind) {
-            .agent => .agent,
-            .guest => .guest,
-            .member => .member,
-        } };
+        for (all, out) |u, *o| o.* = .{
+            .id = u.id,
+            .kind = switch (u.kind) {
+                .agent => .agent,
+                .guest => .guest,
+                .member => .member,
+                .unreadable => .unreadable,
+            },
+            .name = switch (u.name) {
+                .found => |n| .{ .found = n },
+                .unreadable => .unreadable,
+            },
+        };
+        c.listed = all;
         return .{ .found = out };
+    }
+
+    /// **THE REQUEST FAILS WITH THE ACCOUNT'S OWN ERROR** (Host.fail!,
+    /// KindUnreadable or NameUnreadable): the error account `id`'s `which`
+    /// read failed with when `accounts` listed it, the error the Zig's own
+    /// lookup returned. An account not listed, or whose read did not fail,
+    /// is the Roc's bug, and fails the request as error.AccountNotUnreadable,
+    /// never served.
+    fn failAccount(ctx: *anyopaque, which: roc_chat.AccountRead, id: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        for (c.listed) |u| {
+            if (!std.mem.eql(u8, u.id, id)) continue;
+            switch (which) {
+                .kind => if (u.kind == .unreadable) return c.fail(u.kind.unreadable),
+                .name => if (u.name == .unreadable) return c.fail(u.name.unreadable),
+            }
+            break;
+        }
+        c.fail(error.AccountNotUnreadable);
     }
 
     /// **THE CONVERSATION THE ROC FOUND, AS THE STORE TAKES IT**: where it

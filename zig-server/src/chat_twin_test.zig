@@ -1710,18 +1710,39 @@ test "Paths: a conversation's topics folder, a channel's member file and a topic
 // Host.accounts! hands it, against users.zig ────────────────────────────────
 
 /// The accounts as the host hands them to the Roc (chat_router `accounts`:
-/// users.listAccounts), `id, kind, name` triples, the kind `a`, `g` or `m`.
+/// users.listAccounts), `id, kind, name_read, name` each: the kind `a`,
+/// `g`, `m` or `u` (its password's stat failed), the name read `f` or `u`
+/// (it failed; the name then "").
 fn accountArgs(a: std.mem.Allocator, all: []const users.Account) ![]const []const u8 {
     var out: std.ArrayList([]const u8) = .empty;
     for (all) |u| try out.appendSlice(a, &.{ u.id, switch (u.kind) {
         .agent => "a",
         .guest => "g",
         .member => "m",
-    }, u.name });
+        .unreadable => "u",
+    }, switch (u.name) {
+        .found => "f",
+        .unreadable => "u",
+    }, switch (u.name) {
+        .found => |n| n,
+        .unreadable => "",
+    } });
     return out.items;
 }
 
-test "Accounts: whether an account exists, its name and the authorized roster, as principalExists, getUserName and listAuthorized read them from generated account trees: canonical and not, files where folders belong, passwords or none, the agent, names with CR LF, and ids that sort by number, not bytes" {
+/// The error account `id`'s `which` read (`kind` or `name`) failed with,
+/// as listAccounts kept it (what chat_router `failAccount` fails the
+/// request with); null when it did not fail or there is no such account.
+fn keptError(all: []const users.Account, which: []const u8, id: []const u8) ?anyerror {
+    for (all) |u| {
+        if (!std.mem.eql(u8, u.id, id)) continue;
+        if (std.mem.eql(u8, which, "kind")) return if (u.kind == .unreadable) u.kind.unreadable else null;
+        if (std.mem.eql(u8, which, "name")) return if (u.name == .unreadable) u.name.unreadable else null;
+    }
+    return null;
+}
+
+test "Accounts: whether an account exists, its name and the authorized roster, as principalExists, getUserName and listAuthorized read them from generated account trees: canonical and not, files where folders belong, passwords or none, the agent, names with CR LF, ids that sort by number, not bytes, and passwords and names that will not read, each failing exactly the lookups whose Zig failed, with its error" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -1750,6 +1771,13 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
     var guests: usize = 0;
     var agents_bare: usize = 0;
     var skipped: usize = 0;
+    // How often each side of a failure was met: a name lookup and a roster
+    // that failed, a roster that read past a guest's unreadable name, a
+    // roster that failed on a kind.
+    var name_failed: usize = 0;
+    var roster_failed: usize = 0;
+    var roster_on_kind: usize = 0;
+    var roster_past_guest: usize = 0;
     for (0..1500) |k| {
         try std.Io.Dir.cwd().deleteTree(io, users.auth_root);
         // One in thirty: no account store at all.
@@ -1767,11 +1795,15 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
                     continue;
                 }
                 try std.Io.Dir.cwd().createDirPath(io, dir);
-                if (r.boolean()) try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ dir, "password" }), .data = "$2b$12$hash" }) else {
+                const password = try std.fs.path.join(a, &.{ dir, "password" });
+                // A password whose stat fails (a link to itself), now and then.
+                if (r.uintLessThan(u8, 12) == 0) try std.Io.Dir.cwd().symLink(io, "password", password, .{}) else if (r.boolean()) try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = password, .data = "$2b$12$hash" }) else {
                     guests += 1;
                     if (std.mem.eql(u8, id, "3")) agents_bare += 1;
                 }
-                if (names[r.uintLessThan(usize, names.len)]) |n| try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ dir, "name" }), .data = n });
+                const name = try std.fs.path.join(a, &.{ dir, "name" });
+                // A name that will not read (a folder), now and then.
+                if (r.uintLessThan(u8, 10) == 0) try std.Io.Dir.cwd().createDirPath(io, name) else if (names[r.uintLessThan(usize, names.len)]) |n| try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = name, .data = n });
             }
             if (hasName(made.items, "9223372036854775808") and hasName(made.items, "99999999999999999999")) huge_ties += 1;
         }
@@ -1782,26 +1814,61 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
         for (ids ++ asked_too) |id| {
             if (users.validUid(id) or std.mem.trim(u8, id, " \t\r\n").len == 0) try queries.append(a, id) else skipped += 1;
         }
+        const held = try users.listAccounts(io, a);
         var args: std.ArrayList([]const u8) = .empty;
         try args.append(a, try std.fmt.allocPrint(a, "{d}", .{queries.items.len}));
         try args.appendSlice(a, queries.items);
-        try args.appendSlice(a, try accountArgs(a, try users.listAccounts(io, a)));
+        try args.appendSlice(a, try accountArgs(a, held));
         const got = try roc(a, .accounts, args.items);
         compared += 1;
+        // Each id: `exists, ok, name`, or `exists, name, <whose>` when the
+        // Roc asks for the failure.
         for (queries.items, 0..) |id, i| {
-            const z_exists = try users.principalExists(io, a, id);
-            const z_name = try users.getUserName(io, a, id);
-            const r_exists = std.mem.eql(u8, got[2 * i], "1");
-            if (z_exists != r_exists or !std.mem.eql(u8, z_name, got[2 * i + 1]))
-                differ.add("account \"{f}\": zig {} \"{f}\", roc {} \"{f}\"", .{ std.zig.fmtString(id), z_exists, std.zig.fmtString(z_name), r_exists, std.zig.fmtString(got[2 * i + 1]) });
+            const r_exists = std.mem.eql(u8, got[3 * i], "1");
+            const r_how = got[3 * i + 1];
+            const r_what = got[3 * i + 2];
+            // **PRINCIPALEXISTS LOOKED AT THE FOLDER ALONE**: it never fails
+            // on what the listing found, and the Roc's never asks to.
+            const z_exists = users.principalExists(io, a, id) catch |e| {
+                differ.add("account \"{f}\": principalExists failed {t}, which the Roc's exists cannot", .{ std.zig.fmtString(id), e });
+                continue;
+            };
+            if (z_exists != r_exists) differ.add("account \"{f}\": zig exists {}, roc {}", .{ std.zig.fmtString(id), z_exists, r_exists });
+            if (users.getUserName(io, a, id)) |z_name| {
+                if (!std.mem.eql(u8, r_how, "ok") or !std.mem.eql(u8, z_name, r_what))
+                    differ.add("account \"{f}\": zig name \"{f}\", roc {s} \"{f}\"", .{ std.zig.fmtString(id), std.zig.fmtString(z_name), r_how, std.zig.fmtString(r_what) });
+            } else |e| {
+                name_failed += 1;
+                // The Roc asks for the request to fail on this account's
+                // name, and the error the host kept for it is the Zig's.
+                if (!std.mem.eql(u8, r_how, "name") or !std.mem.eql(u8, r_what, id) or !std.meta.eql(keptError(held, "name", id), @as(?anyerror, e)))
+                    differ.add("account \"{f}\": zig name failed {t}, roc {s} \"{f}\" (kept {?t})", .{ std.zig.fmtString(id), e, r_how, std.zig.fmtString(r_what), keptError(held, r_how, r_what) });
+            }
         }
-        var flat: std.ArrayList([]const u8) = .empty;
-        for (try users.listAuthorized(io, a)) |u| try flat.appendSlice(a, &.{ u.id, u.name });
-        const r_flat = got[2 * queries.items.len ..];
-        if (!sameLists(flat.items, r_flat)) differ.add("authorized: zig {s}, roc {s}", .{ try said(a, flat.items), try said(a, r_flat) });
+        const r_roster = got[3 * queries.items.len ..];
+        if (users.listAuthorized(io, a)) |authorized| {
+            var flat: std.ArrayList([]const u8) = .empty;
+            try flat.append(a, "ok");
+            for (authorized) |u| try flat.appendSlice(a, &.{ u.id, u.name });
+            if (!sameLists(flat.items, r_roster)) differ.add("authorized: zig {s}, roc {s}", .{ try said(a, flat.items), try said(a, r_roster) });
+            for (held) |u| {
+                if (u.kind == .guest and u.name == .unreadable) {
+                    roster_past_guest += 1;
+                    break;
+                }
+            }
+        } else |e| {
+            roster_failed += 1;
+            // The Roc's roster fails on the account, and the read, whose
+            // kept error is the one listAuthorized stopped at.
+            if (r_roster.len != 2 or !std.meta.eql(keptError(held, r_roster[0], r_roster[1]), @as(?anyerror, e)))
+                differ.add("authorized: zig failed {t}, roc {s}", .{ e, try said(a, r_roster) });
+            if (r_roster.len == 2 and std.mem.eql(u8, r_roster[0], "kind")) roster_on_kind += 1;
+        }
     }
     try differ.none(compared);
     try testing.expect(huge_ties > 30 and guests > 1000 and agents_bare > 30 and skipped > 0);
+    try testing.expect(name_failed > 100 and roster_failed > 100 and roster_on_kind > 30 and roster_past_guest > 30);
     // **WHY ONLY CANONICAL IDS ARE COMPARED**: no other reaches a lookup.
     // A DM's other half and its partner come from a pair Paths.participant
     // passed (dm_other), which takes canonical halves only, so a 007 folder,

@@ -792,6 +792,36 @@ test "route: a chat request whose asker cannot be read is a 500, never a sign-in
     }
 }
 
+/// The bytes `method target` answered and the error the route returned, if
+/// any, the Roc serving or, with `oracle`, the old Zig.
+fn servedBy(a: std.mem.Allocator, io: Io, oracle: bool, method: []const u8, target: []const u8, cookies: []const u8) !struct { out: []const u8, err: ?anyerror } {
+    const chat_router = @import("chat_router.zig");
+    chat_router.test_oracle = oracle;
+    defer chat_router.test_oracle = false;
+    const raw = try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{ method, target, cookies });
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    const err: ?anyerror = if (router.route(&req, io, a, &b)) |_| null else |e| e;
+    try out.writer.flush();
+    return .{ .out = out.written(), .err = err };
+}
+
+/// **THE ROC ANSWERS `method target` AS THE OLD ZIG DID**, byte for byte,
+/// with its error or with none; the status, to say which it was.
+fn asTheOldZig(a: std.mem.Allocator, io: Io, method: []const u8, target: []const u8, cookies: []const u8, status: []const u8) !void {
+    const roc = try servedBy(a, io, false, method, target, cookies);
+    const zig = try servedBy(a, io, true, method, target, cookies);
+    if (!std.meta.eql(zig.err, roc.err) or !std.mem.eql(u8, zig.out, roc.out) or !std.mem.eql(u8, harness.status(roc.out), status)) {
+        std.debug.print("{s} {s}: roc {?t} \"{s}\", zig {?t} \"{s}\", want {s}\n", .{ method, target, roc.err, harness.status(roc.out), zig.err, harness.status(zig.out), status });
+        return error.TestUnexpectedResult;
+    }
+}
+
 /// The bytes `method target` answered and the error the route returned, the
 /// Roc serving or, with `oracle`, the old Zig.
 fn answeredBy(a: std.mem.Allocator, io: Io, oracle: bool, method: []const u8, target: []const u8, cookies: []const u8) !struct { out: []const u8, err: anyerror } {
@@ -874,7 +904,7 @@ test "route: a topics folder that is not there is no topics; one that is a file 
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
 }
 
-test "route: an account whose name will not read fails the request (Host.accounts!), never a name of \"\" or no such account; as the old Zig failed the DM it titled" {
+test "route: an account whose name or password will not read fails exactly the routes whose old Zig read it, with its error, byte for byte (Host.accounts! lists it as unreadable, Host.fail! fails on it); every other route answers as the old Zig did; never a name of \"\" or no such account" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -892,30 +922,44 @@ test "route: an account whose name will not read fails the request (Host.account
     const name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
     try harness.UidSite.disk.remove(io, a, name);
     try std.Io.Dir.cwd().createDirPath(io, name);
+    const failed = "500 Internal Server Error";
     // Her DM's topics: the old Zig read her name for the title and failed
-    // the same, byte for byte.
-    for ([_][2][]const u8{ .{ "GET", "/chat/c/1_2/Plans" }, .{ "POST", "/chat/c/1_2/Plans/pin" }, .{ "GET", "/chat/c/1_2/Plans/reactions" } }) |ask| {
-        const roc = try answeredBy(a, io, false, ask[0], ask[1], steve);
-        const zig = try answeredBy(a, io, true, ask[0], ask[1], steve);
-        try testing.expectEqual(zig.err, roc.err);
-        try testing.expectEqualStrings(zig.out, roc.out);
-        try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
-    }
-    // **WHAT CHANGED**: every account is read in one asking, names and all,
-    // so the DM's landing and the roster, the conversations, a message's
-    // topic and every page that names the member fail too, where the old
-    // Zig read only the names it showed (its landing, with a topic, read
-    // none). One account that will not read is never left out.
-    for ([_][]const u8{ "/chat/c/1_2", "/chat/conversations", "/chat/msg/Plans_1", "/chat/links", "/chat/images" }) |target| {
-        const roc = try answeredBy(a, io, false, "GET", target, steve);
-        try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
-    }
+    // with its error (error.IsDir), byte for byte.
+    try asTheOldZig(a, io, "GET", "/chat/c/1_2/Plans", steve, failed);
+    try asTheOldZig(a, io, "POST", "/chat/c/1_2/Plans/pin", steve, failed);
+    try asTheOldZig(a, io, "GET", "/chat/c/1_2/Plans/reactions", steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.IsDir), (try servedBy(a, io, false, "GET", "/chat/c/1_2/Plans/reactions", steve)).err);
+    // The roster read a member's name: the conversations and a message's
+    // topic fail as the old Zig's did.
+    try asTheOldZig(a, io, "GET", "/chat/conversations", steve, failed);
+    try asTheOldZig(a, io, "GET", "/chat/msg/Plans_1", steve, failed);
+    // **WHAT NEVER READ HER NAME IS SERVED**, as the old Zig served it: the
+    // DM's landing with a topic, and the member's own pages.
+    try asTheOldZig(a, io, "GET", "/chat/c/1_2", steve, "303 See Other");
+    try asTheOldZig(a, io, "GET", "/chat/links", steve, "200 OK");
+    try asTheOldZig(a, io, "GET", "/chat/images", steve, "200 OK");
+    try asTheOldZig(a, io, "GET", "/chat/code", steve, "200 OK");
     // The disk willing again: served.
     try std.Io.Dir.cwd().deleteTree(io, name);
     try users.setUserName(io, a, "2", "Debbie");
     const ok = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET /chat/conversations HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{steve}));
     try testing.expectEqualStrings("200 OK", harness.status(ok));
     try testing.expect(std.mem.indexOf(u8, ok, "Debbie") != null);
+
+    // **A PASSWORD THAT CANNOT BE CHECKED** (a link to itself): only the
+    // roster read it (listAuthorized, the agent's and a guest's too), so
+    // the conversations and a message's topic fail with its error; her DM,
+    // found by her folder and titled by her name, is served as before.
+    const password = try std.fs.path.join(a, &.{ users.auth_root, "2", "password" });
+    try std.Io.Dir.cwd().deleteFile(io, password);
+    try std.Io.Dir.cwd().symLink(io, "password", password, .{});
+    try asTheOldZig(a, io, "GET", "/chat/conversations", steve, failed);
+    try asTheOldZig(a, io, "GET", "/chat/msg/Plans_1", steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.SymLinkLoop), (try servedBy(a, io, false, "GET", "/chat/conversations", steve)).err);
+    try asTheOldZig(a, io, "GET", "/chat/c/1_2/Plans/reactions", steve, "200 OK");
+    try asTheOldZig(a, io, "GET", "/chat/c/1_2", steve, "303 See Other");
+    try asTheOldZig(a, io, "GET", "/chat/links", steve, "200 OK");
+    try asTheOldZig(a, io, "GET", "/chat/images", steve, "200 OK");
 }
 
 test "route: /chat/msg skips a malformed channel and counts it for /admin/host; a roster that will not read is a 500, never a topic not found" {

@@ -125,21 +125,32 @@ pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
 }
 
 /// An account's kind, as the chat's Roc takes it: the agent (`isAgent`,
-/// decided here alone), a member (a password), or a guest (neither).
-pub const AccountKind = enum { agent, guest, member };
+/// decided here alone), a member (a password), a guest (neither), or the
+/// error its password's stat failed with (the agent's too, as
+/// userIsAuthorized stats it first).
+pub const AccountKind = union(enum) { agent, guest, member, unreadable: anyerror };
 
-/// One account as the chat's Roc takes it: its id, its kind, and its name
-/// file's bytes as stored ("" when it has none); the Roc cuts them as
-/// getUserName does (roc-webbox chat/Accounts.roc).
-pub const Account = struct { id: []const u8, name: []const u8, kind: AccountKind };
+/// An account's name file, as the chat's Roc takes it: its bytes as stored
+/// ("" when there is none; the Roc cuts them as getUserName does), or the
+/// error its read failed with. Never "" for a read that failed.
+pub const AccountName = union(enum) { found: []const u8, unreadable: anyerror };
+
+/// One account as the chat's Roc takes it (roc-webbox chat/Accounts.roc):
+/// its id, its kind, its name.
+pub const Account = struct { id: []const u8, kind: AccountKind, name: AccountName };
 
 /// **EVERY ACCOUNT, FOR THE CHAT'S ROC, AND NOTHING SECRET** (roc-webbox
 /// Host.accounts!): each canonical account folder under auth_root, in the
 /// disk's order, its kind and its name file. Two reads an account: whether
 /// it has a password (a stat, made for the agent too, as listAuthorized
-/// makes it) and its name; never a password's or a key's bytes. A read that
-/// failed is the error, never a guest or a name of "". Missing auth_root →
-/// none.
+/// makes it) and its name; never a password's or a key's bytes.
+///
+/// **ONE ACCOUNT'S READ THAT FAILED IS THAT ACCOUNT'S, NOT THE LIST'S**: it
+/// is kept beside the account (`.unreadable`), never a guest or a name of
+/// "", and fails only a lookup that needs it, with this error, as the
+/// lookups the Roc replaced (principalExists, getUserName, listAuthorized)
+/// failed only when they read it. Only a listing of auth_root that failed
+/// (or memory) is the list's error. Missing auth_root → none.
 pub fn listAccounts(io: Io, alloc: Alloc) ![]Account {
     const entries = try store.list(io, alloc, auth_root);
     var out: std.ArrayList(Account) = .empty;
@@ -147,9 +158,13 @@ pub fn listAccounts(io: Io, alloc: Alloc) ![]Account {
         if (entry.kind != .directory) continue;
         if (!allDigits(entry.name)) continue; // canonical only (156(i)), as listAuthorized and listUserIDs
         const id = try alloc.dupe(u8, entry.name);
-        const member = try userIsMember(io, alloc, id);
-        const name = (try readAuthFile(io, alloc, id, "name")) orelse "";
-        try out.append(alloc, .{ .id = id, .name = name, .kind = if (isAgent(id)) .agent else if (member) .member else .guest });
+        // absent-ok: not read as absence: a failed stat or read is kept as the account's own error, returned when a lookup needs it.
+        const kind: AccountKind = if (userIsMember(io, alloc, id)) |member|
+            (if (isAgent(id)) .agent else if (member) .member else .guest)
+        else |e|
+            .{ .unreadable = e };
+        const name: AccountName = if (readAuthFile(io, alloc, id, "name")) |b| .{ .found = b orelse "" } else |e| .{ .unreadable = e };
+        try out.append(alloc, .{ .id = id, .kind = kind, .name = name });
     }
     return out.toOwnedSlice(alloc);
 }
