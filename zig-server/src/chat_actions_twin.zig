@@ -1,9 +1,11 @@
 //! **THE OLD ZIG, KEPT AS THE ROC'S ORACLE** (roc-webbox docs/ROC-CHAT.md
-//! C4): a /chat or /channel request served as before the Roc took a topic's
-//! reactions, react, pin and unpin: decided by the Zig parse the router
-//! replaced (chat_route_twin.zig), and those four served by their Zig
-//! handlers as they were at angry-gopher dc3445e (reactions.zig `serveFile`
-//! and `handleReact`, chat.zig `pinTopic`). chat_router.zig runs it when a
+//! C4, C3): a /chat or /channel request served as before the Roc took a
+//! topic's reactions, react, pin and unpin (C4), and a conversation's
+//! landing and a topic's page (C3): decided by the Zig parse the router
+//! replaced (chat_route_twin.zig), and those served by their Zig handlers
+//! as they were (reactions.zig `serveFile` and `handleReact`, chat.zig
+//! `pinTopic` at angry-gopher dc3445e; chat.zig's landings and the page's
+//! tail at ffe98f1). chat_router.zig runs it when a
 //! test sets `test_oracle`; chat_actions_twin_test.zig runs the same
 //! requests both ways, on two copies of one tree, and holds the answers and
 //! the files they leave to each other. Test-only: it goes when the Roc has
@@ -22,6 +24,8 @@ const presence = @import("presence.zig");
 const reactions = @import("reactions.zig");
 const chat_state = @import("chat_state.zig");
 const store = @import("chat_store.zig");
+const chat_page = @import("chat_page.zig");
+const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -41,6 +45,17 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
         .serve => |s| {
             if (s.presence) presence.markActiveAndBroadcast(io, alloc, bus, call.uid, now);
             const r = s.route;
+            if ((r.family == .dm or r.family == .channel) and r.part == .landing) {
+                const f = (try chat.findConv(io, alloc, call.uid, r.family, r.key)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
+                const def = try chat_paths.firstTopic(io, alloc, f.dir);
+                if (def.len == 0) return chat_page.noTopicsPage(req, io, alloc, call.uid, f.base, try chat.convTitle(io, alloc, call.uid, f));
+                return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ f.base, def }));
+            }
+            if ((r.family == .dm or r.family == .channel) and r.part == .topic and r.tail == .page) {
+                const t = (try chat.findTopic(io, alloc, call.uid, r)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
+                if (req.head.method != .GET and req.head.method != .HEAD) return http.methodNotAllowed(req, .GET);
+                return chat_page.conversationPage(req, io, alloc, call.uid, try t.topic(alloc), now);
+            }
             if ((r.family == .dm or r.family == .channel) and r.part == .topic) switch (r.tail) {
                 .reactions, .react, .pin, .unpin => {
                     // The 404s are chat.zig's, as ever.

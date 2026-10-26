@@ -143,8 +143,23 @@ pub const Sidebar = struct {
     topics: []const []const u8,
 };
 
+/// **THE SIDEBAR AS IT CROSSES TO THE ROC** (`Host.page!`, chat/Pages.roc
+/// `decode_sidebar`): the viewer, "1" for a DM, the key, base and topic,
+/// then each list counted: the others (id, name, "1" when online), the
+/// channels, the pins, the topics.
+pub fn sidebarFields(alloc: Alloc, sb: Sidebar) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    try out.appendSlice(alloc, &.{ sb.uid, if (sb.dm) "1" else "0", sb.key, sb.base, sb.sid, try std.fmt.allocPrint(alloc, "{d}", .{sb.others.len}) });
+    for (sb.others) |o| try out.appendSlice(alloc, &.{ o.id, o.name, if (o.online) "1" else "0" });
+    for ([_][]const []const u8{ sb.channels, sb.pins, sb.topics }) |list| {
+        try out.append(alloc, try std.fmt.allocPrint(alloc, "{d}", .{list.len}));
+        try out.appendSlice(alloc, list);
+    }
+    return out.items;
+}
+
 /// The sidebar's data, read for `topic`.
-fn sidebarOf(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) !Sidebar {
+pub fn sidebarOf(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) !Sidebar {
     const conv = topic.conv;
     var others: std.ArrayList(Other) = .empty;
     for (try users.listAuthorized(io, alloc)) |u| {

@@ -71,6 +71,28 @@ const scenario = [_]Ask{
     .{ .who = .debbie, .method = "POST", .target = "/channel/ops/Standup/react", .body = "msg=1&emoji=" ++ thumbs },
     .{ .who = .steve, .method = "POST", .target = "/channel/ops/Gone/pin" },
     .{ .who = .steve, .method = "POST", .target = "/channel/nothere/Standup/pin" },
+    // C3: the landings, the first-topic shell, the page and its sidebar.
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_3" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_3" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_9" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/quiet" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/nothere" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans" },
+    .{ .who = .debbie, .method = "GET", .target = "/chat/c/1_2/Plans" },
+    .{ .who = .steve, .method = "HEAD", .target = "/chat/c/1_2/Other" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/plans" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/quiet/Nothing" },
+    .{ .who = .steve, .method = "GET", .target = "/chat" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -85,6 +107,9 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     try harness.writeTranscript(a, io, "1_2", "Other", &.{"three"});
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n", .{});
     try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    // A channel with no topics, and a DM pair with none: the first-topic shell.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "quiet.channel" }), "1\n3\n", .{});
+    @import("presence.zig").forgetForTest();
 
     chat_router.test_oracle = oracle;
     defer chat_router.test_oracle = false;
@@ -129,7 +154,7 @@ fn tree(a: Alloc, io: Io, root: []const u8) ![]const u8 {
     return out.toOwnedSlice();
 }
 
-test "a topic's reactions, react, pin and unpin answer as the Zig they replaced did, and leave the same files (C4)" {
+test "a topic's reactions, react, pin and unpin (C4), a conversation's landing and a topic's page (C3) answer as the Zig they replaced did, and leave the same files" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -151,10 +176,18 @@ test "a topic's reactions, react, pin and unpin answer as the Zig they replaced 
     }
     try testing.expectEqual(@as(usize, 0), differ);
     // The scenario reached what it means to: stores, every refusal, the 404s.
-    var seen: [6]bool = @splat(false);
-    for (roc.answers) |r| for ([_][]const u8{ "204 No Content", "400 Bad Request", "404 Not Found", "405 Method Not Allowed", "413 Payload Too Large", "303 See Other" }, 0..) |want, k| {
+    var seen: [7]bool = @splat(false);
+    for (roc.answers) |r| for ([_][]const u8{ "204 No Content", "400 Bad Request", "404 Not Found", "405 Method Not Allowed", "413 Payload Too Large", "303 See Other", "200 OK" }, 0..) |want, k| {
         if (std.mem.eql(u8, harness.status(r), want)) seen[k] = true;
     };
     try testing.expect(std.mem.allEqual(bool, &seen, true));
     try testing.expect(std.mem.indexOf(u8, roc.files, "\"on\":false") != null);
+    // The pages were the real ones: a sidebar with a pinned topic, the shell.
+    var pages: usize = 0;
+    var shells: usize = 0;
+    for (roc.answers) |r| {
+        if (std.mem.indexOf(u8, r, "\"pinned_sessions\":[{") != null) pages += 1;
+        if (std.mem.indexOf(u8, r, "chat-first-topic") != null) shells += 1;
+    }
+    try testing.expect(pages > 0 and shells >= 2);
 }

@@ -27,6 +27,10 @@ const presence = @import("presence.zig");
 const reactions = @import("reactions.zig");
 const chat_state = @import("chat_state.zig");
 const store = @import("chat_store.zig");
+const chat_page = @import("chat_page.zig");
+const chat_paths = @import("chat_paths.zig");
+const chrome = @import("chat_chrome.zig");
+const chat_upload = @import("chat_upload.zig");
 const Now = @import("request_time.zig").Now;
 
 const Request = std.http.Server.Request;
@@ -96,11 +100,11 @@ pub const Call = struct {
     uid: []const u8 = "",
     asked: bool = false,
     /// The topic `topic` found, for the calls after it.
-    found: ?store.TopicAddress = null,
+    found: ?chat.Found = null,
     failed: ?anyerror = null,
 
     pub fn host(c: *Call) roc_chat.Host {
-        return .{ .ctx = c, .member = member, .presence = presence_, .topic = topic, .body = body, .reactions = reactions_, .react = react, .pin = pin };
+        return .{ .ctx = c, .member = member, .presence = presence_, .topic = topic, .body = body, .reactions = reactions_, .react = react, .pin = pin, .landing = landing, .page = page, .srcs = srcs };
     }
 
     fn of(ctx: *anyopaque) *Call {
@@ -175,7 +179,7 @@ pub const Call = struct {
         const c = of(ctx);
         const t = c.found orelse @panic("Host.react!: no topic found");
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const done = reactions.storeReaction(c.io, c.alloc, c.bus, t, c.uid, c.now, .{ .msg = msg, .emoji = emoji, .on = on }) catch |e| {
+        const done = reactions.storeReaction(c.io, c.alloc, c.bus, t.address(), c.uid, c.now, .{ .msg = msg, .emoji = emoji, .on = on }) catch |e| {
             c.fail(e);
             return 2;
         };
@@ -191,5 +195,62 @@ pub const Call = struct {
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         chat_state.setTopicPinned(c.io, c.alloc, c.uid, t.key, t.sid, pinned) catch |e| return c.no(e);
         return true;
+    }
+
+    /// `fail`, answering the Roc nothing.
+    fn none(c: *Call, e: anyerror) []const []const u8 {
+        c.fail(e);
+        return &.{};
+    }
+
+    fn landing(ctx: *anyopaque, family: u8, key_: []const u8) []const []const u8 {
+        const c = of(ctx);
+        const f_ = std.enums.fromInt(roc_chat.Family, family) orelse std.debug.panic("Host.landing!: family {d}", .{family});
+        const key = c.alloc.dupe(u8, key_) catch |e| return c.none(e);
+        // absent-ok: not read as absence: a failed lookup is kept and returned once the call ends; only "not the member's" is none.
+        const f = (chat.findConv(c.io, c.alloc, c.uid, f_, key) catch |e| return c.none(e)) orelse return &.{};
+        // absent-ok: the same.
+        const first = chat_paths.firstTopic(c.io, c.alloc, f.dir) catch |e| return c.none(e);
+        if (first.len > 0) return c.alloc.dupe([]const u8, &.{ f.base, first }) catch |e| c.none(e);
+        // No topics yet: the page that offers the first reads the title (a
+        // DM's partner) and the viewer, in that order, as the Zig did.
+        // absent-ok: the same.
+        const title = chat.convTitle(c.io, c.alloc, c.uid, f) catch |e| return c.none(e);
+        // absent-ok: the same.
+        const viewer = users.getUserName(c.io, c.alloc, c.uid) catch |e| return c.none(e);
+        return c.alloc.dupe([]const u8, &.{ f.base, "", viewer, title }) catch |e| c.none(e);
+    }
+
+    fn page(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        const f = c.found orelse @panic("Host.page!: no topic found");
+        return c.pageFields(f) catch |e| c.none(e);
+    }
+
+    /// The page's data in conversationPage's order: the resume pointer
+    /// written (DMs), the viewer, the sidebar.
+    fn pageFields(c: *Call, f: chat.Found) ![]const []const u8 {
+        if (f.dm) try chat_state.setLastViewedTopic(c.io, c.alloc, c.uid, f.key, f.sid);
+        const viewer = try users.getUserName(c.io, c.alloc, c.uid);
+        const sidebar = try chat_page.sidebarOf(c.io, c.alloc, c.uid, try f.topic(c.alloc), c.now);
+        var out: std.ArrayList([]const u8) = .empty;
+        const n = struct {
+            fn digits(a: Alloc, v: anytype) ![]const u8 {
+                return std.fmt.allocPrint(a, "{d}", .{v});
+            }
+        }.digits;
+        try out.appendSlice(c.alloc, &.{ viewer, f.title, try n(c.alloc, chat_upload.image_max), try n(c.alloc, chat_upload.video_max), chat_upload.accept, try n(c.alloc, @import("search_tokens.zig").min_len) });
+        try out.appendSlice(c.alloc, try chat_page.sidebarFields(c.alloc, sidebar));
+        return out.items;
+    }
+
+    fn srcs(ctx: *anyopaque) []const []const u8 {
+        const c = of(ctx);
+        var out: std.ArrayList([]const u8) = .empty;
+        inline for (chrome.assets) |a| {
+            const src = chrome.src(c.alloc, a.name) catch |e| return c.none(e);
+            out.appendSlice(c.alloc, &.{ a.name, src }) catch |e| return c.none(e);
+        }
+        return out.items;
     }
 };

@@ -52,6 +52,15 @@ var owed: std.StringHashMapUnmanaged(i128) = .empty;
 /// time pass (`Now.plus`).
 const owed_retry_ns: i128 = 30 * std.time.ns_per_s;
 
+/// **A TEST'S FRESH START**: nobody seen, nothing owed (a test that serves
+/// the same requests twice must not find the first run's members online).
+pub fn forgetForTest() void {
+    var keys = last_seen.keyIterator();
+    while (keys.next()) |k| gpa.free(k.*);
+    last_seen.clearAndFree(gpa);
+    owed.clearAndFree(gpa);
+}
+
 /// markActive bumps `uid`'s lastSeen and reports whether THIS bump was the
 /// transition edge from offline to online (true on first-ever sighting OR after
 /// >= PresenceWindow of inactivity), at the request's time `at`. Pure state

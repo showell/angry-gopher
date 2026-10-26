@@ -123,34 +123,70 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
     }
 }
 
-/// **WHERE A TOPIC ROUTE'S TOPIC IS, IF IT IS ONE THE VIEWER MAY USE**
-/// (the Roc's `Host.topic!`): what convRoute or channelRoute, then
-/// topicRoute, look up before serving a topic's tail, in their order,
-/// answering nothing. Null for any of their 404s: the Roc hands the route
-/// back, and they answer it as ever. `route` is a DM's or a channel's topic.
-pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?store.TopicAddress {
-    std.debug.assert(route.part == .topic);
-    const key = route.key;
-    const dir = switch (route.family) {
-        .dm => dir: {
+/// **A CONVERSATION THE VIEWER MAY USE, AS THE ROC'S HOSTED FUNCTIONS ASK**:
+/// where it is, its key and URL base, its kind and, for a channel, its
+/// members. `title` is the page's (empty until a topic's is known).
+pub const Found = struct {
+    dir: []const u8,
+    key: []const u8,
+    base: []const u8,
+    dm: bool,
+    members: []const []const u8 = &.{},
+    sid: []const u8 = "",
+    title: []const u8 = "",
+
+    pub fn address(f: Found) store.TopicAddress {
+        return .{ .dir = f.dir, .key = f.key, .sid = f.sid };
+    }
+
+    /// The routed conversation the page renderer takes.
+    pub fn topic(f: Found, alloc: Alloc) !Topic {
+        const us = std.mem.indexOfScalar(u8, f.key, '_') orelse 0;
+        const meta: store.ConvMeta = if (f.dm) try store.ConvMeta.dm(alloc, f.key[0..us], f.key[us + 1 ..]) else .{ .kind = .channel, .members = f.members };
+        return .{ .conv = .{ .meta = meta, .key = f.key, .base = f.base, .dir = f.dir }, .sid = f.sid, .title = f.title };
+    }
+};
+
+/// **THE CONVERSATION OF A DM OR CHANNEL ROUTE, IF IT IS THE VIEWER'S**
+/// (the Roc's `Host.landing!` and `Host.topic!`): what convRoute and
+/// channelRoute look up first, in their order, answering nothing. Null for
+/// any of their 404s: the Roc hands the route back, and they answer it.
+pub fn findConv(io: Io, alloc: Alloc, uid: []const u8, family: roc_chat.Family, key: []const u8) !?Found {
+    switch (family) {
+        .dm => {
             if (!try chat_paths.chatKeyParticipant(alloc, key, uid)) return null;
             const us = std.mem.indexOfScalar(u8, key, '_').?;
             const other = if (std.mem.eql(u8, key[0..us], uid)) key[us + 1 ..] else key[0..us];
             if (!try users.principalExists(io, alloc, other)) return null;
-            // The page's title names the partner: a name that will not read
-            // fails the request here as it does there.
-            _ = try partnerName(io, alloc, key, uid);
-            break :dir try chat_paths.dmConvDir(alloc, key);
+            return .{ .dir = try chat_paths.dmConvDir(alloc, key), .key = key, .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{key}), .dm = true };
         },
-        .channel => dir: {
+        .channel => {
             const members = (try chat_paths.channelMembers(io, alloc, key)) orelse return null;
             if (!chat_paths.hasMember(members, uid)) return null;
-            break :dir try chat_paths.channelConvDir(alloc, key);
+            return .{ .dir = try chat_paths.channelConvDir(alloc, key), .key = key, .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{key}), .dm = false, .members = members };
         },
         else => unreachable,
-    };
-    if (!try topicExists(io, alloc, dir, route.sid)) return null;
-    return .{ .dir = dir, .key = key, .sid = route.sid };
+    }
+}
+
+/// A conversation's title, as its pages show it: "Chat w/<partner>" or
+/// "#<name>" (reading the partner's name).
+pub fn convTitle(io: Io, alloc: Alloc, uid: []const u8, f: Found) ![]const u8 {
+    if (f.dm) return std.fmt.allocPrint(alloc, "Chat w/{s}", .{try partnerName(io, alloc, f.key, uid)});
+    return std.fmt.allocPrint(alloc, "#{s}", .{f.key});
+}
+
+/// **WHERE A TOPIC ROUTE'S TOPIC IS, IF IT IS ONE THE VIEWER MAY USE**
+/// (the Roc's `Host.topic!`): `findConv`, the topic's title (the partner's
+/// name read, as convRoute reads it), then whether topicRoute would find
+/// the topic. Null for any of their 404s.
+pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?Found {
+    std.debug.assert(route.part == .topic);
+    var f = (try findConv(io, alloc, uid, route.family, route.key)) orelse return null;
+    f.sid = route.sid;
+    f.title = try std.fmt.allocPrint(alloc, "{s}: {s}", .{ try convTitle(io, alloc, uid, f), route.sid });
+    if (!try topicExists(io, alloc, f.dir, route.sid)) return null;
+    return f;
 }
 
 /// channelRoute serves /channel/<name>[/<sid>[/...]]: `route.key` is a
@@ -171,15 +207,9 @@ fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8,
         .dir = try chat_paths.channelConvDir(alloc, name),
     };
     switch (route.part) {
-        .landing => {
-            const def = try chat_paths.firstTopic(io, alloc, conv.dir);
-            if (def.len == 0) {
-                // Member of a channel with no topics yet: offer to start the first.
-                const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
-                return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
-            }
-            return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
-        },
+        // The Roc's (roc-webbox chat/main.roc), handed back only when
+        // `findConv` did not find it, which was answered above.
+        .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
         // /channel/<name>/new: create a topic ("new" is reserved).
         .new => return newTopic(req, io, alloc, bus, conv, uid, now),
         .invalid => return http.notFound(req),
@@ -209,17 +239,9 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .dir = try chat_paths.dmConvDir(alloc, pair),
     };
     switch (route.part) {
-        .landing => {
-            const def = try chat_paths.firstTopic(io, alloc, conv.dir);
-            if (def.len == 0) {
-                // Addressable pair, no topics yet: offer to start the first one
-                // (rather than 404 a real, reachable conversation).
-                const partner = try partnerName(io, alloc, conv.key, uid);
-                const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
-                return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
-            }
-            return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
-        },
+        // The Roc's (roc-webbox chat/main.roc), handed back only when
+        // `findConv` did not find it, which was answered above.
+        .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
         // /chat/c/<conv>/new: create a topic ("new" beats {sid}; it's reserved).
         .new => return newTopic(req, io, alloc, bus, conv, uid, now),
         .invalid => return http.notFound(req),
@@ -248,10 +270,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
         return page.notFoundPage(req, io, alloc, uid, what, conv.base);
     }
     switch (route.tail) {
-        .page => {
-            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            try page.conversationPage(req, io, alloc, uid, topic, now);
-        },
+        .page => std.debug.panic("chat.topicRoute: the page is the Roc's, and its topic was here", .{}),
         // /uploads/<file>: serve a stored image.
         .uploads => {
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);

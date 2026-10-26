@@ -397,6 +397,33 @@ test "route: a reaction that will not store, and a sidecar that will not read, a
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_2/Plans/reactions", steve)));
 }
 
+test "route: a topic's page whose resume pointer will not write, and a landing whose topics will not list, are 500s (C3: the Roc's pages keep the host's errors)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // The bookmarks' folder is a file: the page's resume pointer cannot be written.
+    const bookmarks = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions" });
+    try std.Io.Dir.cwd().deleteTree(io, bookmarks);
+    try harness.UidSite.disk.write(io, a, bookmarks, "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_2/Plans", steve)));
+    // The conversation's topics folder is a file: its landing cannot list them.
+    const sessions = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_3"), "sessions" });
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    try harness.UidSite.disk.write(io, a, sessions, "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_3", steve)));
+}
+
 /// A request whose handler must fail: the router's error, and the 500 the
 /// site would have sent (here, what went out before it).
 fn askFailing(a: std.mem.Allocator, io: Io, method: []const u8, target: []const u8, cookies: []const u8) ![]const u8 {
