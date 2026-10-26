@@ -444,6 +444,20 @@ test "Codec: a message's stored form, and what reads back from a file of them" {
         try decodeAgrees(a, file.items, &differ);
         compared += 1;
     }
+    // **THE ROC'S BLOCK READS BACK AS THE MESSAGE IT STORED** (C8a: the
+    // Roc writes the block the store appends): a message as a send makes
+    // one, its markdown generated (separators bare and escaped, backslashes,
+    // CR, empty lines, a trailing newline, bytes not UTF-8), first or not.
+    const names = [_][]const u8{ "Steve", "Q\"uote\\back\x01ctl\ttab caf\u{e9}", "caf\xe9\xff", "a: b" };
+    for (try codecStrings(a, 0x5704ee, 2000, 12), 0..) |md, n| {
+        const index: usize = n % 3;
+        const m: ChatMessage = .{ .id = try std.fmt.allocPrint(a, "t_{d}", .{index + 1}), .from = names[n % names.len], .at = "2025-10-25T13:46:40Z", .uid = if (n % 5 == 0) "" else "17", .markdown = md };
+        const rs = (try roc1(a, .stored_form, &.{ try std.fmt.allocPrint(a, "{d}", .{index}), m.id, m.from, m.at, m.uid, m.markdown })).?;
+        const back = try chat_codec.decodeChatFile(a, rs);
+        compared += 1;
+        if (back.len != 1 or !std.mem.eql(u8, back[0].id, m.id) or !std.mem.eql(u8, back[0].from, m.from) or !std.mem.eql(u8, back[0].at, m.at) or !std.mem.eql(u8, back[0].uid, m.uid) or !std.mem.eql(u8, back[0].markdown, m.markdown))
+            differ.add("decodeChatFile(the Roc's stored form of \"{f}\") is not that message", .{std.zig.fmtString(m.markdown)});
+    }
     try differ.none(compared);
 }
 

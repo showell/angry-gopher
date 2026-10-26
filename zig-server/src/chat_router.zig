@@ -14,9 +14,10 @@
 //! lookup of the conversation decides on (O2: every account, once, looked
 //! up by the Roc; a channel's member file and the topics' folder by the
 //! file primitives, named and parsed by the Roc), the body, the
-//! primitives a reaction is stored and sent by (a line appended, a topic's
-//! count, the bus), and a message's store, which stays Zig's until C8, and
-//! answers what to send. `handle` sends it once
+//! primitives a reaction and a message are stored and sent by (a line
+//! appended, a topic's count, the markdown render, a message's block stored
+//! with its count and search, the bus), and the cross-page fan-out, which
+//! stays Zig's until C8b, and answers what to send. `handle` sends it once
 //! the call has ended. **THE HOST HOLDS NO CONVERSATION BETWEEN CALLS**:
 //! each operation on one is handed it (`roc_chat.Conv`) by the Roc.
 
@@ -34,6 +35,7 @@ const reactions = @import("reactions.zig");
 const recent = @import("recent.zig");
 const store = @import("chat_store.zig");
 const chat_count = @import("chat_count.zig");
+const chat_fanout = @import("chat_fanout.zig");
 const chat_page = @import("chat_page.zig");
 const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
@@ -156,7 +158,9 @@ pub const Call = struct {
             .srcs = srcs,
             .me = me,
             .now = now_,
-            .append = append,
+            .render = render,
+            .store_message = storeMessage,
+            .fan_out = fanOut,
             .header = header,
             .hostile = hostile,
         };
@@ -518,17 +522,57 @@ pub const Call = struct {
         return c.now.unixSecs();
     }
 
-    fn append(ctx: *anyopaque, conv_: roc_chat.Conv, sid_: []const u8, name: []const u8, markdown_: []const u8, cid_: []const u8) bool {
+    /// **THE ONE MARKDOWN PROCESSOR** (Host.render!): a message's
+    /// markdown as its frame's HTML, rendered once, before the store. A
+    /// render that failed fails the request.
+    fn render(ctx: *anyopaque, md: []const u8) roc_chat.Rendered {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        return .{ .rendered = markdown.render(c.alloc, md) catch |e| {
+            c.fail(e);
+            return .failed;
+        } };
+    }
+
+    /// The Roc's message as the store keeps it, its bytes copied out of
+    /// the Roc's memory (the search index keeps some past the call).
+    fn chatMessage(c: *Call, m: roc_chat.Message) !store.ChatMessage {
+        return .{
+            .id = try c.alloc.dupe(u8, m.id),
+            .from = try c.alloc.dupe(u8, m.from),
+            .at = try c.alloc.dupe(u8, m.at),
+            .uid = try c.alloc.dupe(u8, m.uid),
+            .markdown = try c.alloc.dupe(u8, m.markdown),
+        };
+    }
+
+    /// **A MESSAGE STORED** (Host.store_message!): chat_store.storeMessage,
+    /// the block the Roc made appended to the topic's transcript, then the
+    /// count cache and the search index told. An append that failed fails
+    /// the request, nothing stored.
+    fn storeMessage(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, block: []const u8, index: u64, m: roc_chat.Message) bool {
         const c = of(ctx);
         if (c.dead()) return false;
-        const r = c.resolved(conv_) catch |e| return c.no(e);
-        const sid = c.alloc.dupe(u8, sid_) catch |e| return c.no(e);
-        const author: store.Author = .{ .name = c.alloc.dupe(u8, name) catch |e| return c.no(e), .id = c.uid };
-        const md = c.alloc.dupe(u8, markdown_) catch |e| return c.no(e);
-        const cid = c.alloc.dupe(u8, cid_) catch |e| return c.no(e);
+        const t = c.address(conv_, sid) catch |e| return c.no(e);
+        const msg = c.chatMessage(m) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        _ = store.appendMessage(c.io, c.alloc, c.bus, c.now, r.meta, .{ .dir = r.dir, .key = r.key, .sid = sid }, author, md, cid) catch |e| return c.no(e);
+        store.storeMessage(c.io, c.alloc, t, block, index, msg) catch |e| return c.no(e);
         return true;
+    }
+
+    /// **THE CROSS-PAGE FAN-OUT, STILL THE ZIG'S** (Host.fan_out!;
+    /// roc-webbox docs/ROC-CHAT.md C8b ports it): chat_fanout's
+    /// fanoutCrossPage, unchanged, after the publish. **STORED IS DONE**: a
+    /// failure here is the fan-out's, counted and said (fanoutFailed), never
+    /// the send's.
+    fn fanOut(ctx: *anyopaque, conv_: roc_chat.Conv, sid_: []const u8, m: roc_chat.Message, index: u64) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        const r = c.resolved(conv_) catch |e| return chat_fanout.fanoutFailed("every surface", "every member", e, conv_.key, sid_);
+        const sid = c.alloc.dupe(u8, sid_) catch |e| return chat_fanout.fanoutFailed("every surface", "every member", e, r.key, sid_);
+        const msg = c.chatMessage(m) catch |e| return chat_fanout.fanoutFailed("every surface", "every member", e, r.key, sid);
+        chat_fanout.fanoutCrossPage(c.io, c.alloc, c.bus, r.meta, r.key, sid, msg, msg.uid, index);
     }
 
     fn header(ctx: *anyopaque, name: []const u8) []const []const u8 {

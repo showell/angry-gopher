@@ -9,6 +9,9 @@ const webbox = @import("webbox");
 const chat_router = @import("chat_router.zig");
 const store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
+const chat_count = @import("chat_count.zig");
+const chat_search = @import("chat_search.zig");
+const search_index = @import("search_index.zig");
 const Now = @import("request_time.zig").Now;
 const Alloc = std.mem.Allocator;
 
@@ -595,6 +598,224 @@ test "a reaction whose store, count or reactor will not read fails with the old 
         const zig = try failedReact(a, io, true, c[0], c[1]);
         const roc = try failedReact(a, io, false, c[0], c[1]);
         if (!std.mem.eql(u8, zig, roc) or !std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: \n") or std.mem.indexOf(u8, roc, "\"msg\":1,\"uid\"") != null) {
+            std.debug.print("{s} ({s}):\n  zig: {f}\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(zig), std.zig.fmtString(roc) });
+            return error.TestUnexpectedResult;
+        }
+    }
+}
+
+// ── sends: the transcript, the .count, every frame and search, both ways ───
+
+/// `s` as a form value: every byte but a letter or a digit escaped.
+fn formValue(a: Alloc, s: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    for (s) |c| if (std.ascii.isAlphanumeric(c)) try out.append(a, c) else try out.print(a, "%{X:0>2}", .{c});
+    return out.items;
+}
+
+/// A send of `md` (with client id `cid`, when there is one) as `cookie`,
+/// async (204) or not (303).
+fn sendRaw(a: Alloc, target: []const u8, cookie: []const u8, md: []const u8, cid: ?[]const u8, how: enum { sync, async_ }) ![]const u8 {
+    const body = try std.fmt.allocPrint(a, "markdown={s}{s}", .{ try formValue(a, md), if (cid) |c| try std.fmt.allocPrint(a, "&cid={s}", .{try formValue(a, c)}) else "" });
+    return std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\n{s}Content-Length: {d}\r\n\r\n{s}", .{ target, cookie, if (how == .async_) "X-Chat-Async: 1\r\n" else "", body.len, body });
+}
+
+fn getRaw(a: Alloc, target: []const u8, cookie: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ target, cookie });
+}
+
+/// Every key a send publishes on in `sendRun`'s site: each topic's, then
+/// each member's notify, sidebar, recent, images and code.
+const send_keys = [_][]const u8{ "1_2/Plans", "1_2/Fresh", "ops/Standup", "ops/Brand", "1_3/Fresh" } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3");
+
+fn memberKeys(comptime uid: []const u8) [5][]const u8 {
+    return .{ "ntf:" ++ uid, "sb:" ++ uid, "rec:" ++ uid, "img:" ++ uid, "code:" ++ uid };
+}
+
+/// Sends on one hub, the old way (appendMessage) or the Roc's (`appended!`
+/// over store_message!, publish! and fan_out!): a DM topic whose `.count`
+/// is stale, topics' first messages (index 0, the sidebar's topic-added) in
+/// a DM and a channel, markdown the stored form must escape (lines that
+/// read as the separator, bare and escaped; the separator itself; a
+/// leading `>`; CRLF; empty lines; a trailing newline), an image and a code
+/// block for the feeds, names and cids JSON must escape (one name not
+/// UTF-8). The search index is built before the sends, so what it finds
+/// after is what the sends told it. Every answer, every file, every frame
+/// on every key, and the searches.
+fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: []const u8, frames: []const u8, searches: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const cookies = [_][]const u8{
+        try harness.memberSession(a, io, "1", hard_names[0]),
+        try harness.memberSession(a, io, "2", hard_names[1]),
+        try harness.memberSession(a, io, "3", hard_names[2]),
+    };
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    // **A STALE `.count`**: a size the transcript is not, so the count is
+    // recounted (2), never believed (5).
+    try harness.UidSite.disk.write(io, a, try chat_count.countPath(a, try chat_paths.dmConvDir(a, "1_2"), "Plans"), "5 9999\n40 9\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n3\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+
+    var hub = webbox.bus.Hub.init(io, a);
+    var subs: [send_keys.len]*webbox.bus.Subscriber = undefined;
+    for (send_keys, &subs) |k, *s| s.* = try hub.open(k);
+
+    // The index built now, from the disk, before any send.
+    _ = try serveOn(a, io, &hub, oracle, try getRaw(a, "/chat/search/words?prefix=zz", cookies[0]));
+
+    // Who (an index into `cookies`), where, what, its cid, and whether async.
+    const sends = [_]struct { usize, []const u8, []const u8, ?[]const u8, bool }{
+        .{ 0, "/chat/c/1_2/Plans/send", "-------------\n\\-------------\n\\\\-------------\n> a quote\r\nCRLF then\n\nafter an empty line\n", "c\"1\\x\x01/", false },
+        .{ 1, "/chat/c/1_2/Plans/send", "a\n\n-------------\nb", null, true },
+        .{ 0, "/chat/c/1_2/Fresh/send", "> zeppelin\n\n<img src=\"/u/1.png\">\n\n```zig\nconst x = 1;\n```\n", "c-2", false },
+        .{ 2, "/channel/ops/Standup/send", "-------------", "</script>", false },
+        .{ 1, "/channel/ops/Brand/send", "plain zeppelin words", null, true },
+        .{ 0, "/channel/ops/Standup/send", "x\r\n\r\n", "\xe2\x80\xa8", false },
+        .{ 2, "/chat/c/1_3/Fresh/send", "hi zeppelin", null, false },
+    };
+    const answers = try a.alloc([]const u8, sends.len);
+    for (sends, answers) |s, *got| {
+        const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, s[1], cookies[s[0]], s[2], s[3], if (s[4]) .async_ else .sync));
+        got.* = try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out });
+    }
+    // What search finds after, for each member: words in the sends only,
+    // and in a transcript from before.
+    var searches: std.ArrayList(u8) = .empty;
+    for (cookies) |c| for ([_][]const u8{ "zeppelin", "quote", "after", "crlf", "four", "script" }) |word| {
+        chat_search.forgetAll();
+        const r = try serveOn(a, io, &hub, oracle, try getRaw(a, try std.fmt.allocPrint(a, "/chat/search/messages?word={s}", .{word}), c));
+        try searches.print(a, "{?t} {s}\n", .{ r.err, r.out });
+    };
+    return .{ .answers = answers, .files = try tree(a, io, site.base), .frames = try drained(a, &hub, &send_keys, &subs), .searches = searches.items };
+}
+
+test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, block and frame; store_message!, publish!, then the Zig's fan_out!) leaves the transcripts, the .count files and the feeds the old Zig left, sends the same frames on every key, and search finds the same" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence and the index outlive the request
+    defer meter.restore();
+    const zig = try sendRun(a, io, true);
+    const roc = try sendRun(a, io, false);
+    var differ: usize = 0;
+    for (zig.answers, roc.answers, 0..) |z, r, i| if (!std.mem.eql(u8, z, r)) {
+        differ += 1;
+        std.debug.print("send {d}\n  zig: {f}\n  roc: {f}\n", .{ i, std.zig.fmtString(z), std.zig.fmtString(r) });
+    };
+    inline for (.{ "files", "frames", "searches" }) |what| if (!std.mem.eql(u8, @field(zig, what), @field(roc, what))) {
+        differ += 1;
+        std.debug.print(what ++ " differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(@field(zig, what)), std.zig.fmtString(@field(roc, what)) });
+    };
+    try testing.expectEqual(@as(usize, 0), differ);
+    // It reached what it means to: every send stored (303s and 204s); the
+    // stale count recounted (Plans_3, not Plans_6); the separator lines
+    // escaped; a first message's topic-added on both DM members' sidebars
+    // and every channel member's; the frames with their escaped names and
+    // cids; the feeds; search finding what landed after it was built.
+    try testing.expectEqual(@as(usize, 5), std.mem.count(u8, try std.mem.join(a, "", roc.answers), "303 See Other"));
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, try std.mem.join(a, "", roc.answers), "204 No Content"));
+    for ([_][]const u8{
+        "MSG_Plans_3\nfrom: Q\"uote",
+        "\\-------------\n\\\\-------------\n\\\\\\-------------\n> a quote\r\nCRLF then\n\nafter an empty line\n",
+        "MSG_Plans_4\nfrom: caf\xe9\xff\ndate: 2025-10-25T13:46:40Z\nuid: 2\n\na\n\n\\-------------\nb",
+        "sessions/Fresh.md\nMSG_Fresh_1\n",
+        "sessions/Brand.md\nMSG_Brand_1\n",
+        "sessions/Plans.count\n4 ",
+        "MSG_Standup_2\nfrom: Ann\ndate: 2025-10-25T13:46:40Z\nuid: 3\n\n\\-------------",
+    }) |want| if (std.mem.indexOf(u8, roc.files, want) == null) {
+        std.debug.print("not in the files: {f}\n", .{std.zig.fmtString(want)});
+        return error.TestUnexpectedResult;
+    };
+    for ([_][]const u8{
+        "== 1_2/Plans\nid: 2\ndata: {\"index\":2,\"from\":\"Q\\\"uote\\\\back\\u0001ctl\\u001f\\ttab/sl\x7f caf\u{e9} \u{1F44D}\",\"from_uid\":\"1\",\"at\":\"2025-10-25T13:46:40Z\",\"html\":",
+        ",\"id\":\"Plans_3\",\"cid\":\"c\\\"1\\\\x\\u0001/\"}\n\n",
+        "id: 3\ndata: {\"index\":3,\"from\":[99,97,102,233,255],\"from_uid\":\"2\"",
+        "== 1_2/Fresh\nid: 0\ndata: {\"index\":0,",
+        "\"cid\":\"</script>\"}",
+        "\"kind\":\"topic-added\",\"conv\":\"1_2\",\"sid\":\"Fresh\"",
+        "\"kind\":\"topic-added\",\"conv\":\"ops\",\"sid\":\"Brand\"",
+    }) |want| if (std.mem.indexOf(u8, roc.frames, want) == null) {
+        std.debug.print("not in the frames: {f}\n", .{std.zig.fmtString(want)});
+        return error.TestUnexpectedResult;
+    };
+    for ([_][]const u8{ "== sb:1\n", "== sb:2\n", "== sb:3\n", "== img:1\n", "== code:2\n", "== rec:3\n", "== ntf:2\n" }) |key|
+        if (std.mem.indexOf(u8, roc.frames, key) == null) {
+            std.debug.print("nothing published on {s}\n", .{key});
+            return error.TestUnexpectedResult;
+        };
+    try testing.expect(std.mem.indexOf(u8, roc.searches, "\"id\":\"Brand_1\"") != null and std.mem.indexOf(u8, roc.searches, "\"id\":\"Fresh_1\"") != null);
+}
+
+/// A send as Steve to `target`, on a site where a step of it will fail, the
+/// old way or the Roc's: its error, its status, every frame sent on every
+/// key, and every file the site holds.
+fn failedSend(a: Alloc, io: Io, oracle: bool, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", if (breaks == .author) "" else "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    switch (breaks) {
+        // The channel's sessions a file: the count reads nothing there (0),
+        // and the append cannot make the folder.
+        .append => {
+            const sessions = try std.fs.path.join(a, &.{ try chat_paths.channelConvDir(a, "ops"), "sessions" });
+            try std.Io.Dir.cwd().deleteTree(io, sessions);
+            try harness.UidSite.disk.write(io, a, sessions, "not a folder", .{});
+        },
+        // A topic whose transcript is a link to a folder: not counted.
+        .count => {
+            const dir = try chat_paths.dmConvDir(a, "1_2");
+            try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ dir, "elsewhere" }));
+            try std.Io.Dir.cwd().symLink(io, "../elsewhere", try std.fs.path.join(a, &.{ dir, "sessions", "Broken.md" }), .{});
+        },
+        // The sender's name is empty: no author.
+        .author => {},
+    }
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    var hub = webbox.bus.Hub.init(io, a);
+    const keys = [_][]const u8{ "1_2/Plans", "1_2/Broken", "ops/Standup" } ++ memberKeys("1") ++ memberKeys("2");
+    var subs: [keys.len]*webbox.bus.Subscriber = undefined;
+    for (keys, &subs) |k, *s| s.* = try hub.open(k);
+    const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, target, steve, "hello there", "c-1", .sync));
+    const frames = try drained(a, &hub, &keys, &subs);
+    return std.fmt.allocPrint(a, "{?t} {s}\nframes: {s}\nfiles: {s}", .{ r.err, harness.status(r.out), frames, try tree(a, io, site.base) });
+}
+
+test "a send whose transcript will not append, whose count fails, or whose sender has no name fails with the old Zig's error, stores nothing and sends nothing" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    inline for (.{
+        .{ "/channel/ops/Standup/send", .append, "NotDir" },
+        .{ "/chat/c/1_2/Broken/send", .count, "IsDir" },
+        .{ "/chat/c/1_2/Plans/send", .author, "NoAuthor" },
+    }) |c| {
+        const zig = try failedSend(a, io, true, c[0], c[1]);
+        const roc = try failedSend(a, io, false, c[0], c[1]);
+        // Presence's frames (the sender came online) go out before the
+        // send; nothing of the message, on any key or in any file.
+        if (!std.mem.eql(u8, zig, roc) or !std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: ") or std.mem.indexOf(u8, roc, "hello") != null or std.mem.indexOf(u8, roc, "== 1_2/Plans\n") != null or std.mem.indexOf(u8, roc, "== 1_2/Broken\n") != null or std.mem.indexOf(u8, roc, "== ops/Standup\n") != null) {
             std.debug.print("{s} ({s}):\n  zig: {f}\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(zig), std.zig.fmtString(roc) });
             return error.TestUnexpectedResult;
         }

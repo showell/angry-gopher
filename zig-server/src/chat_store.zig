@@ -124,6 +124,10 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream 
 /// the stored message (id + server-stamped date). **THE RENDER IS HERE, ONCE**
 /// (chat_frame.zig): the published blob is the finished SSE frame, the same
 /// for every viewer, which each open stream writes as it is.
+/// **THE CHAT'S OWN SENDS ARE THE ROC'S** (roc-webbox chat/main.roc
+/// `appended!`, over `storeMessage`, the bus and `fanoutCrossPage`): this
+/// serves the Zig's other writers (login's welcome DM, docs' post to chat)
+/// and is the Zig the Roc's are held to.
 pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, topic: TopicAddress, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
     // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
     // refuses such a block on every read, so it would go out live and be gone
@@ -171,6 +175,31 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
     fanoutCrossPage(io, alloc, bus, meta, topic.key, topic.sid, msg, from.id, index);
 
     return msg;
+}
+
+/// **A MESSAGE STORED, AS A PRIMITIVE** (the Roc's `Host.store_message!`;
+/// roc-webbox chat/main.roc `appended!` decides the rest of what
+/// `appendMessage` does): `stored`, message `index`'s block as
+/// chatStoredForm writes it (the Roc's Transcript.stored_form), appended to
+/// the topic's transcript, then the `.count` and the search index told of
+/// `msg`. The count cache and the search index are the store's
+/// infrastructure, so they go with the append. An append that failed is
+/// the error, nothing stored; past it nothing fails.
+/// **THE TWINS' ORACLE IS `appendMessage`**, kept apart from this, so a
+/// step dropped here shows against it.
+pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u8, index: usize, msg: ChatMessage) !void {
+    const path = try transcriptPath(alloc, topic.dir, topic.sid);
+    const new_size = try store.append(io, alloc, path, stored);
+    // A crash between the append and this leaves a count whose size is not the
+    // transcript's — in either order — so messageCount refuses it and recounts.
+    // The size check is the protection, not the ordering.
+    writeCount(io, alloc, topic.dir, topic.sid, index + 1, new_size, .{
+        .offset = new_size - stored.len,
+        .uid = msg.uid,
+    });
+    // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
+    // takes the message, or drops itself whole if it cannot.
+    search_index.noteAppend(io, topic.dir, topic.sid, msg);
 }
 
 // ── reactions sidecar ─────────────────────────────────────────────────────────
