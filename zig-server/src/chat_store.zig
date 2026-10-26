@@ -195,6 +195,9 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// `event: reaction` frame (chat_frame.reactionFrame), the line verbatim.
 /// Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is
 /// checked against the transcript's real count. Returns the stored line.
+/// **THE TWINS' ORACLE**: the chat's reactions are the Roc's (roc-webbox
+/// chat/main.roc `reacted!`, over `appendLine`, `messageCount` and the bus);
+/// this is the Zig they are held to.
 pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAddress, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
     const count = try messageCount(io, alloc, topic.dir, topic.sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
@@ -218,6 +221,18 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAdd
     return line;
 }
 
+/// **ONE LINE APPENDED TO AN APPEND-ONLY LINE FILE** (the Roc's
+/// `Host.append_line!`): `line` and a newline at the end of the file at
+/// `path`, its folders made as `store.append` makes them. **A TORN LINE
+/// STAYS ITS OWN LINE**: an append a stop cut short leaves a line with no
+/// newline, and the next one glued to it is one line that reads as neither:
+/// two lost where one was. So a file that does not end in a newline gets
+/// one first. Read before the store, so a read that fails stores nothing.
+pub fn appendLine(io: Io, alloc: Alloc, path: []const u8, line: []const u8) !void {
+    const lead = if (try endsMidLine(io, alloc, path)) "\n" else "";
+    _ = try store.append(io, alloc, path, try std.mem.concat(alloc, u8, &.{ lead, line, "\n" }));
+}
+
 /// Whether the file at `path` has bytes and its last is not a newline: an
 /// append that was cut short. No file, or an empty one, is not.
 fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
@@ -230,8 +245,9 @@ fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
 
 /// reactionLine is the ONE place the sidecar's line shape is written. `on`
 /// false is a retraction: the client folds by last-event-wins per
-/// (msg, uid, emoji), so the file stays append-only.
-fn reactionLine(alloc: Alloc, msg_num: usize, uid: []const u8, from: []const u8, emoji: []const u8, on: bool, at: []const u8) ![]u8 {
+/// (msg, uid, emoji), so the file stays append-only. The Roc's twin:
+/// roc-webbox chat/Reaction.roc `line`.
+pub fn reactionLine(alloc: Alloc, msg_num: usize, uid: []const u8, from: []const u8, emoji: []const u8, on: bool, at: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "{{\"msg\":{d},\"uid\":{f},\"from\":{f},\"emoji\":{f},\"on\":{},\"at\":{f}}}", .{
         msg_num,                  std.json.fmt(uid, .{}), std.json.fmt(from, .{}),
         std.json.fmt(emoji, .{}), on,                     std.json.fmt(at, .{}),

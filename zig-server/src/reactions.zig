@@ -11,8 +11,8 @@
 //! one glyph.
 //!
 //! Routes (DM and channel alike), the Roc's since C4 (roc-webbox
-//! chat/main.roc `act!`): what is here is what it asks of Zig, the form's
-//! twin and the store's part.
+//! chat/main.roc `act!`): what is here is the form's twin and the old
+//! store's part, the oracles the Roc is held to.
 //!   GET  /<…>/<sid>/reactions   the sidecar bytes (ndjson; empty when none)
 //!   POST /<…>/<sid>/react       form msg=<n> emoji=<glyph> on=<1|0> → 204
 
@@ -55,9 +55,10 @@ pub fn parseReactForm(alloc: Alloc, body: []const u8) !ReactForm {
     return .{ .reacted = .{ .msg = msg, .emoji = emoji, .on = std.mem.eql(u8, on_s, "1") } };
 }
 
-/// **THE STORE'S PART OF A REACTION** (the Roc's `Host.react!` until C8):
-/// the author's name looked up, the line appended and sent live, or no such
-/// message in the topic.
+/// **THE STORE'S PART OF A REACTION, AS THE OLD ZIG DID IT**: the author's
+/// name looked up, the line appended and sent live, or no such message in
+/// the topic. The twins' oracle (chat_actions_twin.zig); the router's are
+/// the Roc's (roc-webbox chat/main.roc `reacted!`).
 pub fn storeReaction(io: Io, alloc: Alloc, bus: *Bus, topic: store.TopicAddress, uid: []const u8, now: Now, r: Reacted) !enum { stored, no_such_message } {
     const from_name = try users.getUserName(io, alloc, uid);
     _ = store.appendReaction(io, alloc, bus, now, topic, r.msg, .{ .name = from_name, .id = uid }, r.emoji, r.on) catch |e| switch (e) {

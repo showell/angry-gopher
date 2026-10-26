@@ -400,6 +400,207 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     try testing.expect(std.mem.indexOf(u8, roc.files, "New topic: [Ideas](/chat/c/1_2/Ideas)") != null);
 }
 
+// ── reactions: the sidecar's bytes and the live frames, both ways ──────────
+
+/// One request served on `hub`, the old way or the Roc's: what it answered
+/// and the error the route returned, if any.
+fn serveOn(a: Alloc, io: Io, hub: *webbox.bus.Hub, oracle: bool, raw: []const u8) !struct { out: []const u8, err: ?anyerror } {
+    chat_router.test_oracle = oracle;
+    defer chat_router.test_oracle = false;
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var b = webbox.bus.Bus.of(hub);
+    const err: ?anyerror = if (router.route(&req, io, a, &b)) |kept| blk: {
+        if (kept) |k| webbox.bus.drop(hub, k);
+        break :blk null;
+    } else |e| e;
+    try out.writer.flush();
+    return .{ .out = out.written(), .err = err };
+}
+
+const router = @import("router.zig");
+
+/// A react POST as `cookie`.
+fn reactRaw(a: Alloc, target: []const u8, cookie: []const u8, body: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookie, body.len, body });
+}
+
+/// Every blob published on each of `subs` (`keys` their keys), drained, as
+/// `== key` then the bytes.
+fn drained(a: Alloc, hub: *webbox.bus.Hub, keys: []const []const u8, subs: []const *webbox.bus.Subscriber) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(a);
+    for (keys, subs) |k, s| {
+        while (s.poll()) |blob| try out.writer.print("== {s}\n{s}", .{ k, blob });
+        hub.close(s);
+    }
+    return out.toOwnedSlice();
+}
+
+/// Names a reaction's line must escape: a quote, a backslash, control
+/// bytes, DEL, `/`, non-ASCII; one that is not UTF-8 (Zig writes it as an
+/// array of byte numbers); one cut of its CR LF as it is read.
+const hard_names = [_][]const u8{ "Q\"uote\\back\x01ctl\x1f\ttab/sl\x7f caf\u{e9} \u{1F44D}", "caf\xe9\xff", "Ann\r\n" };
+
+/// Reactions on a DM's topic and a channel's, by members named
+/// `hard_names`, on sidecars that start torn (no final newline), whole, and
+/// missing, the old way or the Roc's: every answer, every file the site
+/// holds, and every frame each topic's key carried, in order.
+fn reactRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: []const u8, frames: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const cookies = [_][]const u8{
+        try harness.memberSession(a, io, "1", hard_names[0]),
+        try harness.memberSession(a, io, "2", hard_names[1]),
+        try harness.memberSession(a, io, "3", hard_names[2]),
+    };
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    try harness.writeTranscript(a, io, "1_2", "Other", &.{"three"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n3\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{ "four", "five", "six" });
+    // A sidecar a stop cut short, one whole, and none at all (Other's).
+    try harness.UidSite.disk.write(io, a, try store.reactionsPath(a, try chat_paths.dmConvDir(a, "1_2"), "Plans"), "{\"msg\":1,\"uid\":\"9\",\"fr", .{});
+    try harness.UidSite.disk.write(io, a, try store.reactionsPath(a, try chat_paths.channelConvDir(a, "ops"), "Standup"), "{\"msg\":2}\n", .{});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+
+    var hub = webbox.bus.Hub.init(io, a);
+    const keys = [_][]const u8{ "1_2/Plans", "1_2/Other", "ops/Standup", "1_2/plans" };
+    var subs: [keys.len]*webbox.bus.Subscriber = undefined;
+    for (keys, &subs) |k, *s| s.* = try hub.open(k);
+
+    const heart = "%E2%9D%A4%EF%B8%8F";
+    const Ask2 = struct { who: usize, target: []const u8, body: []const u8 };
+    const asks = [_]Ask2{
+        .{ .who = 0, .target = "/chat/c/1_2/Plans/react", .body = "msg=1&emoji=" ++ thumbs },
+        .{ .who = 1, .target = "/chat/c/1_2/Plans/react", .body = "msg=2&emoji=" ++ heart ++ "&on=0" },
+        .{ .who = 0, .target = "/chat/c/1_2/Plans/react", .body = "msg=2&emoji=" ++ thumbs ++ "&on=1" },
+        .{ .who = 0, .target = "/chat/c/1_2/Plans/react", .body = "msg=3&emoji=" ++ thumbs },
+        .{ .who = 0, .target = "/chat/c/1_2/Plans/react", .body = "msg=0&emoji=" ++ thumbs },
+        .{ .who = 1, .target = "/chat/c/1_2/plans/react", .body = "msg=1&emoji=" ++ heart },
+        .{ .who = 0, .target = "/chat/c/1_2/Other/react", .body = "msg=1&emoji=" ++ thumbs },
+        .{ .who = 0, .target = "/chat/c/1_2/Other/react", .body = "msg=2&emoji=" ++ thumbs },
+        .{ .who = 0, .target = "/channel/ops/Standup/react", .body = "msg=3&emoji=" ++ heart },
+        .{ .who = 1, .target = "/channel/ops/Standup/react", .body = "msg=1&emoji=" ++ thumbs ++ "&on=0" },
+        .{ .who = 2, .target = "/channel/ops/Standup/react", .body = "msg=2&emoji=" ++ thumbs },
+        .{ .who = 2, .target = "/channel/ops/Standup/react", .body = "msg=4&emoji=" ++ thumbs },
+    };
+    const answers = try a.alloc([]const u8, asks.len);
+    for (asks, answers) |q, *got| {
+        const r = try serveOn(a, io, &hub, oracle, try reactRaw(a, q.target, cookies[q.who], q.body));
+        got.* = try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out });
+    }
+    return .{ .answers = answers, .files = try tree(a, io, site.base), .frames = try drained(a, &hub, &keys, &subs) };
+}
+
+test "a reaction stored and sent by the Roc, over append_line!, message_count! and publish!, leaves the sidecar's bytes the old Zig left and sends its frames on its keys: a torn sidecar's line kept its own, names that need escaping, every bound" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
+    const zig = try reactRun(a, io, true);
+    const roc = try reactRun(a, io, false);
+    var differ: usize = 0;
+    for (zig.answers, roc.answers, 0..) |z, r, i| if (!std.mem.eql(u8, z, r)) {
+        differ += 1;
+        std.debug.print("react {d}\n  zig: {f}\n  roc: {f}\n", .{ i, std.zig.fmtString(z), std.zig.fmtString(r) });
+    };
+    if (!std.mem.eql(u8, zig.files, roc.files)) {
+        differ += 1;
+        std.debug.print("files differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(zig.files), std.zig.fmtString(roc.files) });
+    }
+    if (!std.mem.eql(u8, zig.frames, roc.frames)) {
+        differ += 1;
+        std.debug.print("frames differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(zig.frames), std.zig.fmtString(roc.frames) });
+    }
+    try testing.expectEqual(@as(usize, 0), differ);
+    // It reached what it means to: the torn line kept its own, each name
+    // escaped (one as byte numbers), the stamp, both refusals, and a frame
+    // for each of the eight stored, on the key of the topic as the request
+    // spelled it (the old Zig's).
+    for ([_][]const u8{ "\"fr\n{\"msg\":1,\"uid\":\"1\",\"from\":\"Q\\\"uote\\\\back\\u0001ctl\\u001f\\ttab/sl\x7f caf\u{e9} \u{1F44D}\"", "\"from\":[99,97,102,233,255]", "\"from\":\"Ann\"", "\"at\":\"2025-10-25T13:46:40Z\"" }) |want|
+        if (std.mem.indexOf(u8, roc.files, want) == null) {
+            std.debug.print("not in the files: {f}\n", .{std.zig.fmtString(want)});
+            return error.TestUnexpectedResult;
+        };
+    try testing.expectEqual(@as(usize, 8), std.mem.count(u8, roc.frames, "event: reaction\ndata: {\"msg\":"));
+    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, roc.frames, "== 1_2/Plans\n"));
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, roc.frames, "== 1_2/plans\n"));
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, roc.frames, "== 1_2/Other\n"));
+    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, roc.frames, "== ops/Standup\n"));
+    try testing.expectEqual(@as(usize, 4), std.mem.count(u8, try std.mem.join(a, "", roc.answers), "400 Bad Request"));
+}
+
+/// The reaction `target` as Steve, on a site where a step of it will fail,
+/// the old way or the Roc's: its error, its status, the frames sent, and
+/// every file the site holds.
+fn failedReact(a: Alloc, io: Io, oracle: bool, target: []const u8, comptime breaks: enum { sidecar, transcript, name }) ![]const u8 {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    const dir = try chat_paths.dmConvDir(a, "1_2");
+    switch (breaks) {
+        // The sidecar a folder: its last byte cannot be read, nor appended to.
+        .sidecar => try std.Io.Dir.cwd().createDirPath(io, try store.reactionsPath(a, dir, "Plans")),
+        // A topic whose transcript is a link to a folder: listed, not counted.
+        .transcript => {
+            try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ dir, "elsewhere" }));
+            try std.Io.Dir.cwd().symLink(io, "../elsewhere", try std.fs.path.join(a, &.{ dir, "sessions", "Broken.md" }), .{});
+        },
+        // The reactor's own name a folder: there, and unreadable.
+        .name => {
+            const name = try std.fs.path.join(a, &.{ users.auth_root, "1", "name" });
+            try harness.UidSite.disk.remove(io, a, name);
+            try std.Io.Dir.cwd().createDirPath(io, name);
+        },
+    }
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    var hub = webbox.bus.Hub.init(io, a);
+    const keys = [_][]const u8{ "1_2/Plans", "1_2/Broken", "ops/Standup" };
+    var subs: [keys.len]*webbox.bus.Subscriber = undefined;
+    for (keys, &subs) |k, *s| s.* = try hub.open(k);
+    const r = try serveOn(a, io, &hub, oracle, try reactRaw(a, target, steve, "msg=1&emoji=" ++ thumbs));
+    const frames = try drained(a, &hub, &keys, &subs);
+    return std.fmt.allocPrint(a, "{?t} {s}\nframes: {s}\nfiles: {s}", .{ r.err, harness.status(r.out), frames, try tree(a, io, site.base) });
+}
+
+test "a reaction whose store, count or reactor will not read fails with the old Zig's error, stores nothing and sends nothing" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    inline for (.{
+        .{ "/chat/c/1_2/Plans/react", .sidecar, "IsDir" },
+        .{ "/chat/c/1_2/Broken/react", .transcript, "IsDir" },
+        .{ "/channel/ops/Standup/react", .name, "IsDir" },
+        .{ "/chat/c/1_2/Plans/react", .name, "IsDir" },
+    }) |c| {
+        const zig = try failedReact(a, io, true, c[0], c[1]);
+        const roc = try failedReact(a, io, false, c[0], c[1]);
+        if (!std.mem.eql(u8, zig, roc) or !std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: \n") or std.mem.indexOf(u8, roc, "\"msg\":1,\"uid\"") != null) {
+            std.debug.print("{s} ({s}):\n  zig: {f}\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(zig), std.zig.fmtString(roc) });
+            return error.TestUnexpectedResult;
+        }
+    }
+}
+
 /// The most one request's memory held, served the old way or the Roc's: the
 /// bytes its allocator was asked for at once (the response is written
 /// elsewhere, as the kernel sends it).

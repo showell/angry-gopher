@@ -97,6 +97,7 @@ const Fn = enum(u8) {
     rosters = 58,
     conv_paths = 59,
     accounts = 60,
+    reaction_line = 61,
 };
 
 /// One Roc call's results, in `a`.
@@ -137,11 +138,12 @@ fn setUp() std.heap.ArenaAllocator {
 // ── Time (timefmt.zig) ─────────────────────────────────────────────────────
 
 /// Seconds that try the calendar: the epoch and around it, leap days and
-/// centuries (1900, 2000, 2100, 2400), the years Hinnant's eras turn, the
-/// far past and future, and a pseudorandom spread between.
+/// centuries (1900, 2000, 2100, 2400), the ends of years (a leap year's and
+/// not), the years Hinnant's eras turn, the far past and future, and a
+/// pseudorandom spread between.
 fn times(a: std.mem.Allocator) ![]i64 {
     var out: std.ArrayList(i64) = .empty;
-    for ([_]i64{ 0, -1, 1, 86399, 86400, -86400, -86401, 951782400, 951868800, 4107542400, 4107456000, 13574563200, -2208988800, -62135596800, -62167219200, 253402300799, 253402300800, 1761400000, 1700000000 }) |t|
+    for ([_]i64{ 0, -1, 1, 86399, 86400, -86400, -86401, 951782400, 951868800, 4107542400, 4107456000, 13574563200, -2208988800, -62135596800, -62167219200, 253402300799, 253402300800, 1761400000, 1700000000, 1735689600, 1767225600, 978307200, 946684800, 4102444800 }) |t|
         for ([_]i64{ -1, 0, 1 }) |d| try out.append(a, t + d);
     var rng = std.Random.DefaultPrng.init(0x7177e);
     for (0..5000) |_| try out.append(a, rng.random().intRangeAtMost(i64, -62135596800, 253402300799));
@@ -706,6 +708,43 @@ test "Reaction: the react form judged as parseReactForm judges it, and one glyph
         const got = yes((try roc1(a, .valid_emoji, &.{g})).?);
         compared += 1;
         if (want != got) differ.add("validEmoji(\"{f}\"): zig {}, roc {}", .{ std.zig.fmtString(g), want, got });
+    }
+    try differ.none(compared);
+}
+
+test "Reaction: the sidecar's line as reactionLine writes it, field order and escapes, over generated uids, names, emoji, stamps and on or off" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    const strings = try byteStrings(a);
+    var rng = std.Random.DefaultPrng.init(0x4eac71);
+    const r = rng.random();
+    const pick = struct {
+        fn f(rr: std.Random, ss: []const []const u8) []const u8 {
+            return ss[rr.uintLessThan(usize, ss.len)];
+        }
+    }.f;
+    const ts = try times(a);
+    var compared: usize = 0;
+    for (0..4000) |i| {
+        const msg: u64 = switch (i % 4) {
+            0 => 1,
+            1 => r.int(u32),
+            2 => std.math.maxInt(u64),
+            else => r.int(u64),
+        };
+        // The stamp as the Roc makes it (Time's twin holds it to timefmt).
+        const at = if (i % 3 == 0) pick(r, strings) else try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]);
+        const uid = pick(r, strings);
+        const from = pick(r, strings);
+        const emoji = pick(r, strings);
+        const on = r.boolean();
+        const z = try chat_store.reactionLine(a, msg, uid, from, emoji, on, at);
+        const got = (try roc1(a, .reaction_line, &.{ try std.fmt.allocPrint(a, "{d}", .{msg}), uid, from, emoji, if (on) "1" else "0", at })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, got)) differ.add("reactionLine: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
     }
     try differ.none(compared);
 }

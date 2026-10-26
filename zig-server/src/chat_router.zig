@@ -13,9 +13,10 @@
 //! serves them itself, asking `Call` (below) for presence, the reads its
 //! lookup of the conversation decides on (O2: every account, once, looked
 //! up by the Roc; a channel's member file and the topics' folder by the
-//! file primitives, named and parsed by the Roc), the body and the store's
-//! writes, which
-//! stay Zig's until C8, and answers what to send. `handle` sends it once
+//! file primitives, named and parsed by the Roc), the body, the
+//! primitives a reaction is stored and sent by (a line appended, a topic's
+//! count, the bus), and a message's store, which stays Zig's until C8, and
+//! answers what to send. `handle` sends it once
 //! the call has ended. **THE HOST HOLDS NO CONVERSATION BETWEEN CALLS**:
 //! each operation on one is handed it (`roc_chat.Conv`) by the Roc.
 
@@ -32,6 +33,7 @@ const presence = @import("presence.zig");
 const reactions = @import("reactions.zig");
 const recent = @import("recent.zig");
 const store = @import("chat_store.zig");
+const chat_count = @import("chat_count.zig");
 const chat_page = @import("chat_page.zig");
 const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
@@ -141,7 +143,9 @@ pub const Call = struct {
             .raw = raw,
             .links = links,
             .recent = recentRows,
-            .react = react,
+            .publish = publish,
+            .append_line = appendLine,
+            .message_count = messageCount,
             .read = read,
             .write = write,
             .remove = remove,
@@ -426,22 +430,42 @@ pub const Call = struct {
         chat_paths.countMalformed(name_);
     }
 
-    fn react(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, msg: u64, emoji: []const u8, on: bool) roc_chat.Reacted {
+    /// **THE BUS, AS A PRIMITIVE** (Host.publish!): webbox's bus.publish,
+    /// which copies the bytes to each subscriber, so the Roc's go with the
+    /// call. It cannot fail; after a failure it sends nothing.
+    fn publish(ctx: *anyopaque, key: []const u8, bytes: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        c.bus.publish(key, bytes);
+    }
+
+    /// **ONE LINE APPENDED** (Host.append_line!): chat_store.appendLine,
+    /// under the chat root (the seam has refused a path that would leave
+    /// it), its torn-line rule the store's.
+    fn appendLine(ctx: *anyopaque, path: []const u8, line: []const u8) bool {
+        const c = of(ctx);
+        if (c.dead()) return false;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        store.appendLine(c.io, c.alloc, p, line) catch |e| return c.no(e);
+        return true;
+    }
+
+    /// **A TOPIC'S MESSAGE COUNT** (Host.message_count!): chat_count's,
+    /// its cache and its recount the store's, shared with the append. A
+    /// count that failed fails the request, never 0.
+    fn messageCount(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) roc_chat.Count {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const t = c.address(conv_, sid) catch |e| {
-            c.fail(e);
-            return .failed;
-        };
+        const t = c.address(conv_, sid) catch |e| return c.uncounted(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const done = reactions.storeReaction(c.io, c.alloc, c.bus, t, c.uid, c.now, .{ .msg = msg, .emoji = emoji, .on = on }) catch |e| {
-            c.fail(e);
-            return .failed;
-        };
-        return switch (done) {
-            .stored => .stored,
-            .no_such_message => .no_such_message,
-        };
+        return .{ .counted = chat_count.messageCount(c.io, c.alloc, t.dir, t.sid) catch |e| return c.uncounted(e) };
+    }
+
+    /// `fail`, answering the Roc that the count failed.
+    fn uncounted(c: *Call, e: anyerror) roc_chat.Count {
+        c.fail(e);
+        return .failed;
     }
 
     /// `fail`, answering the Roc nothing.
