@@ -28,6 +28,7 @@ const chat_fanout = @import("chat_fanout.zig");
 const recent_feed = @import("recent_feed.zig");
 const recent = @import("recent.zig");
 const chat_actions_twin = @import("chat_actions_twin.zig");
+const chat_state = @import("chat_state.zig");
 
 /// chat/twin.roc's numbers.
 const Fn = enum(u8) {
@@ -72,6 +73,8 @@ const Fn = enum(u8) {
     code_feed = 39,
     recent_excerpt = 40,
     recent_json = 41,
+    resume_topic = 42,
+    pinned = 43,
 };
 
 /// One Roc call's results, in `a`.
@@ -1001,4 +1004,90 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
         if (!std.mem.eql(u8, z, got)) differ.add("recent:\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
     }
     try differ.none(compared);
+}
+
+// ── ChatState (chat_state.zig) ─────────────────────────────────────────────
+
+/// Topic names that meet: ChitChat (firstOf's pick) and a case-twin of it,
+/// dates, `general<N>`, names that sort before and after each other by byte
+/// (`Z` before `a`), and a name no list has.
+const state_names = [_][]const u8{ "ChitChat", "chitchat", "general", "general2", "Plans", "2026-10-25", "a", "Z", "b c", "\xff" };
+
+test "ChatState: where a bare DM resumes, for every topic list, order and last view tried" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0x7e503);
+    const r = rng.random();
+    const nows = [_]i64{ 1761400000, 0, -1, 951782400, 253402300799, -62135596800 };
+    var picks = [_]usize{ 0, 0, 0 };
+    for (0..4000) |k| {
+        // The edge cases first, then lists of up to six in any order (the
+        // store lists them sorted; firstOf takes the first it is given).
+        var topics: std.ArrayList([]const u8) = .empty;
+        const n: usize = if (k < 200) k % 3 else r.uintAtMost(usize, 6);
+        for (0..n) |_| try topics.append(a, state_names[r.uintLessThan(usize, state_names.len)]);
+        const last: []const u8 = switch (r.uintLessThan(u8, 4)) {
+            0 => "",
+            1 => "Gone",
+            else => if (topics.items.len > 0 and r.boolean()) topics.items[r.uintLessThan(usize, topics.items.len)] else state_names[r.uintLessThan(usize, state_names.len)],
+        };
+        const now = if (r.boolean()) nows[r.uintLessThan(usize, nows.len)] else r.intRangeAtMost(i64, -62135596800, 253402300799);
+        const z = try chat_state.chooseResumeTopic(a, topics.items, last, now);
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.appendSlice(a, &.{ last, try std.fmt.allocPrint(a, "{d}", .{now}) });
+        try args.appendSlice(a, topics.items);
+        const got = (try roc1(a, .resume_topic, args.items)).?;
+        compared += 1;
+        // Which way it went, so a generator that never reaches one is seen.
+        const way: usize = if (last.len != 0 and std.mem.eql(u8, z, last)) 0 else if (chat_paths.firstOf(topics.items).len > 0) 1 else 2;
+        picks[way] += 1;
+        if (!std.mem.eql(u8, z, got)) differ.add("resume(last \"{f}\", now {d}, {d} topics): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(last), now, topics.items.len, std.zig.fmtString(z), std.zig.fmtString(got) });
+    }
+    try differ.none(compared);
+    for (picks) |p| try testing.expect(p > 300);
+}
+
+test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte, or removed, whatever the file held" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var removed: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0x919);
+    const r = rng.random();
+    // Lines as a file may hold them: padded, blank, CRLF, repeated, bytes
+    // that sort high, and a line that is only spaces.
+    const lines = [_][]const u8{ "Plans", "Plans", "Other", " Plans ", "\tb\r", "", "   ", "a", "B", "ChitChat", "\xc3\xa9", "\xff", "a b", "Plans\r" };
+    const sids = [_][]const u8{ "Plans", "Other", "a", "new", "a b", "\xff", "B", " Plans" };
+    for (0..5000) |k| {
+        var file: std.ArrayList(u8) = .empty;
+        // The first few: no file (""), then any lines.
+        const n: usize = if (k < 50) 0 else r.uintAtMost(usize, 7);
+        for (0..n) |i| {
+            if (i > 0) try file.appendSlice(a, if (r.uintLessThan(u8, 4) == 0) "\r\n" else "\n");
+            try file.appendSlice(a, lines[r.uintLessThan(usize, lines.len)]);
+        }
+        if (n > 0 and r.boolean()) try file.append(a, '\n');
+        const sid = sids[r.uintLessThan(usize, sids.len)];
+        const pin = r.boolean();
+        const z = try chat_state.nextPinned(a, file.items, sid, pin);
+        const got = try roc(a, .pinned, &.{ file.items, sid, if (pin) "1" else "0" });
+        compared += 1;
+        const rz: ?[]const u8 = switch (got.len) {
+            0 => null,
+            1 => got[0],
+            else => return error.TwinGaveMore,
+        };
+        if (z == null) removed += 1;
+        const same = if (z) |zb| (rz != null and std.mem.eql(u8, zb, rz.?)) else rz == null;
+        if (!same) differ.add("pinned(\"{f}\", \"{f}\", {}): zig \"{f}\" (removed {}), roc \"{f}\" (removed {})", .{ std.zig.fmtString(file.items), std.zig.fmtString(sid), pin, std.zig.fmtString(z orelse ""), z == null, std.zig.fmtString(rz orelse ""), rz == null });
+    }
+    try differ.none(compared);
+    try testing.expect(removed > 100);
 }

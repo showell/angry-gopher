@@ -110,6 +110,17 @@ pub fn setTopicPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u
     // every pin the user had — silently, on the way to adding one. No pins is
     // a missing file (store.zig answers ""); anything else leaves them alone.
     const existing = try readPinnedFile(io, alloc, uid, conv_key);
+    const body = (try nextPinned(alloc, existing, sid, pinned)) orelse return removePinnedFile(io, alloc, uid, conv_key);
+    try writePinnedFile(io, alloc, uid, conv_key, body);
+}
+
+/// nextPinned is setTopicPinned's decision, pure: the pinned file `existing`
+/// with `sid` added or removed, sorted, a line each; null when no pin is
+/// left (the file goes). Only `sid` is de-duplicated: a line the file
+/// already repeats stays repeated. The Roc chat makes the same choice
+/// (roc-webbox chat/ChatState.roc `pinned`); chat_twin_test.zig holds it to
+/// this.
+pub fn nextPinned(alloc: Alloc, existing: []const u8, sid: []const u8, pinned: bool) !?[]u8 {
     const cur = try parsePinned(alloc, existing);
 
     // Rebuild the set with sid added/removed, kept sorted and de-duped.
@@ -124,8 +135,7 @@ pub fn setTopicPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u
     }
     if (pinned and !have) try next.append(alloc, sid);
 
-    const path = try pinnedPath(alloc, uid, conv_key);
-    if (next.items.len == 0) return disk.remove(io, alloc, path);
+    if (next.items.len == 0) return null;
     std.mem.sort([]const u8, next.items, {}, lessThanStr);
 
     var body: std.ArrayList(u8) = .empty;
@@ -133,8 +143,19 @@ pub fn setTopicPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u
         try body.appendSlice(alloc, s);
         try body.append(alloc, '\n');
     }
+    return body.items;
+}
+
+/// The member's pinned file for `conv_key` written as `body` (nextPinned's).
+pub fn writePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, body: []const u8) !void {
+    const path = try pinnedPath(alloc, uid, conv_key);
     if (std.fs.path.dirname(path)) |d| try disk.makeDir(io, alloc, d);
-    try disk.write(io, alloc, path, body.items, .{});
+    try disk.write(io, alloc, path, body, .{});
+}
+
+/// The member's pinned file for `conv_key` removed: no pin is left.
+pub fn removePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) !void {
+    return disk.remove(io, alloc, try pinnedPath(alloc, uid, conv_key));
 }
 
 fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
@@ -142,7 +163,9 @@ fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ dir, "pinned-sessions", conv_key });
 }
 
-fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
+/// The member's pinned file for `conv_key`, as stored: "" when there is
+/// none; an error when it will not read, never "".
+pub fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
     const path = try pinnedPath(alloc, uid, conv_key);
     return disk.readOrEmpty(io, alloc, path, .unlimited);
 }
@@ -164,10 +187,18 @@ pub fn resumeTopic(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, now:
     const topics = try chat_paths.listTopics(io, alloc, dir);
 
     const last = try lastViewedTopic(io, alloc, uid, conv);
+    return chooseResumeTopic(alloc, topics, last, now.unixSecs());
+}
+
+/// chooseResumeTopic is resumeTopic's decision, pure: `last` (the topic last
+/// viewed, "" for none) while `topics` has it, else their firstOf, else the
+/// date of `now_secs`. The Roc chat makes the same choice (roc-webbox
+/// chat/ChatState.roc `resume_topic`); chat_twin_test.zig holds it to this.
+pub fn chooseResumeTopic(alloc: Alloc, topics: []const []const u8, last: []const u8, now_secs: i64) ![]const u8 {
     if (last.len != 0) {
         for (topics) |s| if (std.mem.eql(u8, s, last)) return last;
     }
     const first = chat_paths.firstOf(topics);
     if (first.len > 0) return first;
-    return timefmt.formatDateUTC(alloc, now.unixSecs());
+    return timefmt.formatDateUTC(alloc, now_secs);
 }

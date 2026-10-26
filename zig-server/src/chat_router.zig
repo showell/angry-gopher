@@ -136,14 +136,17 @@ pub const Call = struct {
             .feed = feed,
             .recent = recentRows,
             .react = react,
-            .pin = pin,
+            .pins = pins,
+            .write_pins = writePins,
+            .remove_pins = removePins,
             .landing = landing,
             .page = page,
             .srcs = srcs,
             .me = me,
             .viewer = viewerName,
             .last_conv = lastConv,
-            .resume_topic = resumeTopic,
+            .last_viewed = lastViewed,
+            .now = now_,
             .topics = topics,
             .channels = channels,
             .members = members,
@@ -305,12 +308,36 @@ pub const Call = struct {
         };
     }
 
-    fn pin(ctx: *anyopaque, pinned: bool) bool {
+    /// The member's pinned file for the found topic's conversation, as
+    /// stored ("" for none). **A SET THAT WILL NOT READ IS NOT AN EMPTY SET**
+    /// (chat_state.setTopicPinned): a failed read is null, never "", so the
+    /// Roc writes nothing over the pins it could not see.
+    fn pins(ctx: *anyopaque) ?[]const u8 {
+        const c = of(ctx);
+        if (c.dead()) return null;
+        const t = c.found orelse @panic("Host.pins!: no topic found");
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        return chat_state.readPinnedFile(c.io, c.alloc, c.uid, t.key) catch |e| {
+            c.fail(e);
+            return null;
+        };
+    }
+
+    fn writePins(ctx: *anyopaque, bytes: []const u8) bool {
         const c = of(ctx);
         if (c.dead()) return false;
-        const t = c.found orelse @panic("Host.pin!: no topic found");
+        const t = c.found orelse @panic("Host.write_pins!: no topic found");
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        chat_state.setTopicPinned(c.io, c.alloc, c.uid, t.key, t.sid, pinned) catch |e| return c.no(e);
+        chat_state.writePinnedFile(c.io, c.alloc, c.uid, t.key, bytes) catch |e| return c.no(e);
+        return true;
+    }
+
+    fn removePins(ctx: *anyopaque) bool {
+        const c = of(ctx);
+        if (c.dead()) return false;
+        const t = c.found orelse @panic("Host.remove_pins!: no topic found");
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        chat_state.removePinnedFile(c.io, c.alloc, c.uid, t.key) catch |e| return c.no(e);
         return true;
     }
 
@@ -397,11 +424,17 @@ pub const Call = struct {
         return chat_state.lastUserConv(c.io, c.alloc, c.uid) catch |e| c.nothing(e);
     }
 
-    fn resumeTopic(ctx: *anyopaque, conv_: []const u8) []const u8 {
+    fn lastViewed(ctx: *anyopaque, conv_: []const u8) []const u8 {
         const c = of(ctx);
         if (c.dead()) return "";
         // absent-ok: the same.
-        return chat_state.resumeTopic(c.io, c.alloc, c.uid, conv_, c.now) catch |e| c.nothing(e);
+        return chat_state.lastViewedTopic(c.io, c.alloc, c.uid, conv_) catch |e| c.nothing(e);
+    }
+
+    fn now_(ctx: *anyopaque) i64 {
+        const c = of(ctx);
+        if (c.dead()) return 0;
+        return c.now.unixSecs();
     }
 
     fn topics(ctx: *anyopaque, family: roc_chat.Family, key: []const u8) []const []const u8 {
