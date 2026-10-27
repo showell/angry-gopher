@@ -313,28 +313,35 @@ pub const Call = struct {
         };
     }
 
-    /// Topic `sid`'s transcript in `conv_`, held for the answer: whether there is
-    /// one.
-    fn raw(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) bool {
+    /// The file at `path` under the chat root (Host.raw!: a topic's
+    /// transcript, its name the Roc's; the seam has checked it), its bytes
+    /// held for the answer: whether there is one.
+    fn raw(ctx: *anyopaque, path: []const u8) bool {
         const c = of(ctx);
         if (c.dead()) return false;
-        const t = c.address(conv_, sid) catch |e| return c.no(e);
-        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no transcript" is none.
-        c.held = (chat_paths.readTranscript(c.io, c.alloc, t.dir, t.sid) catch |e| return c.no(e)) orelse return false;
+        // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is none.
+        c.held = (c.heldFile(path) catch |e| return c.no(e)) orelse return false;
         return true;
     }
 
-    /// The member's links.md, rendered as the server's own markdown
-    /// (`renderTrusted`: a curated page has far more links than a message
-    /// may), held for the answer: whether there is one.
-    fn links(ctx: *anyopaque) bool {
+    /// The file at `path` under the chat root (Host.links!: the member's
+    /// links.md, its name the Roc's; the seam has checked it), rendered as
+    /// the server's own markdown (`renderTrusted`: a curated page has far
+    /// more links than a message may), held for the answer: whether there
+    /// is one.
+    fn links(ctx: *anyopaque, path: []const u8) bool {
         const c = of(ctx);
         if (c.dead()) return false;
-        const path = std.fs.path.join(c.alloc, &.{ store.chat_root, "users", c.uid, "links.md" }) catch |e| return c.no(e);
         // absent-ok: the same; only "no file" is none.
-        const md = (webbox.store.readOrNull(c.io, c.alloc, path, .unlimited) catch |e| return c.no(e)) orelse return false;
+        const md = (c.heldFile(path) catch |e| return c.no(e)) orelse return false;
         c.held = markdown.renderTrusted(c.alloc, md) catch |e| return c.no(e);
         return true;
+    }
+
+    /// The file at `path` under the chat root, or null when it is not there.
+    fn heldFile(c: *Call, path: []const u8) !?[]u8 {
+        const p = try std.fs.path.join(c.alloc, &.{ store.chat_root, path });
+        return webbox.store.readOrNull(c.io, c.alloc, p, .unlimited);
     }
 
     /// The member's recent feed as recent.zig gathers it.
