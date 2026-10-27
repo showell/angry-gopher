@@ -47,7 +47,7 @@ const Fn = enum(u8) {
     pair_key = 8,
     valid_topic_id = 9,
     valid_channel_name = 10,
-    valid_msg_ref_id = 11,
+    is_valid_msg_ref_id = 11,
     first_of = 13,
     transcript_path = 14,
     decode_file = 15,
@@ -64,7 +64,7 @@ const Fn = enum(u8) {
     reaction_frame = 26,
     form_field = 27,
     react_form = 28,
-    valid_emoji = 29,
+    is_valid_emoji = 29,
     chrome_page = 30,
     not_found_page = 31,
     no_topics_page = 32,
@@ -350,7 +350,7 @@ test "Paths: topic ids, channel names and message ids, every byte at every place
         const checks = .{
             .{ Fn.valid_topic_id, chat_paths.validTopicID(s) },
             .{ Fn.valid_channel_name, chat_paths.validChannelName(s) },
-            .{ Fn.valid_msg_ref_id, chat_paths.validMsgRefID(s) },
+            .{ Fn.is_valid_msg_ref_id, chat_paths.validMsgRefID(s) },
         };
         inline for (checks) |c| {
             const r = yes((try roc1(a, c[0], &.{s})).?);
@@ -796,7 +796,7 @@ test "Reaction: the react form judged as parseReactForm judges it, and one glyph
     }
     for (glyphs.items) |g| {
         const want = reactions.validEmoji(g);
-        const got = yes((try roc1(a, .valid_emoji, &.{g})).?);
+        const got = yes((try roc1(a, .is_valid_emoji, &.{g})).?);
         compared += 1;
         if (want != got) differ.add("validEmoji(\"{f}\"): zig {}, roc {}", .{ std.zig.fmtString(g), want, got });
     }
@@ -2003,7 +2003,7 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
             // **PRINCIPALEXISTS LOOKED AT THE FOLDER ALONE**: it never fails
             // on what the listing found, and the Roc's never asks to.
             const z_exists = users.principalExists(io, a, id) catch |e| {
-                differ.add("account \"{f}\": principalExists failed {t}, which the Roc's exists cannot", .{ std.zig.fmtString(id), e });
+                differ.add("account \"{f}\": principalExists failed {t}, which the Roc's has_account cannot", .{ std.zig.fmtString(id), e });
                 continue;
             };
             if (z_exists != r_exists) differ.add("account \"{f}\": zig exists {}, roc {}", .{ std.zig.fmtString(id), z_exists, r_exists });
