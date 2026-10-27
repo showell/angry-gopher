@@ -256,15 +256,24 @@ test "ZigText: a string as std.json.fmt writes it, and as the readers trim it" {
     const a = arena.allocator();
     var differ: Differences = .{};
     const ss = try byteStrings(a);
+    var compared: usize = 0;
     for (ss) |s| {
-        const z = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(s, .{})});
-        const r = (try roc1(a, .json_string, &.{s})).?;
-        if (!std.mem.eql(u8, z, r)) differ.add("json(\"{f}\"): zig {s}, roc {s}", .{ std.zig.fmtString(s), z, r });
+        // json_string takes text: the strings that are not UTF-8 go, since
+        // the Roc's door refuses them and `roc test` covers that refusal
+        // (JsonText's str_at_door expects).
+        if (std.unicode.utf8ValidateSlice(s)) {
+            const z = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(s, .{})});
+            const r = (try roc1(a, .json_string, &.{s})).?;
+            if (!std.mem.eql(u8, z, r)) differ.add("json(\"{f}\"): zig {s}, roc {s}", .{ std.zig.fmtString(s), z, r });
+            compared += 1;
+        }
         const zt = std.mem.trim(u8, s, " \t\r\n");
         const rt = (try roc1(a, .trim, &.{s})).?;
         if (!std.mem.eql(u8, zt, rt)) differ.add("trim(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(s), std.zig.fmtString(zt), std.zig.fmtString(rt) });
+        compared += 1;
     }
-    try differ.none(ss.len * 2);
+    try differ.none(compared);
+    try testing.expect(compared > ss.len + 300);
 }
 
 // ── Paths (chat_paths.zig) ─────────────────────────────────────────────────
