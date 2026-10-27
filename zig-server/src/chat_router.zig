@@ -83,7 +83,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     // heap, webbox's arena per request on Linux), with no arena over it, so
     // nothing it took outlives the request and nothing is taken twice.
     roc_chat.useRequest(alloc);
-    const decision = try roc_chat.decide(alloc, sub, channel, req.head.method, call.host());
+    // A crash after a kept failure is that failure's: every hosted function
+    // answers empty once one has failed, which the Roc may not survive.
+    const decision = roc_chat.decide(alloc, sub, channel, req.head.method, call.host()) catch |e| return call.failed orelse e;
     // A failure the Roc could not be told (the store, reading who it is)
     // fails the request, as it did before the router.
     if (call.failed) |e| return e;
