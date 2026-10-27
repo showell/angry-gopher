@@ -31,6 +31,7 @@
 //! has a frozen-vector regression test beside it in users_session.zig.
 
 const users_session = @import("users_session.zig");
+const names = @import("names.zig");
 const apiKeyMatches = users_session.apiKeyMatches;
 pub const clock_skew_secs = users_session.clock_skew_secs;
 pub const currentUserID = users_session.currentUserID;
@@ -317,11 +318,11 @@ pub fn nowUnix(io: Io) i64 {
 
 /// allocateUser creates a new account with `name` and returns its id, bumping
 /// the account-id counter (auth_root/next-id.txt).
-pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
+pub fn allocateUser(io: Io, alloc: Alloc, name: names.UserName) ![]const u8 {
     const counter_path = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
     const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{d}", .{n});
-    try setUserName(io, alloc, id, name);
+    try setUserName(io, alloc, id, name.text);
     return id;
 }
 
@@ -542,7 +543,7 @@ test "fs: only members reserve a name; findMemberByName resolves it" {
 
     // a freshly allocated account (name only, no password) is NOT yet a member,
     // so its name is NOT reserved — a half-registered guest can't squat a name.
-    const id = try allocateUser(io, a, "Alice");
+    const id = try allocateUser(io, a, .literal("Alice"));
     try testing.expect((try findMemberByName(io, a, "Alice")) == null);
 
     // becoming a member (password set) reserves the name and makes it resolvable
@@ -597,8 +598,8 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id1 = try allocateUser(io, a, "First");
-    const id2 = try allocateUser(io, a, "Second");
+    const id1 = try allocateUser(io, a, .literal("First"));
+    const id2 = try allocateUser(io, a, .literal("Second"));
 
     // distinct, numeric, strictly increasing (the shared counter bumps)
     const n1 = try std.fmt.parseInt(i64, id1, 10);
@@ -653,9 +654,9 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     defer threaded.deinit();
     const io = threaded.io();
 
-    const keep = try allocateUser(io, a, "Keeper");
+    const keep = try allocateUser(io, a, .literal("Keeper"));
     try setUserPassword(io, a, keep, "pw");
-    const gone = try allocateUser(io, a, "Goner");
+    const gone = try allocateUser(io, a, .literal("Goner"));
     try setUserPassword(io, a, gone, "pw");
     try testing.expect(try reserveUploadBytes(io, a, gone, 100)); // give it users_root state too
 
@@ -692,7 +693,7 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id = try allocateUser(io, a, "Alice");
+    const id = try allocateUser(io, a, .literal("Alice"));
     try setUserPassword(io, a, id, "pw");
     // The password, there and unreadable: a link to itself loops.
     const pw = try std.fs.path.join(a, &.{ auth_root, id, "password" });

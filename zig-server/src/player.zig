@@ -107,11 +107,11 @@ fn isSafeID(id: []const u8) bool {
 // ── issuance ─────────────────────────────────────────────────────────────────
 
 /// allocate mints a fresh local player with `name` and returns its id (`p<n>`).
-pub fn allocate(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
+pub fn allocate(io: Io, alloc: Alloc, name: names.UserName) ![]const u8 {
     const counter_path = try std.fs.path.join(alloc, &.{ player_root, "next-id.txt" });
     const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{s}{d}", .{ local_prefix, n });
-    try setName(io, alloc, id, name);
+    try setName(io, alloc, id, name.text);
     return id;
 }
 
@@ -222,11 +222,13 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
 
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const next = sanitizeNext((try formField(alloc, body, "next")) orelse from_query);
-    const vr = try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "");
-    if (vr.err.len != 0) return renderPage(req, alloc, cur.name, next.path, vr.err);
+    const name = switch (try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "")) {
+        .ok => |n| n,
+        .refused => |why| return renderPage(req, alloc, cur.name, next.path, why),
+    };
 
     if (try game_limits.admitPlayer(io, client)) |r| return game_limits.refuse(req, r);
-    const id = try allocate(io, alloc, vr.name);
+    const id = try allocate(io, alloc, name);
     var hs: std.ArrayList(std.http.Header) = .empty;
     try hs.append(alloc, .{ .name = "location", .value = next.path });
     const ck = (try cookie(io, alloc, id)) orelse
@@ -360,13 +362,13 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id = try allocate(io, a, "Nikhil");
+    const id = try allocate(io, a, .literal("Nikhil"));
     try testing.expect(std.mem.startsWith(u8, id, local_prefix));
     try testing.expect(!std.ascii.isDigit(id[0])); // never collides with an account id
     try testing.expectEqualStrings("Nikhil", try nameOf(io, a, id));
 
     // A second player gets a distinct id.
-    const id2 = try allocate(io, a, "Debbie");
+    const id2 = try allocate(io, a, .literal("Debbie"));
     try testing.expect(!std.mem.eql(u8, id, id2));
 
     // mirror gives an account id a row under its own numeric spelling.

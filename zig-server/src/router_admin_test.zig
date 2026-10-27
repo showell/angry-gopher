@@ -275,7 +275,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const me = try harness.adminSession(a, io);
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const old_uid = try harness.signedUid(a, id); // signed with the secret before the change
     const secret_path = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });
 
@@ -329,7 +329,7 @@ test "route: an admin delete of a player there is not says so, 404, where it wen
     const me = try harness.adminSession(a, io);
     try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
     try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
 }
 

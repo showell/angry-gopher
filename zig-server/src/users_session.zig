@@ -469,7 +469,7 @@ test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies"
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id = try allocateUser(io, a, "Member");
+    const id = try allocateUser(io, a, .literal("Member"));
     try setUserPassword(io, a, id, "pw");
     try Io.Dir.cwd().createDirPath(io, users.session_secret_dir);
     const spath = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });

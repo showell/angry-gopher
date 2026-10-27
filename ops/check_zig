@@ -62,12 +62,13 @@ portable_budget=(--budget steps=1500000000 --budget arena_bytes=1073741824)
 (cd "$REPO_DIR/.." && shale "${portable_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_portable.shale" repo="$(basename "$REPO_DIR")")
 
 # Poka-yoke lint: a sealed value is made by its check alone (metal-vmm QUEUE
-# 250). A checked value (player.Id, users.Uid, and webbox's http.Target)
-# carries a seal of size zero that only its own file sets, so a call that
-# takes one cannot be handed a value no one checked: a literal without the
-# seal does not compile, and this refuses one that sets it anywhere else. Its plants run in shale's own tests.
+# 250). A checked value (player.Id, users.Uid, names.UserName, and webbox's
+# http.Target) carries a seal of size zero that only its own file sets, so
+# a call that takes one cannot be handed a value no one checked: a literal
+# without the seal does not compile, and this refuses one that sets it
+# anywhere else. Its plants run in shale's own tests.
 echo "==> seal lint"
-(cd "$REPO_DIR/.." && shale shale/cookbook/sealed.shale dir="$(basename "$REPO_DIR")/zig-server/src" seals=id_seal:player.zig,uid_seal:users.zig)
+(cd "$REPO_DIR/.." && shale shale/cookbook/sealed.shale dir="$(basename "$REPO_DIR")/zig-server/src" seals=id_seal:player.zig,uid_seal:users.zig,name_seal:names.zig)
 (cd "$REPO_DIR/.." && shale shale/cookbook/sealed.shale dir=zig-webbox/src seals=target_seal:http.zig)
 
 # Poka-yoke lint: a read of the store whose failure is caught into a value

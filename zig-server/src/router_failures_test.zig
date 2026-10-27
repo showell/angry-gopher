@@ -271,7 +271,7 @@ test "route: an error after a request's body was read is answered 500 too, never
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const me = try harness.signedUid(a, id);
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/game/new-session", me, "state")));
     const s1 = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id, "lynrummy-elm", "sessions", "1" });
@@ -387,8 +387,8 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     defer uid_site.deinit();
     const docs_store = @import("docs_store.zig");
     const reading_list = @import("reading_list.zig");
-    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
-    const ada = try users.allocateUser(io, a, "Ada");
+    const me = try harness.signedUid(a, try player.allocate(io, a, .literal("Ada")));
+    const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const slug = try docs_store.createUserDoc(io, a, ada, "Notes");
@@ -451,10 +451,10 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     defer uid_site.deinit();
     const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
-    const ada = try users.allocateUser(io, a, "Ada");
+    const me = try harness.signedUid(a, try player.allocate(io, a, .literal("Ada")));
+    const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
-    const bo = try users.allocateUser(io, a, "Bo");
+    const bo = try users.allocateUser(io, a, .literal("Bo"));
     try users.setUserPassword(io, a, bo, "a password for Bo");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const key = try std.fmt.allocPrint(a, "{s}_{s}", .{ ada, bo });
@@ -485,7 +485,7 @@ test "a release that can release nothing says so, never the page a release that 
     defer uid_site.deinit();
     // A member's id in the player cookie and no session (it lapsed): the
     // account is not this cookie's to release.
-    const ada = try users.allocateUser(io, a, "Ada");
+    const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
     try player.mirror(io, a, ada, "Ada");
     const got = try harness.postAs(a, io, "/logout", try harness.signedUid(a, ada), "release=yes");

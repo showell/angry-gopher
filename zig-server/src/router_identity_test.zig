@@ -20,7 +20,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const unsigned = try std.fmt.allocPrint(a, "gopher_uid={s}", .{id});
 
     // The owner's first visit: a redirect to the same page that sets the
@@ -53,7 +53,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     try testing.expect(std.mem.indexOf(u8, game_page, "location: /play?next=/game") != null);
 
     // A POST with it is never the re-identification: no redirect, no cookie.
-    const other = try player.allocate(io, a, "Debbie");
+    const other = try player.allocate(io, a, .literal("Debbie"));
     const post = try harness.serve(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n", .{other}));
     try testing.expect(harness.setUid(post) == null); // an empty name: the form again, no player made
     try testing.expect(!harness.playingAs(post, "Debbie")); // and the form names no one
@@ -130,7 +130,7 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     try testing.expect(harness.playingAs(m, "Steve"));
 
     // A player never yet signed, once the window has shut: no one.
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     try harness.UidSite.closeWindow(a, io);
     const late = try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
     try testing.expectEqualStrings("200 OK", harness.status(late));
@@ -189,7 +189,7 @@ test "route: the re-sign's redirect stays on this site" {
     };
     for (cases) |c| {
         // A fresh legacy player each time: a re-sign happens once per id.
-        const id = try player.allocate(io, a, "Nikhil");
+        const id = try player.allocate(io, a, .literal("Nikhil"));
         const r = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{ c[0], id }));
         try testing.expectEqualStrings("303 See Other", harness.status(r));
         try testing.expect(std.mem.indexOf(u8, r, try std.fmt.allocPrint(a, "location: {s}\r\n", .{c[1]})) != null);
@@ -205,7 +205,7 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const now = harness.nowSecs(io);
     const old = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
     const renewed = try harness.UidSite.ask(a, io, "/play", old);

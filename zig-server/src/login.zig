@@ -150,19 +150,23 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             }
         },
         .upgrade => {
-            // Cookied guest → member, in place (registerMember keeps cur.id).
+            // Cookied guest → member, in place: the guest keeps their id and
+            // their name, and gains a password.
             if (password.len == 0) return renderPwPage(req, alloc, mode, name, next, "Please enter a password.");
             if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
-            const id = try registerMember(cur, io, alloc, name, password);
+            try users.setUserPassword(io, alloc, cur.id, password);
+            const id = cur.id;
             throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, name);
             sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
         },
         .stranger => {
-            const vr = try names.validateUserName(alloc, name);
-            if (vr.err.len != 0) return renderPwPage(req, alloc, .stranger, name, next, vr.err);
-            const valid = vr.name;
+            const checked = switch (try names.validateUserName(alloc, name)) {
+                .ok => |n| n,
+                .refused => |why| return renderPwPage(req, alloc, .stranger, name, next, why),
+            };
+            const valid = checked.text;
             const member_id = try users.findMemberByName(io, alloc, valid);
             const action = (try chat.formField(alloc, body, "action")) orelse "";
             if (std.mem.eql(u8, action, "login")) {
@@ -177,7 +181,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             if (member_id != null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "\u{201C}{s}\u{201D} is taken — log in instead.", .{valid}));
             if (password.len == 0) return renderPwPage(req, alloc, .stranger, valid, next, "Please enter a password.");
             if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
-            const id = try registerMember(cur, io, alloc, valid, password);
+            const id = try registerMember(io, alloc, checked, password);
             throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, valid);
             sendHostWelcome(io, alloc, bus, id);
@@ -207,15 +211,10 @@ fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_
     return .ok;
 }
 
-/// registerMember turns `name` into a password member and returns its id. If the
-/// current guest IS this name (not yet a member), it upgrades that guest's id in
-/// place so their identity and data carry over; otherwise it allocates a fresh
-/// id.
-fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u8, password: []const u8) ![]const u8 {
-    if (cur.id.len != 0 and !cur.member and std.mem.eql(u8, cur.name, name)) {
-        try users.setUserPassword(io, alloc, cur.id, password);
-        return cur.id;
-    }
+/// registerMember makes a new password member named `name`, a checked one,
+/// and returns its id. (A guest who upgrades keeps their id: `.upgrade` sets
+/// only their password.)
+fn registerMember(io: Io, alloc: Alloc, name: names.UserName, password: []const u8) ![]const u8 {
     const id = try users.allocateUser(io, alloc, name);
     try users.setUserPassword(io, alloc, id, password);
     return id;
