@@ -185,7 +185,12 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
         .total_actions = 0,
         .disk_bytes = 0,
     };
-    const uroot = storage.userDataDir(alloc, p.id) catch {
+    // player.list passes only ids isSafeID took, so `orelse` is never taken.
+    const checked = player.Id.of(p.id) orelse {
+        st.unreadable += 1;
+        return st;
+    };
+    const uroot = storage.userDataDir(alloc, checked) catch {
         st.unreadable += 1;
         return st;
     };
@@ -347,7 +352,7 @@ test "the delete-confirm counts say what could not be read, never zero for it (m
     const none = gatherStats(io, a, .{ .id = "p1", .name = "Ada" });
     try std.testing.expectEqual(@as(u32, 0), none.unreadable);
     // Their games folder is a file: it will not list.
-    const games = try std.fs.path.join(a, &.{ try storage.userDataDir(a, "p1"), "lynrummy-elm", "sessions" });
+    const games = try std.fs.path.join(a, &.{ try storage.userDataDir(a, player.Id.of("p1").?), "lynrummy-elm", "sessions" });
     try Io.Dir.cwd().createDirPath(io, std.fs.path.dirname(games).?);
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = games, .data = "not a folder" });
     const st = gatherStats(io, a, .{ .id = "p1", .name = "Ada" });

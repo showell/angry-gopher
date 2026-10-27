@@ -49,11 +49,10 @@ const max_append_bytes = limits.body.game_append;
 /// `client` is the caller's address as the router read it, for the bound on
 /// what one address may write (game_limits.zig); null when the host gave none.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
-    const user_id = (try player.current(io, alloc, req)).id;
-    if (user_id.len == 0) {
+    const user_id = player.Id.of((try player.current(io, alloc, req)).id) orelse {
         try http.redirect(req, "/play?next=/game");
         return;
-    }
+    };
 
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try playPage(req, io, alloc, user_id, 0);
@@ -82,7 +81,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]c
 
 /// sessionRoute fans out the per-session URL space (`rest` is the path after
 /// "/sessions/").
-fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, rest: []const u8) !void {
+fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -115,7 +114,7 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client
 /// DSL-encoded GameState; the server prepends a server-owned created_at, writes
 /// the merged DSL to <session>/meta, and returns the id as JSON. The game-state
 /// DSL is stored verbatim.
-fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8) !void {
+fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     const game_state_dsl = (try http.readLimitedBody(req, alloc, max_new_session_bytes)) orelse return;
@@ -143,7 +142,7 @@ const LineKind = storage.LineKind;
 /// appendSessionLine is the universal write handler: POST body → one appended
 /// line in <session>/<rel>. Actions are wire-DSL text (actions.dsl); annotations
 /// are JSONL (compacted).
-fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, kind: LineKind) !void {
+fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, session_id: i64, kind: LineKind) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
@@ -157,7 +156,7 @@ fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, c
 /// sessionBootstrap returns the resume bundle as one text/plain document: the
 /// meta DSL, a `---` separator line, then the action log DSL. Elm splits on the
 /// separator.
-fn sessionBootstrap(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !void {
+fn sessionBootstrap(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const meta_bytes = (try storage.readSessionFile(io, alloc, user_id, session_id, "meta")) orelse "";
@@ -170,7 +169,7 @@ fn sessionBootstrap(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, se
 
 /// sessionsList renders the HTML browser of a player's full-game sessions,
 /// newest first.
-fn sessionsList(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
+fn sessionsList(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     const ids = try storage.listSessionIDs(io, alloc, user_id);
     std.mem.sort(i64, ids, {}, std.sort.desc(i64)); // newest first
 
@@ -192,7 +191,7 @@ fn sessionsList(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void 
 }
 
 /// sessionsJSON is the api/sessions equivalent of sessionsList.
-fn sessionsJSON(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
+fn sessionsJSON(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     const ids = try storage.listSessionIDs(io, alloc, user_id);
     std.mem.sort(i64, ids, {}, std.sort.desc(i64));
 
@@ -213,7 +212,7 @@ fn sessionsJSON(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void 
 
 /// sessionDetail renders a debug view for a session dir — no replay, just what's
 /// on disk.
-fn sessionDetail(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !void {
+fn sessionDetail(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const meta = try readMeta(io, alloc, user_id, session_id);
@@ -240,12 +239,12 @@ fn sessionDetail(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, sessi
 
 /// playPage renders the Elm host. `session_id` 0 = new game (initialSessionId
 /// null); >0 resumes.
-fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !void {
+fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
     const initial = if (session_id > 0)
         try std.fmt.allocPrint(alloc, "{d}", .{session_id})
     else
         "null";
-    const name = try player.nameOf(io, alloc, user_id);
+    const name = try player.nameOf(io, alloc, user_id.text);
     const name_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(name, .{})});
 
     // The two spaces in the format are the literal spaces after `=` and after
@@ -273,7 +272,7 @@ fn nowUnix(io: Io) i64 {
 
 /// readMeta loads + parses <session>/meta, or a zero SessionMeta when absent
 ///.
-fn readMeta(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !SessionMeta {
+fn readMeta(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !SessionMeta {
     const b = (try storage.readSessionFile(io, alloc, user_id, session_id, "meta")) orelse return .{};
     return session_meta.parseSessionMeta(b);
 }

@@ -50,8 +50,8 @@ fn userRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
 
 /// userDataDir is the public form of userRoot — a player's whole game-data
 /// subtree ({data_root}/{userID}), which the admin overview walks for stats.
-pub fn userDataDir(alloc: Alloc, user_id: []const u8) ![]u8 {
-    return userRoot(alloc, user_id);
+pub fn userDataDir(alloc: Alloc, id: player.Id) ![]u8 {
+    return userRoot(alloc, id.text);
 }
 
 /// deleteUserData removes a player's entire game-data subtree.
@@ -135,7 +135,7 @@ pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id
 
 /// Who a game write is charged to: the player and the address it came from
 /// (`game_limits.admit`).
-pub const Payer = struct { id: []const u8, client: ?[]const u8 };
+pub const Payer = struct { id: player.Id, client: ?[]const u8 };
 
 /// The two kinds of line a session takes: a DSL action (trailing newlines
 /// trimmed, one added) and a JSON annotation (compacted, one newline added).
@@ -183,13 +183,13 @@ pub fn appendPuzzleMove(io: Io, alloc: Alloc, payer: Payer, session_id: i64, puz
     const line = try lineOf(alloc, .actions, body);
     if (new_meta) |meta| {
         if (try game_limits.admit(io, alloc, payer.id, payer.client, true, meta.len + line.len)) |r| return .{ .refused = r };
-        if (!try ensurePuzzleSession(io, alloc, payer.id, session_id, meta)) {
+        if (!try ensurePuzzleSession(io, alloc, payer.id.text, session_id, meta)) {
             try game_limits.giveBack(io, alloc, payer.id, payer.client, true, meta.len + line.len);
             return .not_offered;
         }
     } else if (try game_limits.admit(io, alloc, payer.id, payer.client, false, line.len)) |r| return .{ .refused = r };
     const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
-    try appendLine(io, alloc, try join(alloc, &.{ try puzzleSessionDir(alloc, payer.id, session_id), rel }), line);
+    try appendLine(io, alloc, try join(alloc, &.{ try puzzleSessionDir(alloc, payer.id.text, session_id), rel }), line);
     return .done;
 }
 
@@ -208,21 +208,21 @@ fn appendLine(io: Io, alloc: Alloc, path: []const u8, line: []const u8) !void {
 
 /// allocateSessionID returns the next sequential full-game session id (1-based)
 /// for a player, persisted in their next-session-id.txt.
-pub fn allocateSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
-    return counter.next(io, alloc, try nextSessionIDPath(alloc, user_id));
+pub fn allocateSessionID(io: Io, alloc: Alloc, id: player.Id) !i64 {
+    return counter.next(io, alloc, try nextSessionIDPath(alloc, id.text));
 }
 
 /// sessionDir is {lynrummyElmRoot}/sessions/<id>.
-pub fn sessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
-    const root = try lynrummyElmRoot(alloc, user_id);
+pub fn sessionDir(alloc: Alloc, id: player.Id, session_id: i64) ![]u8 {
+    const root = try lynrummyElmRoot(alloc, id.text);
     const id_str = try std.fmt.allocPrint(alloc, "{d}", .{session_id});
     return join(alloc, &.{ root, "sessions", id_str });
 }
 
 /// writeSessionFile writes body to <session-dir>/<rel>, creating parent dirs.
 /// Last-write-wins (used for meta).
-fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
-    const dir = try sessionDir(alloc, user_id, session_id);
+fn writeSessionFile(io: Io, alloc: Alloc, id: player.Id, session_id: i64, rel: []const u8, body: []const u8) !void {
+    const dir = try sessionDir(alloc, id, session_id);
     const full = try join(alloc, &.{ dir, rel });
     try store.write(io, alloc, full, body, .{});
 }
@@ -230,8 +230,8 @@ fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, 
 /// readSessionFile reads <session-dir>/<rel>, or null when the file (or session)
 /// is missing. Any other failure is an error: a game resumed from an empty log
 /// it could not read would be played on from the start and appended to.
-pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8) !?[]u8 {
-    const dir = try sessionDir(alloc, user_id, session_id);
+pub fn readSessionFile(io: Io, alloc: Alloc, id: player.Id, session_id: i64, rel: []const u8) !?[]u8 {
+    const dir = try sessionDir(alloc, id, session_id);
     const full = try join(alloc, &.{ dir, rel });
     return store.read(io, alloc, full, .unlimited) catch |e| switch (e) {
         error.FileNotFound, error.NotDir => null,
@@ -240,16 +240,16 @@ pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i6
 }
 
 /// sessionExists reports whether a full-game session directory is on disk.
-pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
-    const dir = try sessionDir(alloc, user_id, session_id);
+pub fn sessionExists(io: Io, alloc: Alloc, id: player.Id, session_id: i64) !bool {
+    const dir = try sessionDir(alloc, id, session_id);
     const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
 }
 
 /// listSessionIDs returns every full-game session-id directory for a player,
 /// sorted ascending.
-pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
-    const root = try lynrummyElmRoot(alloc, user_id);
+pub fn listSessionIDs(io: Io, alloc: Alloc, id: player.Id) ![]i64 {
+    const root = try lynrummyElmRoot(alloc, id.text);
     const sessions = try join(alloc, &.{ root, "sessions" });
 
     const entries = try store.list(io, alloc, sessions);
@@ -257,9 +257,9 @@ pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
     var ids: std.ArrayList(i64) = .empty;
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
-        const id = std.fmt.parseInt(i64, entry.name, 10) catch continue;
-        if (id <= 0) continue;
-        try ids.append(alloc, id);
+        const n = std.fmt.parseInt(i64, entry.name, 10) catch continue;
+        if (n <= 0) continue;
+        try ids.append(alloc, n);
     }
     const out = try ids.toOwnedSlice(alloc);
     std.mem.sort(i64, out, {}, std.sort.asc(i64));
@@ -279,8 +279,8 @@ pub fn countTextLines(io: Io, alloc: Alloc, path: []const u8) !usize {
 }
 
 /// countSessionActions counts the lines in <session>/actions.dsl.
-pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !usize {
-    const dir = try sessionDir(alloc, user_id, session_id);
+pub fn countSessionActions(io: Io, alloc: Alloc, id: player.Id, session_id: i64) !usize {
+    const dir = try sessionDir(alloc, id, session_id);
     const full = try join(alloc, &.{ dir, "actions.dsl" });
     return countTextLines(io, alloc, full);
 }
@@ -321,6 +321,7 @@ fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
 
 const testing = std.testing;
 const roots = @import("roots.zig");
+const test_p1 = player.Id.of("p1").?;
 
 /// The host's turn, as the writers below take it: a handler runs only inside
 /// it (webbox's linux_host `turn`; the bare-metal host's one loop), and
@@ -330,7 +331,7 @@ var test_turn: Io.Mutex = .init;
 /// One writer of the concurrent-append test, each append in a turn of its
 /// own, as a handler's would be. `parent` must be thread-safe: the test
 /// passes the page allocator (named only inside a test block).
-fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, writer: usize, n: usize) void {
+fn appendMany(io: Io, parent: Alloc, user_id: player.Id, session_id: i64, writer: usize, n: usize) void {
     var arena = std.heap.ArenaAllocator.init(parent);
     defer arena.deinit();
     const alloc = arena.allocator();
@@ -359,19 +360,19 @@ test "fs: appends to one session from many writers at once, each in the host's t
     const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
     defer saved.restore();
 
-    const id = try allocateSessionID(io, a, "p1");
-    try writeSessionFile(io, a, "p1", id, "meta", "m");
+    const id = try allocateSessionID(io, a, test_p1);
+    try writeSessionFile(io, a, test_p1, id, "meta", "m");
     const writers = 8;
     const each = 100;
     var group: Io.Group = .init;
     var w: usize = 0;
     while (w < writers) : (w += 1) {
-        group.concurrent(io, appendMany, .{ io, std.heap.page_allocator, "p1", id, w, each }) catch
-            group.async(io, appendMany, .{ io, std.heap.page_allocator, "p1", id, w, each });
+        group.concurrent(io, appendMany, .{ io, std.heap.page_allocator, test_p1, id, w, each }) catch
+            group.async(io, appendMany, .{ io, std.heap.page_allocator, test_p1, id, w, each });
     }
     try group.await(io);
 
-    const body = (try readSessionFile(io, a, "p1", id, "actions.dsl")).?;
+    const body = (try readSessionFile(io, a, test_p1, id, "actions.dsl")).?;
     var lines: usize = 0;
     var it = std.mem.splitScalar(u8, std.mem.trimEnd(u8, body, "\n"), '\n');
     while (it.next()) |line| {
@@ -393,10 +394,10 @@ test "fs: a session file that cannot be read is an error, never a fresh game" {
     const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
     defer saved.restore();
 
-    const id = try allocateSessionID(io, a, "p1");
-    try testing.expectEqual(@as(?[]u8, null), try readSessionFile(io, a, "p1", id, "meta")); // not there
-    try store.makeDir(io, a, try join(a, &.{ try sessionDir(a, "p1", id), "actions.dsl" }));
-    try testing.expect(std.meta.isError(readSessionFile(io, a, "p1", id, "actions.dsl")));
+    const id = try allocateSessionID(io, a, test_p1);
+    try testing.expectEqual(@as(?[]u8, null), try readSessionFile(io, a, test_p1, id, "meta")); // not there
+    try store.makeDir(io, a, try join(a, &.{ try sessionDir(a, test_p1, id), "actions.dsl" }));
+    try testing.expect(std.meta.isError(readSessionFile(io, a, test_p1, id, "actions.dsl")));
 }
 
 test "fs: a first move for a session the page did not offer counts nothing against its player (metal-vmm QUEUE 172)" {
@@ -412,12 +413,12 @@ test "fs: a first move for a session the page did not offer counts nothing again
     defer saved.restore();
     const forgot = game_limits.forgetForTest();
     defer forgot.end();
-    const payer = Payer{ .id = "p1", .client = null };
+    const payer = Payer{ .id = test_p1, .client = null };
     // Session 99 was never offered: refused, and nothing counted.
     try std.testing.expect(try appendPuzzleMove(io, a, payer, 99, 0, "move", "the meta") == .not_offered);
     // Its whole allowance is still there, its sessions too.
-    try std.testing.expect((try game_limits.admit(io, a, "p1", null, false, game_limits.max_bytes)) == null);
-    for (0..game_limits.max_sessions) |_| try std.testing.expect((try game_limits.admit(io, a, "p1", null, true, 0)) == null);
+    try std.testing.expect((try game_limits.admit(io, a, test_p1, null, false, game_limits.max_bytes)) == null);
+    for (0..game_limits.max_sessions) |_| try std.testing.expect((try game_limits.admit(io, a, test_p1, null, true, 0)) == null);
 }
 
 test "fs: a session made counts one against its player; its lines, and a puzzle's later moves, count none" {
@@ -433,7 +434,7 @@ test "fs: a session made counts one against its player; its lines, and a puzzle'
     defer saved.restore();
     const forgot = game_limits.forgetForTest();
     defer forgot.end();
-    const payer = Payer{ .id = "p1", .client = null };
+    const payer = Payer{ .id = test_p1, .client = null };
     const made = try makeGameSession(io, a, payer, "the meta");
     try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
     for (0..3) |_| try std.testing.expect(try appendGameLine(io, a, payer, made.id, .actions, "a line") == null);
