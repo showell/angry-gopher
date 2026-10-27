@@ -94,7 +94,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // password) or a stranger is sent to set a password and returned here —
     // guests may play the game, but chat requires membership.
     if (!try users.principalAuthorized(io, alloc, uid)) {
-        return http.redirect(req, try http.Target.format(alloc, "/login/full?next=/chat{s}", .{sub}));
+        return toLogin(req, alloc, "/chat", sub);
     }
 
     // Presence: any authorized page/action counts as activity — but NOT the SSE
@@ -178,7 +178,7 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     const uid = try users.currentUserID(io, alloc, req);
     // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
     if (!try users.principalAuthorized(io, alloc, uid)) {
-        return http.redirect(req, try http.Target.format(alloc, "/login/full?next=/channel{s}", .{sub}));
+        return toLogin(req, alloc, "/channel", sub);
     }
     if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
 
@@ -584,13 +584,23 @@ fn convHasTopic(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool {
     return false;
 }
 
+/// To the login page, to come back to `base` `sub` after: **the request's
+/// own path, so one that is no path on this site is its 400.** Every other
+/// redirect this file builds is from a conversation's base and a topic's
+/// sid, which the store's names keep on the site, so its error.NotOnSite is
+/// the router's 500: a bug, never a redirect to somewhere else.
+fn toLogin(req: *Request, alloc: Alloc, comptime base: []const u8, sub: []const u8) !void {
+    const back = http.Target.format(alloc, "/login/full?next=" ++ base ++ "{s}", .{sub}) catch |e| switch (e) {
+        error.NotOnSite => return req.respond("not a path on this site\n", .{ .status = .bad_request }),
+        else => return e,
+    };
+    return http.redirect(req, back);
+}
+
 /// redirectFound issues a 302 to `location` — the msg-ref
 /// lookup uses 302 (a transient lookup-then-go), not the 303 the others use.
 fn redirectFound(req: *Request, location: http.Target) !void {
-    return req.respond("", .{
-        .status = .found,
-        .extra_headers = &.{.{ .name = "location", .value = location.path }},
-    });
+    return http.redirectWith(req, location, .{ .status = .found });
 }
 
 // ── raw + index ──────────────────────────────────────────────────────────────

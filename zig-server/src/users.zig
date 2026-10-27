@@ -265,13 +265,13 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
 }
 
 fn authFileExists(io: Io, alloc: Alloc, id: Uid, name: []const u8) !bool {
-    const path = try std.fs.path.join(alloc, &.{ auth_root, id.text, name });
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id.text(), name });
     return try store.has(io, alloc, path);
 }
 
 /// readAuthFile reads {auth_root}/{id}/{name}, or null if absent.
 pub fn readAuthFile(io: Io, alloc: Alloc, id: Uid, name: []const u8) !?[]u8 {
-    const path = try std.fs.path.join(alloc, &.{ auth_root, id.text, name });
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id.text(), name });
     return store.readOrNull(io, alloc, path, .unlimited);
 }
 
@@ -280,15 +280,19 @@ pub fn readAuthFile(io: Io, alloc: Alloc, id: Uid, name: []const u8) !?[]u8 {
 /// one (`readAuthFile`, `authFileExists`), so an id with `/` or `..` in it
 /// never names another folder's password: the check is where the id is,
 /// and a reader cannot be handed one that skipped it. A literal without
-/// `uid_seal` does not compile, and ops/check_zig's seal lint refuses one
-/// that sets it outside this file.
+/// `uid_seal` does not compile, and ops/check_zig's seal lint refuses
+/// `.uid_seal =` and `.account_uid =` outside this file. `text()` reads it.
 pub const Uid = struct {
-    text: []const u8,
+    account_uid: []const u8,
     uid_seal: Seal,
 
     pub fn of(s: []const u8) ?Uid {
         if (!allDigits(s)) return null;
-        return .{ .text = s, .uid_seal = .{} };
+        return .{ .account_uid = s, .uid_seal = .{} };
+    }
+
+    pub fn text(id: Uid) []const u8 {
+        return id.account_uid;
     }
 };
 
@@ -322,7 +326,7 @@ pub fn allocateUser(io: Io, alloc: Alloc, name: names.UserName) ![]const u8 {
     const counter_path = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
     const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{d}", .{n});
-    try setUserName(io, alloc, id, name.text);
+    try setUserName(io, alloc, id, name.text());
     return id;
 }
 

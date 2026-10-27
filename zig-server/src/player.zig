@@ -81,14 +81,19 @@ pub fn current(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
 /// as a type only `Id.of` makes, so a call that takes one (storage.deleteUserData)
 /// cannot be handed an id no one checked. Zig has no private fields: a literal
 /// without `id_seal` does not compile, and ops/check_zig's seal lint (shale's
-/// cookbook/sealed.shale) refuses one that sets it outside this file.
+/// cookbook/sealed.shale) refuses `.id_seal =` and `.player_id =` outside
+/// this file, a literal's or a change to one made. `text()` reads it.
 pub const Id = struct {
-    text: []const u8,
+    player_id: []const u8,
     id_seal: Seal,
 
     pub fn of(s: []const u8) ?Id {
         if (!isSafeID(s)) return null;
-        return .{ .text = s, .id_seal = .{} };
+        return .{ .player_id = s, .id_seal = .{} };
+    }
+
+    pub fn text(id: Id) []const u8 {
+        return id.player_id;
     }
 };
 
@@ -111,7 +116,7 @@ pub fn allocate(io: Io, alloc: Alloc, name: names.UserName) ![]const u8 {
     const counter_path = try std.fs.path.join(alloc, &.{ player_root, "next-id.txt" });
     const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{s}{d}", .{ local_prefix, n });
-    try setName(io, alloc, id, name.text);
+    try setName(io, alloc, id, name.text());
     return id;
 }
 
@@ -224,24 +229,21 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
     const next = sanitizeNext((try formField(alloc, body, "next")) orelse from_query);
     const name = switch (try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "")) {
         .ok => |n| n,
-        .refused => |why| return renderPage(req, alloc, cur.name, next.path, why),
+        .refused => |why| return renderPage(req, alloc, cur.name, next.path(), why),
     };
 
     if (try game_limits.admitPlayer(io, client)) |r| return game_limits.refuse(req, r);
     const id = try allocate(io, alloc, name);
-    var hs: std.ArrayList(std.http.Header) = .empty;
-    try hs.append(alloc, .{ .name = "location", .value = next.path });
     const ck = (try cookie(io, alloc, id)) orelse
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
-    try hs.append(alloc, .{ .name = "set-cookie", .value = ck });
-    try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
+    return http.redirectWith(req, next, .{ .headers = &.{.{ .name = "set-cookie", .value = ck }} });
 }
 
 /// queryNext reads ?next= off the request target, so a GET /play?next=/game
 /// remembers where the visitor was headed.
 fn queryNext(alloc: Alloc, target: []const u8) ![]const u8 {
     const q = std.mem.indexOfScalar(u8, target, '?') orelse return "/";
-    return sanitizeNext((try formField(alloc, target[q + 1 ..], "next")) orelse "/").path;
+    return sanitizeNext((try formField(alloc, target[q + 1 ..], "next")) orelse "/").path();
 }
 
 /// sanitizeNext keeps only internal redirect targets, so ?next= is never an open
@@ -327,17 +329,17 @@ test "isSafeID accepts account and local spellings, rejects traversal" {
 }
 
 test "sanitizeNext keeps internal paths and refuses an open redirect" {
-    try testing.expectEqualStrings("/game", sanitizeNext("/game").path);
-    try testing.expectEqualStrings("/", sanitizeNext("//evil.example").path);
-    try testing.expectEqualStrings("/", sanitizeNext("https://evil.example").path);
-    try testing.expectEqualStrings("/", sanitizeNext("").path);
+    try testing.expectEqualStrings("/game", sanitizeNext("/game").path());
+    try testing.expectEqualStrings("/", sanitizeNext("//evil.example").path());
+    try testing.expectEqualStrings("/", sanitizeNext("https://evil.example").path());
+    try testing.expectEqualStrings("/", sanitizeNext("").path());
     // **WHAT A BROWSER READS AS ANOTHER HOST** (the normalization hunt,
     // 2026-10-10): a backslash after the slash is a second slash to a
     // browser, and a tab or newline inside is dropped before it looks.
     for ([_][]const u8{ "/\\evil.example", "/\\/evil.example", "/\t/evil.example", "/\n/evil.example", "/x\\y", "/\x7f/evil.example" }) |bad| {
-        try testing.expectEqualStrings("/", sanitizeNext(bad).path);
+        try testing.expectEqualStrings("/", sanitizeNext(bad).path());
     }
-    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3").path);
+    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3").path());
 }
 
 test "formField decodes plus and percent escapes" {

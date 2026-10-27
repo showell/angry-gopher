@@ -243,7 +243,7 @@ fn fresh(addr: []const u8, t: i64) Seen {
 
 /// `id`'s slot: found, or the least recently asked one measured afresh.
 fn slot(io: Io, alloc: Alloc, checked: player.Id) !*Usage {
-    const id = checked.text;
+    const id = checked.text();
     std.debug.assert(id.len <= id_max); // isSafeID's bound, which Id.of holds
     tick += 1;
     var empty: ?*Usage = null;
