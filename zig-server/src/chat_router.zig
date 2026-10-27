@@ -504,15 +504,20 @@ pub const Call = struct {
         return .{ .image_max = chat_upload.image_max, .video_max = chat_upload.video_max, .accept = chat_upload.accept, .search_min = @import("search_tokens.zig").min_len };
     }
 
-    fn srcs(ctx: *anyopaque) []const []const u8 {
+    fn srcs(ctx: *anyopaque) []const roc_chat.Src {
         const c = of(ctx);
         if (c.dead()) return &.{};
-        var out: std.ArrayList([]const u8) = .empty;
-        inline for (chrome.assets) |a| {
-            const src = chrome.src(c.alloc, a.name) catch |e| return c.none(e);
-            out.appendSlice(c.alloc, &.{ a.name, src }) catch |e| return c.none(e);
+        const out = c.alloc.alloc(roc_chat.Src, chrome.assets.len) catch |e| return c.noSrcs(e);
+        inline for (chrome.assets, 0..) |a, k| {
+            out[k] = .{ .name = a.name, .src = chrome.src(c.alloc, a.name) catch |e| return c.noSrcs(e) };
         }
-        return out.items;
+        return out;
+    }
+
+    /// `fail`, answering the Roc no scripts.
+    fn noSrcs(c: *Call, e: anyerror) []const roc_chat.Src {
+        c.fail(e);
+        return &.{};
     }
 
     fn me(ctx: *anyopaque) []const u8 {
