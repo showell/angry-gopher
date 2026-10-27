@@ -1436,21 +1436,18 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         if (!std.mem.eql(u8, try chat.dmBase(a, key), bases[0])) differ.add("dmBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[0]) });
         if (!std.mem.eql(u8, try chat.channelBase(a, key), bases[1])) differ.add("channelBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[1]) });
     }
-    // A topic among topics, without case: every byte, ASCII letters in both
-    // cases and bytes past them (which have no case here).
+    // A topic among topics, without case: ASCII letters in both cases, the
+    // characters beside them, and a character past ASCII (which has no case
+    // here). Whole characters only: the Roc's topics are text, its door
+    // refuses bytes that are not UTF-8, and `roc test` covers that refusal.
     var rng = std.Random.DefaultPrng.init(0x70_91c);
     const r = rng.random();
-    const topic_bytes = "aAbBzZ@[`{-09\xc3\xa9\xff";
+    const topic_chars = [_][]const u8{ "a", "A", "b", "B", "z", "Z", "@", "[", "`", "{", "-", "0", "9", "\u{e9}", "\u{c9}" };
     var hits: usize = 0;
     for (0..4000) |_| {
         var topics: std.ArrayList([]const u8) = .empty;
-        for (0..r.uintAtMost(usize, 4)) |_| {
-            const t = try a.alloc(u8, r.uintAtMost(usize, 3));
-            for (t) |*c| c.* = topic_bytes[r.uintLessThan(usize, topic_bytes.len)];
-            try topics.append(a, t);
-        }
-        const sid = try a.alloc(u8, r.uintAtMost(usize, 3));
-        for (sid) |*c| c.* = topic_bytes[r.uintLessThan(usize, topic_bytes.len)];
+        for (0..r.uintAtMost(usize, 4)) |_| try topics.append(a, try randomText(a, r, &topic_chars, 3));
+        const sid = try randomText(a, r, &topic_chars, 3);
         const z = chat.hasTopic(topics.items, sid);
         var args: std.ArrayList([]const u8) = .empty;
         try args.append(a, sid);
@@ -1462,6 +1459,14 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     }
     try differ.none(compared);
     try testing.expect(hits > 300);
+}
+
+/// Up to `most` characters picked from `chars`, so the text is UTF-8
+/// whenever every one of `chars` is.
+fn randomText(a: std.mem.Allocator, r: std.Random, chars: []const []const u8, most: usize) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    for (0..r.uintAtMost(usize, most)) |_| try out.appendSlice(a, chars[r.uintLessThan(usize, chars.len)]);
+    return out.items;
 }
 
 // ── a member's channels (chat_paths.zig) ───────────────────────────────────
