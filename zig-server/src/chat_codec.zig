@@ -131,7 +131,7 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
 /// unescapeBodyLine reverses the body-line escaping: a line that is one-or-more
 /// backslashes followed by exactly 13 hyphens (the `^\\+-------------$` shape)
 /// loses one leading backslash. Everything else passes through.
-fn unescapeBodyLine(line: []const u8) []const u8 {
+pub fn unescapeBodyLine(line: []const u8) []const u8 {
     var k: usize = 0;
     while (k < line.len and line[k] == '\\') k += 1;
     if (k >= 1 and std.mem.eql(u8, line[k..], dashes)) return line[1..];
@@ -167,7 +167,7 @@ fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
 /// escapeBodyLine protects a body line that would collide with `sep` by
 /// prepending a backslash — it matches `^\\*-------------$` (ZERO or more
 /// backslashes then exactly 13 hyphens). Symmetric with unescapeBodyLine.
-fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
+pub fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
     var k: usize = 0;
     while (k < line.len and line[k] == '\\') k += 1;
     if (std.mem.eql(u8, line[k..], dashes)) return std.fmt.allocPrint(alloc, "\\{s}", .{line});
