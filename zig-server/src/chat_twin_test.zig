@@ -690,8 +690,10 @@ test "Form: a field as webbox's formField reads it, for every form tried" {
     var differ: Differences = .{};
     var compared: usize = 0;
     for (try forms(a)) |body| for ([_][]const u8{ "msg", "emoji", "on", "x", "" }) |name| {
+        // A value that is not UTF-8 is malformed at the Roc's door, where
+        // formField passed its bytes on.
         const want: []const []const u8 = if (http.formField(a, body, name)) |found|
-            (if (found) |v| &.{ "F", v } else &.{})
+            (if (found) |v| (if (std.unicode.utf8ValidateSlice(v)) &.{ "F", v } else &.{"M"}) else &.{})
         else |e| switch (e) {
             error.MalformedForm => &.{"M"},
             else => return e,
@@ -711,7 +713,12 @@ test "Reaction: the react form judged as parseReactForm judges it, and one glyph
     var differ: Differences = .{};
     var compared: usize = 0;
     for (try forms(a)) |body| {
-        const want: []const []const u8 = if (reactions.parseReactForm(a, body)) |f| switch (f) {
+        // A field that is not UTF-8 makes the form malformed at the Roc's
+        // door, where parseReactForm judged its bytes.
+        const not_text = for ([_][]const u8{ "msg", "emoji", "on" }) |name| {
+            if (http.formField(a, body, name) catch null) |v| if (!std.unicode.utf8ValidateSlice(v)) break true;
+        } else false;
+        const want: []const []const u8 = if (not_text) &.{"M"} else if (reactions.parseReactForm(a, body)) |f| switch (f) {
             .reacted => |r| &.{ "R", try std.fmt.allocPrint(a, "{d}", .{r.msg}), r.emoji, if (r.on) "1" else "0" },
             .bad => |why| &.{ "B", why },
         } else |e| switch (e) {

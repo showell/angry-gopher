@@ -132,12 +132,22 @@ fn serveFile(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []c
     try req.respond(bytes, .{ .extra_headers = &.{http.ndjson_ct} });
 }
 
+/// **A FORM IS TEXT AT THE ROC'S DOOR**, where chat.zig took its bytes: a
+/// field that is not UTF-8 once decoded is a malformed form, the site's 400.
+/// The twin refuses it the same way.
+fn textField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
+    const v = (try chat.formField(alloc, body, name)) orelse return null;
+    if (!std.unicode.utf8ValidateSlice(v)) return error.MalformedForm;
+    return v;
+}
+
 /// handleReact answers POST /<…>/<sid>/react: validate the three fields, append
 /// the event (which fans out live), 204. Bad input is a 400 with a one-line
 /// reason; `msg` beyond the transcript's count is one of them.
 fn handleReact(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, reactions.max_body_bytes)) orelse return;
+    for ([_][]const u8{ "msg", "emoji", "on" }) |name| _ = try textField(alloc, body, name);
     const r = switch (try reactions.parseReactForm(alloc, body)) {
         .bad => |why| return req.respond(why, .{ .status = .bad_request }),
         .reacted => |r| r,
@@ -168,7 +178,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     const body = (try http.readLimitedBody(req, alloc, limits.body.chat_message)) orelse return;
-    const topic_raw = (try chat.formField(alloc, body, "topic")) orelse "";
+    const topic_raw = (try textField(alloc, body, "topic")) orelse "";
     const topic = std.mem.trim(u8, topic_raw, " \t\r\n");
     if (!chat_paths.validTopicID(topic)) {
         return req.respond("Topic must be letters, digits, and hyphens only — no spaces, underscores, or punctuation.\n", .{ .status = .bad_request });
@@ -345,17 +355,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     const is_async = if (try http.header(req, alloc, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
 
     const body = (try http.readLimitedBody(req, alloc, limits.body.chat_message)) orelse return;
-    const md = (try chat.formField(alloc, body, "markdown")) orelse
+    const md = (try textField(alloc, body, "markdown")) orelse
         return req.respond("not sent: no message (the form has no markdown field)\n", .{ .status = .bad_request });
-    const cid = (try chat.formField(alloc, body, "cid")) orelse "";
+    const cid = (try textField(alloc, body, "cid")) orelse "";
     if (std.mem.trim(u8, md, " \t\r\n").len == 0) {
         return req.respond("not sent: the message is empty\n", .{ .status = .bad_request });
-    }
-    // **A MESSAGE IS TEXT**: its bytes are UTF-8. Stored otherwise, every
-    // stream would send it as JSON's array of numbers where the client reads a
-    // string. A browser always sends UTF-8; only a hand-made request is refused.
-    if (!std.unicode.utf8ValidateSlice(md)) {
-        return req.respond("not sent: the message is not UTF-8 text\n", .{ .status = .bad_request });
     }
 
     // Refuse hostile / absurdly over-formatted markdown at the door rather than

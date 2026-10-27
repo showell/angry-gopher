@@ -201,8 +201,18 @@ test "the Roc router decides every corpus path as chat.zig's dispatch did, under
         roc_chat.use(call.allocator());
         var ask: roc_chat.Routing = .{ .member = member };
         var got = try roc_chat.decide(call.allocator(), sub, channel, .GET, ask.host());
-        const want = try decide(call.allocator(), sub, channel, member);
         compared += 1;
+        // **A PATH THAT IS NOT UTF-8 IS REFUSED AT THE ROC'S DOOR** (its
+        // 400, before anyone is asked anything), where chat.zig routed its
+        // bytes: no old decision to agree with.
+        if (!std.unicode.utf8ValidateSlice(sub)) {
+            if (got != .malformed_form or ask.asked or ask.marked) {
+                differ += 1;
+                if (differ <= 10) std.debug.print("{s} \"{s}\" member={}: roc {f}, want the door's 400\n", .{ if (channel) "/channel" else "/chat", sub, member, got });
+            }
+            continue;
+        }
+        const want = try decide(call.allocator(), sub, channel, member);
         // A route the Roc serves itself (C4) counted presence itself, before
         // it found no topic and handed the route to Zig.
         if (got == .serve and ask.marked) got.serve.presence = true;
