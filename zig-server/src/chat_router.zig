@@ -573,7 +573,6 @@ pub const Call = struct {
     /// which the Roc counts for one member's one surface (`fanoutFailed`),
     /// never kept by `fail`. After a failure of the request (none can follow
     /// a store) each answers that failure, doing nothing.
-
     /// **A MESSAGE'S PARTS, AS THE ONE MARKDOWN READER FINDS THEM**
     /// (Host.message_parts!): recent_feed.recentExcerpt,
     /// images_store.extractImageTags and code_store.extractCodeBlocks, as

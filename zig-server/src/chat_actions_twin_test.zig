@@ -763,7 +763,7 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
     try testing.expectEqual(@as(usize, 2), std.mem.count(u8, roc.files, "source MSG_Notes_1 in 1_1:"));
     try testing.expectEqual(@as(usize, 6), std.mem.count(u8, roc.files, "source MSG_Standup_4 in ops:"));
     try testing.expectEqual(@as(usize, 4), std.mem.count(u8, roc.files, "source MSG_Feeds_1 in 1_2:"));
-    for ([_][]const u8{ "\"url\":\"/chat/c/1_4/Ideas\",\"who\":\"You\",\"topic\":\"Ideas\"", "\"where\":\"to \",\"topic\":\"Notes\"","\"kind\":\"topic-added\",\"conv\":\"1_1\",\"sid\":\"Notes\"", "\"images\":[\"<img src=\\\"/a.png\\\" alt=\\\"q\\\\\\\"x\\\">\",\"<IMG\\nsrc=\\\"/b.png\\\">\"]" }) |want|
+    for ([_][]const u8{ "\"url\":\"/chat/c/1_4/Ideas\",\"who\":\"You\",\"topic\":\"Ideas\"", "\"where\":\"to \",\"topic\":\"Notes\"", "\"kind\":\"topic-added\",\"conv\":\"1_1\",\"sid\":\"Notes\"", "\"images\":[\"<img src=\\\"/a.png\\\" alt=\\\"q\\\\\\\"x\\\">\",\"<IMG\\nsrc=\\\"/b.png\\\">\"]" }) |want|
         if (std.mem.indexOf(u8, roc.frames, want) == null) {
             std.debug.print("not in the frames: {f}\n", .{std.zig.fmtString(want)});
             return error.TestUnexpectedResult;

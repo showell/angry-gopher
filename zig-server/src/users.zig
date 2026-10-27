@@ -165,6 +165,7 @@ pub fn listAccounts(io: Io, alloc: Alloc) ![]Account {
             error.OutOfMemory => return e,
             else => .{ .unreadable = e },
         };
+        // absent-ok: the same: a failed read is the account's own `.unreadable`, its error kept; memory is the list's.
         const name: AccountName = if (readAuthFile(io, alloc, id, "name")) |b| .{ .found = b orelse "" } else |e| switch (e) {
             error.OutOfMemory => return e,
             else => .{ .unreadable = e },
