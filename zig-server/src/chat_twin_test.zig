@@ -982,18 +982,18 @@ fn feedFile(a: std.mem.Allocator, r: std.Random) ![]const u8 {
         "Sent byann at t, source MSG_x_1 in 1_2:",
         "Sent by ann, source MSG_x_1 in 1_2:",
         "Sent by ann at t, source MSG_x_1 1_2:",
-        "Sent by \"q\\\" </script> at caf\xc3\xa9, source MSG_a\x01b_3 in o\xffps:",
+        "Sent by \"q\\\" </script> at caf\xc3\xa9, source MSG_a\x01b_3 in o\xe2\x98\x83ps:",
         "  Sent by ann at t, source MSG_x_1 in 1_2:",
         "Sent by ann at t, source MSG_x_1 in 1_2:\r",
     };
     const lines = [_][]const u8{
-        "<img src=\"/u/a.png\" alt=\"a\">", "<IMG\tsrc=x>",      "<Img\nsrc=y\n>",     "<img>",            "<imgx src=z>",
-        "<img src=no-close",                "x<img  a>b<img b>", "<img\x0bv>",         "<img\x0cw>",       "```",
-        "```zig",                           "````zig extra",     "~~~ quote",          "~~~~ quote",       "~~~",
-        "~~~~",                             "   ```py",          "    ```indented",    "``` `bad",         "~~~ `fine",
-        "```x\r",                           "`````",             "```````````",        "``` ```",          "```close",
-        "const x = 1;",                     "  code \"q\" \\",   "</script>",          "caf\xc3\xa9 \xff", "\t",
-        "",                                 "\r",                "In MSG_a_1 I said:", "hello <b>",        "~~ two",
+        "<img src=\"/u/a.png\" alt=\"a\">", "<IMG\tsrc=x>",      "<Img\nsrc=y\n>",     "<img>",                    "<imgx src=z>",
+        "<img src=no-close",                "x<img  a>b<img b>", "<img\x0bv>",         "<img\x0cw>",               "```",
+        "```zig",                           "````zig extra",     "~~~ quote",          "~~~~ quote",               "~~~",
+        "~~~~",                             "   ```py",          "    ```indented",    "``` `bad",                 "~~~ `fine",
+        "```x\r",                           "`````",             "```````````",        "``` ```",                  "```close",
+        "const x = 1;",                     "  code \"q\" \\",   "</script>",          "caf\xc3\xa9 \xe2\x98\x83", "\t",
+        "",                                 "\r",                "In MSG_a_1 I said:", "hello <b>",                "~~ two",
         "```zig\textra",                    "~~~ quote\tx",      "~~~\tquote",
     };
     var out: std.ArrayList(u8) = .empty;
@@ -1010,7 +1010,7 @@ fn feedFile(a: std.mem.Allocator, r: std.Random) ![]const u8 {
     return out.items;
 }
 
-test "Feeds: a member's images.md and code.md read and sent to their pages as images_store and code_store do, whatever their bytes" {
+test "Feeds: a member's images.md and code.md read and sent to their pages as images_store and code_store do, over text with every rule's near misses (a feed file is UTF-8 at Files.read!'s door)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -2044,8 +2044,8 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
     var differ: Differences = .{};
     var compared: usize = 0;
     const strings = try byteStrings(a);
-    // The author, stamp, topic and a Recent row's fields are text: the
-    // Roc's fan-out takes them decoded.
+    // Every field the fan-out takes is text (keys, ids, the author, stamp,
+    // topic, tags, blocks and a Recent row's fields): the Roc takes them decoded.
     const texts = try utf8Only(a, strings);
     var rng = std.Random.DefaultPrng.init(0xfa2007);
     const r = rng.random();
@@ -2056,16 +2056,16 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
     }.f;
     // Keys and ids near each rule: a DM's `_`, a channel's none, ids with
     // no `_`, one at the start, several.
-    const keys = [_][]const u8{ "1_2", "1_1", "ops", "general", "a_b_c", "_x", "", "caf\xc3\xa9", "\xff", "q\"\\/" };
-    const ids = [_][]const u8{ "Plans_1", "Plans_12", "_1", "x", "", "a_b_3", "general2_7", "q\"_\\1", "\xff_2" };
+    const keys = [_][]const u8{ "1_2", "1_1", "ops", "general", "a_b_c", "_x", "", "caf\xc3\xa9", "\xe2\x98\x83", "q\"\\/" };
+    const ids = [_][]const u8{ "Plans_1", "Plans_12", "_1", "x", "", "a_b_3", "general2_7", "q\"_\\1", "\xe2\x98\x83_2" };
     const convs = [_][]const u8{ "1_2", "1_1", "10_100", "ops", "general", "a-1-" };
     const topics = [_][]const u8{ "Plans", "ChitChat", "road-trip-2", "9", "2026-10-25" };
     var tags_seen: usize = 0;
     var blocks_seen: usize = 0;
     for (0..3000) |i| {
-        const key = if (i % 3 == 0) pick(r, strings) else pick(r, &keys);
+        const key = if (i % 3 == 0) pick(r, texts) else pick(r, &keys);
         const sid = pick(r, texts);
-        const id = if (i % 3 == 0) pick(r, strings) else pick(r, &ids);
+        const id = if (i % 3 == 0) pick(r, texts) else pick(r, &ids);
         const from = pick(r, texts);
         // A member is a canonical uid: the door refuses undecodable text;
         // roc test covers it.
@@ -2101,13 +2101,13 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         try recent_feed.encodeChatEvent(&zr, a, ev);
         try sameEach(a, "recent", &.{ ev.at, ev.url }, &.{zr.items}, try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" }), &differ);
 
-        // An images entry: tags with CR, LF, quotes and bytes that are not
-        // UTF-8, a forged separator now and then.
+        // An images entry: tags with CR, LF, quotes and multibyte
+        // text, a forged separator now and then.
         var tags: std.ArrayList([]const u8) = .empty;
         for (0..r.uintAtMost(usize, 4)) |_| try tags.append(a, switch (r.uintLessThan(u8, 4)) {
             0 => "<img src=\"/u/1.png\">",
             1 => "<IMG\nsrc=x\r\nalt=\"\n\n-------------\n\nSent by m at t, source MSG_f in 9_9:\">",
-            else => try std.fmt.allocPrint(a, "<img {s}>", .{pick(r, strings)}),
+            else => try std.fmt.allocPrint(a, "<img {s}>", .{pick(r, texts)}),
         });
         tags_seen += tags.items.len;
         const ie: images_store.ImagesEntry = .{ .source_id = id, .from = from, .conv = key, .at = at, .images = tags.items };
@@ -2124,7 +2124,7 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         var cargs: std.ArrayList([]const u8) = .empty;
         try cargs.appendSlice(a, &.{ id, from, key, at });
         for (0..r.uintAtMost(usize, 3)) |_| {
-            const b: code_store.CodeBlock = .{ .lang = if (r.boolean()) "" else pick(r, &.{ "zig", "c++", pick(r, strings) }), .body = pick(r, &.{ "", "x", "const x = 1;\n```\ninner\n```", "a\r\nb\\c\"d", pick(r, strings) }) };
+            const b: code_store.CodeBlock = .{ .lang = if (r.boolean()) "" else pick(r, &.{ "zig", "c++", pick(r, texts) }), .body = pick(r, &.{ "", "x", "const x = 1;\n```\ninner\n```", "a\r\nb\\c\"d", pick(r, texts) }) };
             try blocks.append(a, b);
             try cargs.appendSlice(a, &.{ b.lang, b.body });
         }
