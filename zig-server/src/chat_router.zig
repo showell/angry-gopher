@@ -350,7 +350,7 @@ pub const Call = struct {
         const out = c.alloc.alloc(roc_chat.RecentRow, rows.len) catch |e| return c.noRecent(e);
         for (rows, out) |w, *o| {
             const secs = std.fmt.allocPrint(c.alloc, "{d}", .{w.secs}) catch |e| return c.noRecent(e);
-            o.* = .{ .doc = if (w.doc) "1" else "0", .secs = secs, .uid = w.uid, .name = w.name, .key = w.key, .label = w.label, .topic = w.topic, .markdown = w.markdown, .dm = if (w.dm) "1" else "0" };
+            o.* = .{ .kind = if (w.doc) .doc else .message, .secs = secs, .uid = w.uid, .name = w.name, .key = w.key, .label = w.label, .topic = w.topic, .markdown = w.markdown, .dm = if (w.dm) .dm else .channel };
         }
         return out;
     }
