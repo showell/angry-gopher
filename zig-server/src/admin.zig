@@ -83,8 +83,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
 /// **AN ID FROM A FORM IS A UID BEFORE IT IS A PATH.** The key is written to
 /// and removed from {auth_root}/<id>/api-key, and principalExists and
 /// principalAuthorized look at what is on disk, not at the characters: `1/.`
-/// or `1/../2` passed both and named a folder (zig-metal-unikernel's
-/// REVIEW-request-paths.md, finding 5).
+/// or `1/../2` passed both and named a folder.
 fn apiKeyTarget(io: Io, alloc: Alloc, id: []const u8) !bool {
     return users.validUid(id) and try users.principalExists(io, alloc, id) and try users.principalAuthorized(io, alloc, id);
 }

@@ -13,7 +13,7 @@ const testing = std.testing;
 const harness = @import("router_harness.zig");
 const router = @import("router.zig");
 
-// ── /admin/backup (zig-metal-unikernel REVIEW-admin-backup.md) ──────────────────────
+// ── /admin/backup ──────────────────────────────────────────────────────────────
 
 test "route: HEAD /admin/backup reads nothing" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);

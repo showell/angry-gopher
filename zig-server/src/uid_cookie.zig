@@ -1,10 +1,10 @@
-//! uid_cookie: `gopher_uid`, signed (zig-metal-unikernel QUEUE item 51,
-//! DESIGN-signed-uid.md; Steve, 2026-10-02: re-identify once).
+//! uid_cookie: `gopher_uid`, signed; an unsigned one from before is
+//! re-identified once.
 //!
 //! `gopher_uid` names a player (`p<n>`), a member's game identity (digits),
 //! or a legacy guest (digits). It was set in the clear, so whoever set it by
 //! hand WAS that identity: a player's games, a member's games, a guest's
-//! account (REVIEW-request-paths findings 1-2). Now it is
+//! account. Now it is
 //!
 //!     <id>.<issued>.<mac>     mac = base64url(HMAC-SHA256(secret, "gopher_uid\n" id "\n" issued))
 //!

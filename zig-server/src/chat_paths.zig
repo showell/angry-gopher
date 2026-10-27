@@ -227,7 +227,7 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
 /// ({chat_store.chat_root}/users/<member>/images.md), so each must be what allocateUser
 /// makes: digits, with no leading zero. A half like `..` would otherwise
 /// write one level up on Linux, and `05_5` and `5_05` would split one DM in
-/// two (zig-metal-unikernel's REVIEW-request-paths.md, finding 3). Whether the other
+/// two. Whether the other
 /// half is an account that exists is the route's to ask: this has no Io.
 pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool {
     const cut = cutSeq(key, "_") orelse return false;
@@ -328,7 +328,7 @@ test "chatKeyParticipant: both halves are canonical uids, in order, and the user
     try testing.expect(try chatKeyParticipant(a, "2_10", "10"));
     try testing.expect(!try chatKeyParticipant(a, "1_2", "3"));
     try testing.expect(!try chatKeyParticipant(a, "2_1", "1")); // not canonical
-    // REVIEW-request-paths.md finding 3: the other half was any text.
+    // The other half is checked too, not taken as any text.
     for ([_][]const u8{ ".._5", "._5", "abc_5", "05_5", "5_05", "0_5", "_5", "5_", "5_5_6", "5_6/x", "-1_5" }) |key| {
         try testing.expect(!try chatKeyParticipant(a, key, "5"));
     }
