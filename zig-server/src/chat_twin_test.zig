@@ -634,6 +634,7 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
     var differ: Differences = .{};
     var compared: usize = 0;
     const strings = try byteStrings(a);
+    const ts = try times(a);
     var rng = std.Random.DefaultPrng.init(0xf4a3e);
     const r = rng.random();
     const pick = struct {
@@ -651,7 +652,8 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
             .from = pick(r, strings),
             // The author is a canonical uid: the Roc's frame takes a Uid.
             .from_uid = ([_][]const u8{ "1", "3", "10", "12" })[i % 4],
-            .at = pick(r, strings),
+            // The stamp as the Roc makes it (Time's twin holds it to timefmt).
+            .at = try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]),
             .id = pick(r, strings),
             .markdown = if (i % 2 == 0) pick(r, strings) else (try codecMessage(a, r)).markdown,
             .cid = pick(r, strings),
