@@ -77,6 +77,23 @@ pub fn current(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
     return .{ .id = id, .name = name };
 }
 
+/// **A PLAYER ID, CHECKED** (metal-vmm QUEUE 250): what `isSafeID` passed,
+/// as a type only `Id.of` makes, so a call that takes one (storage.deleteUserData)
+/// cannot be handed an id no one checked. Zig has no private fields: a literal
+/// without `id_seal` does not compile, and ops/check_zig's seal lint (shale's
+/// cookbook/sealed.shale) refuses one that sets it outside this file.
+pub const Id = struct {
+    text: []const u8,
+    id_seal: Seal,
+
+    pub fn of(s: []const u8) ?Id {
+        if (!isSafeID(s)) return null;
+        return .{ .text = s, .id_seal = .{} };
+    }
+};
+
+const Seal = struct {};
+
 /// isSafeID rejects anything that could escape player_root or a data directory.
 /// Ids come from a cookie, so this is the one place they are untrusted.
 fn isSafeID(id: []const u8) bool {

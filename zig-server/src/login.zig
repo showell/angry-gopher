@@ -272,7 +272,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
             // first, and a failure there keeps the account and its name, to be
             // released again; any failure is the router's 500, never "logged
             // out".
-            try storage.deleteUserData(io, alloc, t);
+            try storage.deleteUserData(io, alloc, player.Id.of(t) orelse return error.UnsafeId);
             if (user.id.len != 0) try users.deleteUserRecord(io, alloc, t) else try player.deleteRecord(io, alloc, t);
         };
         return renderLogoutComplete(req, alloc);
