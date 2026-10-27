@@ -134,7 +134,7 @@ test "request edges: every number a request carries, at its type's edges, as a m
     const Folder = struct { dir: []const u8, unreachable_sites: []const library_sites.Site };
     var listed_seen: [edge_sites.len]bool = @splat(false);
     for ([_]Folder{
-        .{ .dir = "src", .unreachable_sites = &.{} },
+        .{ .dir = @import("build_options").app_src, .unreachable_sites = &.{} },
         .{ .dir = @import("build_options").webbox_src, .unreachable_sites = &library_sites.unreachable_from_requests },
         .{ .dir = @import("build_options").shale_src, .unreachable_sites = &@import("shale").edge_sites.unreachable_from_requests },
     }) |folder| {

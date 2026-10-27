@@ -158,10 +158,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     // The request-edge harness reads every number parse in the source, the
-    // libraries' too: where zig-webbox's and Shale's sources are.
+    // libraries' too: where this app's, zig-webbox's and Shale's sources are
+    // (absolute: a test runs in whatever folder `zig build` was run from).
     const router_opts = b.addOptions();
     router_opts.addOption([]const u8, "commit", "dev");
     router_opts.addOption(bool, "fake_leak", false);
+    router_opts.addOption([]const u8, "app_src", pathFromRoot(b, "src"));
     router_opts.addOption([]const u8, "webbox_src", pathFromRoot(webbox_dep.builder, "src"));
     router_opts.addOption([]const u8, "shale_src", pathFromRoot(shale_dep.builder, "src"));
     router_tests.root_module.addImport("build_options", router_opts.createModule());
