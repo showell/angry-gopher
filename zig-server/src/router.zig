@@ -239,17 +239,15 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
             // **BACK TO THE SAME PAGE, ON THIS SITE ONLY** (http.Target):
             // the target as it came, `GET //evil.example/x` or
             // `GET http://evil.example/`, named another host.
-            const location: std.http.Header = .{ .name = "location", .value = http.Target.of(try http.target(req, alloc)).path };
             const set: std.http.Header = .{ .name = "set-cookie", .value = c.set };
             const clear: std.http.Header = .{ .name = "set-cookie", .value = http.clearCookie(uid_cookie.legacy_cookie_name) };
-            return req.respond("", .{ .status = .see_other, .extra_headers = if (c.clear_legacy) &.{ location, set, clear } else &.{ location, set } });
+            return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = if (c.clear_legacy) &.{ set, clear } else &.{set} });
         },
         .refused => |r| return game_limits.refuse(req, r),
     };
     // **A SESSION UNDER ITS LEGACY NAME MOVES ON ITS NEXT GET** (metal-vmm
     // QUEUE 170.8), back to the same page, the legacy one cleared.
-    if (try users.sessionToMove(io, alloc, req)) |value| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
-        .{ .name = "location", .value = http.Target.of(try http.target(req, alloc)).path },
+    if (try users.sessionToMove(io, alloc, req)) |value| return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = &.{
         .{ .name = "set-cookie", .value = try login.authCookie(alloc, value) },
         .{ .name = "set-cookie", .value = http.clearCookie(users.session_cookie_legacy) },
     } });

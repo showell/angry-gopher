@@ -27,17 +27,21 @@ pub const max_user_len = 40; // max display-name length
 /// so a new account or player (users.allocateUser, player.allocate) is never
 /// named by text no one checked: a newline in a name would split every
 /// transcript line it signs. Zig has no private fields: a literal without
-/// `name_seal` does not compile, and ops/check_zig's seal lint refuses one
-/// that sets it outside this file.
+/// `name_seal` does not compile, and ops/check_zig's seal lint refuses
+/// `.name_seal =` and `.user_name =` outside this file. `text()` reads it.
 pub const UserName = struct {
-    text: []const u8,
+    user_name: []const u8,
     name_seal: Seal,
+
+    pub fn text(n: UserName) []const u8 {
+        return n.user_name;
+    }
 
     /// A name written in the source, checked as it compiles: already in the
     /// form `validateUserName` gives back.
     pub fn literal(comptime s: []const u8) UserName {
         comptime if (!canonical(s)) @compileError("not a name validateUserName gives: " ++ s);
-        return .{ .text = s, .name_seal = .{} };
+        return .{ .user_name = s, .name_seal = .{} };
     }
 };
 
@@ -105,7 +109,7 @@ pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
     if (std.ascii.eqlIgnoreCase(out, "you") or std.ascii.eqlIgnoreCase(out, "me")) {
         return .{ .refused = "“You” and “Me” are reserved — please pick another name." };
     }
-    return .{ .ok = .{ .text = out, .name_seal = .{} } };
+    return .{ .ok = .{ .user_name = out, .name_seal = .{} } };
 }
 
 test "validateUserName collapses whitespace, requires alnum, rejects punctuation/overlength" {
@@ -114,10 +118,10 @@ test "validateUserName collapses whitespace, requires alnum, rejects punctuation
     const a = arena.allocator();
 
     // happy: trims, collapses internal whitespace runs to one space
-    try testing.expectEqualStrings("Steve Howell", (try validateUserName(a, "  Steve   Howell  ")).ok.text);
+    try testing.expectEqualStrings("Steve Howell", (try validateUserName(a, "  Steve   Howell  ")).ok.text());
     // apostrophe + space allowed; non-ASCII bytes treated as letters (permissive)
-    try testing.expectEqualStrings("O'Brien", (try validateUserName(a, "O'Brien")).ok.text);
-    try testing.expectEqualStrings("José", (try validateUserName(a, "José")).ok.text);
+    try testing.expectEqualStrings("O'Brien", (try validateUserName(a, "O'Brien")).ok.text());
+    try testing.expectEqualStrings("José", (try validateUserName(a, "José")).ok.text());
 
     // ── rejections: name is empty, err is set ──
     const cases = [_][]const u8{
@@ -143,17 +147,17 @@ test "validateUserName collapses whitespace, requires alnum, rejects punctuation
         try testing.expect(r == .refused and r.refused.len != 0);
     }
     // but names that merely CONTAIN them are fine
-    try testing.expectEqualStrings("Mel", (try validateUserName(a, "Mel")).ok.text);
-    try testing.expectEqualStrings("You Two", (try validateUserName(a, "You Two")).ok.text);
+    try testing.expectEqualStrings("Mel", (try validateUserName(a, "Mel")).ok.text());
+    try testing.expectEqualStrings("You Two", (try validateUserName(a, "You Two")).ok.text());
 }
 
 test "UserName.literal takes only a name validateUserName gives back as it is" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    try testing.expectEqualStrings("O'Brien", UserName.literal("O'Brien").text);
+    try testing.expectEqualStrings("O'Brien", UserName.literal("O'Brien").text());
     for ([_][]const u8{ "Steve Howell", "José", "Mel", "You Two" }) |ok| {
         try testing.expect(canonical(ok));
-        try testing.expectEqualStrings(ok, (try validateUserName(arena.allocator(), ok)).ok.text);
+        try testing.expectEqualStrings(ok, (try validateUserName(arena.allocator(), ok)).ok.text());
     }
     for ([_][]const u8{ "", " Ada", "Ada ", "A  B", "a\nb", "a<b", "You", "'", &@as([41]u8, @splat('a')) }) |bad| try testing.expect(!canonical(bad));
 }

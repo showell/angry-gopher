@@ -244,7 +244,7 @@ fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id:
         try std.fmt.allocPrint(alloc, "{d}", .{session_id})
     else
         "null";
-    const name = try player.nameOf(io, alloc, user_id.text);
+    const name = try player.nameOf(io, alloc, user_id.text());
     const name_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(name, .{})});
 
     // The two spaces in the format are the literal spaces after `=` and after

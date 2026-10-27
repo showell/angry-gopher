@@ -45,7 +45,7 @@ fn join(alloc: Alloc, parts: []const []const u8) ![]u8 {
 
 /// userRoot is {data_root}/{userID} — a player's whole subtree.
 fn userRoot(alloc: Alloc, user_id: player.Id) ![]u8 {
-    return join(alloc, &.{ data_root, user_id.text });
+    return join(alloc, &.{ data_root, user_id.text() });
 }
 
 /// userDataDir is the public form of userRoot — a player's whole game-data
@@ -61,25 +61,25 @@ pub fn deleteUserData(io: Io, alloc: Alloc, id: player.Id) !void {
     const root = try userRoot(alloc, id);
     // What they held is forgotten whatever the removal did: the next write
     // measures the folder afresh.
-    defer game_limits.forget(id.text);
+    defer game_limits.forget(id.text());
     try store.removeTree(io, alloc, root);
 }
 
 fn puzzleRoot(alloc: Alloc, user_id: player.Id) ![]u8 {
-    return join(alloc, &.{ data_root, user_id.text, "puzzle" });
+    return join(alloc, &.{ data_root, user_id.text(), "puzzle" });
 }
 
 /// lynrummyElmRoot is the full-game namespace for a player.
 fn lynrummyElmRoot(alloc: Alloc, user_id: player.Id) ![]u8 {
-    return join(alloc, &.{ data_root, user_id.text, "lynrummy-elm" });
+    return join(alloc, &.{ data_root, user_id.text(), "lynrummy-elm" });
 }
 
 fn nextPuzzleIDPath(alloc: Alloc, user_id: player.Id) ![]u8 {
-    return join(alloc, &.{ data_root, user_id.text, "next-puzzle-id.txt" });
+    return join(alloc, &.{ data_root, user_id.text(), "next-puzzle-id.txt" });
 }
 
 fn nextSessionIDPath(alloc: Alloc, user_id: player.Id) ![]u8 {
-    return join(alloc, &.{ data_root, user_id.text, "next-session-id.txt" });
+    return join(alloc, &.{ data_root, user_id.text(), "next-session-id.txt" });
 }
 
 /// puzzleSessionDir is {puzzleRoot}/sessions/<id>.

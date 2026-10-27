@@ -166,7 +166,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
                 .ok => |n| n,
                 .refused => |why| return renderPwPage(req, alloc, .stranger, name, next, why),
             };
-            const valid = checked.text;
+            const valid = checked.text();
             const member_id = try users.findMemberByName(io, alloc, valid);
             const action = (try chat.formField(alloc, body, "action")) orelse "";
             if (std.mem.eql(u8, action, "login")) {
@@ -376,9 +376,8 @@ pub fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
 /// headers. Each cookie is its own header.
 fn sendRedirect(req: *Request, alloc: Alloc, location: http.Target, cookies: []const []const u8) !void {
     var hs: std.ArrayList(std.http.Header) = .empty;
-    try hs.append(alloc, .{ .name = "location", .value = location.path });
     for (cookies) |c| try hs.append(alloc, .{ .name = "set-cookie", .value = c });
-    try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
+    return http.redirectWith(req, location, .{ .headers = hs.items });
 }
 
 /// sendHTML responds with an HTML body plus any Set-Cookie headers.
@@ -416,7 +415,7 @@ fn sanitizeNext(next: []const u8) http.Target {
 /// field so we return where the user was headed.
 fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, next: http.Target, err_msg: []const u8) !void {
     const en = try html.htmlEscape(alloc, name);
-    const enx = try html.htmlEscape(alloc, next.path);
+    const enx = try html.htmlEscape(alloc, next.path());
     var b: std.ArrayList(u8) = .empty;
 
     try b.print(alloc,
