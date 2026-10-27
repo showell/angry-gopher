@@ -34,6 +34,7 @@ const Alloc = std.mem.Allocator;
 const counter = @import("webbox").counter;
 const store = @import("webbox").store;
 const game_limits = @import("game_limits.zig");
+const player = @import("player.zig");
 
 /// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
@@ -54,14 +55,13 @@ pub fn userDataDir(alloc: Alloc, user_id: []const u8) ![]u8 {
 }
 
 /// deleteUserData removes a player's entire game-data subtree.
-/// Refuses an empty id. Absent is OK; a removal that failed is an error, and
+/// The id is a checked one (`player.Id`). Absent is OK; a removal that failed is an error, and
 /// the caller's to answer (metal-vmm QUEUE 129: both callers said "deleted").
-pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
-    if (std.mem.trim(u8, user_id, " \t\r\n").len == 0) return error.EmptyUserID;
-    const root = try userRoot(alloc, user_id);
+pub fn deleteUserData(io: Io, alloc: Alloc, id: player.Id) !void {
+    const root = try userRoot(alloc, id.text);
     // What they held is forgotten whatever the removal did: the next write
     // measures the folder afresh.
-    defer game_limits.forget(user_id);
+    defer game_limits.forget(id.text);
     try store.removeTree(io, alloc, root);
 }
 
