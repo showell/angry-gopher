@@ -1138,9 +1138,13 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
     for (0..4000) |k| {
         // The edge cases first, then lists of up to six in any order (the
         // store lists them sorted; firstOf takes the first it is given).
+        // A listed topic is text (Files.list!'s door skips a name that is
+        // not UTF-8), so the topics leave out state_names' last, "\xff"; the
+        // last view, a file's bytes, may still be it.
+        const text_names = state_names[0 .. state_names.len - 1];
         var topics: std.ArrayList([]const u8) = .empty;
         const n: usize = if (k < 200) k % 3 else r.uintAtMost(usize, 6);
-        for (0..n) |_| try topics.append(a, state_names[r.uintLessThan(usize, state_names.len)]);
+        for (0..n) |_| try topics.append(a, text_names[r.uintLessThan(usize, text_names.len)]);
         const last: []const u8 = switch (r.uintLessThan(u8, 4)) {
             0 => "",
             1 => "Gone",
