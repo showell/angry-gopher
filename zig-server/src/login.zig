@@ -143,7 +143,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
                 // typed a non-member and clicked Log in — offer to register.
                 return renderPwPage(req, alloc, .stranger, name, next, try std.fmt.allocPrint(alloc, "No account named \u{201C}{s}\u{201D}. Create one instead?", .{name}));
             }
-            switch (try gatedCheck(req, io, alloc, address, member_id.?, password)) {
+            switch (try checkPasswordThrottled(req, io, alloc, address, member_id.?, password)) {
                 .refused => return, // the 429 has been sent
                 .wrong => return renderPwPage(req, alloc, mode, name, next, try std.fmt.allocPrint(alloc, "Wrong password for \u{201C}{s}\u{201D}.", .{name})),
                 .ok => return loginAsMember(req, io, alloc, member_id.?, next),
@@ -171,7 +171,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             const action = (try chat.formField(alloc, body, "action")) orelse "";
             if (std.mem.eql(u8, action, "login")) {
                 if (member_id == null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "No account named \u{201C}{s}\u{201D}. Create one instead?", .{valid}));
-                switch (try gatedCheck(req, io, alloc, address, member_id.?, password)) {
+                switch (try checkPasswordThrottled(req, io, alloc, address, member_id.?, password)) {
                     .refused => return, // the 429 has been sent
                     .wrong => return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "Wrong password for \u{201C}{s}\u{201D}.", .{valid})),
                     .ok => return loginAsMember(req, io, alloc, member_id.?, next),
@@ -198,7 +198,7 @@ const GateResult = enum { ok, wrong, refused };
 /// the guess never reaches `checkUserPassword`. A failed check is counted
 /// against both bounds; a success clears the address's count. The account key is
 /// the resolved member id, so two spellings of a name are one account.
-fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_id: []const u8, password: []const u8) !GateResult {
+fn checkPasswordThrottled(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_id: []const u8, password: []const u8) !GateResult {
     if (throttle.check(io, address, member_id)) |bound| {
         try req.respond(bound.text(), .{ .status = .too_many_requests });
         return .refused;

@@ -134,13 +134,13 @@ const gopher_hosting = struct {
 };
 
 /// **THIS APPLICATION, AS THE LIBRARY SERVES IT** (webbox's site.zig): its
-/// route table is `routed`, private, so no host calls the table without the
+/// route table is `dispatch`, private, so no host calls the table without the
 /// serving around it. A malformed form is the client's mistake, a 400, on
 /// every form (metal-vmm QUEUE 156(i)): one decoder (http.formField), where
 /// chat's own took a bad escape as text and the first of two fields, while
 /// players' refused the escape as a 500.
 const App = struct {
-    pub const routes = routed;
+    pub const routes = dispatch;
     pub const family = familyOf;
     pub const setup = app_start.setup;
     pub const StartReport = app_start.StartReport;
@@ -227,7 +227,7 @@ pub const between = site.between;
 /// 400 for a malformed form, the kept stream as the answer) is site.zig's.
 pub const route = site.route;
 
-fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
     // first GET inside the window comes back to the same page with the
     // signed cookie set, and the unsigned spelling is refused from then on.

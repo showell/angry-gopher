@@ -35,7 +35,7 @@ test "route: one address may have 3 legacy cookies re-signed an hour, then 429" 
     try testing.expectEqualStrings("429 Too Many Requests", harness.status(swept));
     try testing.expect(std.mem.indexOf(u8, swept, "renewed") != null);
     try testing.expect(harness.setUid(swept) == null);
-    try testing.expect(!harness.UidSite.marked(a, io, ids[3]));
+    try testing.expect(!harness.UidSite.isSigned(a, io, ids[3]));
     // Its owner, from their own address, is re-signed.
     try testing.expectEqualStrings("303 See Other", harness.status(try from.get(a, io, ids[3], "198.51.100.1")));
     // And an ordinary visit from the swept-out address is untouched.
