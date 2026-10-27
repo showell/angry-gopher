@@ -649,7 +649,8 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
                 else => std.math.maxInt(usize),
             },
             .from = pick(r, strings),
-            .from_uid = pick(r, strings),
+            // The author is a canonical uid: the Roc's frame takes a Uid.
+            .from_uid = ([_][]const u8{ "1", "3", "10", "12" })[i % 4],
             .at = pick(r, strings),
             .id = pick(r, strings),
             .markdown = if (i % 2 == 0) pick(r, strings) else (try codecMessage(a, r)).markdown,
