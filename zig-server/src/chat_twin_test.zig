@@ -865,7 +865,10 @@ test "Pages: the 404 that says why, the first-topic shell, the empty /chat and t
             compared += 1;
             if (!std.mem.eql(u8, c.zig, r)) differ.add("{t}(\"{f}\"): zig {d} bytes, roc {d}", .{ c.f, std.zig.fmtString(t), c.zig.len, r.len });
         }
-        const v: chat_page.View = .{ .key = t, .base = u, .sid = w, .title = texts[(i * 3) % texts.len], .uid = texts[(i * 17) % texts.len], .viewer = texts[(i * 19) % texts.len], .sidebar_json = texts[(i * 23) % texts.len] };
+        // The key, base and topic are text and the uid a canonical one: the
+        // Roc's page takes them decoded.
+        if (!std.unicode.utf8ValidateSlice(t) or !std.unicode.utf8ValidateSlice(u) or !std.unicode.utf8ValidateSlice(w)) continue;
+        const v: chat_page.View = .{ .key = t, .base = u, .sid = w, .title = texts[(i * 3) % texts.len], .uid = ([_][]const u8{ "1", "3", "10", "12" })[i % 4], .viewer = texts[(i * 19) % texts.len], .sidebar_json = texts[(i * 23) % texts.len] };
         const z = try chat_page.conversationHtml(a, v);
         const r = (try roc1(a, .conversation_page, try std.mem.concat(a, []const u8, &.{ &.{ v.key, v.base, v.sid, v.title, v.uid, v.viewer, v.sidebar_json, try digits(a, chat_upload.image_max), try digits(a, chat_upload.video_max), accept, try digits(a, @import("search_tokens.zig").min_len) }, pairs }))).?;
         compared += 1;
