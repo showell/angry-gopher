@@ -865,6 +865,8 @@ test "Pages: the 404 that says why, the first-topic shell, the empty /chat and t
             .{ .f = .no_conversations_page, .zig = try chat_page.noConversationsHtml(a, t), .args = &.{t} },
         };
         for (checks) |c| {
+            // The first-topic shell's base is text: the Roc's takes it decoded.
+            if (c.f == .no_topics_page and !std.unicode.utf8ValidateSlice(u)) continue;
             const r = (try roc1(a, c.f, try std.mem.concat(a, []const u8, &.{ c.args, pairs }))).?;
             compared += 1;
             if (!std.mem.eql(u8, c.zig, r)) differ.add("{t}(\"{f}\"): zig {d} bytes, roc {d}", .{ c.f, std.zig.fmtString(t), c.zig.len, r.len });
