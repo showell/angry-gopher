@@ -1594,7 +1594,10 @@ test "Paths: a conversation's topics, as listTopics lists them, from generated f
     var compared: usize = 0;
     var rng = std.Random.DefaultPrng.init(0x70b1c);
     const r = rng.random();
-    const names = [_][]const u8{ "Plans.md", "plans.md", "PLANS.md", "a.md", "B.md", "b.md", ".md", "x.md", "notes.txt", "md", "a.MD", "a.md.bak", "\xff.md", "\xffa.md", "\xc3\xa9t\xc3\xa9.md", "ete.md", "Zed.md", "zed.md", "2026-10-25.md", "ChitChat.md", "general2.md", "Plans.reactions.jsonl", "Plans.count" };
+    // Names are UTF-8 only: one that is not (`\xff.md`) is left out at the
+    // Roc's door, Files.list!, and is no twin case (roc-webbox's
+    // chat_hosted.zig and Files.roc's expects cover it).
+    const names = [_][]const u8{ "Plans.md", "plans.md", "PLANS.md", "a.md", "B.md", "b.md", ".md", "x.md", "notes.txt", "md", "a.MD", "a.md.bak", "\xc3\xa9t\xc3\xa9.md", "ete.md", "Zed.md", "zed.md", "2026-10-25.md", "ChitChat.md", "general2.md", "Plans.reactions.jsonl", "Plans.count" };
     const conv_dir = try chat_paths.dmConvDir(a, "1_2");
     const sessions = try std.fs.path.join(a, &.{ conv_dir, "sessions" });
     var folders: usize = 0;
@@ -1704,7 +1707,10 @@ test "Paths: every channel's roster, as channelRosters reads them from generated
     const r = rng.random();
     // Entries that count and not: the suffix exact, `.channel` alone (""),
     // numeric names, bytes that sort high, a doubled suffix, near misses.
-    const names = [_][]const u8{ "ops.channel", "Zed.channel", "zed.channel", ".channel", "7.channel", "10.channel", "\xff.channel", "\xc3\xa9t\xc3\xa9.channel", "a.channel.channel", "ops.channel.bak", "channel", "readme", "ops", "x.CHANNEL", "quiet.channel" };
+    // UTF-8 only: a name that is not (`\xff.channel`) is skipped and counted
+    // at the Roc's door, Files.list!, and is no twin case (roc-webbox's
+    // chat_hosted.zig covers it).
+    const names = [_][]const u8{ "ops.channel", "Zed.channel", "zed.channel", ".channel", "7.channel", "10.channel", "\xc3\xa9t\xc3\xa9.channel", "a.channel.channel", "ops.channel.bak", "channel", "readme", "ops", "x.CHANNEL", "quiet.channel" };
     const files = [_][]const u8{ "1\n", "1\n2\n", "# team\n3\r\n", "", "2\n 1\t\n", "1\nnot a uid\n", "1\n1\n", "007\n", "3 # Claude\n" };
     const channels = try d.at(a, "channels");
     var failed: usize = 0;

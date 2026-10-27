@@ -156,6 +156,7 @@ pub const Call = struct {
             .remove = remove,
             .list = list,
             .fail = refuse,
+            .fail_text = failText,
             .malformed_channel = malformedChannel,
             .online = online,
             .limits = limits_,
@@ -441,6 +442,17 @@ pub const Call = struct {
     fn refuse(ctx: *anyopaque, e: anyerror) void {
         const c = of(ctx);
         if (!c.dead()) c.fail(e);
+    }
+
+    /// **A FILE THAT IS NOT TEXT FAILS THE REQUEST** (Host.fail!'s
+    /// `NotUtf8`): the Roc's door refused the bytes of the file at `path`,
+    /// a damaged file, never one the chat wrote; said with its path, and
+    /// kept as every failure is.
+    fn failText(ctx: *anyopaque, path: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        std.log.warn("chat: {s} is not UTF-8", .{path});
+        c.fail(error.NotUtf8);
     }
 
     /// A channel the Roc's listing skipped as malformed, counted for
