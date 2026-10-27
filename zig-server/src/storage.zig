@@ -15,11 +15,10 @@
 //! turn, zig-metal-unikernel HOST.md), so this file keeps no lock. store.append stats the file's size
 //! and then writes at it (the std.Io file API exposes no O_APPEND), so two
 //! appends to one file at once could both write at the old end, one over the
-//! other. This file once said that could not happen, because one request
-//! allocates a session; but the append routes take any session the player
-//! owns, so one player in two tabs, or a client retrying, appends to one file
-//! twice at once. Measured: 1,814 of 2,000 lines landed from 8 concurrent
-//! writers (zig-metal-unikernel's GROWTH-game-store.md).
+//! other. One request allocates a session, but the append routes take any
+//! session the player owns, so one player in two tabs, or a client retrying,
+//! appends to one file twice at once (measured: 1,814 of 2,000 lines landed
+//! from 8 concurrent writers).
 //!
 //! **EVERY GAME WRITE IS ADMITTED BY WHAT IT WRITES** (metal-vmm QUEUE
 //! 157(b)): a handler writes through `makeGameSession`, `appendGameLine` or

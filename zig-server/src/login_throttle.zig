@@ -1,5 +1,4 @@
-//! login_throttle: refuse password guesses BEFORE the bcrypt (QUEUE.md item
-//! 97; zig-metal-unikernel's DESIGN-login-throttle.md, option B).
+//! login_throttle: refuse password guesses BEFORE the bcrypt.
 //!
 //! Each `/login/full` that verifies a member is a bcrypt check (cost 10) — tens
 //! of milliseconds of CPU, and on zig-metal-unikernel that is the machine's one

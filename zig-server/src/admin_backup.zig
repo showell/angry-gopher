@@ -13,7 +13,7 @@
 //!
 //! **SO THE LAST MEMBER SAYS IT IS WHOLE.** A tar cut between two members
 //! reads as complete: GNU tar and Python's tarfile list it and exit 0
-//! (zig-metal-unikernel REVIEW-admin-backup.md, finding 2, measured). So the archive
+//! (measured). So the archive
 //! ends with `backup-manifest.txt`, written only once everything before it
 //! was: every file's SHA-256, size and path, then `end: N files, M bytes`.
 //! An archive without it, or whose files do not match it, was cut short.
@@ -26,8 +26,7 @@
 //! are included: the session secret and the password hashes are part of
 //! what a restore needs, and the route is admin-only.
 //!
-//! **IT ASKS FOR THE PASSWORD AGAIN** (zig-metal-unikernel REVIEW-admin-backup.md,
-//! finding 1). The session secret is in it, and the secret mints every
+//! **IT ASKS FOR THE PASSWORD AGAIN.** The session secret is in it, and the secret mints every
 //! session and every player's cookie. A session lasts a year and cannot be
 //! revoked, so a copied cookie must not be enough for it. A GET (or HEAD)
 //! shows a form; the archive is the answer to a POST with uid 1's password.
@@ -71,8 +70,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const data = store.data_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
     const auth = store.auth_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
 
-    // **A HEAD READS NOTHING** (zig-metal-unikernel REVIEW-admin-backup.md, finding
-    // 7): it is the form's, as a GET is. Walking the data to write it into
+    // **A HEAD READS NOTHING**: it is the form's, as a GET is. Walking the data to write it into
     // nothing cost a whole backup's reads; on metal, that is every other
     // request waiting.
     if (req.head.method != .POST) return form(req, alloc, "", .ok);
