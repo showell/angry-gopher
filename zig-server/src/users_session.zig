@@ -47,8 +47,8 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     // 3. guest gopher_uid — only a non-authorized principal that exists, and
     // only signed (an unsigned one is re-signed once by the router's GET, in
     // uid_cookie's window, and is no one here). An unsigned cookie used to be
-    // enough, which let anyone set a guest's password (REVIEW-request-paths
-    // finding 2). The value is owned by http.cookie, so it survives a later
+    // enough, which let anyone set a guest's password. The value is owned by
+    // http.cookie, so it survives a later
     // body read.
     if (try uid_cookie.resolve(io, alloc, req)) |uid| {
         if (allDigits(uid) and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
@@ -231,11 +231,12 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
     const id = presented[0..dash];
     // **A UID, BEFORE IT IS A PATH.** The prefix names {users.auth_root}/<id>/...,
     // and an id with `/` or `..` in it reached other folders' password and
-    // api-key files (zig-metal-unikernel's REVIEW-request-paths.md, finding 4).
-    if (!allDigits(id) or !try userIsAuthorized(io, alloc, id)) return null;
+    // api-key files.
+    const uid = users.Uid.of(id) orelse return null;
+    if (!try userIsAuthorized(io, alloc, id)) return null;
 
     // absent-ok: fails closed: a key that cannot be read admits no one.
-    const stored_opt = readAuthFile(io, alloc, id, "api-key") catch return null;
+    const stored_opt = readAuthFile(io, alloc, uid, "api-key") catch return null;
     const stored = std.mem.trim(u8, stored_opt orelse return null, " \t\r\n");
     // `id` is a slice into `presented`, which bearerToken already owns (via
     // http.header), so it survives a later body read — no dupe needed here.
@@ -468,7 +469,7 @@ test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies"
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id = try allocateUser(io, a, "Member");
+    const id = try allocateUser(io, a, .literal("Member"));
     try setUserPassword(io, a, id, "pw");
     try Io.Dir.cwd().createDirPath(io, users.session_secret_dir);
     const spath = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });

@@ -259,8 +259,8 @@ test "a stream is a GET's: a POST to one is 405, its body never read nor held (m
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
-    const ada = try users.allocateUser(io, a, "Ada");
+    const me = try harness.signedUid(a, try player.allocate(io, a, .literal("Ada")));
+    const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const got = try harness.postAs(a, io, "/chat/notifications", cookies, &@as([100]u8, @splat('x')));
@@ -312,4 +312,29 @@ test "route: pin puts a topic in the viewer's Pinned group and unpin takes it ou
     try testing.expectEqualStrings("Plans", pinned[0]);
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
     try testing.expectEqual(@as(usize, 0), (try chat_state.pinnedTopics(io, a, "1", "1_2")).len);
+}
+
+test "route: the chat's gate sends an outsider to sign in and back to the request's own path, and a path that is none on this site is a 400, never a redirect (metal-vmm QUEUE 250)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    for ([_][2][]const u8{ .{ "/chat/c/1_2/general", "/login/full?next=/chat/c/1_2/general" }, .{ "/channel/ops", "/login/full?next=/channel/ops" } }) |c| {
+        const away = try harness.get(a, io, c[0]);
+        try testing.expectEqualStrings("303 See Other", harness.status(away));
+        try testing.expectEqualStrings(c[1], harness.responseHeader(away, "location").?);
+    }
+    // A backslash: a browser reads it as a slash, so the target is no path
+    // on this site.
+    for ([_][]const u8{ "/chat/c/1_2/a\\b", "/channel/ops\\x" }) |bad| {
+        const refused = try harness.get(a, io, bad);
+        try testing.expectEqualStrings("400 Bad Request", harness.status(refused));
+        try testing.expect(harness.responseHeader(refused, "location") == null);
+    }
 }

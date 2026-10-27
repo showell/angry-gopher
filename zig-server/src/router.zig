@@ -134,26 +134,14 @@ const gopher_hosting = struct {
     }
 };
 
-/// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
-/// the request target as it came, so `GET //evil.example/x` answered
-/// `location: //evil.example/x`, which a browser reads as another host, and
-/// the absolute form `GET http://evil.example/` named one outright
-/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 2). A target that is
-/// not a plain local path is sent to `/` instead.
-fn localTarget(target: []const u8) []const u8 {
-    if (target.len == 0 or target[0] != '/') return "/";
-    if (target.len > 1 and (target[1] == '/' or target[1] == '\\')) return "/";
-    return target;
-}
-
 /// **THIS APPLICATION, AS THE LIBRARY SERVES IT** (webbox's site.zig): its
-/// route table is `routed`, private, so no host calls the table without the
+/// route table is `dispatch`, private, so no host calls the table without the
 /// serving around it. A malformed form is the client's mistake, a 400, on
 /// every form (metal-vmm QUEUE 156(i)): one decoder (http.formField), where
 /// chat's own took a bad escape as text and the first of two fields, while
 /// players' refused the escape as a 500.
 const App = struct {
-    pub const routes = routed;
+    pub const routes = dispatch;
     pub const family = familyOf;
     pub const setup = app_start.setup;
     pub const StartReport = app_start.StartReport;
@@ -242,7 +230,7 @@ pub const between = site.between;
 /// 400 for a malformed form, the kept stream as the answer) is site.zig's.
 pub const route = site.route;
 
-fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
     // first GET inside the window comes back to the same page with the
     // signed cookie set, and the unsigned spelling is refused from then on.
@@ -251,17 +239,18 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     const client = try client_address.resolve(alloc, req, bus.peer);
     if (try uid_cookie.reissue(io, alloc, req, client)) |re| switch (re) {
         .cookie => |c| {
-            const location: std.http.Header = .{ .name = "location", .value = localTarget(try http.target(req, alloc)) };
+            // **BACK TO THE SAME PAGE, ON THIS SITE ONLY** (http.Target):
+            // the target as it came, `GET //evil.example/x` or
+            // `GET http://evil.example/`, named another host.
             const set: std.http.Header = .{ .name = "set-cookie", .value = c.set };
             const clear: std.http.Header = .{ .name = "set-cookie", .value = http.clearCookie(uid_cookie.legacy_cookie_name) };
-            return req.respond("", .{ .status = .see_other, .extra_headers = if (c.clear_legacy) &.{ location, set, clear } else &.{ location, set } });
+            return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = if (c.clear_legacy) &.{ set, clear } else &.{set} });
         },
         .refused => |r| return game_limits.refuse(req, r),
     };
     // **A SESSION UNDER ITS LEGACY NAME MOVES ON ITS NEXT GET** (metal-vmm
     // QUEUE 170.8), back to the same page, the legacy one cleared.
-    if (try users.sessionToMove(io, alloc, req)) |value| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
-        .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
+    if (try users.sessionToMove(io, alloc, req)) |value| return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = &.{
         .{ .name = "set-cookie", .value = try login.authCookie(alloc, value) },
         .{ .name = "set-cookie", .value = http.clearCookie(users.session_cookie_legacy) },
     } });

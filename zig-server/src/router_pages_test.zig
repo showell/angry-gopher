@@ -17,7 +17,7 @@ test "every embedded asset is kept by the browser and asked about each use: ETag
     // /game and /puzzles serve their scripts to a player only.
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
+    const me = try harness.signedUid(a, try player.allocate(io, a, .literal("Ada")));
     const paths = [_][]const u8{
         "/chat/chat.js",           "/chat/colors.js",      "/game/elm.js",
         "/game/engine.js",         "/game/engine_glue.js", "/driving/blitter.js",
@@ -57,10 +57,10 @@ test "every page names its scripts by their bytes, and a script asked for by its
     const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator); // a send allocates through it
     defer meter.restore();
     // A player for the games; two members and a topic between them for chat.
-    const me = try harness.signedUid(a, try player.allocate(io, a, "Ada"));
-    const ada = try users.allocateUser(io, a, "Ada");
+    const me = try harness.signedUid(a, try player.allocate(io, a, .literal("Ada")));
+    const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
-    const bo = try users.allocateUser(io, a, "Bo");
+    const bo = try users.allocateUser(io, a, .literal("Bo"));
     try users.setUserPassword(io, a, bo, "a password for Bo");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const dm = try std.fmt.allocPrint(a, "/chat/c/{s}_{s}/scripts", .{ ada, bo });

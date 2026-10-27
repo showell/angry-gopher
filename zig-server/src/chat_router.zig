@@ -89,7 +89,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     if (decision != .redirect and !(decision == .serve and decision.serve.route.family == .asset) and !call.asked)
         std.debug.panic("the Roc router answered {f} without asking who is asking", .{decision});
     switch (decision) {
-        .redirect => |location| return http.redirect(req, location),
+        // Built by the Roc from a conversation's base and a topic, which the
+        // store's names keep on the site: one off it is a bug, the router's
+        // 500, never a redirect somewhere else.
+        .redirect => |location| return http.redirect(req, try http.Target.format(alloc, "{s}", .{location})),
+        .to_login => |next| return toLogin(req, alloc, next),
         .serve => |s| {
             if (s.presence) presence.markActiveAndBroadcast(io, alloc, bus, call.uid, now);
             return chat.serve(req, io, alloc, bus, call.uid, s.route, now);
@@ -105,7 +109,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
         // The site's 400 for every malformed form (webbox site.zig).
         .malformed_form => return error.MalformedForm,
         .not_found => return http.notFound(req),
-        .found => |location| return req.respond("", .{ .status = .found, .extra_headers = &.{.{ .name = "location", .value = location }} }),
+        .found => |location| return http.redirectWith(req, try http.Target.format(alloc, "{s}", .{location}), .{ .status = .found }),
         // The host's bytes between the Roc's: a transcript (nothing around
         // it, so it goes out as read) or a page around rendered links.
         .held => |h| {
@@ -115,6 +119,18 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
             return req.respond(body, .{ .status = @fromBackingInt(@intCast(h.status)), .extra_headers = headers[0..n] });
         },
     }
+}
+
+/// To the login page, to come back to `next` after (the Roc's gate,
+/// chat/main.roc `dispatch!`): **the request's own path, so one that is no
+/// path on this site is its 400** (metal-vmm QUEUE 250), never a redirect
+/// to the root or anywhere else.
+pub fn toLogin(req: *Request, alloc: Alloc, next: []const u8) !void {
+    const back = http.Target.format(alloc, "/login/full?next={s}", .{next}) catch |e| switch (e) {
+        error.NotOnSite => return req.respond("not a path on this site\n", .{ .status = .bad_request }),
+        else => return e,
+    };
+    return http.redirect(req, back);
 }
 
 /// **ONE REQUEST'S HOST, FOR ITS ROC CALL**: who is asking, read when the

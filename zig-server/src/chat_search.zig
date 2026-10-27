@@ -68,7 +68,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     var buf: [tokens.max_word]u8 = undefined;
     const key = tokens.key(try chat.urlDecode(alloc, raw), &buf);
     const reach = try chat_paths.visibleConvs(io, alloc, uid);
-    const idx = search_index.ready(io, alloc) orelse {
+    const idx = search_index.indexOrBuild(io, alloc) orelse {
         return req.respond("{\"error\":\"search is not ready\"}", .{ .status = .service_unavailable, .extra_headers = &.{http.json_ct} });
     };
     var b: std.ArrayList(u8) = .empty;

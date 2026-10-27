@@ -1,10 +1,10 @@
-//! uid_cookie: `gopher_uid`, signed (zig-metal-unikernel QUEUE item 51,
-//! DESIGN-signed-uid.md; Steve, 2026-10-02: re-identify once).
+//! uid_cookie: `gopher_uid`, signed; an unsigned one from before is
+//! re-identified once.
 //!
 //! `gopher_uid` names a player (`p<n>`), a member's game identity (digits),
 //! or a legacy guest (digits). It was set in the clear, so whoever set it by
 //! hand WAS that identity: a player's games, a member's games, a guest's
-//! account (REVIEW-request-paths findings 1-2). Now it is
+//! account. Now it is
 //!
 //!     <id>.<issued>.<mac>     mac = base64url(HMAC-SHA256(secret, "gopher_uid\n" id "\n" issued))
 //!
@@ -84,7 +84,7 @@ pub fn sign(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix: i64) 
 pub const lifetime_secs: i64 = 365 * 24 * 60 * 60;
 
 /// This cookie's rules for the `webbox` library's signing (signed.zig).
-const kind: signed.Kind = .{ .label = label, .lifetime_secs = lifetime_secs, .skew_secs = users.clock_skew_secs, .validId = validId };
+const kind: signed.Kind([]const u8) = .{ .label = label, .lifetime_secs = lifetime_secs, .skew_secs = users.clock_skew_secs, .parse = signed.textIf(validId) };
 
 /// The id a signed value carries at `now_unix`, or null: one past its
 /// lifetime, or issued further ahead than a clock's skew, is no one.
@@ -93,7 +93,7 @@ pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 
 }
 
 /// The cookie, for webbox's reading and writing of signed cookies.
-const cookie: signed_cookie.Cookie = .{ .name = cookie_name, .legacy_name = legacy_cookie_name, .kind = kind };
+const cookie: signed_cookie.Cookie([]const u8) = .{ .name = cookie_name, .legacy_name = legacy_cookie_name, .kind = kind };
 
 fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -254,7 +254,7 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
         // signed either way, so not counted against the address.
         .verified => |v| {
             if (!signed_cookie.needsRenewal(cookie, v, now)) return null;
-            return .{ .cookie = .{ .set = (try issue(io, alloc, v.id)) orelse return null, .clear_legacy = v.legacy } };
+            return .{ .cookie = .{ .set = (try issue(io, alloc, v.text)) orelse return null, .clear_legacy = v.legacy } };
         },
         // Perhaps a legacy unsigned spelling: below.
         .invalid => {},

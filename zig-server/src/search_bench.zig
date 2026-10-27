@@ -139,7 +139,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
         // Queries, as a viewer who sees everything here.
         var reach: std.ArrayList(chat_paths.Reach) = .empty;
         for (convs) |c| try reach.append(a, .{ .dir = try std.fmt.allocPrint(a, "{s}/{s}", .{ root, c }), .base = c, .kind = .dm });
-        const idx = search_index.ready(io, a).?;
+        const idx = search_index.indexOrBuild(io, a).?;
         for ([_][]const u8{ "la", "th", "w1", "zep" }) |prefix| {
             var q = std.heap.ArenaAllocator.init(page);
             defer q.deinit();

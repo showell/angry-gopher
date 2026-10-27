@@ -16,7 +16,7 @@ const Decision = roc_chat.Decision;
 pub fn decide(alloc: std.mem.Allocator, sub: []const u8, channel: bool, member: bool) !Decision {
     if (!channel and sub.len > 1 and std.mem.endsWith(u8, sub, ".js"))
         return .{ .serve = .{ .route = .{ .family = .asset, .rest = sub[1..] }, .presence = false } };
-    if (!member) return .{ .redirect = try std.fmt.allocPrint(alloc, "/login/full?next={s}{s}", .{ if (channel) "/channel" else "/chat", sub }) };
+    if (!member) return .{ .to_login = try std.fmt.allocPrint(alloc, "{s}{s}", .{ if (channel) "/channel" else "/chat", sub }) };
     const route = if (channel) underChannel(sub) else underChat(sub);
     return .{ .serve = .{ .route = route, .presence = !isStream(route) } };
 }

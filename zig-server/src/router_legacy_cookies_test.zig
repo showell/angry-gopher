@@ -21,7 +21,7 @@ test "route: one address may have 3 legacy cookies re-signed an hour, then 429" 
     const limits = harness.UidSite.game_limits;
 
     var ids: [5][]const u8 = undefined;
-    for (&ids) |*id| id.* = try player.allocate(io, a, "Nikhil");
+    for (&ids) |*id| id.* = try player.allocate(io, a, .literal("Nikhil"));
     const from = struct {
         fn get(al: std.mem.Allocator, i: Io, id: []const u8, peer: []const u8) ![]const u8 {
             return harness.serveFrom(al, i, try std.fmt.allocPrint(al, "GET /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{id}), peer);
@@ -35,7 +35,7 @@ test "route: one address may have 3 legacy cookies re-signed an hour, then 429" 
     try testing.expectEqualStrings("429 Too Many Requests", harness.status(swept));
     try testing.expect(std.mem.indexOf(u8, swept, "renewed") != null);
     try testing.expect(harness.setUid(swept) == null);
-    try testing.expect(!harness.UidSite.marked(a, io, ids[3]));
+    try testing.expect(!harness.UidSite.isSigned(a, io, ids[3]));
     // Its owner, from their own address, is re-signed.
     try testing.expectEqualStrings("303 See Other", harness.status(try from.get(a, io, ids[3], "198.51.100.1")));
     // And an ordinary visit from the swept-out address is untouched.
@@ -74,7 +74,7 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const value = try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600);
     const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
     const moved = try harness.UidSite.ask(a, io, "/play", legacy);
@@ -88,7 +88,7 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     try testing.expect(harness.playingAs(try harness.postForm(a, io, "/play", legacy, ""), "Nikhil"));
     // A sibling's plant under the old name, beside the site's own new one,
     // is not read at all.
-    const other = try player.allocate(io, a, "Debbie");
+    const other = try player.allocate(io, a, .literal("Debbie"));
     const planted = try std.fmt.allocPrint(a, "gopher_uid={s}; __Host-gopher_uid={s}", .{ try uid_cookie.sign(a, harness.UidSite.secret, other, harness.nowSecs(io)), value });
     try testing.expect(harness.playingAs(try harness.UidSite.ask(a, io, "/play", planted), "Nikhil"));
 }
@@ -140,7 +140,7 @@ test "route: a legacy uid signed after the cutoff names no one and is not moved;
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const late = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, http.legacy_issued_before_unix + 60)});
     const got = try harness.UidSite.ask(a, io, "/play", late);
     try testing.expect(!harness.playingAs(got, "Nikhil"));

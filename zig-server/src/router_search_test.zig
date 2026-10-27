@@ -235,7 +235,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     try testing.expect(keys.count() > 10);
     // Built; then messages that land after it, through appendMessage, as
     // the index takes them (and the disk, which the baseline reads).
-    _ = search_index.ready(io, a).?;
+    _ = search_index.indexOrBuild(io, a).?;
     var hub = Hub.init(io, a);
     var bus = Bus.of(&hub);
     for (0..12) |n| {
@@ -258,7 +258,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
         var it = tokens.words(body.*);
         while (it.next()) |w| try keys.put(a, try std.ascii.allocLowerString(a, w), {});
     }
-    const idx = search_index.ready(io, a).?;
+    const idx = search_index.indexOrBuild(io, a).?;
     var compared: usize = 0;
     for ([_][]const u8{ "1", "2", "3" }) |who| {
         const reach = try chat_paths.visibleConvs(io, a, who);

@@ -178,7 +178,7 @@ test "request edges: every number a request carries, at its type's edges, as a m
     defer uid_site.deinit();
     const steve = try harness.memberSession(a, io, "1", "Steve");
     _ = try harness.memberSession(a, io, "2", "Debbie");
-    const id = try player.allocate(io, a, "Steve");
+    const id = try player.allocate(io, a, .literal("Steve"));
     const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try harness.signedUid(a, id) });
     const bearer = try users.setUserAPIKey(io, a, "1");
     try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"hello"});

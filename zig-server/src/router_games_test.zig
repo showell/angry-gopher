@@ -20,7 +20,7 @@ test "route: /puzzles writes nothing; a session is made by its first move" {
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
 
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const me = try harness.signedUid(a, id);
     const games = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id });
 
@@ -61,7 +61,7 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     defer uid_site.deinit();
     const limits = harness.UidSite.game_limits;
 
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const me = try harness.signedUid(a, id);
     const games = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id });
 
@@ -91,7 +91,7 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
 
     // Sessions: another player with 500 on disk may not make one more,
     // but may still play in the ones they have.
-    const other = try player.allocate(io, a, "Debbie");
+    const other = try player.allocate(io, a, .literal("Debbie"));
     const them = try harness.signedUid(a, other);
     for (1..limits.max_sessions + 1) |n| {
         try harness.UidSite.disk.write(io, a, try std.fmt.allocPrint(a, "{s}/{s}/puzzle/sessions/{d}/meta", .{ harness.UidSite.storage.data_root, other, n }), "m", .{});
@@ -106,7 +106,7 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     const host_space = free_space.save();
     defer host_space.restore();
     free_space.reader = lowDisk;
-    const third = try player.allocate(io, a, "Gus");
+    const third = try player.allocate(io, a, .literal("Gus"));
     const floor = try harness.postAs(a, io, "/game/new-session", try harness.signedUid(a, third), "state");
     try testing.expectEqualStrings("507 Insufficient Storage", harness.status(floor));
     try testing.expect(std.mem.indexOf(u8, floor, "low on disk") != null);
@@ -165,7 +165,7 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     try testing.expectEqualStrings("429 Too Many Requests", harness.status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.11, not-one-9\r\n")));
 
     // Game writes: 20 MB from one address an hour, across players.
-    const ids = [_][]const u8{ try player.allocate(io, a, "One"), try player.allocate(io, a, "Two") };
+    const ids = [_][]const u8{ try player.allocate(io, a, .literal("One")), try player.allocate(io, a, .literal("Two")) };
     const big = try a.alloc(u8, 200 * 1024);
     @memset(big, 's');
     var sent: u64 = 0;
@@ -196,7 +196,7 @@ test "route: every game write is counted as exactly what it wrote: an annotation
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const limits = harness.UidSite.game_limits;
-    const id = try player.allocate(io, a, "Nikhil");
+    const id = try player.allocate(io, a, .literal("Nikhil"));
     const me = try harness.signedUid(a, id);
     const games = try std.fs.path.join(a, &.{ harness.UidSite.storage.data_root, id });
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/game/new-session", me, "state")));

@@ -77,6 +77,28 @@ pub fn current(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
     return .{ .id = id, .name = name };
 }
 
+/// **A PLAYER ID, CHECKED** (metal-vmm QUEUE 250): what `isSafeID` passed,
+/// as a type only `Id.of` makes, so a call that takes one (storage.deleteUserData)
+/// cannot be handed an id no one checked. Zig has no private fields: a literal
+/// without `id_seal` does not compile, and ops/check_zig's seal lint (shale's
+/// cookbook/sealed.shale) refuses `.id_seal =` and `.player_id =` outside
+/// this file, a literal's or a change to one made. `text()` reads it.
+pub const Id = struct {
+    player_id: []const u8,
+    id_seal: Seal,
+
+    pub fn of(s: []const u8) ?Id {
+        if (!isSafeID(s)) return null;
+        return .{ .player_id = s, .id_seal = .{} };
+    }
+
+    pub fn text(id: Id) []const u8 {
+        return id.player_id;
+    }
+};
+
+const Seal = struct {};
+
 /// isSafeID rejects anything that could escape player_root or a data directory.
 /// Ids come from a cookie, so this is the one place they are untrusted.
 fn isSafeID(id: []const u8) bool {
@@ -90,11 +112,11 @@ fn isSafeID(id: []const u8) bool {
 // ── issuance ─────────────────────────────────────────────────────────────────
 
 /// allocate mints a fresh local player with `name` and returns its id (`p<n>`).
-pub fn allocate(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
+pub fn allocate(io: Io, alloc: Alloc, name: names.UserName) ![]const u8 {
     const counter_path = try std.fs.path.join(alloc, &.{ player_root, "next-id.txt" });
     const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{s}{d}", .{ local_prefix, n });
-    try setName(io, alloc, id, name);
+    try setName(io, alloc, id, name.text());
     return id;
 }
 
@@ -205,30 +227,29 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
 
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const next = sanitizeNext((try formField(alloc, body, "next")) orelse from_query);
-    const vr = try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "");
-    if (vr.err.len != 0) return renderPage(req, alloc, cur.name, next, vr.err);
+    const name = switch (try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "")) {
+        .ok => |n| n,
+        .refused => |why| return renderPage(req, alloc, cur.name, next.path(), why),
+    };
 
     if (try game_limits.admitPlayer(io, client)) |r| return game_limits.refuse(req, r);
-    const id = try allocate(io, alloc, vr.name);
-    var hs: std.ArrayList(std.http.Header) = .empty;
-    try hs.append(alloc, .{ .name = "location", .value = next });
+    const id = try allocate(io, alloc, name);
     const ck = (try cookie(io, alloc, id)) orelse
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
-    try hs.append(alloc, .{ .name = "set-cookie", .value = ck });
-    try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
+    return http.redirectWith(req, next, .{ .headers = &.{.{ .name = "set-cookie", .value = ck }} });
 }
 
 /// queryNext reads ?next= off the request target, so a GET /play?next=/game
 /// remembers where the visitor was headed.
 fn queryNext(alloc: Alloc, target: []const u8) ![]const u8 {
     const q = std.mem.indexOfScalar(u8, target, '?') orelse return "/";
-    return sanitizeNext((try formField(alloc, target[q + 1 ..], "next")) orelse "/");
+    return sanitizeNext((try formField(alloc, target[q + 1 ..], "next")) orelse "/").path();
 }
 
 /// sanitizeNext keeps only internal redirect targets, so ?next= is never an open
-/// redirect (`http.internalTarget`).
-fn sanitizeNext(next: []const u8) []const u8 {
-    return http.internalTarget(next);
+/// redirect (`http.Target`).
+fn sanitizeNext(next: []const u8) http.Target {
+    return .of(next);
 }
 
 /// formField is `http.formField`: one decoder for every form.
@@ -308,17 +329,17 @@ test "isSafeID accepts account and local spellings, rejects traversal" {
 }
 
 test "sanitizeNext keeps internal paths and refuses an open redirect" {
-    try testing.expectEqualStrings("/game", sanitizeNext("/game"));
-    try testing.expectEqualStrings("/", sanitizeNext("//evil.example"));
-    try testing.expectEqualStrings("/", sanitizeNext("https://evil.example"));
-    try testing.expectEqualStrings("/", sanitizeNext(""));
+    try testing.expectEqualStrings("/game", sanitizeNext("/game").path());
+    try testing.expectEqualStrings("/", sanitizeNext("//evil.example").path());
+    try testing.expectEqualStrings("/", sanitizeNext("https://evil.example").path());
+    try testing.expectEqualStrings("/", sanitizeNext("").path());
     // **WHAT A BROWSER READS AS ANOTHER HOST** (the normalization hunt,
     // 2026-10-10): a backslash after the slash is a second slash to a
     // browser, and a tab or newline inside is dropped before it looks.
     for ([_][]const u8{ "/\\evil.example", "/\\/evil.example", "/\t/evil.example", "/\n/evil.example", "/x\\y", "/\x7f/evil.example" }) |bad| {
-        try testing.expectEqualStrings("/", sanitizeNext(bad));
+        try testing.expectEqualStrings("/", sanitizeNext(bad).path());
     }
-    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3"));
+    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3").path());
 }
 
 test "formField decodes plus and percent escapes" {
@@ -343,13 +364,13 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id = try allocate(io, a, "Nikhil");
+    const id = try allocate(io, a, .literal("Nikhil"));
     try testing.expect(std.mem.startsWith(u8, id, local_prefix));
     try testing.expect(!std.ascii.isDigit(id[0])); // never collides with an account id
     try testing.expectEqualStrings("Nikhil", try nameOf(io, a, id));
 
     // A second player gets a distinct id.
-    const id2 = try allocate(io, a, "Debbie");
+    const id2 = try allocate(io, a, .literal("Debbie"));
     try testing.expect(!std.mem.eql(u8, id, id2));
 
     // mirror gives an account id a row under its own numeric spelling.

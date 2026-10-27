@@ -67,14 +67,14 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
 /// handleAPIKey generates (POST) or revokes (POST revoke=1) a member's API key —
 /// the admin acting on any member.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
-    if (req.head.method != .POST) return http.redirect(req, "/admin");
+    if (req.head.method != .POST) return http.redirect(req, .literal("/admin"));
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const id = std.mem.trim(u8, (try chat.formField(alloc, body, "user")) orelse "", " \t\r\n");
-    if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, "/admin");
+    if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, .literal("/admin"));
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         try users.clearUserAPIKey(io, alloc, id);
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/admin?keyrevoked={s}", .{id}));
+        return http.redirect(req, try http.Target.format(alloc, "/admin?keyrevoked={s}", .{id}));
     }
     const key = try users.setUserAPIKey(io, alloc, id);
     return settings.renderKeyShown(req, io, alloc, id, key, "/admin", "Admin");
@@ -83,8 +83,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
 /// **AN ID FROM A FORM IS A UID BEFORE IT IS A PATH.** The key is written to
 /// and removed from {auth_root}/<id>/api-key, and principalExists and
 /// principalAuthorized look at what is on disk, not at the characters: `1/.`
-/// or `1/../2` passed both and named a folder (zig-metal-unikernel's
-/// REVIEW-request-paths.md, finding 5).
+/// or `1/../2` passed both and named a folder.
 fn apiKeyTarget(io: Io, alloc: Alloc, id: []const u8) !bool {
     return users.validUid(id) and try users.principalExists(io, alloc, id) and try users.principalAuthorized(io, alloc, id);
 }

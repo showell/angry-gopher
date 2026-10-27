@@ -482,7 +482,7 @@ fn nowMs(io: Io) i64 {
 
 /// The index, built now if no host built it, or a failure dropped it, but
 /// not within `retry_ms` of a build that failed.
-pub fn ready(io: Io, scratch: Alloc) ?*Index {
+pub fn indexOrBuild(io: Io, scratch: Alloc) ?*Index {
     if (the == null) {
         const now = nowMs(io);
         const waiting = if (failed_at_ms) |t| now >= t and now - t < retry_ms else false;
@@ -643,7 +643,7 @@ test "fs: a build out of memory fails, never an index missing what it could not 
     try testing.expectEqual(@as(?Stats, null), buildAll(io, fba.allocator()));
     try testing.expectEqual(@as(?Stats, null), stats());
     // And a search does not build again at once.
-    try testing.expectEqual(@as(?*Index, null), ready(io, fba.allocator()));
+    try testing.expectEqual(@as(?*Index, null), indexOrBuild(io, fba.allocator()));
 
     // With room: every message, none unreadable.
     const s = buildAll(io, a).?;
@@ -656,7 +656,7 @@ test "fs: a build out of memory fails, never an index missing what it could not 
     try testing.expectEqual(@as(?Stats, null), stats());
     // And a search does not build it again at once (the box's review of 155, 3).
     failing.fail_index = std.math.maxInt(usize);
-    try testing.expectEqual(@as(?*Index, null), ready(io, a));
+    try testing.expectEqual(@as(?*Index, null), indexOrBuild(io, a));
 }
 
 test "a block read in place is what the decoder makes of it (155's review)" {

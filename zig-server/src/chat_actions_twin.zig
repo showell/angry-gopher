@@ -60,7 +60,8 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     if (call.failed) |e| return e;
     const decision = try chat_route_twin.decide(alloc, sub, channel, member);
     switch (decision) {
-        .redirect => |location| return http.redirect(req, location),
+        .redirect => |location| return http.redirect(req, try http.Target.format(alloc, "{s}", .{location})),
+        .to_login => |next| return chat_router.toLogin(req, alloc, next),
         .serve => |s| {
             if (s.presence) presence.markActiveAndBroadcast(io, alloc, bus, call.uid, now);
             const r = s.route;
@@ -94,7 +95,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                 const f = (try chat.findConv(io, alloc, call.uid, r.family, r.key)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
                 const def = try chat_paths.firstTopic(io, alloc, f.dir);
                 if (def.len == 0) return chat_page.noTopicsPage(req, io, alloc, call.uid, f.base, try chat.convTitle(io, alloc, call.uid, f));
-                return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ f.base, def }));
+                return http.redirect(req, try http.Target.format(alloc, "{s}/{s}", .{ f.base, def }));
             }
             if ((r.family == .dm or r.family == .channel) and r.part == .topic and r.tail == .page) {
                 const t = (try chat.findTopic(io, alloc, call.uid, r)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
@@ -253,10 +254,10 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: Now) !
     // start the first, where it went to today's date as a topic: a send makes
     // one there, but a page of a topic not there is a 404 (156(j)'s review).
     if ((try chat_paths.firstTopic(io, alloc, try chat_paths.dmConvDir(alloc, conv))).len == 0) {
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}));
+        return http.redirect(req, try http.Target.format(alloc, "/chat/c/{s}", .{conv}));
     }
     const sid = try chat_state.resumeTopic(io, alloc, uid, conv, now);
-    return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
+    return http.redirect(req, try http.Target.format(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
 }
 
 /// chatConversations serves GET /chat/conversations: the (partner × topic)
@@ -305,13 +306,13 @@ fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []con
         const conv = try chat_paths.chatPairKey(alloc, uid, partner.id);
         const dir = try chat_paths.dmConvDir(alloc, conv);
         if (try convHasTopic(io, alloc, dir, sid)) {
-            return redirectFound(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
+            return redirectFound(req, try http.Target.format(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
         }
     }
     for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
         const dir = try chat_paths.channelConvDir(alloc, name);
         if (try convHasTopic(io, alloc, dir, sid)) {
-            return redirectFound(req, try std.fmt.allocPrint(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
+            return redirectFound(req, try http.Target.format(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
         }
     }
     return http.notFound(req);
@@ -327,11 +328,8 @@ fn convHasTopic(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool {
 
 /// redirectFound issues a 302 to `location` — the msg-ref
 /// lookup uses 302 (a transient lookup-then-go), not the 303 the others use.
-fn redirectFound(req: *Request, location: []const u8) !void {
-    return req.respond("", .{
-        .status = .found,
-        .extra_headers = &.{.{ .name = "location", .value = location }},
-    });
+fn redirectFound(req: *Request, location: http.Target) !void {
+    return http.redirectWith(req, location, .{ .status = .found });
 }
 
 /// sendMessage handles POST /<…>/<sid>/send: parse the markdown+cid form, then
@@ -376,7 +374,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
     // Where a plain form post goes back to, made before the store (177.1):
     // made after, an allocation that failed was a 500 for a stored message.
-    const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
+    const back = try http.Target.format(alloc, "{s}/{s}", .{ conv.base, topic.sid });
     _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
     return sendDone(req, is_async, back);
 }
@@ -385,7 +383,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
 /// 303 back to the topic page (the no-JS form-post fallback).
 /// The answer to a stored send: allocates nothing, so a send stored is never
 /// answered 500 for memory (177.1).
-fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
+fn sendDone(req: *Request, is_async: bool, back: http.Target) !void {
     if (is_async) return req.respond("", .{ .status = .no_content });
     return http.redirect(req, back);
 }

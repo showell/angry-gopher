@@ -29,7 +29,7 @@ const files = [_]File{
 
 /// handle dispatches /shale* — `sub` is the path after "/shale".
 pub fn handle(req: *Request, sub: []const u8) !void {
-    if (sub.len == 0) return req.respond("", .{ .status = .moved_permanently, .extra_headers = &.{.{ .name = "location", .value = "/shale/" }} });
+    if (sub.len == 0) return http.redirectWith(req, .literal("/shale/"), .{ .status = .moved_permanently });
     const name = if (std.mem.eql(u8, sub, "/")) "learn.html" else sub[1..];
     for (files) |f| {
         if (std.mem.eql(u8, f.name, name)) return http.serveEmbedded(req, f.body, f.ct);
