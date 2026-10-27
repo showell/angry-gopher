@@ -31,6 +31,7 @@
 //! has a frozen-vector regression test beside it in users_session.zig.
 
 const users_session = @import("users_session.zig");
+const names = @import("names.zig");
 const apiKeyMatches = users_session.apiKeyMatches;
 pub const clock_skew_secs = users_session.clock_skew_secs;
 pub const currentUserID = users_session.currentUserID;
@@ -86,7 +87,7 @@ pub fn userExists(io: Io, alloc: Alloc, id: []const u8) !bool {
 
 /// userIsMember reports whether id has a password file.
 pub fn userIsMember(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return authFileExists(io, alloc, id, "password");
+    return authFileExists(io, alloc, Uid.of(id) orelse return false, "password");
 }
 
 /// isAgent — today exactly one agent (Claude, uid 3).
@@ -139,7 +140,7 @@ fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
 /// retire's plan refuses a nameless account (the box's A2), and
 /// `onlyMemberNamed` never matches "".
 pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
-    const b = (try readAuthFile(io, alloc, id, "name")) orelse return "";
+    const b = (try readAuthFile(io, alloc, Uid.of(id) orelse return "", "name")) orelse return "";
     return std.mem.trimEnd(u8, b, "\r\n");
 }
 
@@ -183,13 +184,13 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
 /// userHasAPIKey reports whether the principal has an API-key file.
 pub fn userHasAPIKey(io: Io, alloc: Alloc, id: []const u8) bool {
     // absent-ok: display only: a key that cannot be looked at shows as none, and Generate replaces it as Regenerate would.
-    return authFileExists(io, alloc, id, "api-key") catch false;
+    return authFileExists(io, alloc, Uid.of(id) orelse return false, "api-key") catch false;
 }
 
 /// getUserAPIKey returns the stored key for display, or null when absent OR a
 /// legacy bare-hash key (no '-', not recoverable — regenerate to view).
 pub fn getUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
-    const b = (try readAuthFile(io, alloc, id, "api-key")) orelse return null;
+    const b = (try readAuthFile(io, alloc, Uid.of(id) orelse return null, "api-key")) orelse return null;
     const key = std.mem.trim(u8, b, " \t\r\n");
     if (std.mem.indexOfScalar(u8, key, '-') == null) return null;
     return key;
@@ -263,16 +264,35 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
     return (std.fmt.parseInt(i64, a, 10) catch 0) < (std.fmt.parseInt(i64, b, 10) catch 0);
 }
 
-fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
-    const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
+fn authFileExists(io: Io, alloc: Alloc, id: Uid, name: []const u8) !bool {
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id.text, name });
     return try store.has(io, alloc, path);
 }
 
 /// readAuthFile reads {auth_root}/{id}/{name}, or null if absent.
-pub fn readAuthFile(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !?[]u8 {
-    const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
+pub fn readAuthFile(io: Io, alloc: Alloc, id: Uid, name: []const u8) !?[]u8 {
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id.text, name });
     return store.readOrNull(io, alloc, path, .unlimited);
 }
+
+/// **AN ACCOUNT ID, CHECKED** (metal-vmm QUEUE 250): what `allDigits` passed,
+/// as a type only `Uid.of` makes. A file under {auth_root}/<id>/ is read by
+/// one (`readAuthFile`, `authFileExists`), so an id with `/` or `..` in it
+/// never names another folder's password: the check is where the id is,
+/// and a reader cannot be handed one that skipped it. A literal without
+/// `uid_seal` does not compile, and ops/check_zig's seal lint refuses one
+/// that sets it outside this file.
+pub const Uid = struct {
+    text: []const u8,
+    uid_seal: Seal,
+
+    pub fn of(s: []const u8) ?Uid {
+        if (!allDigits(s)) return null;
+        return .{ .text = s, .uid_seal = .{} };
+    }
+};
+
+const Seal = struct {};
 
 /// allDigits reports whether `s` is non-empty and all ASCII digits (a well-formed uid).
 /// Whether `id` has the shape of an account id: what allocateUser makes,
@@ -298,11 +318,11 @@ pub fn nowUnix(io: Io) i64 {
 
 /// allocateUser creates a new account with `name` and returns its id, bumping
 /// the account-id counter (auth_root/next-id.txt).
-pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
+pub fn allocateUser(io: Io, alloc: Alloc, name: names.UserName) ![]const u8 {
     const counter_path = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
     const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{d}", .{n});
-    try setUserName(io, alloc, id, name);
+    try setUserName(io, alloc, id, name.text);
     return id;
 }
 
@@ -328,7 +348,7 @@ pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u
 /// or a hash that is no hash, admits no one and is an error (a 500), never a
 /// wrong password counted toward the lockout (metal-vmm QUEUE 172).
 pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) !bool {
-    const stored = (try readAuthFile(io, alloc, id, "password")) orelse return false;
+    const stored = (try readAuthFile(io, alloc, Uid.of(id) orelse return false, "password")) orelse return false;
     return auth.verifyPassword(std.mem.trimEnd(u8, stored, "\r\n"), password);
 }
 
@@ -523,7 +543,7 @@ test "fs: only members reserve a name; findMemberByName resolves it" {
 
     // a freshly allocated account (name only, no password) is NOT yet a member,
     // so its name is NOT reserved — a half-registered guest can't squat a name.
-    const id = try allocateUser(io, a, "Alice");
+    const id = try allocateUser(io, a, .literal("Alice"));
     try testing.expect((try findMemberByName(io, a, "Alice")) == null);
 
     // becoming a member (password set) reserves the name and makes it resolvable
@@ -578,8 +598,8 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id1 = try allocateUser(io, a, "First");
-    const id2 = try allocateUser(io, a, "Second");
+    const id1 = try allocateUser(io, a, .literal("First"));
+    const id2 = try allocateUser(io, a, .literal("Second"));
 
     // distinct, numeric, strictly increasing (the shared counter bumps)
     const n1 = try std.fmt.parseInt(i64, id1, 10);
@@ -634,9 +654,9 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     defer threaded.deinit();
     const io = threaded.io();
 
-    const keep = try allocateUser(io, a, "Keeper");
+    const keep = try allocateUser(io, a, .literal("Keeper"));
     try setUserPassword(io, a, keep, "pw");
-    const gone = try allocateUser(io, a, "Goner");
+    const gone = try allocateUser(io, a, .literal("Goner"));
     try setUserPassword(io, a, gone, "pw");
     try testing.expect(try reserveUploadBytes(io, a, gone, 100)); // give it users_root state too
 
@@ -673,7 +693,7 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     defer threaded.deinit();
     const io = threaded.io();
 
-    const id = try allocateUser(io, a, "Alice");
+    const id = try allocateUser(io, a, .literal("Alice"));
     try setUserPassword(io, a, id, "pw");
     // The password, there and unreadable: a link to itself loops.
     const pw = try std.fs.path.join(a, &.{ auth_root, id, "password" });

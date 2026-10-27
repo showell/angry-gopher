@@ -57,7 +57,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
         // after a save) rather than an empty nudge. Only the bare landing falls
         // back to the picker, and only when you have no docs at all.
         if (try docs_store.mostRecentDocSlug(io, alloc, uid)) |slug| {
-            return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/docs/{s}", .{slug}));
+            return http.redirect(req, try http.Target.format(alloc, "/chat/docs/{s}", .{slug}));
         }
         return renderDocsEditor(req, io, alloc, uid, "");
     }
@@ -84,7 +84,7 @@ fn renderDocsEditor(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug_r
     const list = try docs_store.listUserDocs(io, alloc, uid);
     const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
     if (slug.len != 0 and (!docs_store.validDocSlug(slug) or !slugInList(list, slug))) {
-        return http.redirect(req, "/chat/docs");
+        return http.redirect(req, .literal("/chat/docs"));
     }
     var body: []const u8 = "";
     if (slug.len != 0) body = try docs_store.readUserDoc(io, alloc, uid, slug);
@@ -207,14 +207,14 @@ fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 /// docsNew creates a new empty doc and 303s to it. Title is required (else back
 /// to /chat/docs).
 fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
-    if (req.head.method != .POST) return http.redirect(req, "/chat/docs");
+    if (req.head.method != .POST) return http.redirect(req, .literal("/chat/docs"));
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const title_raw = (try chat.formField(alloc, body, "title")) orelse "";
     const title = std.mem.trim(u8, title_raw, " \t\r\n");
-    if (title.len == 0) return http.redirect(req, "/chat/docs");
+    if (title.len == 0) return http.redirect(req, .literal("/chat/docs"));
     const slug = try docs_store.createUserDoc(io, alloc, uid, title);
     publishDocRecent(alloc, bus, uid, slug, now);
-    return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/docs/{s}", .{slug}));
+    return http.redirect(req, try http.Target.format(alloc, "/chat/docs/{s}", .{slug}));
 }
 
 /// docsSave overwrites an existing doc's body (autosave target) → 204. A POST for

@@ -34,6 +34,7 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
 const storage = @import("storage.zig");
+const player = @import("player.zig");
 const client_address = @import("webbox").client_address;
 const free_space = @import("webbox").free_space;
 
@@ -102,9 +103,8 @@ var tick: u64 = 0;
 
 /// Whether `id`, from `client`, may add `bytes`, and a session if
 /// `new_session`; null when it may, and then it is counted against both.
-pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !?Refusal {
+pub fn admit(io: Io, alloc: Alloc, id: player.Id, client: ?[]const u8, new_session: bool, bytes: u64) !?Refusal {
     if (free_space.read()) |s| if (s.free < s.total / 4) return .floor;
-    if (id.len == 0 or id.len > id_max) return .bytes; // never a player's: refuse rather than miscount
     const u = try slot(io, alloc, id);
     if (new_session and u.sessions >= max_sessions) return .sessions;
     if (u.bytes + bytes > max_bytes) return .bytes;
@@ -119,7 +119,7 @@ pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_sess
 /// What `admit` counted for a write that then did not happen, given back
 /// (metal-vmm QUEUE 172: a first move for a session not offered was counted
 /// as written).
-pub fn giveBack(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !void {
+pub fn giveBack(io: Io, alloc: Alloc, id: player.Id, client: ?[]const u8, new_session: bool, bytes: u64) !void {
     const u = try slot(io, alloc, id);
     if (new_session) u.sessions -|= 1;
     u.bytes -|= bytes;
@@ -242,7 +242,9 @@ fn fresh(addr: []const u8, t: i64) Seen {
 }
 
 /// `id`'s slot: found, or the least recently asked one measured afresh.
-fn slot(io: Io, alloc: Alloc, id: []const u8) !*Usage {
+fn slot(io: Io, alloc: Alloc, checked: player.Id) !*Usage {
+    const id = checked.text;
+    std.debug.assert(id.len <= id_max); // isSafeID's bound, which Id.of holds
     tick += 1;
     var empty: ?*Usage = null;
     var oldest: ?*Usage = null;
@@ -258,7 +260,7 @@ fn slot(io: Io, alloc: Alloc, id: []const u8) !*Usage {
         if (oldest == null or u.used < oldest.?.used) oldest = u;
     }
     const victim = empty orelse oldest.?;
-    const m = try measure(io, alloc, id);
+    const m = try measure(io, alloc, checked);
     victim.* = .{ .len = @intCast(id.len), .sessions = m.sessions, .bytes = m.bytes, .used = tick };
     @memcpy(victim.id[0..id.len], id);
     return victim;
@@ -268,7 +270,7 @@ const Measured = struct { sessions: u32 = 0, bytes: u64 = 0 };
 
 /// What `id` holds on disk: every file's size under their folder, and the
 /// sessions in both games' `sessions` folders.
-fn measure(io: Io, alloc: Alloc, id: []const u8) !Measured {
+fn measure(io: Io, alloc: Alloc, id: player.Id) !Measured {
     const root = try storage.userDataDir(alloc, id);
     var m: Measured = .{};
     m.bytes = try sizeOf(io, alloc, root, 0);
@@ -305,6 +307,10 @@ fn testSpace() ?free_space.Space {
     return test_space;
 }
 
+fn pid(s: []const u8) player.Id {
+    return player.Id.of(s).?;
+}
+
 test "fs: a player is measured once, counted up, and refused at each bound" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -323,31 +329,31 @@ test "fs: a player is measured once, counted up, and refused at each bound" {
     for ([_][]const u8{ "lynrummy-elm/sessions/1/meta", "lynrummy-elm/sessions/2/meta", "puzzle/sessions/1/meta" }) |rel| {
         try store.write(io, a, try std.fs.path.join(a, &.{ storage.data_root, "p1", rel }), "0123456789", .{});
     }
-    const m = try measure(io, a, "p1");
+    const m = try measure(io, a, pid("p1"));
     try testing.expectEqual(@as(u32, 3), m.sessions);
     try testing.expectEqual(@as(u64, 30), m.bytes);
 
     // Up to the byte bound exactly, then not a byte more.
-    try testing.expect((try admit(io, a, "p1", null, false, max_bytes - 30)) == null);
-    try testing.expectEqual(Refusal.bytes, (try admit(io, a, "p1", null, false, 1)).?);
-    try testing.expect((try admit(io, a, "p1", null, false, 0)) == null);
+    try testing.expect((try admit(io, a, pid("p1"), null, false, max_bytes - 30)) == null);
+    try testing.expectEqual(Refusal.bytes, (try admit(io, a, pid("p1"), null, false, 1)).?);
+    try testing.expect((try admit(io, a, pid("p1"), null, false, 0)) == null);
     // Another player is untouched by it.
-    try testing.expect((try admit(io, a, "p2", null, true, 100)) == null);
+    try testing.expect((try admit(io, a, pid("p2"), null, true, 100)) == null);
 
     // A release forgets: measured afresh, from the disk.
     forget("p1");
-    try testing.expect((try admit(io, a, "p1", null, false, 1)) == null);
+    try testing.expect((try admit(io, a, pid("p1"), null, false, 1)) == null);
 
     // Sessions: up to the bound, then not one more; a write to one is still fine.
     forget("p2");
-    for (0..max_sessions) |_| try testing.expect((try admit(io, a, "p2", null, true, 0)) == null);
-    try testing.expectEqual(Refusal.sessions, (try admit(io, a, "p2", null, true, 0)).?);
-    try testing.expect((try admit(io, a, "p2", null, false, 10)) == null);
+    for (0..max_sessions) |_| try testing.expect((try admit(io, a, pid("p2"), null, true, 0)) == null);
+    try testing.expectEqual(Refusal.sessions, (try admit(io, a, pid("p2"), null, true, 0)).?);
+    try testing.expect((try admit(io, a, pid("p2"), null, false, 10)) == null);
 
-    // An id that is no player's, empty or past id_max, is refused before
-    // anything is measured or counted.
-    try testing.expectEqual(Refusal.bytes, (try admit(io, a, "", null, false, 1)).?);
-    try testing.expectEqual(Refusal.bytes, (try admit(io, a, "p" ++ &@as([id_max]u8, @splat('1')), null, false, 1)).?);
+    // An id that is no player's, empty or past id_max, never reaches it: no
+    // `player.Id` holds one.
+    try testing.expect(player.Id.of("") == null);
+    try testing.expect(player.Id.of("p" ++ &@as([id_max]u8, @splat('1'))) == null);
 }
 
 test "fs: the floor refuses every game write below a quarter free, and only then" {
@@ -368,11 +374,11 @@ test "fs: the floor refuses every game write below a quarter free, and only then
     free_space.reader = testSpace;
 
     test_space = .{ .free = 25, .total = 100 }; // exactly a quarter: allowed
-    try testing.expect((try admit(io, a, "p1", null, true, 10)) == null);
+    try testing.expect((try admit(io, a, pid("p1"), null, true, 10)) == null);
     test_space = .{ .free = 24, .total = 100 };
-    try testing.expectEqual(Refusal.floor, (try admit(io, a, "p1", null, false, 0)).?);
+    try testing.expectEqual(Refusal.floor, (try admit(io, a, pid("p1"), null, false, 0)).?);
     test_space = null; // the host cannot say: no floor
-    try testing.expect((try admit(io, a, "p1", null, false, 10)) == null);
+    try testing.expect((try admit(io, a, pid("p1"), null, false, 10)) == null);
 }
 
 test "slots: the least recently asked player is the one pushed out" {
@@ -388,9 +394,9 @@ test "slots: the least recently asked player is the one pushed out" {
     defer forgot.end();
 
     var buf: [16]u8 = undefined;
-    for (0..slots) |i| _ = try admit(io, a, try std.fmt.bufPrint(&buf, "p{d}", .{i}), null, false, 1);
-    _ = try admit(io, a, "p0", null, false, 1); // p0 asked again: p1 is now the oldest
-    _ = try admit(io, a, "pnew", null, false, 1);
+    for (0..slots) |i| _ = try admit(io, a, pid(try std.fmt.bufPrint(&buf, "p{d}", .{i})), null, false, 1);
+    _ = try admit(io, a, pid("p0"), null, false, 1); // p0 asked again: p1 is now the oldest
+    _ = try admit(io, a, pid("pnew"), null, false, 1);
     var found_p0 = false;
     var found_p1 = false;
     for (table) |u| {

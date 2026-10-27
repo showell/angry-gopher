@@ -57,12 +57,13 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const id = std.mem.trim(u8, (try formField(alloc, body, "user")) orelse "", " \t\r\n");
         if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);
-        storage.deleteUserData(io, alloc, id) catch |e| {
+        const checked = player.Id.of(id) orelse return noSuchPlayer(req, alloc, id);
+        storage.deleteUserData(io, alloc, checked) catch |e| {
             // A volume refusing writes is site.route's 503 (metal-vmm QUEUE 188.2).
             if (e == error.ReadOnlyFileSystem) return e;
             return req.respond("delete failed\n", .{ .status = .internal_server_error });
         };
-        return http.redirect(req, try std.fmt.allocPrint(alloc, self_url ++ "?deleted={s}", .{id}));
+        return http.redirect(req, try http.Target.format(alloc, self_url ++ "?deleted={s}", .{id}));
     }
     const id = std.mem.trim(u8, http.queryValue(try http.target(req, alloc), "user") orelse "", " \t\r\n");
     if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);
@@ -184,7 +185,12 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
         .total_actions = 0,
         .disk_bytes = 0,
     };
-    const uroot = storage.userDataDir(alloc, p.id) catch {
+    // player.list passes only ids isSafeID took, so `orelse` is never taken.
+    const checked = player.Id.of(p.id) orelse {
+        st.unreadable += 1;
+        return st;
+    };
+    const uroot = storage.userDataDir(alloc, checked) catch {
         st.unreadable += 1;
         return st;
     };
@@ -346,7 +352,7 @@ test "the delete-confirm counts say what could not be read, never zero for it (m
     const none = gatherStats(io, a, .{ .id = "p1", .name = "Ada" });
     try std.testing.expectEqual(@as(u32, 0), none.unreadable);
     // Their games folder is a file: it will not list.
-    const games = try std.fs.path.join(a, &.{ try storage.userDataDir(a, "p1"), "lynrummy-elm", "sessions" });
+    const games = try std.fs.path.join(a, &.{ try storage.userDataDir(a, player.Id.of("p1").?), "lynrummy-elm", "sessions" });
     try Io.Dir.cwd().createDirPath(io, std.fs.path.dirname(games).?);
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = games, .data = "not a folder" });
     const st = gatherStats(io, a, .{ .id = "p1", .name = "Ada" });

@@ -58,7 +58,7 @@ const clear_legacy_auth_cookie = users.session_cookie_legacy ++ "=; Path=/; Max-
 /// handle dispatches /login* — `sub` is the path after "/login" ("/full" for the
 /// password gate; bare "/login" is the old name-only door, now at /play).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
-    if (sub.len == 0) return http.redirect(req, "/play");
+    if (sub.len == 0) return http.redirect(req, .literal("/play"));
     if (std.mem.eql(u8, sub, "/full")) return handleLoginFull(req, io, alloc, bus);
     return http.notFound(req);
 }
@@ -150,19 +150,23 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             }
         },
         .upgrade => {
-            // Cookied guest → member, in place (registerMember keeps cur.id).
+            // Cookied guest → member, in place: the guest keeps their id and
+            // their name, and gains a password.
             if (password.len == 0) return renderPwPage(req, alloc, mode, name, next, "Please enter a password.");
             if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
-            const id = try registerMember(cur, io, alloc, name, password);
+            try users.setUserPassword(io, alloc, cur.id, password);
+            const id = cur.id;
             throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, name);
             sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
         },
         .stranger => {
-            const vr = try names.validateUserName(alloc, name);
-            if (vr.err.len != 0) return renderPwPage(req, alloc, .stranger, name, next, vr.err);
-            const valid = vr.name;
+            const checked = switch (try names.validateUserName(alloc, name)) {
+                .ok => |n| n,
+                .refused => |why| return renderPwPage(req, alloc, .stranger, name, next, why),
+            };
+            const valid = checked.text;
             const member_id = try users.findMemberByName(io, alloc, valid);
             const action = (try chat.formField(alloc, body, "action")) orelse "";
             if (std.mem.eql(u8, action, "login")) {
@@ -177,7 +181,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             if (member_id != null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "\u{201C}{s}\u{201D} is taken — log in instead.", .{valid}));
             if (password.len == 0) return renderPwPage(req, alloc, .stranger, valid, next, "Please enter a password.");
             if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
-            const id = try registerMember(cur, io, alloc, valid, password);
+            const id = try registerMember(io, alloc, checked, password);
             throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, valid);
             sendHostWelcome(io, alloc, bus, id);
@@ -207,15 +211,10 @@ fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_
     return .ok;
 }
 
-/// registerMember turns `name` into a password member and returns its id. If the
-/// current guest IS this name (not yet a member), it upgrades that guest's id in
-/// place so their identity and data carry over; otherwise it allocates a fresh
-/// id.
-fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u8, password: []const u8) ![]const u8 {
-    if (cur.id.len != 0 and !cur.member and std.mem.eql(u8, cur.name, name)) {
-        try users.setUserPassword(io, alloc, cur.id, password);
-        return cur.id;
-    }
+/// registerMember makes a new password member named `name`, a checked one,
+/// and returns its id. (A guest who upgrades keeps their id: `.upgrade` sets
+/// only their password.)
+fn registerMember(io: Io, alloc: Alloc, name: names.UserName, password: []const u8) ![]const u8 {
     const id = try users.allocateUser(io, alloc, name);
     try users.setUserPassword(io, alloc, id, password);
     return id;
@@ -223,7 +222,7 @@ fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u
 
 /// loginAsMember sets the identity cookie + signed member session for `id` and
 /// returns to `next`.
-fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []const u8) !void {
+fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: http.Target) !void {
     const signed = (try users.signSessionNow(io, alloc, id)) orelse {
         // The shared session secret is missing — unrecoverable here (prod always
         // has it). Fail loudly rather than issue an unsigned/forgeable cookie.
@@ -272,12 +271,12 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
             // first, and a failure there keeps the account and its name, to be
             // released again; any failure is the router's 500, never "logged
             // out".
-            try storage.deleteUserData(io, alloc, t);
+            try storage.deleteUserData(io, alloc, player.Id.of(t) orelse return error.UnsafeId);
             if (user.id.len != 0) try users.deleteUserRecord(io, alloc, t) else try player.deleteRecord(io, alloc, t);
         };
         return renderLogoutComplete(req, alloc);
     }
-    if (id.len == 0) return sendRedirect(req, alloc, "/", &.{});
+    if (id.len == 0) return sendRedirect(req, alloc, .literal("/"), &.{});
     return renderLogoutPage(req, alloc, if (user.id.len != 0) user.name else local.name);
 }
 
@@ -375,9 +374,9 @@ pub fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
 
 /// sendRedirect issues a 303 See Other to `location` carrying any Set-Cookie
 /// headers. Each cookie is its own header.
-fn sendRedirect(req: *Request, alloc: Alloc, location: []const u8, cookies: []const []const u8) !void {
+fn sendRedirect(req: *Request, alloc: Alloc, location: http.Target, cookies: []const []const u8) !void {
     var hs: std.ArrayList(std.http.Header) = .empty;
-    try hs.append(alloc, .{ .name = "location", .value = location });
+    try hs.append(alloc, .{ .name = "location", .value = location.path });
     for (cookies) |c| try hs.append(alloc, .{ .name = "set-cookie", .value = c });
     try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
 }
@@ -403,9 +402,9 @@ fn formValue(alloc: Alloc, target: []const u8, body: []const u8, name: []const u
 }
 
 /// sanitizeNext keeps only internal redirect targets, to avoid open redirects
-/// (`http.internalTarget`).
-fn sanitizeNext(next: []const u8) []const u8 {
-    return http.internalTarget(next);
+/// (`http.Target`).
+fn sanitizeNext(next: []const u8) http.Target {
+    return .of(next);
 }
 
 // ── HTML pages (verbatim ports of the render* funcs) ──────────────────────────
@@ -415,9 +414,9 @@ fn sanitizeNext(next: []const u8) []const u8 {
 /// display + hidden input otherwise; the password box carries a show/hide
 /// eyeball (typo guard, no confirm field). `next` rides through as a hidden
 /// field so we return where the user was headed.
-fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, next: []const u8, err_msg: []const u8) !void {
+fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, next: http.Target, err_msg: []const u8) !void {
     const en = try html.htmlEscape(alloc, name);
-    const enx = try html.htmlEscape(alloc, next);
+    const enx = try html.htmlEscape(alloc, next.path);
     var b: std.ArrayList(u8) = .empty;
 
     try b.print(alloc,

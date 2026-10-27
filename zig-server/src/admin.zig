@@ -67,14 +67,14 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
 /// handleAPIKey generates (POST) or revokes (POST revoke=1) a member's API key —
 /// the admin acting on any member.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
-    if (req.head.method != .POST) return http.redirect(req, "/admin");
+    if (req.head.method != .POST) return http.redirect(req, .literal("/admin"));
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const id = std.mem.trim(u8, (try chat.formField(alloc, body, "user")) orelse "", " \t\r\n");
-    if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, "/admin");
+    if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, .literal("/admin"));
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         try users.clearUserAPIKey(io, alloc, id);
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/admin?keyrevoked={s}", .{id}));
+        return http.redirect(req, try http.Target.format(alloc, "/admin?keyrevoked={s}", .{id}));
     }
     const key = try users.setUserAPIKey(io, alloc, id);
     return settings.renderKeyShown(req, io, alloc, id, key, "/admin", "Admin");
