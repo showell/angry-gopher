@@ -29,6 +29,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import zig_source  # noqa: E402
 
 ROOTS = ("webbox.zig", "webbox_linux.zig", "shale.zig", "shale_linux.zig")
+# Test roots a library's build runs beside its modules, in a binary of their
+# own (shale's Zig tools' tests, metal-vmm QUEUE 252): they and the tests they
+# import are the library's, though no module root reaches them.
+TEST_ROOTS = ("shale_zig_tools_test.zig",)
 
 
 def read(path):
@@ -65,6 +69,15 @@ def library(src):
                     tests.add(dep)
                 else:
                     todo.append(dep)
+    for root in TEST_ROOTS:
+        path = zig_source.at(src, root)
+        if not os.path.exists(path):
+            continue
+        tests.add(root)
+        for raw in imports(path):
+            dep = os.path.normpath(os.path.join(os.path.dirname(root), raw))
+            if dep.endswith("_test.zig") and not dep.startswith(".."):
+                tests.add(dep)
     return members, tests
 
 
@@ -115,6 +128,12 @@ def self_test():
         got = problems(d)
         assert len(got) == 1 and "app.zig embeds a.zig, a file of the library" in got[0], got
         write("app.zig", 'const s = @embedFile("webbox_store_source");\n')
+        assert problems(d) == [], problems(d)
+        # A test root of its own, and the tests it imports, are the library's.
+        write("b_test.zig", 'const a = @import("a.zig");\n')
+        got = problems(d)
+        assert len(got) == 1 and "b_test.zig imports a.zig by path" in got[0], got
+        write(TEST_ROOTS[0], 'test {\n    _ = @import("b_test.zig");\n}\n')
         assert problems(d) == [], problems(d)
     print("lint_webbox_library: its self-test passes (an application's file by name; by path, on one line or split, or embedding one, a finding; a commented import none; the library's own tests not the application's)")
 
