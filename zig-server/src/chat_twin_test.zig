@@ -1148,7 +1148,7 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
 /// Topic names that meet: ChitChat (firstOf's pick) and a case-twin of it,
 /// dates, `general<N>`, names that sort before and after each other by byte
 /// (`Z` before `a`), and a name no list has.
-const state_names = [_][]const u8{ "ChitChat", "chitchat", "general", "general2", "Plans", "2026-10-25", "a", "Z", "b c", "\xff" };
+const state_names = [_][]const u8{ "ChitChat", "chitchat", "general", "general2", "Plans", "2026-10-25", "a", "Z", "b c", "\xe2\x98\x83" };
 
 test "ChatState: where a bare DM resumes, for every topic list, order and last view tried" {
     var arena = setUp();
@@ -1164,10 +1164,9 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
     for (0..4000) |k| {
         // The edge cases first, then lists of up to six in any order (the
         // store lists them sorted; firstOf takes the first it is given).
-        // A listed topic is text (Files.list!'s door skips a name that is
-        // not UTF-8), so the topics leave out state_names' last, "\xff"; the
-        // last view, a file's bytes, may still be it.
-        const text_names = state_names[0 .. state_names.len - 1];
+        // A listed topic and the last view are text (Files.list!'s and
+        // Files.read!'s doors).
+        const text_names = state_names;
         var topics: std.ArrayList([]const u8) = .empty;
         const n: usize = if (k < 200) k % 3 else r.uintAtMost(usize, 6);
         for (0..n) |_| try topics.append(a, text_names[r.uintLessThan(usize, text_names.len)]);
@@ -1192,7 +1191,7 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
     for (picks) |p| try testing.expect(p > 300);
 }
 
-test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte, or removed, whatever the file held" {
+test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte, or removed, whatever text the file held" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -1204,8 +1203,8 @@ test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte,
     const r = rng.random();
     // Lines as a file may hold them: padded, blank, CRLF, repeated, bytes
     // that sort high, and a line that is only spaces.
-    const lines = [_][]const u8{ "Plans", "Plans", "Other", " Plans ", "\tb\r", "", "   ", "a", "B", "ChitChat", "\xc3\xa9", "\xff", "a b", "Plans\r" };
-    const sids = [_][]const u8{ "Plans", "Other", "a", "new", "a b", "\xff", "B", " Plans" };
+    const lines = [_][]const u8{ "Plans", "Plans", "Other", " Plans ", "\tb\r", "", "   ", "a", "B", "ChitChat", "\xc3\xa9", "\xe2\x98\x83", "a b", "Plans\r" };
+    const sids = [_][]const u8{ "Plans", "Other", "a", "new", "a b", "\xe2\x98\x83", "B", " Plans" };
     for (0..5000) |k| {
         var file: std.ArrayList(u8) = .empty;
         // The first few: no file (""), then any lines.
@@ -1279,10 +1278,10 @@ fn bookmarkFile(a: std.mem.Allocator, r: std.Random, value: []const u8) ![]const
     }
 }
 
-const bookmark_values = [_][]const u8{ "1_2", "Plans", "a", "2026-10-25", "general2", "\xff", "a b", x256[0..255], &x256 };
+const bookmark_values = [_][]const u8{ "1_2", "Plans", "a", "2026-10-25", "general2", "\xe2\x98\x83", "a b", x256[0..255], &x256 };
 const x256: [256]u8 = @splat('x');
 
-test "ChatState: the last-conv and last-sessions files read back as lastUserConv and lastViewedTopic read them, whatever they hold, and none when there is none" {
+test "ChatState: the last-conv and last-sessions files read back as lastUserConv and lastViewedTopic read them, whatever text they hold, and none when there is none" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -1716,7 +1715,7 @@ test "Paths: a channel's members, as channelMembers reads its file, over generat
     // malformed: not canonical, a comment after a uid, a path, bytes the
     // trim does not take.
     const good = [_][]const u8{ "1", "2", "3", "10", "100", "# the team", "#", "#1 x", "", " ", "\t", "\r", "  1  ", "\t2\t", " 3\r", "\t\r 10 \t", "\t\t100" };
-    const bad = [_][]const u8{ "007", "0", "+7", "-1", "../x", "../../x", "3 # Claude", "1 2", "abc", "\xff", "1\x0b", "\x0b1", "1\x00", "2#", "1\n\x0c" };
+    const bad = [_][]const u8{ "007", "0", "+7", "-1", "../x", "../../x", "3 # Claude", "1 2", "abc", "\xe2\x98\x83", "1\x0b", "\x0b1", "1\x00", "2#", "1\n\x0c" };
     const file = try d.at(a, "channels/team.channel");
     var ok: usize = 0;
     var malformed: usize = 0;
