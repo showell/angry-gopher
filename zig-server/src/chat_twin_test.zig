@@ -282,6 +282,13 @@ fn yes(b: []const u8) bool {
     return std.mem.eql(u8, b, "1");
 }
 
+/// A uid as allocateUser writes one: digits, the first not zero.
+fn twinUid(s: []const u8) bool {
+    if (s.len == 0 or s[0] == '0') return false;
+    for (s) |c| if (c < '0' or c > '9') return false;
+    return true;
+}
+
 test "Paths: who is in a DM, and its canonical key" {
     var arena = setUp();
     defer arena.deinit();
@@ -292,10 +299,15 @@ test "Paths: who is in a DM, and its canonical key" {
     const halves = [_][]const u8{ "", "0", "1", "2", "9", "10", "01", "007", "12", "21", "99999999999999999999", "9223372036854775807", "9223372036854775808", "a", "..", "1a", "-1", "+1", "1_2", "\xff" };
     for (halves) |x| for (halves) |y| {
         const pair = try std.fmt.allocPrint(a, "{s}_{s}", .{ x, y });
+        // A key is the Roc's only from two uids (digits, the first not
+        // zero): its PairKey is text, and no account has another id. The
+        // Zig's atoiOr0 keyed any other half; the Roc keys none.
         const zk = try chat_paths.chatPairKey(a, x, y);
-        const rk = (try roc1(a, .pair_key, &.{ x, y })).?;
+        const rk = try roc1(a, .pair_key, &.{ x, y });
         compared += 1;
-        if (!std.mem.eql(u8, zk, rk)) differ.add("pairKey(\"{s}\", \"{s}\"): zig {s}, roc {s}", .{ x, y, zk, rk });
+        if (twinUid(x) and twinUid(y)) {
+            if (rk == null or !std.mem.eql(u8, zk, rk.?)) differ.add("pairKey(\"{s}\", \"{s}\"): zig {s}, roc {?s}", .{ x, y, zk, rk });
+        } else if (rk != null) differ.add("pairKey(\"{s}\", \"{s}\"): a half is no uid, roc {s}", .{ x, y, rk.? });
         for ([_][]const u8{ x, y, "1", "", "3" }) |user| {
             for ([_][]const u8{ pair, x, try std.fmt.allocPrint(a, "{s}__{s}", .{ x, y }) }) |key| {
                 const z = try chat_paths.chatKeyParticipant(a, key, user);
@@ -1499,8 +1511,10 @@ test "Paths: the channels a member is in, sorted by bytes, from every roster in 
     // Names that sort apart by byte (`Z` before `a`, a prefix first, bytes
     // past ASCII last), a name that is only ".channel" with its suffix cut
     // (""), names that are numbers as a count or a uid is (a roster read
-    // out of step shows), and, picked with replacement, duplicates.
-    const names = [_][]const u8{ "2", "10", "0", "ops", "op", "ops2", "Zed", "zed", "a", "a b", "general", "\xc3\xa9t\xc3\xa9", "\xff", "\xffa", "", "quiet", "Ops" };
+    // out of step shows), and, picked with replacement, duplicates. No name
+    // that is not UTF-8: a roster's name is text, from Files.list!'s door,
+    // which skips such a name.
+    const names = [_][]const u8{ "2", "10", "0", "ops", "op", "ops2", "Zed", "zed", "a", "a b", "general", "\xc3\xa9t\xc3\xa9", "", "quiet", "Ops" };
     // Uids that are prefixes of each other, so a match must be whole.
     const uids = [_][]const u8{ "1", "2", "3", "10", "11", "100" };
     var none: usize = 0;
