@@ -48,7 +48,6 @@ const Fn = enum(u8) {
     valid_topic_id = 9,
     valid_channel_name = 10,
     valid_msg_ref_id = 11,
-    path_join = 12,
     first_of = 13,
     transcript_path = 14,
     decode_file = 15,
@@ -353,20 +352,16 @@ test "Paths: topic ids, channel names and message ids, every byte at every place
     try differ.none(ids.items.len * 3);
 }
 
-test "Paths: paths joined as std.fs.path.join, a transcript's path, a conversation's first topic" {
+test "Paths: a transcript's path, a conversation's first topic" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
     var differ: Differences = .{};
     var compared: usize = 0;
-    const parts = [_][]const u8{ "", "/", "a", "/a", "a/", "/a/", "a//", "//a", "chat", "../x", "b c" };
-    for (parts) |x| for (parts) |y| for (parts) |z| {
-        const zj = try std.fs.path.join(a, &.{ x, y, z });
-        const rj = (try roc1(a, .path_join, &.{ x, y, z })).?;
-        compared += 1;
-        if (!std.mem.eql(u8, zj, rj)) differ.add("join(\"{s}\", \"{s}\", \"{s}\"): zig \"{s}\", roc \"{s}\"", .{ x, y, z, zj, rj });
-    };
+    // The Roc joins no hostile parts (std.fs.path.join's twin is gone): a
+    // path's parts are a key, a uid, a topic id and literals, none empty or
+    // with a `/`; the door refuses undecodable text; roc test covers it.
     // A DM's key and a topic id: the door refuses undecodable text; roc test
     // covers it.
     for ([_][]const u8{ "1_2", "1_1", "10_100" }) |dir| for ([_][]const u8{ "general", "Plans", "road-trip-2" }) |sid| {
