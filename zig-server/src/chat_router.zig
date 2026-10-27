@@ -39,9 +39,6 @@ const recent = @import("recent.zig");
 const store = @import("chat_store.zig");
 const chat_count = @import("chat_count.zig");
 const chat_fanout = @import("chat_fanout.zig");
-const recent_feed = @import("recent_feed.zig");
-const images_store = @import("images_store.zig");
-const code_store = @import("code_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
 const chat_upload = @import("chat_upload.zig");
@@ -167,7 +164,6 @@ pub const Call = struct {
             .now = now_,
             .render = render,
             .store_message = storeMessage,
-            .message_parts = messageParts,
             .append_entry = appendEntry,
             .fanout_failed = fanoutFailed,
             .header = header,
@@ -583,27 +579,6 @@ pub const Call = struct {
     /// which the Roc counts for one member's one surface (`fanoutFailed`),
     /// never kept by `fail`. After a failure of the request (none can follow
     /// a store) each answers that failure, doing nothing.
-    /// **A MESSAGE'S PARTS, AS THE ONE MARKDOWN READER FINDS THEM**
-    /// (Host.message_parts!): recent_feed.recentExcerpt,
-    /// images_store.extractImageTags and code_store.extractCodeBlocks, as
-    /// fanoutCrossPage took them, each made or failed on its own.
-    fn messageParts(ctx: *anyopaque, md: []const u8) roc_chat.Parts {
-        const c = of(ctx);
-        if (c.failed) |e| return .{ .excerpt = .{ .failed = e }, .images = .{ .failed = e }, .code = .{ .failed = e } };
-        return .{
-            .excerpt = if (recent_feed.recentExcerpt(c.alloc, md)) |x| .{ .made = x } else |e| .{ .failed = e },
-            .images = if (images_store.extractImageTags(c.alloc, md)) |tags| .{ .made = tags } else |e| .{ .failed = e },
-            .code = if (codeBlocks(c.alloc, md)) |blocks| .{ .made = blocks } else |e| .{ .failed = e },
-        };
-    }
-
-    fn codeBlocks(alloc: Alloc, md: []const u8) ![]const roc_chat.Block {
-        const found = try code_store.extractCodeBlocks(alloc, md);
-        const out = try alloc.alloc(roc_chat.Block, found.len);
-        for (found, out) |b, *o| o.* = .{ .lang = b.lang, .body = b.body };
-        return out;
-    }
-
     /// **A FEED'S ENTRY APPENDED** (Host.append_entry!): as images_store
     /// `appendImagesEntry` and code_store `appendCodeEntry` append theirs,
     /// the entry's bytes the Roc's. The file is read only to decide whether
