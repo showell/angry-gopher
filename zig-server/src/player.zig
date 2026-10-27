@@ -223,12 +223,12 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const next = sanitizeNext((try formField(alloc, body, "next")) orelse from_query);
     const vr = try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "");
-    if (vr.err.len != 0) return renderPage(req, alloc, cur.name, next, vr.err);
+    if (vr.err.len != 0) return renderPage(req, alloc, cur.name, next.path, vr.err);
 
     if (try game_limits.admitPlayer(io, client)) |r| return game_limits.refuse(req, r);
     const id = try allocate(io, alloc, vr.name);
     var hs: std.ArrayList(std.http.Header) = .empty;
-    try hs.append(alloc, .{ .name = "location", .value = next });
+    try hs.append(alloc, .{ .name = "location", .value = next.path });
     const ck = (try cookie(io, alloc, id)) orelse
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     try hs.append(alloc, .{ .name = "set-cookie", .value = ck });
@@ -239,13 +239,13 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
 /// remembers where the visitor was headed.
 fn queryNext(alloc: Alloc, target: []const u8) ![]const u8 {
     const q = std.mem.indexOfScalar(u8, target, '?') orelse return "/";
-    return sanitizeNext((try formField(alloc, target[q + 1 ..], "next")) orelse "/");
+    return sanitizeNext((try formField(alloc, target[q + 1 ..], "next")) orelse "/").path;
 }
 
 /// sanitizeNext keeps only internal redirect targets, so ?next= is never an open
-/// redirect (`http.internalTarget`).
-fn sanitizeNext(next: []const u8) []const u8 {
-    return http.internalTarget(next);
+/// redirect (`http.Target`).
+fn sanitizeNext(next: []const u8) http.Target {
+    return .of(next);
 }
 
 /// formField is `http.formField`: one decoder for every form.
@@ -325,17 +325,17 @@ test "isSafeID accepts account and local spellings, rejects traversal" {
 }
 
 test "sanitizeNext keeps internal paths and refuses an open redirect" {
-    try testing.expectEqualStrings("/game", sanitizeNext("/game"));
-    try testing.expectEqualStrings("/", sanitizeNext("//evil.example"));
-    try testing.expectEqualStrings("/", sanitizeNext("https://evil.example"));
-    try testing.expectEqualStrings("/", sanitizeNext(""));
+    try testing.expectEqualStrings("/game", sanitizeNext("/game").path);
+    try testing.expectEqualStrings("/", sanitizeNext("//evil.example").path);
+    try testing.expectEqualStrings("/", sanitizeNext("https://evil.example").path);
+    try testing.expectEqualStrings("/", sanitizeNext("").path);
     // **WHAT A BROWSER READS AS ANOTHER HOST** (the normalization hunt,
     // 2026-10-10): a backslash after the slash is a second slash to a
     // browser, and a tab or newline inside is dropped before it looks.
     for ([_][]const u8{ "/\\evil.example", "/\\/evil.example", "/\t/evil.example", "/\n/evil.example", "/x\\y", "/\x7f/evil.example" }) |bad| {
-        try testing.expectEqualStrings("/", sanitizeNext(bad));
+        try testing.expectEqualStrings("/", sanitizeNext(bad).path);
     }
-    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3"));
+    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3").path);
 }
 
 test "formField decodes plus and percent escapes" {

@@ -63,7 +63,7 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
             if (e == error.ReadOnlyFileSystem) return e;
             return req.respond("delete failed\n", .{ .status = .internal_server_error });
         };
-        return http.redirect(req, try std.fmt.allocPrint(alloc, self_url ++ "?deleted={s}", .{id}));
+        return http.redirect(req, try http.Target.format(alloc, self_url ++ "?deleted={s}", .{id}));
     }
     const id = std.mem.trim(u8, http.queryValue(try http.target(req, alloc), "user") orelse "", " \t\r\n");
     if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);

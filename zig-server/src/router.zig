@@ -133,18 +133,6 @@ const gopher_hosting = struct {
     }
 };
 
-/// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
-/// the request target as it came, so `GET //evil.example/x` answered
-/// `location: //evil.example/x`, which a browser reads as another host, and
-/// the absolute form `GET http://evil.example/` named one outright
-/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 2). A target that is
-/// not a plain local path is sent to `/` instead.
-fn localTarget(target: []const u8) []const u8 {
-    if (target.len == 0 or target[0] != '/') return "/";
-    if (target.len > 1 and (target[1] == '/' or target[1] == '\\')) return "/";
-    return target;
-}
-
 /// **THIS APPLICATION, AS THE LIBRARY SERVES IT** (webbox's site.zig): its
 /// route table is `routed`, private, so no host calls the table without the
 /// serving around it. A malformed form is the client's mistake, a 400, on
@@ -248,7 +236,10 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     const client = try client_address.resolve(alloc, req, bus.peer);
     if (try uid_cookie.reissue(io, alloc, req, client)) |re| switch (re) {
         .cookie => |c| {
-            const location: std.http.Header = .{ .name = "location", .value = localTarget(try http.target(req, alloc)) };
+            // **BACK TO THE SAME PAGE, ON THIS SITE ONLY** (http.Target):
+            // the target as it came, `GET //evil.example/x` or
+            // `GET http://evil.example/`, named another host.
+            const location: std.http.Header = .{ .name = "location", .value = http.Target.of(try http.target(req, alloc)).path };
             const set: std.http.Header = .{ .name = "set-cookie", .value = c.set };
             const clear: std.http.Header = .{ .name = "set-cookie", .value = http.clearCookie(uid_cookie.legacy_cookie_name) };
             return req.respond("", .{ .status = .see_other, .extra_headers = if (c.clear_legacy) &.{ location, set, clear } else &.{ location, set } });
@@ -258,7 +249,7 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     // **A SESSION UNDER ITS LEGACY NAME MOVES ON ITS NEXT GET** (metal-vmm
     // QUEUE 170.8), back to the same page, the legacy one cleared.
     if (try users.sessionToMove(io, alloc, req)) |value| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
-        .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
+        .{ .name = "location", .value = http.Target.of(try http.target(req, alloc)).path },
         .{ .name = "set-cookie", .value = try login.authCookie(alloc, value) },
         .{ .name = "set-cookie", .value = http.clearCookie(users.session_cookie_legacy) },
     } });

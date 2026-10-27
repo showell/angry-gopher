@@ -26,7 +26,7 @@ const Request = std.http.Server.Request;
 /// "/apikey"). Members only; presence is marked on entry.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len == 0) return http.redirect(req, "/login/full");
+    if (uid.len == 0) return http.redirect(req, .literal("/login/full"));
     if (!try users.isMember(io, alloc, uid)) return http.notFound(req); // NEED_PASSWORD
     presence.markActiveAndBroadcast(io, alloc, bus, uid, Now.read(io));
 
@@ -38,12 +38,12 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 /// handleAPIKey generates or revokes the caller's key (POST), acting only on the
 /// resolved identity. GET falls back to the settings page.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.redirect(req, "/settings");
+    if (req.head.method != .POST) return http.redirect(req, .literal("/settings"));
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         try users.clearUserAPIKey(io, alloc, uid);
-        return http.redirect(req, "/settings?keyrevoked=1");
+        return http.redirect(req, .literal("/settings?keyrevoked=1"));
     }
     const key = try users.setUserAPIKey(io, alloc, uid);
     return renderKeyShown(req, io, alloc, uid, key, "/settings", "Settings");

@@ -32,7 +32,7 @@ pub const admin_uid = "1";
 pub fn requireAdmin(req: *Request, io: Io, alloc: Alloc) !bool {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) {
-        try http.redirect(req, "/login/full");
+        try http.redirect(req, .literal("/login/full"));
         return false;
     }
     if (!std.mem.eql(u8, uid, admin_uid)) {

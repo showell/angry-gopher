@@ -58,7 +58,7 @@ const clear_legacy_auth_cookie = users.session_cookie_legacy ++ "=; Path=/; Max-
 /// handle dispatches /login* — `sub` is the path after "/login" ("/full" for the
 /// password gate; bare "/login" is the old name-only door, now at /play).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
-    if (sub.len == 0) return http.redirect(req, "/play");
+    if (sub.len == 0) return http.redirect(req, .literal("/play"));
     if (std.mem.eql(u8, sub, "/full")) return handleLoginFull(req, io, alloc, bus);
     return http.notFound(req);
 }
@@ -223,7 +223,7 @@ fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u
 
 /// loginAsMember sets the identity cookie + signed member session for `id` and
 /// returns to `next`.
-fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []const u8) !void {
+fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: http.Target) !void {
     const signed = (try users.signSessionNow(io, alloc, id)) orelse {
         // The shared session secret is missing — unrecoverable here (prod always
         // has it). Fail loudly rather than issue an unsigned/forgeable cookie.
@@ -277,7 +277,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
         };
         return renderLogoutComplete(req, alloc);
     }
-    if (id.len == 0) return sendRedirect(req, alloc, "/", &.{});
+    if (id.len == 0) return sendRedirect(req, alloc, .literal("/"), &.{});
     return renderLogoutPage(req, alloc, if (user.id.len != 0) user.name else local.name);
 }
 
@@ -375,9 +375,9 @@ pub fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
 
 /// sendRedirect issues a 303 See Other to `location` carrying any Set-Cookie
 /// headers. Each cookie is its own header.
-fn sendRedirect(req: *Request, alloc: Alloc, location: []const u8, cookies: []const []const u8) !void {
+fn sendRedirect(req: *Request, alloc: Alloc, location: http.Target, cookies: []const []const u8) !void {
     var hs: std.ArrayList(std.http.Header) = .empty;
-    try hs.append(alloc, .{ .name = "location", .value = location });
+    try hs.append(alloc, .{ .name = "location", .value = location.path });
     for (cookies) |c| try hs.append(alloc, .{ .name = "set-cookie", .value = c });
     try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
 }
@@ -403,9 +403,9 @@ fn formValue(alloc: Alloc, target: []const u8, body: []const u8, name: []const u
 }
 
 /// sanitizeNext keeps only internal redirect targets, to avoid open redirects
-/// (`http.internalTarget`).
-fn sanitizeNext(next: []const u8) []const u8 {
-    return http.internalTarget(next);
+/// (`http.Target`).
+fn sanitizeNext(next: []const u8) http.Target {
+    return .of(next);
 }
 
 // ── HTML pages (verbatim ports of the render* funcs) ──────────────────────────
@@ -415,9 +415,9 @@ fn sanitizeNext(next: []const u8) []const u8 {
 /// display + hidden input otherwise; the password box carries a show/hide
 /// eyeball (typo guard, no confirm field). `next` rides through as a hidden
 /// field so we return where the user was headed.
-fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, next: []const u8, err_msg: []const u8) !void {
+fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, next: http.Target, err_msg: []const u8) !void {
     const en = try html.htmlEscape(alloc, name);
-    const enx = try html.htmlEscape(alloc, next);
+    const enx = try html.htmlEscape(alloc, next.path);
     var b: std.ArrayList(u8) = .empty;
 
     try b.print(alloc,

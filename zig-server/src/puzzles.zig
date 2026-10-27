@@ -59,7 +59,7 @@ const Alloc = std.mem.Allocator;
 /// `client`: the caller's address, as game.handle takes it.
 pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
     const user_id = player.Id.of((try player.current(io, alloc, req)).id) orelse {
-        try http.redirect(req, "/play?next=/puzzles");
+        try http.redirect(req, .literal("/play?next=/puzzles"));
         return;
     };
 

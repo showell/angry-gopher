@@ -94,7 +94,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // password) or a stranger is sent to set a password and returned here —
     // guests may play the game, but chat requires membership.
     if (!try users.principalAuthorized(io, alloc, uid)) {
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/chat{s}", .{sub}));
+        return http.redirect(req, try http.Target.format(alloc, "/login/full?next=/chat{s}", .{sub}));
     }
 
     // Presence: any authorized page/action counts as activity — but NOT the SSE
@@ -178,7 +178,7 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     const uid = try users.currentUserID(io, alloc, req);
     // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
     if (!try users.principalAuthorized(io, alloc, uid)) {
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/channel{s}", .{sub}));
+        return http.redirect(req, try http.Target.format(alloc, "/login/full?next=/channel{s}", .{sub}));
     }
     if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
 
@@ -210,7 +210,7 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
             const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
             return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
         }
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
+        return http.redirect(req, try http.Target.format(alloc, "{s}/{s}", .{ conv.base, def }));
     };
     // /channel/<name>/new — create a topic ("new" is reserved).
     if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
@@ -253,7 +253,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
             const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
             return page.noTopicsPage(req, io, alloc, uid, conv.base, title);
         }
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
+        return http.redirect(req, try http.Target.format(alloc, "{s}/{s}", .{ conv.base, def }));
     };
     // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
     if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid, now);
@@ -402,7 +402,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     if (conv.persistsCursor()) try chat_state.setLastViewedTopic(io, alloc, uid, conv.key, topic.sid);
     // Where a plain form post goes back to, made before the store (177.1):
     // made after, an allocation that failed was a 500 for a stored message.
-    const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
+    const back = try http.Target.format(alloc, "{s}/{s}", .{ conv.base, topic.sid });
     _ = try store.appendMessage(io, alloc, bus, now, conv.meta, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }, .{ .name = from_name, .id = uid }, md, cid);
     return sendDone(req, is_async, back);
 }
@@ -420,7 +420,7 @@ fn pinTopic(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 /// 303 back to the topic page (the no-JS form-post fallback).
 /// The answer to a stored send: allocates nothing, so a send stored is never
 /// answered 500 for memory (177.1).
-fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
+fn sendDone(req: *Request, is_async: bool, back: http.Target) !void {
     if (is_async) return req.respond("", .{ .status = .no_content });
     return http.redirect(req, back);
 }
@@ -512,10 +512,10 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now: Now) !
     // start the first, where it went to today's date as a topic: a send makes
     // one there, but a page of a topic not there is a 404 (156(j)'s review).
     if ((try chat_paths.firstTopic(io, alloc, try chat_paths.dmConvDir(alloc, conv))).len == 0) {
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}));
+        return http.redirect(req, try http.Target.format(alloc, "/chat/c/{s}", .{conv}));
     }
     const sid = try chat_state.resumeTopic(io, alloc, uid, conv, now);
-    return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
+    return http.redirect(req, try http.Target.format(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
 }
 
 /// chatConversations serves GET /chat/conversations: the (partner × topic)
@@ -564,13 +564,13 @@ fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []con
         const conv = try chat_paths.chatPairKey(alloc, uid, partner.id);
         const dir = try chat_paths.dmConvDir(alloc, conv);
         if (try convHasTopic(io, alloc, dir, sid)) {
-            return redirectFound(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
+            return redirectFound(req, try http.Target.format(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
         }
     }
     for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
         const dir = try chat_paths.channelConvDir(alloc, name);
         if (try convHasTopic(io, alloc, dir, sid)) {
-            return redirectFound(req, try std.fmt.allocPrint(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
+            return redirectFound(req, try http.Target.format(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
         }
     }
     return http.notFound(req);
@@ -586,10 +586,10 @@ fn convHasTopic(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool {
 
 /// redirectFound issues a 302 to `location` — the msg-ref
 /// lookup uses 302 (a transient lookup-then-go), not the 303 the others use.
-fn redirectFound(req: *Request, location: []const u8) !void {
+fn redirectFound(req: *Request, location: http.Target) !void {
     return req.respond("", .{
         .status = .found,
-        .extra_headers = &.{.{ .name = "location", .value = location }},
+        .extra_headers = &.{.{ .name = "location", .value = location.path }},
     });
 }
 
