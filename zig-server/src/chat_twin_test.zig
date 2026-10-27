@@ -782,9 +782,10 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
             2 => std.math.maxInt(u64),
             else => r.int(u64),
         };
-        // The stamp as the Roc makes it (Time's twin holds it to timefmt).
-        const at = if (i % 3 == 0) pick(r, strings) else try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]);
-        const uid = pick(r, strings);
+        // The stamp as the Roc makes it (Time's twin holds it to timefmt),
+        // and the reactor a canonical uid: the Roc's line takes a Uid.
+        const at = try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]);
+        const uid = pick(r, &.{ "1", "3", "10", "12", "4294967296" });
         const from = pick(r, strings);
         const emoji = pick(r, strings);
         const on = r.boolean();
