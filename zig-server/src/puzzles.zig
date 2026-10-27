@@ -114,8 +114,8 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: pl
 fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, session_id: i64, puzzle_idx: i32) !void {
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
     // The meta of the session this move makes, if it is the one offered.
-    const new_meta: ?[]const u8 = if (try storage.puzzleSessionExists(io, alloc, user_id.text, session_id)) null else blk: {
-        if (session_id != try storage.nextPuzzleSessionID(io, alloc, user_id.text)) return http.notFound(req);
+    const new_meta: ?[]const u8 = if (try storage.puzzleSessionExists(io, alloc, user_id, session_id)) null else blk: {
+        if (session_id != try storage.nextPuzzleSessionID(io, alloc, user_id)) return http.notFound(req);
         break :blk try metaDsl(io, alloc);
     };
     switch (try storage.appendPuzzleMove(io, alloc, .{ .id = user_id, .client = client }, session_id, puzzle_idx, body, new_meta)) {
@@ -143,7 +143,7 @@ fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id)
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);
 
-    const session_id = try storage.nextPuzzleSessionID(io, alloc, user_id.text);
+    const session_id = try storage.nextPuzzleSessionID(io, alloc, user_id);
 
     // Flag is one DSL string — `session_id:` scalar then a `catalog:` block.
     // Elm's Lib.PuzzleFlagDsl parses it whole.

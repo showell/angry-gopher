@@ -44,46 +44,46 @@ fn join(alloc: Alloc, parts: []const []const u8) ![]u8 {
 }
 
 /// userRoot is {data_root}/{userID} — a player's whole subtree.
-fn userRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
-    return join(alloc, &.{ data_root, user_id });
+fn userRoot(alloc: Alloc, user_id: player.Id) ![]u8 {
+    return join(alloc, &.{ data_root, user_id.text });
 }
 
 /// userDataDir is the public form of userRoot — a player's whole game-data
 /// subtree ({data_root}/{userID}), which the admin overview walks for stats.
 pub fn userDataDir(alloc: Alloc, id: player.Id) ![]u8 {
-    return userRoot(alloc, id.text);
+    return userRoot(alloc, id);
 }
 
 /// deleteUserData removes a player's entire game-data subtree.
 /// The id is a checked one (`player.Id`). Absent is OK; a removal that failed is an error, and
 /// the caller's to answer (metal-vmm QUEUE 129: both callers said "deleted").
 pub fn deleteUserData(io: Io, alloc: Alloc, id: player.Id) !void {
-    const root = try userRoot(alloc, id.text);
+    const root = try userRoot(alloc, id);
     // What they held is forgotten whatever the removal did: the next write
     // measures the folder afresh.
     defer game_limits.forget(id.text);
     try store.removeTree(io, alloc, root);
 }
 
-fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
-    return join(alloc, &.{ data_root, user_id, "puzzle" });
+fn puzzleRoot(alloc: Alloc, user_id: player.Id) ![]u8 {
+    return join(alloc, &.{ data_root, user_id.text, "puzzle" });
 }
 
 /// lynrummyElmRoot is the full-game namespace for a player.
-fn lynrummyElmRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
-    return join(alloc, &.{ data_root, user_id, "lynrummy-elm" });
+fn lynrummyElmRoot(alloc: Alloc, user_id: player.Id) ![]u8 {
+    return join(alloc, &.{ data_root, user_id.text, "lynrummy-elm" });
 }
 
-fn nextPuzzleIDPath(alloc: Alloc, user_id: []const u8) ![]u8 {
-    return join(alloc, &.{ data_root, user_id, "next-puzzle-id.txt" });
+fn nextPuzzleIDPath(alloc: Alloc, user_id: player.Id) ![]u8 {
+    return join(alloc, &.{ data_root, user_id.text, "next-puzzle-id.txt" });
 }
 
-fn nextSessionIDPath(alloc: Alloc, user_id: []const u8) ![]u8 {
-    return join(alloc, &.{ data_root, user_id, "next-session-id.txt" });
+fn nextSessionIDPath(alloc: Alloc, user_id: player.Id) ![]u8 {
+    return join(alloc, &.{ data_root, user_id.text, "next-session-id.txt" });
 }
 
 /// puzzleSessionDir is {puzzleRoot}/sessions/<id>.
-pub fn puzzleSessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
+pub fn puzzleSessionDir(alloc: Alloc, user_id: player.Id, session_id: i64) ![]u8 {
     const root = try puzzleRoot(alloc, user_id);
     const id_str = try std.fmt.allocPrint(alloc, "{d}", .{session_id});
     return join(alloc, &.{ root, "sessions", id_str });
@@ -91,13 +91,13 @@ pub fn puzzleSessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u
 
 /// allocatePuzzleSessionID returns the next sequential puzzle session id (1-based)
 /// for a player, persisted in their next-puzzle-id.txt.
-pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
+pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: player.Id) !i64 {
     return counter.next(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
 /// The puzzle session id a page offers: the one its first move will make.
 /// Nothing is written (zig-metal-unikernel QUEUE item 52: no write on a GET).
-pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
+pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: player.Id) !i64 {
     return counter.peek(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
@@ -107,7 +107,7 @@ pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
 /// there, and is it the one offered" and the making of it are one step
 /// because one handler runs at a time (no lock: HOST.md's turn), so two
 /// first moves make one session, not two.
-fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, meta: []const u8) !bool {
+fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64, meta: []const u8) !bool {
     if (try puzzleSessionExists(io, alloc, user_id, session_id)) return true;
     if (session_id != try nextPuzzleSessionID(io, alloc, user_id)) return false;
     const got = try allocatePuzzleSessionID(io, alloc, user_id);
@@ -118,14 +118,14 @@ fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i6
 
 /// writePuzzleSessionFile writes body to <session-dir>/<rel>, creating parent
 /// dirs. Last-write-wins (used for meta).
-fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
+fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
     try store.write(io, alloc, full, body, .{});
 }
 
 /// puzzleSessionExists reports whether a session directory is on disk.
-pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
+pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !bool {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
@@ -183,13 +183,13 @@ pub fn appendPuzzleMove(io: Io, alloc: Alloc, payer: Payer, session_id: i64, puz
     const line = try lineOf(alloc, .actions, body);
     if (new_meta) |meta| {
         if (try game_limits.admit(io, alloc, payer.id, payer.client, true, meta.len + line.len)) |r| return .{ .refused = r };
-        if (!try ensurePuzzleSession(io, alloc, payer.id.text, session_id, meta)) {
+        if (!try ensurePuzzleSession(io, alloc, payer.id, session_id, meta)) {
             try game_limits.giveBack(io, alloc, payer.id, payer.client, true, meta.len + line.len);
             return .not_offered;
         }
     } else if (try game_limits.admit(io, alloc, payer.id, payer.client, false, line.len)) |r| return .{ .refused = r };
     const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
-    try appendLine(io, alloc, try join(alloc, &.{ try puzzleSessionDir(alloc, payer.id.text, session_id), rel }), line);
+    try appendLine(io, alloc, try join(alloc, &.{ try puzzleSessionDir(alloc, payer.id, session_id), rel }), line);
     return .done;
 }
 
@@ -209,12 +209,12 @@ fn appendLine(io: Io, alloc: Alloc, path: []const u8, line: []const u8) !void {
 /// allocateSessionID returns the next sequential full-game session id (1-based)
 /// for a player, persisted in their next-session-id.txt.
 pub fn allocateSessionID(io: Io, alloc: Alloc, id: player.Id) !i64 {
-    return counter.next(io, alloc, try nextSessionIDPath(alloc, id.text));
+    return counter.next(io, alloc, try nextSessionIDPath(alloc, id));
 }
 
 /// sessionDir is {lynrummyElmRoot}/sessions/<id>.
 pub fn sessionDir(alloc: Alloc, id: player.Id, session_id: i64) ![]u8 {
-    const root = try lynrummyElmRoot(alloc, id.text);
+    const root = try lynrummyElmRoot(alloc, id);
     const id_str = try std.fmt.allocPrint(alloc, "{d}", .{session_id});
     return join(alloc, &.{ root, "sessions", id_str });
 }
@@ -249,7 +249,7 @@ pub fn sessionExists(io: Io, alloc: Alloc, id: player.Id, session_id: i64) !bool
 /// listSessionIDs returns every full-game session-id directory for a player,
 /// sorted ascending.
 pub fn listSessionIDs(io: Io, alloc: Alloc, id: player.Id) ![]i64 {
-    const root = try lynrummyElmRoot(alloc, id.text);
+    const root = try lynrummyElmRoot(alloc, id);
     const sessions = try join(alloc, &.{ root, "sessions" });
 
     const entries = try store.list(io, alloc, sessions);
@@ -439,7 +439,7 @@ test "fs: a session made counts one against its player; its lines, and a puzzle'
     try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
     for (0..3) |_| try std.testing.expect(try appendGameLine(io, a, payer, made.id, .actions, "a line") == null);
     try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
-    const offered = try nextPuzzleSessionID(io, a, "p1");
+    const offered = try nextPuzzleSessionID(io, a, test_p1);
     try std.testing.expect(try appendPuzzleMove(io, a, payer, offered, 0, "first", "puzzle meta") == .done);
     try std.testing.expectEqual(@as(?u32, 2), game_limits.countedSessions("p1"));
     try std.testing.expect(try appendPuzzleMove(io, a, payer, offered, 0, "second", null) == .done);
