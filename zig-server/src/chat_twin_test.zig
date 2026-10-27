@@ -779,6 +779,9 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
     const a = arena.allocator();
     var differ: Differences = .{};
     const strings = try byteStrings(a);
+    // The reactor's name and the emoji are text: the Roc's line takes them
+    // decoded (a name at accounts!'s door, an emoji at the form's).
+    const texts = try utf8Only(a, strings);
     var rng = std.Random.DefaultPrng.init(0x4eac71);
     const r = rng.random();
     const pick = struct {
@@ -799,9 +802,8 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
         // and the reactor a canonical uid: the Roc's line takes a Uid.
         const at = try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]);
         const uid = pick(r, &.{ "1", "3", "10", "12", "4294967296" });
-        // The reactor's name is text: the Roc's line takes it decoded.
-        const from = pick(r, try utf8Only(a, strings));
-        const emoji = pick(r, strings);
+        const from = pick(r, texts);
+        const emoji = pick(r, texts);
         const on = r.boolean();
         const z = try chat_store.reactionLine(a, msg, uid, from, emoji, on, at);
         const got = (try roc1(a, .reaction_line, &.{ try std.fmt.allocPrint(a, "{d}", .{msg}), uid, from, emoji, if (on) "1" else "0", at })).?;
