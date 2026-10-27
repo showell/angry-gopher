@@ -81,7 +81,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
             }
             if ((r.family == .dm or r.family == .channel) and r.part == .topic and (r.tail == .send or r.tail == .invalid_send)) {
                 var f = (try chat.findConv(io, alloc, call.uid, r.family, r.key)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
-                f.sid = r.sid;
+                f.sid = r.topic;
                 f.title = try chat.convTitle(io, alloc, call.uid, f);
                 if (r.tail == .invalid_send) return http.notFound(req);
                 return sendMessage(req, io, alloc, bus, try f.topic(alloc), call.uid, now);
@@ -115,7 +115,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
                 .raw => {
                     const t = (try chat.findTopic(io, alloc, call.uid, r)) orelse return chat.serve(req, io, alloc, bus, call.uid, r, now);
                     if (req.head.method != .GET and req.head.method != .HEAD) return http.methodNotAllowed(req, .GET);
-                    return rawTranscript(req, io, alloc, t.dir, r.sid);
+                    return rawTranscript(req, io, alloc, t.dir, r.topic);
                 },
                 else => {},
             };

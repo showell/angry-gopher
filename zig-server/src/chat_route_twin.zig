@@ -59,7 +59,7 @@ fn conversation(family: roc_chat.Family, path: []const u8) Route {
     const sid = segs.next() orelse return .{ .family = family, .key = key };
     if (std.mem.eql(u8, sid, "new")) return .{ .family = family, .key = key, .part = .new };
     if (!chat_paths.validTopicID(sid)) return .{ .family = family, .key = key, .part = .invalid };
-    var r: Route = .{ .family = family, .key = key, .sid = sid, .part = .topic };
+    var r: Route = .{ .family = family, .key = key, .topic = sid, .part = .topic };
     var peek = segs;
     const is_send = if (peek.next()) |t| std.mem.eql(u8, t, "send") else false;
     const tail = segs.next() orelse return r;

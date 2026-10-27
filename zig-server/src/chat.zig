@@ -185,9 +185,9 @@ pub fn convTitle(io: Io, alloc: Alloc, uid: []const u8, f: Found) ![]const u8 {
 pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?Found {
     std.debug.assert(route.part == .topic);
     var f = (try findConv(io, alloc, uid, route.family, route.key)) orelse return null;
-    f.sid = route.sid;
-    f.title = try topicTitle(alloc, try convTitle(io, alloc, uid, f), route.sid);
-    if (!try topicExists(io, alloc, f.dir, route.sid)) return null;
+    f.sid = route.topic;
+    f.title = try topicTitle(alloc, try convTitle(io, alloc, uid, f), route.topic);
+    if (!try topicExists(io, alloc, f.dir, route.topic)) return null;
     return f;
 }
 
@@ -270,8 +270,8 @@ fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8,
         .new => std.debug.panic("chat: a new topic is the Roc's, and its conversation was here", .{}),
         .invalid => return http.notFound(req),
         .topic => {
-            const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, route.sid });
-            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title });
+            const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, route.topic });
+            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.topic, .title = title });
         },
     }
 }
@@ -305,8 +305,8 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .invalid => return http.notFound(req),
         .topic => {
             const partner = try partnerName(io, alloc, conv.key, uid);
-            const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, route.sid });
-            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.sid, .title = title });
+            const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, route.topic });
+            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.topic, .title = title });
         },
     }
 }
