@@ -367,7 +367,9 @@ test "Paths: paths joined as std.fs.path.join, a transcript's path, a conversati
         compared += 1;
         if (!std.mem.eql(u8, zj, rj)) differ.add("join(\"{s}\", \"{s}\", \"{s}\"): zig \"{s}\", roc \"{s}\"", .{ x, y, z, zj, rj });
     };
-    for (parts) |dir| for ([_][]const u8{ "general", "", "a/b" }) |sid| {
+    // A DM's key and a topic id: the door refuses undecodable text; roc test
+    // covers it.
+    for ([_][]const u8{ "1_2", "1_1", "10_100" }) |dir| for ([_][]const u8{ "general", "Plans", "road-trip-2" }) |sid| {
         const zp = try chat_paths.transcriptPath(a, dir, sid);
         const rp = (try roc1(a, .transcript_path, &.{ dir, sid })).?;
         compared += 1;
@@ -2021,6 +2023,8 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
     // no `_`, one at the start, several.
     const keys = [_][]const u8{ "1_2", "1_1", "ops", "general", "a_b_c", "_x", "", "caf\xc3\xa9", "\xff", "q\"\\/" };
     const ids = [_][]const u8{ "Plans_1", "Plans_12", "_1", "x", "", "a_b_3", "general2_7", "q\"_\\1", "\xff_2" };
+    const convs = [_][]const u8{ "1_2", "1_1", "10_100", "ops", "general", "a-1-" };
+    const topics = [_][]const u8{ "Plans", "ChitChat", "road-trip-2", "9", "2026-10-25" };
     var tags_seen: usize = 0;
     var blocks_seen: usize = 0;
     for (0..3000) |i| {
@@ -2037,15 +2041,19 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         // The five keys, and the URLs: convKeyBaseURL, the topic's page,
         // imagesSourceURL of the message.
         try sameEach(a, "keys", &.{uid}, &.{ try chat_fanout.notifyBusKey(a, uid), try chat_fanout.sidebarBusKey(a, uid), try chat_fanout.recentBusKey(a, uid), try chat_fanout.imagesBusKey(a, uid), try chat_fanout.codeBusKey(a, uid) }, try roc(a, .fanout_keys, &.{uid}), &differ);
+        // The URLs, notify (a DM's text and a channel's) and topic-added take
+        // a conversation's key and a topic id: the door refuses undecodable
+        // text; roc test covers it.
+        const conv = pick(r, &convs);
+        const topic = pick(r, &topics);
+        const conv_base = try chat_fanout.convKeyBaseURL(a, conv);
+        const url = try std.fmt.allocPrint(a, "{s}/{s}", .{ conv_base, topic });
+        try sameEach(a, "urls", &.{ conv, topic, id }, &.{ conv_base, url, try images_store.imagesSourceURL(a, conv_base, id) }, try roc(a, .fanout_urls, &.{ conv, topic, id }), &differ);
         const base = try chat_fanout.convKeyBaseURL(a, key);
-        const url = try std.fmt.allocPrint(a, "{s}/{s}", .{ base, sid });
-        try sameEach(a, "urls", &.{ key, sid, id }, &.{ base, url, try images_store.imagesSourceURL(a, base, id) }, try roc(a, .fanout_urls, &.{ key, sid, id }), &differ);
-
-        // Notify (a DM's text and a channel's) and topic-added.
-        const kind: chat_store.ConvKind = if (r.boolean()) .dm else .channel;
-        const text = try chat_fanout.notifyText(a, kind, from, key, sid);
-        try sameEach(a, "notify", &.{ key, sid, from }, &.{try chat_fanout.notifyEvent(a, key, sid, text, url)}, try roc(a, .notify_event, &.{ if (kind == .dm) "d" else "c", from, key, sid }), &differ);
-        try sameEach(a, "topic-added", &.{ key, sid }, &.{try chat_fanout.topicAddedEvent(a, key, sid, url)}, try roc(a, .topic_added, &.{ key, sid }), &differ);
+        const kind: chat_store.ConvKind = if (std.mem.indexOfScalar(u8, conv, '_') != null) .dm else .channel;
+        const text = try chat_fanout.notifyText(a, kind, from, conv, topic);
+        try sameEach(a, "notify", &.{ conv, topic, from }, &.{try chat_fanout.notifyEvent(a, conv, topic, text, url)}, try roc(a, .notify_event, &.{ from, conv, topic }), &differ);
+        try sameEach(a, "topic-added", &.{ conv, topic }, &.{try chat_fanout.topicAddedEvent(a, conv, topic, url)}, try roc(a, .topic_added, &.{ conv, topic }), &differ);
 
         // The Recent row: every field empty now and then (each left out).
         const maybe = struct {
