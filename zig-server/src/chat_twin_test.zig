@@ -1453,6 +1453,9 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         compared += 1;
         if (!std.mem.eql(u8, z, got)) differ.add("dmTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(n), std.zig.fmtString(id), std.zig.fmtString(z), std.zig.fmtString(got) });
         for (names) |sid| {
+            // A topic is text in the Roc (a TopicAt's Str): one that is not
+            // UTF-8 never reaches topicTitle, so it is no case.
+            if (!std.unicode.utf8ValidateSlice(sid)) continue;
             const zt = try chat.topicTitle(a, z, sid);
             const rt = (try roc1(a, .topic_title, &.{ z, sid })).?;
             compared += 1;
