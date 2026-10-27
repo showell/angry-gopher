@@ -811,7 +811,7 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
     var differ: Differences = .{};
     const strings = try byteStrings(a);
     // The reactor's name and the emoji are text: the Roc's line takes them
-    // decoded (a name at accounts!'s door, an emoji at the form's).
+    // decoded (a name at list_accounts!'s door, an emoji at the form's).
     const texts = try utf8Only(a, strings);
     var rng = std.Random.DefaultPrng.init(0x4eac71);
     const r = rng.random();
@@ -1501,7 +1501,7 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     var compared: usize = 0;
     // Names as an account may hold them, and as it must not: markup, quotes,
     // a script's end, a newline, nothing. Text only: a name is decoded at
-    // accounts!'s door.
+    // list_accounts!'s door.
     const names = [_][]const u8{ "", "Debbie", "<b>x</b>", "</script><script>alert(1)</script>", "a\"b'c&d", "line\nbreak", "  ", "Chat w/", ": ", "\u{1F44D}", "#" };
     // The partner is a canonical uid: the door refuses undecodable text;
     // roc test covers it.
@@ -1879,7 +1879,7 @@ test "Paths: a conversation's topics folder, a channel's member file and a topic
 }
 
 // ── who has an account: the Roc's lookups (chat/Accounts.roc) over what
-// Host.accounts! hands it, against users.zig ────────────────────────────────
+// Host.list_accounts! hands it, against users.zig ────────────────────────────────
 
 /// The accounts as the host hands them to the Roc (chat_router `accounts`:
 /// users.listAccounts), `id, kind, name_read, name` each: the kind `a`,

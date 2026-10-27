@@ -56,7 +56,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     // A static script before the gate, asking nobody.
     const first = try chat_route_twin.decide(alloc, sub, channel, true);
     if (first == .serve and first.serve.route.family == .asset) return chat.serve(req, io, alloc, bus, "", first.serve.route, now);
-    const member = chat_router.Call.member(&call);
+    const member = chat_router.Call.checkMember(&call) == .member;
     if (call.failed) |e| return e;
     const decision = try chat_route_twin.decide(alloc, sub, channel, member);
     switch (decision) {

@@ -104,7 +104,7 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .recent => return recent.handle(req, alloc, bus, uid, route.rest),
         .images => return images.handle(req, alloc, bus, uid, route.rest),
         .code => return code.handle(req, alloc, bus, uid, route.rest),
-        // /chat/links: the Roc's (roc-webbox chat/main.roc `links!`).
+        // /chat/links: the Roc's (roc-webbox chat/main.roc `serve_rendered!`).
         .links => std.debug.panic("chat.serve: /chat/links is the Roc's", .{}),
         // /chat/search/words, /chat/search/messages (chat_search.zig), JSON.
         .search => return chat_search.handle(req, io, alloc, uid, route.rest, now),

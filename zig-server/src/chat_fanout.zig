@@ -5,7 +5,7 @@
 //!
 //! **A SECOND IMPLEMENTATION, FOR NOW** (roc-webbox docs/ROC-CHAT.md C8b): a
 //! send through the Roc router fans out by the Roc's (chat/Fanout.roc), its
-//! parts the Roc's own, over the host's `append_entry!` and `fanout_failed!`
+//! parts the Roc's own, over the host's `append_entry!` and `report_fanout_failure!`
 //! (chat_router.zig). `fanoutCrossPage` stays for the Zig's own writers,
 //! `appendMessage` (login's welcome DM, docs' post to chat), until they move
 //! (C9-C10), and as the twins' oracle: chat_twin_test.zig holds each encoder

@@ -446,7 +446,7 @@ fn drained(a: Alloc, hub: *webbox.bus.Hub, keys: []const []const u8, subs: []con
 /// Names a reaction's line must escape: a quote, a backslash, control
 /// bytes, DEL, `/`, non-ASCII, two and three bytes a character; one cut of
 /// its CR LF as it is read. Text only: a name is UTF-8 when it is set
-/// (validateUserName), and the Roc's accounts! door fails a request on one
+/// (validateUserName), and the Roc's list_accounts! door fails a request on one
 /// that is not.
 const hard_names = [_][]const u8{ "Q\"uote\\back\x01ctl\x1f\ttab/sl\x7f caf\u{e9} \u{1F44D}", "Zo\u{eb} \u{2603}", "Ann\r\n" };
 
@@ -1054,7 +1054,7 @@ fn after(page: []const u8, from: usize, want: []const u8) !usize {
     return i + want.len;
 }
 
-test "a conversation's page (its viewer, sidebar and limits the Roc's, over accounts!, online!, the channels, the pins file, the topics and limits!) is the old Zig's, byte for byte, a DM's and a channel's" {
+test "a conversation's page (its viewer, sidebar and limits the Roc's, over list_accounts!, check_online!, the channels, the pins file, the topics and limits!) is the old Zig's, byte for byte, a DM's and a channel's" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -1105,7 +1105,7 @@ test "a conversation's page (its viewer, sidebar and limits the Roc's, over acco
     _ = try after(roc.answers[3], 0, "\"pinned_sessions\":[{\"id\":\"Later\",\"label\":\"Later\",\"url\":\"/channel/ops/Later\",\"active\":false}],\"topics\":[{\"id\":\"Standup\"");
 }
 
-test "Host.online! is presence.isOnline at the request's time: generated last-seen times at the window's edge (online before 5:00, offline at and after it), and never seen offline" {
+test "Host.check_online! is presence.isOnline at the request's time: generated last-seen times at the window's edge (online before 5:00, offline at and after it), and never seen offline" {
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const presence = @import("presence.zig");

@@ -140,7 +140,7 @@ pub const AccountName = union(enum) { found: []const u8, unreadable: anyerror };
 pub const Account = struct { id: []const u8, kind: AccountKind, name: AccountName };
 
 /// **EVERY ACCOUNT, FOR THE CHAT'S ROC, AND NOTHING SECRET** (roc-webbox
-/// Host.accounts!): each canonical account folder under auth_root, in the
+/// Host.list_accounts!): each canonical account folder under auth_root, in the
 /// disk's order, its kind and its name file. Two reads an account: whether
 /// it has a password (a stat, made for the agent too, as listAuthorized
 /// makes it) and its name; never a password's or a key's bytes.

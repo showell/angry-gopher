@@ -2,7 +2,7 @@
 //! the signed-in user's chat topics (DMs + channels) and personal docs. This
 //! is its reads (`gatherRows`: the convs the viewer is in, each topic's last
 //! message, a file's time where there is no date, their docs) and its
-//! stream; the page is the Roc's (roc-webbox chat/main.roc `recent!`), which
+//! stream; the page is the Roc's (roc-webbox chat/main.roc `gather_recent!`), which
 //! ships the rows newest-first as inline JSON (the same recentEvent shape the
 //! live stream pushes, so recent.js uses one row builder for both paint and
 //! upsert).
@@ -38,7 +38,7 @@ const Request = std.http.Server.Request;
 /// the viewer; a doc's `uid` is the viewer's own. `key` is a chat row's URL
 /// or a doc's slug, `label` its "to <name>"/"in <channel>" or the doc's
 /// title. The Roc builds the page from these (roc-webbox chat/main.roc
-/// `recent!`, chat/Recent.roc): the "You", the excerpt, the order, the JSON.
+/// `gather_recent!`, chat/Recent.roc): the "You", the excerpt, the order, the JSON.
 pub const Row = struct {
     doc: bool = false,
     secs: i64,

@@ -904,7 +904,7 @@ test "route: a topics folder that is not there is no topics; one that is a file 
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(roc.out));
 }
 
-test "route: an account whose name or password will not read fails exactly the routes whose old Zig read it, with its error, byte for byte (Host.accounts! lists it as unreadable, Host.fail! fails on it); every other route answers as the old Zig did; never a name of \"\" or no such account" {
+test "route: an account whose name or password will not read fails exactly the routes whose old Zig read it, with its error, byte for byte (Host.list_accounts! lists it as unreadable, Host.fail! fails on it); every other route answers as the old Zig did; never a name of \"\" or no such account" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();

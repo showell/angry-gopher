@@ -184,7 +184,7 @@ pub var malformed_last: []const u8 = "";
 
 /// Channel `name` counted as one a listing skipped as malformed: the count,
 /// and the last one's name (its first 64 bytes). The Roc's listing asks it
-/// too (roc-webbox Host.malformed_channel!).
+/// too (roc-webbox Host.count_malformed_channel!).
 pub fn countMalformed(name: []const u8) void {
     malformed_channels += 1;
     const n = @min(name.len, malformed_last_buf.len);

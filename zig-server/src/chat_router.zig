@@ -6,7 +6,7 @@
 //! The prelude is the Roc's: a static script is served to anyone; anyone
 //! else must be a member or the agent, or is sent to sign in; and anything
 //! but a stream counts as presence. Who is asking stays here: the Roc asks
-//! (`Host.member!`), after the static scripts, so a script's request does no
+//! (`Host.check_member!`), after the static scripts, so a script's request does no
 //! identity reads, as before.
 //!
 //! **A TOPIC'S REACTIONS, REACT, PIN AND UNPIN ARE THE ROC'S** (C4): it
@@ -129,7 +129,7 @@ pub const Call = struct {
     now: Now,
     uid: []const u8 = "",
     asked: bool = false,
-    /// The bytes a `held` answer carries (Host.raw!, Host.links!), read or
+    /// The bytes a `held` answer carries (Host.serve_file!, Host.serve_rendered!), read or
     /// rendered here and never copied into the Roc and out.
     held: []const u8 = "",
     failed: ?anyerror = null,
@@ -140,14 +140,14 @@ pub const Call = struct {
     pub fn host(c: *Call) roc_chat.Host {
         return .{
             .ctx = c,
-            .member = member,
-            .presence = presence_,
-            .accounts = accounts,
+            .check_member = checkMember,
+            .count_presence = presence_,
+            .list_accounts = accounts,
             .fail_account = failAccount,
-            .body = body,
-            .raw = raw,
-            .links = links,
-            .recent = recentRows,
+            .read_body = body,
+            .serve_file = serveFile,
+            .serve_rendered = serveRendered,
+            .gather_recent = recentRows,
             .publish = publish,
             .append_line = appendLine,
             .message_count = messageCount,
@@ -157,8 +157,8 @@ pub const Call = struct {
             .list = list,
             .fail = refuse,
             .fail_text = failText,
-            .malformed_channel = malformedChannel,
-            .online = online,
+            .count_malformed_channel = malformedChannel,
+            .check_online = online,
             .limits = limits_,
             .srcs = srcs,
             .me = me,
@@ -166,9 +166,9 @@ pub const Call = struct {
             .render = render,
             .store_message = storeMessage,
             .append_entry = appendEntry,
-            .fanout_failed = fanoutFailed,
-            .header = header,
-            .hostile = hostile,
+            .report_fanout_failure = fanoutFailed,
+            .read_header = header,
+            .check_hostile = hostile,
         };
     }
 
@@ -187,13 +187,13 @@ pub const Call = struct {
         return c.failed != null;
     }
 
-    pub fn member(ctx: *anyopaque) bool {
+    pub fn checkMember(ctx: *anyopaque) roc_chat.Membership {
         const c = of(ctx);
         c.asked = true;
         // absent-ok: not read as absence: `fail` keeps the error, and handle returns it once the Roc call ends (a C call cannot carry it).
         c.uid = users.currentUserID(c.io, c.alloc, c.req) catch |e| {
             c.fail(e);
-            return false;
+            return .outsider;
         };
         // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images,
         // code, the conversations API) is members + agents only. A guest
@@ -201,10 +201,11 @@ pub const Call = struct {
         // returned here: guests may play the game, but chat requires
         // membership.
         // absent-ok: the same: the error is kept and returned, never read as "not a member".
-        return users.principalAuthorized(c.io, c.alloc, c.uid) catch |e| {
+        const authorized = users.principalAuthorized(c.io, c.alloc, c.uid) catch |e| {
             c.fail(e);
-            return false;
+            return .outsider;
         };
+        return if (authorized) .member else .outsider;
     }
 
     fn presence_(ctx: *anyopaque) void {
@@ -213,7 +214,7 @@ pub const Call = struct {
         presence.markActiveAndBroadcast(c.io, c.alloc, c.bus, c.uid, c.now);
     }
 
-    /// **EVERY ACCOUNT, THE ROC'S ONE IDENTITY READ** (Host.accounts!):
+    /// **EVERY ACCOUNT, THE ROC'S ONE IDENTITY READ** (Host.list_accounts!):
     /// users.listAccounts, which reads each canonical folder's password
     /// stat and name and nothing else of the auth root; the agent's kind is
     /// its. The Roc does every lookup (exists, a name, the roster) and asks
@@ -294,9 +295,15 @@ pub const Call = struct {
     }
 
     /// `fail`, answering the Roc "not done".
-    fn no(c: *Call, e: anyerror) bool {
+    fn no(c: *Call, e: anyerror) roc_chat.Done {
         c.fail(e);
-        return false;
+        return .failed;
+    }
+
+    /// `fail`, answering the Roc `NotServing`.
+    fn notServing(c: *Call, e: anyerror) roc_chat.Serving {
+        c.fail(e);
+        return .not_serving;
     }
 
     fn body(ctx: *anyopaque, which: roc_chat.Form) ?[]const u8 {
@@ -314,29 +321,29 @@ pub const Call = struct {
         };
     }
 
-    /// The file at `path` under the chat root (Host.raw!: a topic's
+    /// The file at `path` under the chat root (Host.serve_file!: a topic's
     /// transcript, its name the Roc's; the seam has checked it), its bytes
-    /// held for the answer: whether there is one.
-    fn raw(ctx: *anyopaque, path: []const u8) bool {
+    /// held for the answer: `.serving` when there is one.
+    fn serveFile(ctx: *anyopaque, path: []const u8) roc_chat.Serving {
         const c = of(ctx);
-        if (c.dead()) return false;
+        if (c.dead()) return .not_serving;
         // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is none.
-        c.held = (c.heldFile(path) catch |e| return c.no(e)) orelse return false;
-        return true;
+        c.held = (c.heldFile(path) catch |e| return c.notServing(e)) orelse return .not_serving;
+        return .serving;
     }
 
-    /// The file at `path` under the chat root (Host.links!: the member's
+    /// The file at `path` under the chat root (Host.serve_rendered!: the member's
     /// links.md, its name the Roc's; the seam has checked it), rendered as
     /// the server's own markdown (`renderTrusted`: a curated page has far
-    /// more links than a message may), held for the answer: whether there
-    /// is one.
-    fn links(ctx: *anyopaque, path: []const u8) bool {
+    /// more links than a message may), held for the answer: `.serving`
+    /// when there is one.
+    fn serveRendered(ctx: *anyopaque, path: []const u8) roc_chat.Serving {
         const c = of(ctx);
-        if (c.dead()) return false;
+        if (c.dead()) return .not_serving;
         // absent-ok: the same; only "no file" is none.
-        const md = (c.heldFile(path) catch |e| return c.no(e)) orelse return false;
-        c.held = markdown.renderTrusted(c.alloc, md) catch |e| return c.no(e);
-        return true;
+        const md = (c.heldFile(path) catch |e| return c.notServing(e)) orelse return .not_serving;
+        c.held = markdown.renderTrusted(c.alloc, md) catch |e| return c.notServing(e);
+        return .serving;
     }
 
     /// The file at `path` under the chat root, or null when it is not there.
@@ -389,22 +396,22 @@ pub const Call = struct {
         return .failed;
     }
 
-    fn write(ctx: *anyopaque, path: []const u8, bytes: []const u8) bool {
+    fn write(ctx: *anyopaque, path: []const u8, bytes: []const u8) roc_chat.Done {
         const c = of(ctx);
-        if (c.dead()) return false;
+        if (c.dead()) return .failed;
         const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e| return c.no(e);
-        return true;
+        return .ok;
     }
 
-    fn remove(ctx: *anyopaque, path: []const u8) bool {
+    fn remove(ctx: *anyopaque, path: []const u8) roc_chat.Done {
         const c = of(ctx);
-        if (c.dead()) return false;
+        if (c.dead()) return .failed;
         const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends; a file not there is gone already.
         webbox.store.remove(c.io, c.alloc, p) catch |e| return c.no(e);
-        return true;
+        return .ok;
     }
 
     /// **A FOLDER UNDER THE CHAT ROOT** (Host.list!): its entries as
@@ -476,13 +483,13 @@ pub const Call = struct {
     /// **ONE LINE APPENDED** (Host.append_line!): chat_store.appendLine,
     /// under the chat root (the seam has refused a path that would leave
     /// it), its torn-line rule the store's.
-    fn appendLine(ctx: *anyopaque, path: []const u8, line: []const u8) bool {
+    fn appendLine(ctx: *anyopaque, path: []const u8, line: []const u8) roc_chat.Done {
         const c = of(ctx);
-        if (c.dead()) return false;
+        if (c.dead()) return .failed;
         const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         store.appendLine(c.io, c.alloc, p, line) catch |e| return c.no(e);
-        return true;
+        return .ok;
     }
 
     /// **A TOPIC'S MESSAGE COUNT** (Host.message_count!): chat_count's,
@@ -508,7 +515,7 @@ pub const Call = struct {
         return &.{};
     }
 
-    /// **WHO IS ONLINE, AT THE REQUEST'S TIME** (Host.online!, asked by the
+    /// **WHO IS ONLINE, AT THE REQUEST'S TIME** (Host.check_online!, asked by the
     /// seam id by id): presence.isOnline, a read of presence's
     /// process-lifetime map at the request's `now`. It cannot fail; after
     /// a failure of the request it answers offline, reading nothing.
@@ -582,14 +589,14 @@ pub const Call = struct {
     /// the block the Roc made appended to the topic's transcript, then the
     /// count cache and the search index told. An append that failed fails
     /// the request, nothing stored.
-    fn storeMessage(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, block: []const u8, index: u64, m: roc_chat.Message) bool {
+    fn storeMessage(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, block: []const u8, index: u64, m: roc_chat.Message) roc_chat.Done {
         const c = of(ctx);
-        if (c.dead()) return false;
+        if (c.dead()) return .failed;
         const t = c.address(conv_, sid) catch |e| return c.no(e);
         const msg = c.chatMessage(m) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         store.storeMessage(c.io, c.alloc, t, block, index, msg) catch |e| return c.no(e);
-        return true;
+        return .ok;
     }
 
     /// **THE FAN-OUT'S PRIMITIVES NEVER FAIL THE REQUEST** (metal-vmm QUEUE
@@ -618,7 +625,7 @@ pub const Call = struct {
     }
 
     /// **A SURFACE THAT FAILED FOR ONE MEMBER, COUNTED AND SAID**
-    /// (Host.fanout_failed!): chat_fanout.fanoutFailed, the operator's count
+    /// (Host.report_fanout_failure!): chat_fanout.fanoutFailed, the operator's count
     /// and last failure on /admin/host, in its words: "<surface> for member
     /// <uid>, <error>, on <key>/<sid>".
     fn fanoutFailed(ctx: *anyopaque, surface: roc_chat.Surface, member_: []const u8, key: []const u8, sid: []const u8, e: anyerror) void {
