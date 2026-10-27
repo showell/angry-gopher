@@ -985,3 +985,156 @@ test "a large topic's raw transcript costs one request what the old Zig's did, n
     // The same, but for the Roc call's own small change.
     try testing.expect(roc.peak <= old.peak + 256 * 1024);
 }
+
+// ── a conversation's page and its sidebar, both ways ─────────────────────
+
+/// When every page below is asked: the presence window's edges are this
+/// time's.
+const page_now: i64 = 1_761_400_000;
+
+/// The pages, each as whom (0 Steve, 1 Debbie): a DM's, seen by each of
+/// its two members, and a channel's.
+const page_asks = [_]struct { cookie: usize, target: []const u8 }{
+    .{ .cookie = 0, .target = "/chat/c/1_2/Plans" },
+    .{ .cookie = 0, .target = "/chat/c/1_2/zeta" },
+    .{ .cookie = 1, .target = "/chat/c/1_2/Other" },
+    .{ .cookie = 0, .target = "/channel/ops/Standup" },
+    .{ .cookie = 1, .target = "/channel/ops/Standup" },
+};
+
+/// The pages on a fresh site, served the old way or the Roc's: each
+/// answer, and how many channels were counted malformed while they were.
+fn pageRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, malformed: usize } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const presence = @import("presence.zig");
+    // Names a page escapes: quotes, markup, an entity, a script's end.
+    const cookies = [_][]const u8{
+        try harness.memberSession(a, io, "1", "Steve"),
+        try harness.memberSession(a, io, "2", "Deb \"the\" <b>&amp;</script>"),
+    };
+    for ([_][2][]const u8{ .{ "3", "Ann" }, .{ "4", "Bo" }, .{ "5", "Cy" }, .{ "6", "Di" }, .{ "10", "Ten" } }) |m| _ = try harness.memberSession(a, io, m[0], m[1]);
+    // Topics in no order on disk, one with markup in its name (put there
+    // by hand: the store names no file so, but a listing lists it).
+    for ([_][]const u8{ "zeta", "Plans", "Other", "Alpha" }) |t| try harness.writeTranscript(a, io, "1_2", t, &.{"x"});
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "a<b.md" }), .data = "x" });
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"x"});
+    try harness.writeTranscript(a, io, "channels/ops", "Later", &.{"x"});
+    // Steve's channels (ops, Zed), one he is not in (aaa), and a malformed
+    // one, skipped and counted by each listing.
+    const root = store.chat_root;
+    for ([_][2][]const u8{ .{ "ops", "1\n2\n" }, .{ "Zed", "1\n" }, .{ "aaa", "3\n" }, .{ "bad", "1\nnot a uid\n" } }) |c|
+        try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ root, "channels", try std.fmt.allocPrint(a, "{s}.channel", .{c[0]}) }), c[1], .{});
+    // Pins in no order, one stale (no longer a topic), a blank line.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ root, "users", "1", "pinned-sessions", "1_2" }), "Stale\nzeta\n\n Plans\r\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ root, "users", "1", "pinned-sessions", "ops" }), "Gone\nLater\n", .{});
+    // **THE WINDOW'S EDGES, SET BY THE SAME CALLS BOTH WAYS**: Debbie seen
+    // 4:59 ago, Ann 5:00, Bo 5:01, Di a second ago; Cy and Ten never.
+    presence.forgetForTest();
+    const t = Now.at(page_now);
+    for ([_]struct { []const u8, i64 }{ .{ "2", -299 }, .{ "3", -300 }, .{ "4", -301 }, .{ "6", -1 } }) |seen| _ = presence.markActive(seen[0], t.plus(seen[1]));
+
+    chat_router.test_oracle = oracle;
+    defer chat_router.test_oracle = false;
+    chat_router.test_now = t;
+    defer chat_router.test_now = null;
+    const before = chat_paths.malformed_channels;
+    const answers = try a.alloc([]const u8, page_asks.len);
+    for (page_asks, answers) |p, *got| got.* = try harness.serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ p.target, cookies[p.cookie] }));
+    return .{ .answers = answers, .malformed = chat_paths.malformed_channels - before };
+}
+
+/// That `want` is in `page` after `from`; where it ends.
+fn after(page: []const u8, from: usize, want: []const u8) !usize {
+    const i = std.mem.indexOfPos(u8, page, from, want) orelse {
+        std.debug.print("not after {d}: {s}\nin: {s}\n", .{ from, want, page });
+        return error.TestUnexpectedResult;
+    };
+    return i + want.len;
+}
+
+test "a conversation's page (its viewer, sidebar and limits the Roc's, over accounts!, online!, the channels, the pins file, the topics and limits!) is the old Zig's, byte for byte, a DM's and a channel's" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
+    const zig = try pageRun(a, io, true);
+    const roc = try pageRun(a, io, false);
+    for (page_asks, zig.answers, roc.answers) |p, z, r| {
+        try testing.expectEqualStrings("200 OK", harness.status(r));
+        if (!std.mem.eql(u8, z, r)) {
+            std.debug.print("{s}\n  zig: {f}\n  roc: {f}\n", .{ p.target, std.zig.fmtString(z), std.zig.fmtString(r) });
+            return error.TestUnexpectedResult;
+        }
+    }
+    // Each listing met the malformed channel and counted it, both ways.
+    try testing.expectEqual(zig.malformed, roc.malformed);
+    try testing.expectEqual(page_asks.len, roc.malformed);
+
+    // **WHAT THE PAGE SAYS, NOT ONLY THAT IT AGREES** (a change to the
+    // shared Zig moves both ways at once). Steve's DM page: the others by
+    // numeric id, never the viewer; online only within the window (4:59
+    // and a second ago), never at 5:00, 5:01 or never seen.
+    const page = roc.answers[0];
+    var at = try after(page, 0, "{\"conversations\":[");
+    at = try after(page, at, "{\"id\":\"uid:2\",\"label\":\"Deb \\\"the\\\" <b>&amp;<\\/script>\",\"url\":\"/chat/c/1_2\",\"active\":true,\"online\":true},");
+    at = try after(page, at, "{\"id\":\"uid:3\",\"label\":\"Ann\",\"url\":\"/chat/c/1_3\",\"active\":false},");
+    at = try after(page, at, "{\"id\":\"uid:4\",\"label\":\"Bo\",\"url\":\"/chat/c/1_4\",\"active\":false},");
+    at = try after(page, at, "{\"id\":\"uid:5\",\"label\":\"Cy\",\"url\":\"/chat/c/1_5\",\"active\":false},");
+    at = try after(page, at, "{\"id\":\"uid:6\",\"label\":\"Di\",\"url\":\"/chat/c/1_6\",\"active\":false,\"online\":true},");
+    at = try after(page, at, "{\"id\":\"uid:10\",\"label\":\"Ten\",\"url\":\"/chat/c/1_10\",\"active\":false},");
+    // The member's channels by bytes (Zed before ops), never one they are
+    // not in, never the malformed one.
+    at = try after(page, at, "{\"id\":\"ch:Zed\",\"label\":\"# Zed\",\"url\":\"/channel/Zed\",\"active\":false},{\"id\":\"ch:ops\",\"label\":\"# ops\",\"url\":\"/channel/ops\",\"active\":false}],");
+    // The pins that are topics, the stale one dropped; then the rest, by bytes.
+    at = try after(page, at, "\"pinned_sessions\":[{\"id\":\"Plans\",\"label\":\"Plans\",\"url\":\"/chat/c/1_2/Plans\",\"active\":true},{\"id\":\"zeta\",");
+    _ = try after(page, at, "\"topics\":[{\"id\":\"Alpha\",\"label\":\"Alpha\",\"url\":\"/chat/c/1_2/Alpha\",\"active\":false},{\"id\":\"Other\",\"label\":\"Other\",\"url\":\"/chat/c/1_2/Other\",\"active\":false},{\"id\":\"a<b\",");
+    for (roc.answers) |r| try testing.expect(std.mem.indexOf(u8, r, "Stale") == null and std.mem.indexOf(u8, r, "ch:aaa") == null and std.mem.indexOf(u8, r, "ch:bad") == null and std.mem.indexOf(u8, r, "uid:1\",\"label\":\"Steve\",\"url\":\"/chat/c/1_1") == null);
+    // **THE LIMITS ARE THE HOST'S CONSTANTS**, each in its own place.
+    const chat_upload = @import("chat_upload.zig");
+    _ = try after(page, 0, try std.fmt.allocPrint(a, "data-upload-image-max=\"{d}\" data-upload-video-max=\"{d}\" data-upload-accept=\"{s}\" data-search-min=\"{d}\"", .{ chat_upload.image_max, chat_upload.video_max, chat_upload.accept, @import("search_tokens.zig").min_len }));
+    try testing.expect(chat_upload.image_max != chat_upload.video_max);
+    // Debbie's view: Steve, seen as he asked his pages, online.
+    _ = try after(roc.answers[2], 0, "{\"id\":\"uid:1\",\"label\":\"Steve\",\"url\":\"/chat/c/1_2\",\"active\":true,\"online\":true}");
+    // The channel's page: its pin, the stale one dropped.
+    _ = try after(roc.answers[3], 0, "\"pinned_sessions\":[{\"id\":\"Later\",\"label\":\"Later\",\"url\":\"/channel/ops/Later\",\"active\":false}],\"topics\":[{\"id\":\"Standup\"");
+}
+
+test "Host.online! is presence.isOnline at the request's time: generated last-seen times at the window's edge (online before 5:00, offline at and after it), and never seen offline" {
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const presence = @import("presence.zig");
+    presence.forgetForTest();
+    defer presence.forgetForTest();
+    const t = Now.at(page_now);
+    var rng = std.Random.DefaultPrng.init(0x0711e);
+    const r = rng.random();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var ids: [60][]const u8 = undefined;
+    var ago: [60]i64 = undefined;
+    var edges: [3]usize = @splat(0);
+    for (&ids, &ago, 0..) |*id, *s, k| {
+        id.* = try std.fmt.allocPrint(arena.allocator(), "{d}", .{k + 100});
+        // 4:59, 5:00 or 5:01 ago, give or take nothing: the edge itself.
+        s.* = 299 + r.intRangeAtMost(i64, 0, 2);
+        edges[@intCast(s.* - 299)] += 1;
+        _ = presence.markActive(id.*, t.plus(-s.*));
+    }
+    try testing.expect(edges[0] > 0 and edges[1] > 0 and edges[2] > 0);
+    var call: chat_router.Call = .{ .req = undefined, .io = undefined, .alloc = arena.allocator(), .bus = undefined, .now = t };
+    const Presence = @import("roc_chat").Presence;
+    for (ids, ago) |id, s| {
+        const got = chat_router.Call.online(&call, id);
+        try testing.expectEqual(if (s < 300) Presence.online else Presence.offline, got);
+        try testing.expectEqual(presence.isOnline(id, t), got == .online);
+    }
+    try testing.expectEqual(Presence.offline, chat_router.Call.online(&call, "99"));
+    // **AFTER A FAILURE THE HOST DOES NOTHING MORE**: offline, nothing read.
+    call.failed = error.IsDir;
+    try testing.expectEqual(Presence.offline, chat_router.Call.online(&call, ids[0]));
+}

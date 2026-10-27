@@ -962,6 +962,95 @@ test "route: an account whose name or password will not read fails exactly the r
     try asTheOldZig(a, io, "GET", "/chat/images", steve, "200 OK");
 }
 
+test "route: a conversation's page fails where sidebarOf failed, with its error, byte for byte: an account the roster reads, the viewer's name, a channel's member file, the channels folder, a pins file that is a folder, topics that will not list; a malformed channel is skipped, never a failure" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const root = chat_store.chat_root;
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"one"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ root, "channels", "ops.channel" }), "1\n2\n", .{});
+    const ok = "200 OK";
+    const failed = "500 Internal Server Error";
+    const both = [_][]const u8{ "/chat/c/1_2/Plans", "/channel/ops/Standup" };
+    for (both) |target| try asTheOldZig(a, io, "GET", target, steve, ok);
+
+    // **A MALFORMED CHANNEL IN THE ROSTERS IS SKIPPED AND COUNTED**, never
+    // the page's failure.
+    const bad = try std.fs.path.join(a, &.{ root, "channels", "bad.channel" });
+    try harness.UidSite.disk.write(io, a, bad, "1\n1\n", .{});
+    for (both) |target| try asTheOldZig(a, io, "GET", target, steve, ok);
+    try harness.UidSite.disk.remove(io, a, bad);
+
+    // An account only the roster reads (Ann: in neither conversation), its
+    // name a folder: both pages fail with its error.
+    const ann_name = try std.fs.path.join(a, &.{ users.auth_root, "3", "name" });
+    try harness.UidSite.disk.remove(io, a, ann_name);
+    try std.Io.Dir.cwd().createDirPath(io, ann_name);
+    for (both) |target| try asTheOldZig(a, io, "GET", target, steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.IsDir), (try servedBy(a, io, false, "GET", both[1], steve)).err);
+    try std.Io.Dir.cwd().deleteTree(io, ann_name);
+    try users.setUserName(io, a, "3", "Ann");
+    // Its password a link to itself: the roster's stat of it fails.
+    const ann_password = try std.fs.path.join(a, &.{ users.auth_root, "3", "password" });
+    try std.Io.Dir.cwd().deleteFile(io, ann_password);
+    try std.Io.Dir.cwd().symLink(io, "password", ann_password, .{});
+    for (both) |target| try asTheOldZig(a, io, "GET", target, steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.SymLinkLoop), (try servedBy(a, io, false, "GET", both[0], steve)).err);
+    try std.Io.Dir.cwd().deleteFile(io, ann_password);
+    try users.setUserPassword(io, a, "3", "pw");
+    for (both) |target| try asTheOldZig(a, io, "GET", target, steve, ok);
+
+    // The viewer's own name a folder: a channel's page reads it first.
+    const steve_name = try std.fs.path.join(a, &.{ users.auth_root, "1", "name" });
+    try harness.UidSite.disk.remove(io, a, steve_name);
+    try std.Io.Dir.cwd().createDirPath(io, steve_name);
+    try asTheOldZig(a, io, "GET", both[1], steve, failed);
+    try std.Io.Dir.cwd().deleteTree(io, steve_name);
+    try users.setUserName(io, a, "1", "Steve");
+
+    // A member file of another channel that is a folder: it will not read.
+    const gone = try std.fs.path.join(a, &.{ root, "channels", "gone.channel" });
+    try std.Io.Dir.cwd().createDirPath(io, gone);
+    for (both) |target| try asTheOldZig(a, io, "GET", target, steve, failed);
+    try std.Io.Dir.cwd().deleteTree(io, gone);
+
+    // **A PINS FILE THAT IS A FOLDER IS NEVER NO PINS**.
+    const pins = try std.fs.path.join(a, &.{ root, "users", "1", "pinned-sessions", "1_2" });
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ pins, "kept" }));
+    try asTheOldZig(a, io, "GET", both[0], steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.IsDir), (try servedBy(a, io, false, "GET", both[0], steve)).err);
+    try std.Io.Dir.cwd().deleteTree(io, pins);
+    try asTheOldZig(a, io, "GET", both[0], steve, ok);
+
+    // Topics that will not list: the conversation's sessions folder a file.
+    const sessions = try std.fs.path.join(a, &.{ root, "channels", "ops", "sessions" });
+    try std.Io.Dir.cwd().deleteTree(io, sessions);
+    try harness.UidSite.disk.write(io, a, sessions, "", .{});
+    try asTheOldZig(a, io, "GET", both[1], steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.NotDir), (try servedBy(a, io, false, "GET", both[1], steve)).err);
+
+    // The channels folder a file: no member's channels can be listed.
+    try harness.UidSite.disk.remove(io, a, sessions);
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"one"});
+    const channels = try std.fs.path.join(a, &.{ root, "channels" });
+    try std.Io.Dir.cwd().deleteTree(io, channels);
+    try harness.UidSite.disk.write(io, a, channels, "", .{});
+    try asTheOldZig(a, io, "GET", both[0], steve, failed);
+    try testing.expectEqual(@as(?anyerror, error.NotDir), (try servedBy(a, io, false, "GET", both[0], steve)).err);
+}
+
 test "route: /chat/msg skips a malformed channel and counts it for /admin/host; a roster that will not read is a 500, never a topic not found" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

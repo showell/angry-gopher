@@ -13,7 +13,9 @@
 //! serves them itself, asking `Call` (below) for presence, the reads its
 //! lookup of the conversation decides on (O2: every account, once, looked
 //! up by the Roc; a channel's member file and the topics' folder by the
-//! file primitives, named and parsed by the Roc), the body, the
+//! file primitives, named and parsed by the Roc), the body, who is online
+//! and the limits the server enforces (a page's sidebar and its client's
+//! caps, the rest of the page the Roc's), the
 //! primitives a reaction and a message are stored and sent by (a line
 //! appended, a topic's count, the markdown render, a message's block stored
 //! with its count and search, the bus) and fanned out by (a message's parts
@@ -40,7 +42,6 @@ const chat_fanout = @import("chat_fanout.zig");
 const recent_feed = @import("recent_feed.zig");
 const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
-const chat_page = @import("chat_page.zig");
 const chat_paths = @import("chat_paths.zig");
 const chrome = @import("chat_chrome.zig");
 const chat_upload = @import("chat_upload.zig");
@@ -49,7 +50,6 @@ const markdown = @import("markdown.zig");
 const edge = webbox.edge;
 const Now = @import("request_time.zig").Now;
 const Conv = @import("chat_conv.zig").Conv;
-const Topic = @import("chat_conv.zig").Topic;
 
 const Request = std.http.Server.Request;
 const Alloc = std.mem.Allocator;
@@ -158,7 +158,8 @@ pub const Call = struct {
             .list = list,
             .fail = refuse,
             .malformed_channel = malformedChannel,
-            .page = page,
+            .online = online,
+            .limits = limits_,
             .srcs = srcs,
             .me = me,
             .now = now_,
@@ -484,27 +485,23 @@ pub const Call = struct {
         return &.{};
     }
 
-    fn page(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) []const []const u8 {
+    /// **WHO IS ONLINE, AT THE REQUEST'S TIME** (Host.online!, asked by the
+    /// seam id by id): presence.isOnline, a read of presence's
+    /// process-lifetime map at the request's `now`. It cannot fail; after
+    /// a failure of the request it answers offline, reading nothing.
+    pub fn online(ctx: *anyopaque, id: []const u8) roc_chat.Presence {
         const c = of(ctx);
-        if (c.dead()) return &.{};
-        return c.pageFields(conv_, sid) catch |e| c.none(e);
+        if (c.dead()) return .offline;
+        return if (presence.isOnline(id, c.now)) .online else .offline;
     }
 
-    /// The page's data in conversationPage's order, after the resume
-    /// pointer the Roc wrote for a DM: the viewer, the limits, the sidebar.
-    fn pageFields(c: *Call, conv_: roc_chat.Conv, sid: []const u8) ![]const []const u8 {
-        const viewer = try users.getUserName(c.io, c.alloc, c.uid);
-        const topic_: Topic = .{ .conv = try c.resolved(conv_), .sid = try c.alloc.dupe(u8, sid), .title = "" };
-        const sidebar = try chat_page.sidebarOf(c.io, c.alloc, c.uid, topic_, c.now);
-        var out: std.ArrayList([]const u8) = .empty;
-        const n = struct {
-            fn digits(a: Alloc, v: anytype) ![]const u8 {
-                return std.fmt.allocPrint(a, "{d}", .{v});
-            }
-        }.digits;
-        try out.appendSlice(c.alloc, &.{ viewer, try n(c.alloc, chat_upload.image_max), try n(c.alloc, chat_upload.video_max), chat_upload.accept, try n(c.alloc, @import("search_tokens.zig").min_len) });
-        try out.appendSlice(c.alloc, try chat_page.sidebarFields(c.alloc, sidebar));
-        return out.items;
+    /// **THE LIMITS THE SERVER ENFORCES** (Host.limits!): the upload's and
+    /// the search's own constants, single-sourced here, which the
+    /// conversation page tells its client. After a failure, nothing.
+    fn limits_(ctx: *anyopaque) roc_chat.Limits {
+        const c = of(ctx);
+        if (c.dead()) return .{ .image_max = 0, .video_max = 0, .accept = "", .search_min = 0 };
+        return .{ .image_max = chat_upload.image_max, .video_max = chat_upload.video_max, .accept = chat_upload.accept, .search_min = @import("search_tokens.zig").min_len };
     }
 
     fn srcs(ctx: *anyopaque) []const []const u8 {
