@@ -20,6 +20,7 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const disk = @import("webbox").store;
+const markdown_media = @import("markdown_media.zig");
 
 /// images_sep joins entries on disk (blank line, 13 hyphens, blank line).
 pub const images_sep = "\n\n-------------\n\n";
@@ -172,16 +173,43 @@ pub fn imagesSourceURL(alloc: Alloc, base_url: []const u8, source_id: []const u8
 /// encodeImagesEvent writes one imagesSSEEvent JSON object into `j` (field order:
 /// source_id, from, conv, at, images, source_url; no fields omitted). Shared by
 /// the page backlog and the live fanout so both emit one shape.
+///
+/// **NO STORED TAG REACHES THE PAGE AS WRITTEN**: the tags are spans of a
+/// member's raw markdown, and images.js parses them as HTML into the live page.
+/// Each is rebuilt here by markdown_media.safeImgAt (its attribute allowlist,
+/// a same-origin src), the renderer's own rule; one it can't rebuild is dropped.
+/// Here, at the one encoder, so entries already on disk are rebuilt too.
 pub fn encodeImagesEvent(j: *std.ArrayList(u8), alloc: Alloc, e: ImagesEntry, source_url: []const u8) !void {
     try j.print(alloc, "{{\"source_id\":{f},\"from\":{f},\"conv\":{f},\"at\":{f},\"images\":[", .{
         std.json.fmt(e.source_id, .{}), std.json.fmt(e.from, .{}),
         std.json.fmt(e.conv, .{}),      std.json.fmt(e.at, .{}),
     });
-    for (e.images, 0..) |tag, idx| {
-        if (idx != 0) try j.append(alloc, ',');
-        try j.print(alloc, "{f}", .{std.json.fmt(tag, .{})});
+    var first = true;
+    for (e.images) |tag| {
+        const safe = markdown_media.safeImgAt(alloc, tag, 0) orelse continue;
+        if (!first) try j.append(alloc, ',');
+        first = false;
+        try j.print(alloc, "{f}", .{std.json.fmt(safe.html, .{})});
     }
     try j.print(alloc, "],\"source_url\":{f}}}", .{std.json.fmt(source_url, .{})});
+}
+
+test "encodeImagesEvent: a stored tag is rebuilt by the renderer's rule, a hostile one dropped" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const e: ImagesEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-27T00:00:00Z", .images = &.{
+        "<img src=x onerror=\"alert(1)\">",
+        "<img src=\"/up/a.png\" width=\"40\" onload=\"alert(2)\">",
+        "<img src=\"https://evil.example/t.png\">",
+    } };
+    var j: std.ArrayList(u8) = .empty;
+    try encodeImagesEvent(&j, a, e, "/chat/c/1_2/t#msg-t_1");
+    try std.testing.expect(std.mem.find(u8, j.items, "onerror") == null);
+    try std.testing.expect(std.mem.find(u8, j.items, "onload") == null);
+    try std.testing.expect(std.mem.find(u8, j.items, "evil.example") == null);
+    try std.testing.expect(std.mem.find(u8, j.items, "/up/a.png") != null);
+    try std.testing.expect(std.mem.find(u8, j.items, "width=\\\"40\\\"") != null);
 }
 
 test "images.md: a tag carrying the separator and a header plants no entry of its own (metal-vmm QUEUE 185)" {
