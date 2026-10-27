@@ -422,13 +422,32 @@ fn codecMessage(a: std.mem.Allocator, r: std.Random) !ChatMessage {
     return .{ .id = try pick(a, r, 2, true), .from = try pick(a, r, 2, true), .at = try pick(a, r, 2, true), .uid = try pick(a, r, 1, false), .markdown = try pick(a, r, 12, false) };
 }
 
+/// A uid as allocateUser writes one: digits, the first not zero.
+fn canonicalUid(s: []const u8) bool {
+    if (s.len == 0 or s[0] == '0') return false;
+    for (s) |c| if (c < '0' or c > '9') return false;
+    return true;
+}
+
+/// **A `uid:` THAT IS NOT EMPTY AND NOT CANONICAL IS DAMAGED DATA**: the
+/// Roc's Transcript.Author has no such value, so its decode refuses the
+/// whole file where chatDecodeFile keeps the bytes.
+fn corruptAuthor(ms: []const ChatMessage) bool {
+    for (ms) |m| if (m.uid.len != 0 and !canonicalUid(m.uid)) return true;
+    return false;
+}
+
 /// The Roc's decode against chatDecodeFile's, field by field, the refused
-/// count too.
+/// count too; a file with a corrupt author refused, no answer.
 fn decodeAgrees(a: std.mem.Allocator, data: []const u8, differ: *Differences) !void {
     const before = chat_codec.refused_blocks;
     const zm = try chat_codec.decodeChatFile(a, data);
     const zrefused = chat_codec.refused_blocks - before;
     const got = try roc(a, .decode_file, &.{data});
+    if (corruptAuthor(zm)) {
+        if (got.len != 0) differ.add("decode(\"{f}\"): a corrupt uid, roc answered {d} fields", .{ std.zig.fmtString(data), got.len });
+        return;
+    }
     const rrefused = try std.fmt.parseInt(usize, got[0], 10);
     const rest = got[1..];
     if (zrefused != rrefused or rest.len != zm.len * 5) {
@@ -470,8 +489,18 @@ test "Codec: a message's stored form, and what reads back from a file of them" {
             const m = try codecMessage(a, r);
             const zs = try chat_codec.chatStoredForm(a, index, m);
             const idx = try std.fmt.allocPrint(a, "{d}", .{index});
-            const rs = (try roc1(a, .stored_form, &.{ idx, m.id, m.from, m.at, m.uid, m.markdown })).?;
+            const got = try roc1(a, .stored_form, &.{ idx, m.id, m.from, m.at, m.uid, m.markdown });
             compared += 1;
+            // A uid neither empty nor canonical is no Author: no block.
+            if (m.uid.len != 0 and !canonicalUid(m.uid)) {
+                if (got != null) differ.add("storedForm(uid \"{f}\"): not a uid, roc made a block", .{std.zig.fmtString(m.uid)});
+                try file.appendSlice(a, zs);
+                continue;
+            }
+            const rs = got orelse {
+                differ.add("storedForm(uid \"{f}\"): roc made no block", .{std.zig.fmtString(m.uid)});
+                continue;
+            };
             if (!std.mem.eql(u8, zs, rs)) differ.add("storedForm({d}, \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ index, std.zig.fmtString(m.markdown), std.zig.fmtString(zs), std.zig.fmtString(rs) });
             try file.appendSlice(a, zs);
         }
@@ -623,7 +652,9 @@ test "Count: the window at the record's offset, believed or read the slow way" {
     }
     for (windows.items) |w| for ([_]usize{ 0, 1, 3, 6 }) |count| for ([_]bool{ false, true }) |full| {
         const z = try chat_count.windowLast(a, count, w, full, "t");
-        const want: []const []const u8 = if (z) |got| &.{ try std.fmt.allocPrint(a, "{d}", .{got.number}), if (got.current) "1" else "0", got.msg.id, got.msg.from, got.msg.at, got.msg.uid, got.msg.markdown } else &.{};
+        // A window the Roc reads with a corrupt author fails, said as such.
+        const corrupt = !full and corruptAuthor(try chat_codec.decodeChatFile(a, w));
+        const want: []const []const u8 = if (corrupt) &.{"CorruptUid"} else if (z) |got| &.{ try std.fmt.allocPrint(a, "{d}", .{got.number}), if (got.current) "1" else "0", got.msg.id, got.msg.from, got.msg.at, got.msg.uid, got.msg.markdown } else &.{};
         const c = try std.fmt.allocPrint(a, "{d}", .{count});
         const got = try roc(a, .window_last, &.{ c, w, if (full) "1" else "0", "t" });
         compared += 1;
