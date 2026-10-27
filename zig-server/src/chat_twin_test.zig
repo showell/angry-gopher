@@ -1443,7 +1443,9 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     // Names as an account may hold them, and as it must not: markup, quotes,
     // a script's end, bytes that are not UTF-8, a newline, nothing.
     const names = [_][]const u8{ "", "Debbie", "<b>x</b>", "</script><script>alert(1)</script>", "a\"b'c&d", "\xff\xfe", "line\nbreak", "  ", "Chat w/", ": ", "\u{1F44D}", "#" };
-    const ids = [_][]const u8{ "", "2", "10", "\xff", "a b" };
+    // The partner is a canonical uid: the door refuses undecodable text;
+    // roc test covers it.
+    const ids = [_][]const u8{ "2", "10", "9223372036854775808" };
     for (names) |n| for (ids) |id| {
         const z = try chat.dmTitle(a, n, id);
         const got = (try roc1(a, .dm_title, &.{ n, id })).?;
@@ -1915,10 +1917,11 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
         }
         // The ids that can reach a lookup: canonical ones (a DM's halves pass
         // Paths.participant; the member's own is a session's, signed only for
-        // a counter's id). A non-canonical one never asks, so is not compared.
+        // a counter's id). A non-canonical one, blank included, never asks:
+        // the door refuses undecodable text; roc test covers it.
         var queries: std.ArrayList([]const u8) = .empty;
         for (ids ++ asked_too) |id| {
-            if (users.validUid(id) or std.mem.trim(u8, id, " \t\r\n").len == 0) try queries.append(a, id) else skipped += 1;
+            if (users.validUid(id)) try queries.append(a, id) else skipped += 1;
         }
         const held = try users.listAccounts(io, a);
         var args: std.ArrayList([]const u8) = .empty;
