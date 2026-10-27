@@ -212,6 +212,14 @@ test "Time: a date read back, as written, with a fraction or an offset, and ever
 /// Byte strings that try a reader: every single byte, each pair of the
 /// ones that matter to JSON and to digits, UTF-8 good and broken, numbers
 /// at u64's edges, and a seeded spread of short ones.
+/// The strings that are UTF-8: what a Roc that takes text is handed (its
+/// door refuses the rest; `roc test` covers the refusal).
+fn utf8Only(a: std.mem.Allocator, ss: []const []const u8) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    for (ss) |s| if (std.unicode.utf8ValidateSlice(s)) try out.append(a, s);
+    return out.items;
+}
+
 fn byteStrings(a: std.mem.Allocator) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
     for ([_][]const u8{ "", "0", "00", "007", "18446744073709551615", "18446744073709551616", "99999999999999999999", "+5", "-0", "1_0", " 1", "1 ", "0x10", "1e3", "\u{0661}", "caf\xc3\xa9", "\xc3", "\xe2\x82", "\xf0\x9f\x98\x80", "\xed\xa0\x80", "\xc0\xaf", "\xff\xfe", "a\u{2028}b", "\x7f", " \t\r\n x \n\t", "\x0b\x0cx", "   ", "\n" }) |s| try out.append(a, s);
@@ -633,7 +641,9 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
     const a = arena.allocator();
     var differ: Differences = .{};
     var compared: usize = 0;
-    const strings = try byteStrings(a);
+    // The author, id, markdown and cid are text: the Roc's frame takes them
+    // decoded.
+    const strings = try utf8Only(a, try byteStrings(a));
     const ts = try times(a);
     var rng = std.Random.DefaultPrng.init(0xf4a3e);
     const r = rng.random();
@@ -655,7 +665,7 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
             // The stamp as the Roc makes it (Time's twin holds it to timefmt).
             .at = try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]),
             .id = pick(r, strings),
-            .markdown = if (i % 2 == 0) pick(r, strings) else (try codecMessage(a, r)).markdown,
+            .markdown = if (i % 2 == 0) pick(r, strings) else textOr((try codecMessage(a, r)).markdown, ""),
             .cid = pick(r, strings),
         };
         const zf = try chat_frame.messageFrame(a, m);
@@ -789,7 +799,8 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
         // and the reactor a canonical uid: the Roc's line takes a Uid.
         const at = try timefmt.formatRFC3339UTC(a, ts[r.uintLessThan(usize, ts.len)]);
         const uid = pick(r, &.{ "1", "3", "10", "12", "4294967296" });
-        const from = pick(r, strings);
+        // The reactor's name is text: the Roc's line takes it decoded.
+        const from = pick(r, try utf8Only(a, strings));
         const emoji = pick(r, strings);
         const on = r.boolean();
         const z = try chat_store.reactionLine(a, msg, uid, from, emoji, on, at);
@@ -827,7 +838,9 @@ test "Chrome: a chat page's shell, byte for byte, for every title, viewer and bo
     var differ: Differences = .{};
     var compared: usize = 0;
     const pairs = try srcPairs(a);
-    const texts = try pageTexts(a);
+    // The title, viewer and bold link are text: the Roc's shell takes them
+    // decoded.
+    const texts = try utf8Only(a, try pageTexts(a));
     for (texts, 0..) |t, i| for ([_][]const u8{ "", "chat", "docs", "recent", "images", "code", "links", "settings", "Chat" }) |active| {
         const tab = texts[(i * 7) % texts.len];
         const body = texts[(i * 13) % texts.len];
@@ -849,7 +862,8 @@ test "Pages: the 404 that says why, the first-topic shell, the empty /chat and t
     var differ: Differences = .{};
     var compared: usize = 0;
     const pairs = try srcPairs(a);
-    const texts = try pageTexts(a);
+    // Every text a page shows is text: the Roc's pages take it decoded.
+    const texts = try utf8Only(a, try pageTexts(a));
     const accept = chat_upload.accept;
     const digits = struct {
         fn f(al: std.mem.Allocator, n: anytype) ![]const u8 {
@@ -1043,7 +1057,9 @@ test "Feeds: a member's images.md and code.md read and sent to their pages as im
 /// A message's markdown from pieces near each rule recentExcerpt reads by:
 /// quote fences of every length (one in another), code fences, `<img` and
 /// `![…](…)` whole and broken, every whitespace, long runs past the cap,
-/// codepoints of each length and bytes that start none.
+/// codepoints of each length. Text only: a message is UTF-8 (its form
+/// refuses any other), and the Roc's excerpt takes it decoded; the parts
+/// that are bytes no codepoint starts are left out.
 fn excerptText(a: std.mem.Allocator, r: std.Random) ![]const u8 {
     const parts = [_][]const u8{
         "In MSG_x_1 I said:", "~~~ quote",   "~~~~ quote",   "~~~",      "~~~~",                                     "```",                                                                                                                                                                                                                                              "```zig",      "   ```",
@@ -1054,15 +1070,16 @@ fn excerptText(a: std.mem.Allocator, r: std.Random) ![]const u8 {
     };
     var out: std.ArrayList(u8) = .empty;
     for (0..r.uintAtMost(usize, 30)) |_| {
-        try out.appendSlice(a, parts[r.uintLessThan(usize, parts.len)]);
+        const part = parts[r.uintLessThan(usize, parts.len)];
+        if (std.unicode.utf8ValidateSlice(part)) try out.appendSlice(a, part);
         try out.append(a, if (r.uintLessThan(u8, 3) == 0) '\n' else if (r.boolean()) ' ' else 'x');
     }
     // Sometimes far past the cap.
-    if (r.uintLessThan(u8, 6) == 0) for (0..r.uintAtMost(usize, 40)) |_| try out.appendSlice(a, if (r.boolean()) "word \xc3\xa9t\xc3\xa9 " else "\xc0x\xc1y \xf8z ");
+    if (r.uintLessThan(u8, 6) == 0) for (0..r.uintAtMost(usize, 40)) |_| try out.appendSlice(a, if (r.boolean()) "word \xc3\xa9t\xc3\xa9 " else "\u{1F44D}x y\u{2603} ");
     return out.items;
 }
 
-test "Recent: a message's excerpt as recentExcerpt makes it, whatever its bytes" {
+test "Recent: a message's excerpt as recentExcerpt makes it, for every text tried" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -1095,7 +1112,8 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
     const secs = [_]i64{ 0, 1, 1_790_000_000, 1_790_000_000, 1_790_000_001, -86_401, 253_402_300_799 };
     const keys = [_][]const u8{ "/chat/c/1_2/Plans", "/chat/c/1_2/plans", "/chat/c/1_2/Plan", "/channel/ops/a", "/channel/ops/a", "notes", "notes-2", "", "/chat/c/1_2/caf\xc3\xa9" };
     const uids = [_][]const u8{ "", "1", "2", "3" };
-    const names = [_][]const u8{ "", "Debbie", "Ann \"A\" </script>", "\xff" };
+    // A row's fields are text: the Roc's door fails a request on any that is not.
+    const names = [_][]const u8{ "", "Debbie", "Ann \"A\" </script>", "caf\xc3\xa9" };
     const labels = [_][]const u8{ "", "to Debbie", "in ops", "My \"doc\"" };
     var compared: usize = 0;
     for (0..1500) |_| {
@@ -1450,8 +1468,9 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     var differ: Differences = .{};
     var compared: usize = 0;
     // Names as an account may hold them, and as it must not: markup, quotes,
-    // a script's end, bytes that are not UTF-8, a newline, nothing.
-    const names = [_][]const u8{ "", "Debbie", "<b>x</b>", "</script><script>alert(1)</script>", "a\"b'c&d", "\xff\xfe", "line\nbreak", "  ", "Chat w/", ": ", "\u{1F44D}", "#" };
+    // a script's end, a newline, nothing. Text only: a name is decoded at
+    // accounts!'s door.
+    const names = [_][]const u8{ "", "Debbie", "<b>x</b>", "</script><script>alert(1)</script>", "a\"b'c&d", "line\nbreak", "  ", "Chat w/", ": ", "\u{1F44D}", "#" };
     // The partner is a canonical uid: the door refuses undecodable text;
     // roc test covers it.
     const ids = [_][]const u8{ "2", "10", "9223372036854775808" };
@@ -1471,11 +1490,15 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         }
     };
     for (names ++ ids) |key| {
-        const zc = try chat.channelTitle(a, key);
-        const rc = (try roc1(a, .channel_title, &.{key})).?;
+        // A channel's title is made for a channel's name alone (a ChannelName).
+        if (chat_paths.validChannelName(key)) {
+            const zc = try chat.channelTitle(a, key);
+            const rc = (try roc1(a, .channel_title, &.{key})).?;
+            compared += 1;
+            if (!std.mem.eql(u8, zc, rc)) differ.add("channelTitle(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(zc), std.zig.fmtString(rc) });
+        }
         const bases = try roc(a, .conv_bases, &.{key});
-        compared += 3;
-        if (!std.mem.eql(u8, zc, rc)) differ.add("channelTitle(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(zc), std.zig.fmtString(rc) });
+        compared += 2;
         if (!std.mem.eql(u8, try chat.dmBase(a, key), bases[0])) differ.add("dmBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[0]) });
         if (!std.mem.eql(u8, try chat.channelBase(a, key), bases[1])) differ.add("channelBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[1]) });
     }
@@ -1880,7 +1903,7 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
     // an i64, which count as 0, and the largest that is not), and names
     // that are no account (007, +7, 0, a word, the counter's file).
     const ids = [_][]const u8{ "1", "2", "3", "9", "10", "99", "100", "12", "9223372036854775807", "9223372036854775808", "99999999999999999999", "007", "+7", "0", "x", "next-id.txt" };
-    const names = [_]?[]const u8{ null, "Ann", "Ann\r\n", "Bo\r", "  Cy  d \t", "", "Dee\n\n", "\r\nEve", "Fay\r\r\n", "\n", "\xffG", "H\x00i" };
+    const names = [_]?[]const u8{ null, "Ann", "Ann\r\n", "Bo\r", "  Cy  d \t", "", "Dee\n\n", "\r\nEve", "Fay\r\r\n", "\n", "H\x00i" };
     // Asked of both, besides every name above: an id with no folder, empty
     // ones, and the agent's.
     const asked_too = [_][]const u8{ "5", "", " ", "\t\r\n", "3" };
@@ -2019,6 +2042,9 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
     var differ: Differences = .{};
     var compared: usize = 0;
     const strings = try byteStrings(a);
+    // The author, stamp, topic and a Recent row's fields are text: the
+    // Roc's fan-out takes them decoded.
+    const texts = try utf8Only(a, strings);
     var rng = std.Random.DefaultPrng.init(0xfa2007);
     const r = rng.random();
     const pick = struct {
@@ -2036,13 +2062,13 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
     var blocks_seen: usize = 0;
     for (0..3000) |i| {
         const key = if (i % 3 == 0) pick(r, strings) else pick(r, &keys);
-        const sid = pick(r, strings);
+        const sid = pick(r, texts);
         const id = if (i % 3 == 0) pick(r, strings) else pick(r, &ids);
-        const from = pick(r, strings);
+        const from = pick(r, texts);
         // A member is a canonical uid: the door refuses undecodable text;
         // roc test covers it.
         const uid = try std.fmt.allocPrint(a, "{d}", .{r.intRangeAtMost(u64, 1, std.math.maxInt(u64))});
-        const at = pick(r, strings);
+        const at = pick(r, texts);
         compared += 1;
 
         // The five keys, and the URLs: convKeyBaseURL, the topic's page,
@@ -2068,7 +2094,7 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
                 return if (rr.uintLessThan(u8, 5) == 0) "" else s;
             }
         }.f;
-        const ev: recent_feed.ChatEvent = .{ .at = at, .url = maybe(r, url), .who = maybe(r, from), .where = maybe(r, pick(r, strings)), .topic = maybe(r, sid), .excerpt = maybe(r, pick(r, strings)), .dm = r.boolean() };
+        const ev: recent_feed.ChatEvent = .{ .at = at, .url = maybe(r, url), .who = maybe(r, from), .where = maybe(r, pick(r, texts)), .topic = maybe(r, sid), .excerpt = maybe(r, pick(r, texts)), .dm = r.boolean() };
         var zr: std.ArrayList(u8) = .empty;
         try recent_feed.encodeChatEvent(&zr, a, ev);
         try sameEach(a, "recent", &.{ ev.at, ev.url }, &.{zr.items}, try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" }), &differ);
@@ -2127,7 +2153,7 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
     var unreadable: usize = 0;
     var rng = std.Random.DefaultPrng.init(0x4e7e);
     const r = rng.random();
-    const names = [_]?[]const u8{ null, "Ann", "Bo\r\n", "", "q\"\\", "\xffG" };
+    const names = [_]?[]const u8{ null, "Ann", "Bo\r\n", "", "q\"\\" };
     for (0..400) |_| {
         try std.Io.Dir.cwd().deleteTree(io, users.auth_root);
         try std.Io.Dir.cwd().createDirPath(io, users.auth_root);
@@ -2160,4 +2186,10 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
     }
     try differ.none(compared);
     try testing.expect(unreadable > 50);
+}
+
+/// `s` when it is UTF-8, else `other`: a generator's bytes made text, for a
+/// Roc that takes them decoded.
+fn textOr(s: []const u8, other: []const u8) []const u8 {
+    return if (std.unicode.utf8ValidateSlice(s)) s else other;
 }

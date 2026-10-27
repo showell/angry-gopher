@@ -444,9 +444,11 @@ fn drained(a: Alloc, hub: *webbox.bus.Hub, keys: []const []const u8, subs: []con
 }
 
 /// Names a reaction's line must escape: a quote, a backslash, control
-/// bytes, DEL, `/`, non-ASCII; one that is not UTF-8 (Zig writes it as an
-/// array of byte numbers); one cut of its CR LF as it is read.
-const hard_names = [_][]const u8{ "Q\"uote\\back\x01ctl\x1f\ttab/sl\x7f caf\u{e9} \u{1F44D}", "caf\xe9\xff", "Ann\r\n" };
+/// bytes, DEL, `/`, non-ASCII, two and three bytes a character; one cut of
+/// its CR LF as it is read. Text only: a name is UTF-8 when it is set
+/// (validateUserName), and the Roc's accounts! door fails a request on one
+/// that is not.
+const hard_names = [_][]const u8{ "Q\"uote\\back\x01ctl\x1f\ttab/sl\x7f caf\u{e9} \u{1F44D}", "Zo\u{eb} \u{2603}", "Ann\r\n" };
 
 /// Reactions on a DM's topic and a channel's, by members named
 /// `hard_names`, on sidecars that start torn (no final newline), whole, and
@@ -529,7 +531,7 @@ test "a reaction stored and sent by the Roc, over append_line!, message_count! a
     // escaped (one as byte numbers), the stamp, both refusals, and a frame
     // for each of the eight stored, on the key of the topic as the request
     // spelled it (the old Zig's).
-    for ([_][]const u8{ "\"fr\n{\"msg\":1,\"uid\":\"1\",\"from\":\"Q\\\"uote\\\\back\\u0001ctl\\u001f\\ttab/sl\x7f caf\u{e9} \u{1F44D}\"", "\"from\":[99,97,102,233,255]", "\"from\":\"Ann\"", "\"at\":\"2025-10-25T13:46:40Z\"" }) |want|
+    for ([_][]const u8{ "\"fr\n{\"msg\":1,\"uid\":\"1\",\"from\":\"Q\\\"uote\\\\back\\u0001ctl\\u001f\\ttab/sl\x7f caf\u{e9} \u{1F44D}\"", "\"from\":\"Zo\u{eb} \u{2603}\"", "\"from\":\"Ann\"", "\"at\":\"2025-10-25T13:46:40Z\"" }) |want|
         if (std.mem.indexOf(u8, roc.files, want) == null) {
             std.debug.print("not in the files: {f}\n", .{std.zig.fmtString(want)});
             return error.TestUnexpectedResult;
@@ -645,8 +647,7 @@ fn memberKeys(comptime uid: []const u8) [5][]const u8 {
 /// a DM and a channel, markdown the stored form must escape (lines that
 /// read as the separator, bare and escaped; the separator itself; a
 /// leading `>`; CRLF; empty lines; a trailing newline), an image and a code
-/// block for the feeds, names and cids JSON must escape (one name not
-/// UTF-8). The search index is built before the sends, so what it finds
+/// block for the feeds, names and cids JSON must escape. The search index is built before the sends, so what it finds
 /// after is what the sends told it. Every answer, every file, every frame
 /// on every key, and the searches.
 fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: []const u8, frames: []const u8, searches: []const u8 } {
@@ -772,7 +773,7 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
     for ([_][]const u8{
         "MSG_Plans_3\nfrom: Q\"uote",
         "\\-------------\n\\\\-------------\n\\\\\\-------------\n> a quote\r\nCRLF then\n\nafter an empty line\n",
-        "MSG_Plans_4\nfrom: caf\xe9\xff\ndate: 2025-10-25T13:46:40Z\nuid: 2\n\na\n\n\\-------------\nb",
+        "MSG_Plans_4\nfrom: Zo\u{eb} \u{2603}\ndate: 2025-10-25T13:46:40Z\nuid: 2\n\na\n\n\\-------------\nb",
         "sessions/Fresh.md\nMSG_Fresh_1\n",
         "sessions/Brand.md\nMSG_Brand_1\n",
         "sessions/Plans.count\n4 ",
@@ -784,7 +785,7 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
     for ([_][]const u8{
         "== 1_2/Plans\nid: 2\ndata: {\"index\":2,\"from\":\"Q\\\"uote\\\\back\\u0001ctl\\u001f\\ttab/sl\x7f caf\u{e9} \u{1F44D}\",\"from_uid\":\"1\",\"at\":\"2025-10-25T13:46:40Z\",\"html\":",
         ",\"id\":\"Plans_3\",\"cid\":\"c\\\"1\\\\x\\u0001/\"}\n\n",
-        "id: 3\ndata: {\"index\":3,\"from\":[99,97,102,233,255],\"from_uid\":\"2\"",
+        "id: 3\ndata: {\"index\":3,\"from\":\"Zo\u{eb} \u{2603}\",\"from_uid\":\"2\"",
         "== 1_2/Fresh\nid: 0\ndata: {\"index\":0,",
         "\"cid\":\"</script>\"}",
         "\"kind\":\"topic-added\",\"conv\":\"1_2\",\"sid\":\"Fresh\"",
