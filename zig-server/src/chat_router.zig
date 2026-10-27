@@ -504,19 +504,15 @@ pub const Call = struct {
         return .{ .image_max = chat_upload.image_max, .video_max = chat_upload.video_max, .accept = chat_upload.accept, .search_min = @import("search_tokens.zig").min_len };
     }
 
-    /// **WHERE A PAGE NAMES EACH SCRIPT** (Host.srcs!): a field per chat
-    /// asset, the field its name without `.js`. After a failure, none.
-    fn srcs(ctx: *anyopaque) roc_chat.Srcs {
+    fn srcs(ctx: *anyopaque) []const []const u8 {
         const c = of(ctx);
-        if (c.dead()) return .none;
-        const names = comptime std.meta.fieldNames(roc_chat.Srcs);
-        comptime if (names.len != chrome.assets.len) @compileError("Host.srcs! names a field for every chat asset, and only those");
-        var out: roc_chat.Srcs = undefined;
-        inline for (names) |n| @field(out, n) = chrome.src(c.alloc, n ++ ".js") catch |e| {
-            c.fail(e);
-            return .none;
-        };
-        return out;
+        if (c.dead()) return &.{};
+        var out: std.ArrayList([]const u8) = .empty;
+        inline for (chrome.assets) |a| {
+            const src = chrome.src(c.alloc, a.name) catch |e| return c.none(e);
+            out.appendSlice(c.alloc, &.{ a.name, src }) catch |e| return c.none(e);
+        }
+        return out.items;
     }
 
     fn me(ctx: *anyopaque) []const u8 {
