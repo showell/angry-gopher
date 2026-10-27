@@ -2028,7 +2028,9 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         const sid = pick(r, strings);
         const id = if (i % 3 == 0) pick(r, strings) else pick(r, &ids);
         const from = pick(r, strings);
-        const uid = pick(r, strings);
+        // A member is a canonical uid: the door refuses undecodable text;
+        // roc test covers it.
+        const uid = try std.fmt.allocPrint(a, "{d}", .{r.intRangeAtMost(u64, 1, std.math.maxInt(u64))});
         const at = pick(r, strings);
         compared += 1;
 
