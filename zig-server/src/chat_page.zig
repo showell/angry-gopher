@@ -106,7 +106,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
 /// buildSidebarJSON is the inline left-rail payload:
 /// conversations = every other authorized user (DM) + every channel the viewer
 /// is in; pinned_sessions = [] (pins not ported yet); sessions = this conv's
-/// topics. The `</`→`<\/` pass is script-tag safety for inline embedding.
+/// topics. The scriptSafe pass (every `<` as `\u003c`) is script-tag safety for inline embedding.
 fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) ![]const u8 {
     const conv = topic.conv;
     var b: std.ArrayList(u8) = .empty;

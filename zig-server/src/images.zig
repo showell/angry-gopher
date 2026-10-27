@@ -50,8 +50,8 @@ fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     try page.send(req, .ok);
 }
 
-/// emitImagesData ships the initial transcript as inline JSON. The `</`→`<\/`
-/// pass prevents the JSON from closing the surrounding <script>. Per-entry
+/// emitImagesData ships the initial transcript as inline JSON. The scriptSafe
+/// pass (every `<` as `\u003c`) prevents the JSON from closing the surrounding <script>. Per-entry
 /// source_url is rebuilt from the entry's conv.
 fn emitImagesData(b: *std.ArrayList(u8), alloc: Alloc, entries: []images_store.ImagesEntry) !void {
     var j: std.ArrayList(u8) = .empty;

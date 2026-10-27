@@ -86,7 +86,7 @@ fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
 }
 
 /// emitRecentData ships the initial feed as inline JSON next to the mount slot.
-/// The `</`→`<\/` pass prevents the JSON from closing the surrounding <script>.
+/// The scriptSafe pass (every `<` as `\u003c`) prevents the JSON from closing the surrounding <script>.
 fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !void {
     var j: std.ArrayList(u8) = .empty;
     try j.append(alloc, '[');

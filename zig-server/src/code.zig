@@ -43,7 +43,7 @@ fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     try page.send(req, .ok);
 }
 
-/// emitCodeData ships the initial transcript as inline JSON. The `</`→`<\/` pass
+/// emitCodeData ships the initial transcript as inline JSON. The scriptSafe pass (every `<` as `\u003c`)
 /// prevents the JSON from closing the surrounding <script>. Per-entry source_url
 /// is rebuilt from the entry's conv (shares images_store's helper).
 fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeEntry) !void {
