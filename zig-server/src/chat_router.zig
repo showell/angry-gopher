@@ -341,18 +341,24 @@ pub const Call = struct {
         return true;
     }
 
-    /// The member's recent feed as recent.zig gathers it, nine fields a row.
-    fn recentRows(ctx: *anyopaque) []const []const u8 {
+    /// The member's recent feed as recent.zig gathers it.
+    fn recentRows(ctx: *anyopaque) []const roc_chat.RecentRow {
         const c = of(ctx);
         if (c.dead()) return &.{};
         // absent-ok: not read as absence: a failed read is kept and returned once the call ends.
-        const rows = recent.gatherRows(c.io, c.alloc, c.uid) catch |e| return c.none(e);
-        var out: std.ArrayList([]const u8) = .empty;
-        for (rows) |w| {
-            const secs = std.fmt.allocPrint(c.alloc, "{d}", .{w.secs}) catch |e| return c.none(e);
-            out.appendSlice(c.alloc, &.{ if (w.doc) "1" else "0", secs, w.uid, w.name, w.key, w.label, w.topic, w.markdown, if (w.dm) "1" else "0" }) catch |e| return c.none(e);
+        const rows = recent.gatherRows(c.io, c.alloc, c.uid) catch |e| return c.noRecent(e);
+        const out = c.alloc.alloc(roc_chat.RecentRow, rows.len) catch |e| return c.noRecent(e);
+        for (rows, out) |w, *o| {
+            const secs = std.fmt.allocPrint(c.alloc, "{d}", .{w.secs}) catch |e| return c.noRecent(e);
+            o.* = .{ .doc = if (w.doc) "1" else "0", .secs = secs, .uid = w.uid, .name = w.name, .key = w.key, .label = w.label, .topic = w.topic, .markdown = w.markdown, .dm = if (w.dm) "1" else "0" };
         }
-        return out.items;
+        return out;
+    }
+
+    /// `fail`, answering the Roc no recent rows.
+    fn noRecent(c: *Call, e: anyerror) []const roc_chat.RecentRow {
+        c.fail(e);
+        return &.{};
     }
 
     /// **THE FILE PRIMITIVES** (Host.read!, Host.write!, Host.remove!,
