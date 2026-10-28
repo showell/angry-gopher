@@ -516,16 +516,8 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     const emptied = search_index.emptyForTest();
     defer emptied.end();
     _ = search_index.buildAll(io, a).?;
-    const dm12_reach = [_]chat_paths.Reach{.{
-        .dir = try chat_paths.dmConvDir(a, "1_2"),
-        .base = "/chat/c/1_2",
-        .kind = .dm,
-    }};
-    const dm19_reach = [_]chat_paths.Reach{.{
-        .dir = try chat_paths.dmConvDir(a, "1_9"),
-        .base = "/chat/c/1_9",
-        .kind = .dm,
-    }};
+    const dm12_reach = [_][]const u8{try chat_paths.dmConvDir(a, "1_2")};
+    const dm19_reach = [_][]const u8{try chat_paths.dmConvDir(a, "1_9")};
     try testing.expectEqual(@as(usize, 2), (try search_index.indexOrBuild(io, a).?.messagesFor(
         a,
         &dm12_reach,

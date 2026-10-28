@@ -353,6 +353,10 @@ pub const Call = struct {
     bundle: download.Bundle = .{},
     /// The upload's bytes Host.read_upload! read, for Host.store_upload!.
     upload_data: []const u8 = "",
+    /// **WHAT THIS REQUEST'S SEARCHES WALK** (Host.search_scope_add!), the
+    /// conversations' folders as the Roc handed them, in its order: whose
+    /// they are is the Roc's decision, never made here.
+    scope: std.ArrayList([]const u8) = .empty,
     /// The admin retire carrying out the Roc's plan, and what the admin
     /// asked (`retire`, metal-vmm QUEUE 293).
     retiring: ?*chat_retire.Report = null,
@@ -394,6 +398,7 @@ pub const Call = struct {
             .check_online = online,
             .admit = admitOf,
             .read_query = query,
+            .search_scope_add = searchScopeAdd,
             .search_words = searchWords,
             .search_messages = searchMessages,
             .welcome_pending = welcomePending,
@@ -1184,9 +1189,21 @@ pub const Call = struct {
         return c.alloc.dupe([]const u8, &.{v}) catch |e| c.none(e);
     }
 
-    /// **SEARCH'S INDEX, ASKED** (Host.search_words!): what the member can
-    /// see (visibleConvs, every request), then the index's words beginning
-    /// `key`, at most `most`, and its unreadable count; null with no index.
+    /// The conversation in folder `dir` under the chat root (the seam has
+    /// checked it) added to what this request's searches walk
+    /// (Host.search_scope_add!), as the index knows it.
+    fn searchScopeAdd(ctx: *anyopaque, dir: []const u8) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const d = std.fs.path.join(c.alloc, &.{ store.chat_root, dir }) catch |e| return c.no(e);
+        c.scope.append(c.alloc, d) catch |e| return c.no(e);
+        return .ok;
+    }
+
+    /// **SEARCH'S INDEX, ASKED** (Host.search_words!): the index's words
+    /// beginning `key` in the conversations the Roc handed
+    /// (`scope`), at most `most`, and its unreadable count; null with no
+    /// index.
     fn searchWords(
         ctx: *anyopaque,
         key: []const u8,
@@ -1195,20 +1212,11 @@ pub const Call = struct {
         const c = of(ctx);
         const none_found: roc_chat.Words = .{ .words = &.{}, .unreadable = 0 };
         if (c.dead()) return none_found;
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const reach = chat_paths.visibleConvs(
-            c.io,
-            c.alloc,
-            c.uid,
-        ) catch |e| {
-            c.fail(e);
-            return none_found;
-        };
         const idx = search_index.indexOrBuild(c.io, c.alloc) orelse return null;
-        // absent-ok: the same.
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
         const got = if (most == 0) &[_]search_index.WordCount{} else idx.wordsFor(
             c.alloc,
-            reach,
+            c.scope.items,
             key,
             @intCast(most),
         ) catch |e| {
@@ -1221,14 +1229,14 @@ pub const Call = struct {
             return none_found;
         };
         for (got, out) |w, *o| o.* = .{ .word = w.word, .count = w.count };
-        return .{ .words = out, .unreadable = idx.unreadableFor(reach) };
+        return .{ .words = out, .unreadable = idx.unreadableFor(c.scope.items) };
     }
 
-    /// **SEARCH'S INDEX, ASKED FOR MESSAGES** (Host.search_messages!): what
-    /// the member can see, then the index's messages holding `key`, at most
-    /// `most` and within chat_search's byte cap (charged by excerptCost),
-    /// each as its excerpt's window (chat_search.excerptWindow); null with
-    /// no index.
+    /// **SEARCH'S INDEX, ASKED FOR MESSAGES** (Host.search_messages!): the
+    /// index's messages holding `key` in the conversations the Roc handed
+    /// (`scope`), at most `most` and within chat_search's byte cap (charged
+    /// by excerptCost), each by its conversation's place there and as its
+    /// excerpt's window (chat_search.excerptWindow); null with no index.
     fn searchMessages(
         ctx: *anyopaque,
         key: []const u8,
@@ -1241,23 +1249,14 @@ pub const Call = struct {
             .unreadable = 0,
         };
         if (c.dead()) return none_found;
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const reach = chat_paths.visibleConvs(
-            c.io,
-            c.alloc,
-            c.uid,
-        ) catch |e| {
-            c.fail(e);
-            return none_found;
-        };
         const idx = search_index.indexOrBuild(c.io, c.alloc) orelse return null;
-        // absent-ok: the same.
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
         const f = if (most == 0) search_index.Found{
             .hits = &.{},
             .matched = 0,
         } else idx.messagesFor(
             c.alloc,
-            reach,
+            c.scope.items,
             key,
             @intCast(most),
             .{ .bytes = chat_search.most_bytes, .cost = chat_search.excerptCost },
@@ -1273,8 +1272,7 @@ pub const Call = struct {
         for (f.hits, out) |h, *o| {
             const w = chat_search.excerptWindow(h.msg.markdown, key);
             o.* = .{
-                .base = h.conv.base,
-                .kind = if (h.conv.kind == .dm) .dm else .channel,
+                .conv = h.conv,
                 .sid = h.msg.sid,
                 .id = h.msg.id,
                 .from = h.msg.from,
@@ -1289,7 +1287,7 @@ pub const Call = struct {
         return .{
             .hits = out,
             .matched = f.matched,
-            .unreadable = idx.unreadableFor(reach),
+            .unreadable = idx.unreadableFor(c.scope.items),
         };
     }
 
