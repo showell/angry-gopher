@@ -5325,7 +5325,7 @@ fn docsWriteRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []cons
     var frames: std.ArrayList(u8) = .empty;
     for (asks) |q| {
         if (q.plant == .full_list) {
-            const full = try a.alloc(u8, reading_list.max_reading_list_bytes - 64);
+            const full = try a.alloc(u8, (1 << 20) - 64);
             @memset(full, '.');
             try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, "2", reading_list.reading_list_slug), full, .{});
         }

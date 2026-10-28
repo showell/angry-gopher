@@ -43,7 +43,6 @@ const html = @import("webbox").html;
 // pages (login, game, admin, …) escape without importing the chat dispatcher.
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
-const docs = @import("docs.zig");
 const upload = @import("chat_upload.zig");
 const download = @import("chat_download.zig");
 const Bus = @import("webbox").bus.Bus;
@@ -74,10 +73,8 @@ pub fn serve(
     req: *Request,
     io: Io,
     alloc: Alloc,
-    bus: *Bus,
     uid: []const u8,
     route: Route,
-    now: Now,
 ) !void {
     switch (route.family) {
         // Embedded JS assets are public (static client code): the router
@@ -92,19 +89,10 @@ pub fn serve(
             "chat.serve: {t} is the Roc's",
             .{route.family},
         ),
-        // /chat/docs[/...]: the three-pane authoring surface (docs.zig).
-        .docs => return docs.handle(
-            req,
-            io,
-            alloc,
-            bus,
-            uid,
-            route.rest,
-            now,
-        ),
         // /chat/recent, /images, /code and their streams: the Roc's
-        // (roc-webbox chat/main.roc `member_stream!`, metal-vmm QUEUE 286).
-        .recent, .images, .code => std.debug.panic(
+        // (roc-webbox chat/main.roc `member_stream!`, metal-vmm QUEUE 286);
+        // /chat/docs[/...] too (`docs!`, metal-vmm QUEUE 289, 290).
+        .recent, .images, .code, .docs => std.debug.panic(
             "chat.serve: {t} is the Roc's",
             .{route.family},
         ),

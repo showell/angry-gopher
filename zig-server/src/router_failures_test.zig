@@ -644,8 +644,8 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
-    const slug = try docs_store.createUserDoc(io, a, ada, "Notes");
-    try docs_store.writeUserDoc(io, a, ada, slug, "what Ada wrote");
+    const slug = "notes";
+    try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, ada, slug), "what Ada wrote", .{});
     const post = struct {
         fn f(al: std.mem.Allocator, i: Io, c: []const u8, path: []const u8, body: []const u8) ![]const u8 {
             return harness.serve(al, i, try std.fmt.allocPrint(al, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ path, c, body.len, body }));
@@ -660,7 +660,7 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     try testing.expectEqualStrings("404 Not Found", harness.status(gone));
 
     // A reading list at its cap: the next save is the client's limit.
-    try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, &@as([reading_list.max_reading_list_bytes]u8, @splat('x')), 0);
+    try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, ada, reading_list.reading_list_slug), &@as([1 << 20]u8, @splat('x')), .{});
     const full = try post(a, io, cookies, "/chat/docs/save_to_reading_list", "conv=1_2&sid=s&id=s_1&body=hello");
     try testing.expectEqualStrings("413 Payload Too Large", harness.status(full));
 }

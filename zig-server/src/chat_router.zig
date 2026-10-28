@@ -134,10 +134,8 @@ pub fn handle(
                 req,
                 io,
                 alloc,
-                bus,
                 call.uid,
                 s.route,
-                now,
             );
         },
         .respond => |r| {
@@ -291,6 +289,7 @@ pub const Call = struct {
             .me = me,
             .now = now_,
             .render = render,
+            .render_preview = renderPreview,
             .append_message = appendMessage,
             .index_message = indexMessage,
             .write_cache = writeCache,
@@ -1050,6 +1049,22 @@ pub const Call = struct {
             c.fail(e);
             return .failed;
         } };
+    }
+
+    /// A doc's live preview (Host.render_preview!): `render`'s, and
+    /// markdown too hostile to render counted (the preview's own
+    /// observable is the placeholder; the counter puts the probing on
+    /// /version).
+    fn renderPreview(ctx: *anyopaque, md: []const u8) roc_chat.Rendered {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const reason = markdown.hostileReason(c.alloc, md) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        if (reason != null) webbox.edge.count(.malformed_markdown);
+        return render(ctx, md);
     }
 
     /// The Roc's message as the store keeps it, its bytes copied out of

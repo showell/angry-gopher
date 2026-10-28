@@ -12,7 +12,7 @@
 /channel	"/docs"	404 text/html; charset=utf-8	am
 /chat	"/docs/"	200 text/html; charset=utf-8	am
 /channel	"/docs/"	404 text/html; charset=utf-8	am
-/chat	"/docs/new"	docs rest="/new" landing page	am
+/chat	"/docs/new"	303 /chat/docs	am
 /channel	"/docs/new"	404 text/html; charset=utf-8	am
 /chat	"/docsX"	404	am
 /channel	"/docsX"	404 text/html; charset=utf-8	am
@@ -1204,7 +1204,7 @@
 /channel	"/c/1_2/Fresh/send"	404 text/html; charset=utf-8	am
 /chat	"/c/1_2/Plans/react"	404	am
 /channel	"/c/1_2/Plans/react"	404 text/html; charset=utf-8	am
-/chat	"/docs/save_to_reading_list"	docs rest="/save_to_reading_list" landing page	am
+/chat	"/docs/save_to_reading_list"	405 allow POST	am
 /channel	"/docs/save_to_reading_list"	404 text/html; charset=utf-8	am
 /chat	"/c/1_2/Plans/saved"	404	am
 /channel	"/c/1_2/Plans/saved"	404 text/html; charset=utf-8	am
@@ -1256,7 +1256,7 @@
 /channel	"/bad/Standup"	404 text/html; charset=utf-8	am
 /chat	"/bad/Standup/pin"	404	am
 /channel	"/bad/Standup/pin"	404 text/html; charset=utf-8	am
-/chat	"/docs/save"	docs rest="/save" landing page	am
+/chat	"/docs/save"	405 allow POST	am
 /channel	"/docs/save"	404 text/html; charset=utf-8	am
 /chat	"/c/{s}/scripts"	404	am
 /channel	"/c/{s}/scripts"	404 text/html; charset=utf-8	am
