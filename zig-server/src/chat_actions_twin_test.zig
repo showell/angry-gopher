@@ -4836,3 +4836,98 @@ test "Host.check_online! is presence.isOnline at the request's time: generated l
     call.failed = error.IsDir;
     try testing.expectEqual(Presence.offline, chat_router.Call.online(&call, ids[0]));
 }
+
+/// One stream asked for: as whom, how, and the bus key the stream should
+/// hear ("" for one that should not be kept).
+const StreamAsk = struct { who: enum { steve, ann, nobody }, method: []const u8 = "GET", target: []const u8, key: []const u8 = "" };
+
+/// **EVERY CHAT STREAM, AND WHAT IT DELIVERS** (metal-vmm QUEUE 286): the six
+/// stream routes (a DM's topic, a channel's, the recent, images and code
+/// feeds, the notifications, the sidebar) as their owner, as one who is not
+/// theirs, with a key that names nothing, by a method no stream takes and
+/// signed out; and the 404 of a path under /chat that names nothing. Each
+/// answer, its head and backlog; then, for one kept, a blob published on
+/// the key it should hear and every frame it then makes until it makes no
+/// more: the frame once, and once only.
+fn streamsRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ @import("chat_store.zig").chat_root, "channels", "ops.channel" }), "1\n2\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"hi"});
+    @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    const asks = [_]StreamAsk{
+        .{ .who = .steve, .target = "/chat/c/1_2/Plans/stream", .key = "1_2/Plans" },
+        .{ .who = .steve, .target = "/chat/c/1_2/Plans/stream?since=1", .key = "1_2/Plans" },
+        .{ .who = .steve, .target = "/channel/ops/Standup/stream", .key = "ops/Standup" },
+        .{ .who = .steve, .target = "/chat/recent/stream", .key = "rec:1" },
+        .{ .who = .steve, .target = "/chat/images/stream", .key = "img:1" },
+        .{ .who = .steve, .target = "/chat/code/stream", .key = "code:1" },
+        .{ .who = .steve, .target = "/chat/notifications", .key = "ntf:1" },
+        .{ .who = .steve, .target = "/chat/sidebar/stream", .key = "sb:1" },
+        .{ .who = .ann, .target = "/chat/recent/stream", .key = "rec:3" },
+        .{ .who = .ann, .target = "/chat/notifications", .key = "ntf:3" },
+        .{ .who = .ann, .target = "/chat/c/1_2/Plans/stream" },
+        .{ .who = .ann, .target = "/channel/ops/Standup/stream" },
+        .{ .who = .steve, .target = "/chat/c/1_2/Gone/stream" },
+        .{ .who = .steve, .target = "/chat/c/9_9/Plans/stream" },
+        .{ .who = .steve, .target = "/chat/c/x_y/Plans/stream" },
+        .{ .who = .steve, .target = "/channel/nope/Standup/stream" },
+        .{ .who = .steve, .target = "/channel/Bad!Name/Standup/stream" },
+        .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/stream" },
+        .{ .who = .steve, .method = "POST", .target = "/chat/recent/stream" },
+        .{ .who = .steve, .method = "POST", .target = "/chat/notifications" },
+        .{ .who = .steve, .method = "HEAD", .target = "/chat/sidebar/stream" },
+        .{ .who = .nobody, .target = "/chat/notifications" },
+        .{ .who = .nobody, .target = "/chat/c/1_2/Plans/stream" },
+        .{ .who = .steve, .target = "/chat/nowhere" },
+        .{ .who = .steve, .target = "/chat/recent/streamX" },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const cookie = switch (q.who) {
+            .steve => try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{steve}),
+            .ann => try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{ann}),
+            .nobody => "",
+        };
+        const raw = try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\n{s}\r\n", .{ q.method, q.target, cookie });
+        var reader: std.Io.Reader = .fixed(raw);
+        var out: std.Io.Writer.Allocating = .init(a);
+        var server = std.http.Server.init(&reader, &out.writer);
+        var req = try server.receiveHead();
+        req.head.keep_alive = false;
+        var b = webbox.bus.Bus.of(&hub);
+        const got = router.route(&req, io, a, &b);
+        try out.writer.flush();
+        var line: std.ArrayList(u8) = .empty;
+        try line.print(a, "{s} {s} as {t}: ", .{ q.method, q.target, q.who });
+        if (got) |kept| {
+            try line.print(a, "{s}", .{out.written()});
+            if (kept) |k| {
+                defer webbox.bus.drop(&hub, k);
+                try line.appendSlice(a, "== kept\n");
+                if (q.key.len > 0) hub.publish(q.key, "event: message\ndata: {\"live\":1}\n\n");
+                while (try webbox.bus.nextFrame(k, a)) |frame| try line.print(a, "== frame\n{s}", .{frame});
+                try line.appendSlice(a, "== no more\n");
+            } else try line.appendSlice(a, "== not kept\n");
+        } else |e| try line.print(a, "error {t}\n{s}", .{ e, out.written() });
+        try answers.append(a, try unstamped(a, line.items));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "every chat stream (metal-vmm QUEUE 286): a DM's topic, a channel's, the feeds', the notifications and the sidebar, as their owner, as one they are not, by a key naming nothing, by a method no stream takes and signed out, and a frame published once delivered once, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("streamsRun", try streamsRun(a, io), "33fca94b316553c2bf57411f3d212171474778117eeb774687420dade1a7318b");
+}
