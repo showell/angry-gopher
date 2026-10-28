@@ -7,6 +7,7 @@ const std = @import("std");
 const Io = @import("host_io").Io;
 const webbox = @import("webbox");
 const chat_router = @import("chat_router.zig");
+const roc_chat = @import("roc_chat");
 const store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
@@ -5446,6 +5447,64 @@ test "what a search walks (the pure-Roc plan's item 8): each member's, the agent
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     try freezeRun("scopeRun", try scopeRun(a, io), "69f60119cd147df08c83a1dde44d80df9ecd9da551965116e749767c55965c91");
+}
+
+test "search's scope twin (the pure-Roc plan's item 8): the folders the Roc hands Host.search_scope_add! are chat_paths.visibleConvs's, in its order, for every asker the door admits in every phase of the scope tree; where visibleConvs fails, the request fails with its error and nothing is handed" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const askers = try scopeTree(a, io);
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    var compared: usize = 0;
+    var failed: usize = 0;
+    for (std.enums.values(ScopePhase)) |phase| {
+        try scopePhase(a, io, phase);
+        for (askers) |who| {
+            // The guest and the signed out never reach a search.
+            if (who.uid.len == 0) continue;
+            chat_search.forgetAll();
+            const raw = try std.fmt.allocPrint(a, "GET /chat/search/words?prefix=lx HTTP/1.1\r\nHost: x\r\n{s}\r\n", .{who.head});
+            var reader: std.Io.Reader = .fixed(raw);
+            var out: std.Io.Writer.Allocating = .init(a);
+            var server = std.http.Server.init(&reader, &out.writer);
+            var req = try server.receiveHead();
+            var bus = webbox.bus.Bus.of(&hub);
+            // The host chat_router.handle makes, kept here to read what the
+            // Roc handed it.
+            var call: chat_router.Call = .{ .req = &req, .io = io, .alloc = a, .bus = &bus, .now = Now.at(1_767_400_000) };
+            roc_chat.useRequest(a);
+            const decided = roc_chat.decide(a, "/search/words", false, req.head.method, call.host());
+            if (chat_paths.visibleConvs(io, a, who.uid)) |want| {
+                _ = try decided;
+                try testing.expectEqual(@as(?anyerror, null), call.failed);
+                try testing.expectEqual(want.len, call.scope.items.len);
+                for (want, call.scope.items) |w, got| try testing.expectEqualStrings(w.dir, got);
+                compared += 1;
+            } else |e| {
+                // A failure the host kept, never a Roc that crashed after it.
+                if (decided) |_| {} else |de| try testing.expect(de != error.RocCrashed);
+                try testing.expectEqual(@as(?anyerror, e), call.failed);
+                try testing.expectEqual(@as(usize, 0), call.scope.items.len);
+                failed += 1;
+            }
+        }
+    }
+    // Five askers: whole and mended agree, the three phases between fail.
+    try testing.expectEqual(@as(usize, 10), compared);
+    try testing.expectEqual(@as(usize, 15), failed);
 }
 
 /// **THE DOCS' READ PAGES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 289):

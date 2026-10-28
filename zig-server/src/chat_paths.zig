@@ -27,7 +27,10 @@ pub const Reach = struct {
 /// **WHAT ONE VIEWER CAN SEE**, as the sidebar lists it: a DM with every
 /// other authorized member, and every channel they are a member of. A reader
 /// across conversations walks this list and nothing else, so nothing outside
-/// it can reach the viewer: the boundary is the walk.
+/// it can reach the viewer: the boundary is the walk. /admin/search walks
+/// it; **THE CHAT'S SEARCH WALKS THE ROC'S COPY** (roc-webbox Search.scope,
+/// handed to the host by Host.search_scope_add!), which
+/// chat_actions_twin_test.zig's scope twin holds to this one.
 ///
 /// **NARROWER THAN THE ROUTES, ON PURPOSE**: the DM route also opens a DM with
 /// an account that has no password yet, and the viewer's own (`1_1`); neither

@@ -258,6 +258,8 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     var compared: usize = 0;
     for ([_][]const u8{ "1", "2", "3" }) |who| {
         const reach = try chat_paths.visibleConvs(io, a, who);
+        const dirs = try a.alloc([]const u8, reach.len);
+        for (reach, dirs) |r, *d| d.* = r.dir;
         var key_it = keys.keyIterator();
         while (key_it.next()) |k| {
             const base_r = try admin_search.search(io, a, who, k.*);
@@ -273,10 +275,10 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
                 }
                 if (has) try want.put(a, where, {});
             }
-            const got = try idx.messagesFor(a, reach, k.*, 10_000, .{});
+            const got = try idx.messagesFor(a, dirs, k.*, 10_000, .{});
             try testing.expectEqual(got.matched, got.hits.len);
             var got_set: std.StringHashMapUnmanaged(void) = .empty;
-            for (got.hits) |h| try got_set.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ h.conv.base, h.msg.sid, h.msg.id }), {});
+            for (got.hits) |h| try got_set.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ reach[h.conv].base, h.msg.sid, h.msg.id }), {});
             if (want.count() != got_set.count()) {
                 std.debug.print("viewer {s}, key \"{s}\": the baseline's messages holding it {d}, the index's {d}\n", .{ who, k.*, want.count(), got_set.count() });
                 return error.Disagree;
@@ -285,7 +287,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
             while (want_it.next()) |w| try testing.expect(got_set.contains(w.*));
             // And the words route counts it so (the box's review of 155).
             var counted: usize = 0;
-            for (try idx.wordsFor(a, reach, k.*, 100_000)) |wc| {
+            for (try idx.wordsFor(a, dirs, k.*, 100_000)) |wc| {
                 if (std.mem.eql(u8, wc.word, k.*)) counted = wc.count;
             }
             try testing.expectEqual(want.count(), counted);

@@ -14,8 +14,10 @@
 //! each word to how many of its messages hold it. Words by prefix walk the
 //! maps; the messages for a word are found by reading the text of each
 //! conversation whose map holds the word. A query walks only the
-//! conversations the viewer can see, given by the caller on every request
-//! (`chat_paths.visibleConvs`), never a list kept from an earlier one.
+//! conversations it is handed, by their folders, on every request (the
+//! chat's are the Roc's choice, roc-webbox Search.scope, handed a folder at
+//! a time by Host.search_scope_add!; /admin/search's are
+//! `chat_paths.visibleConvs`), never a list kept from an earlier one.
 //!
 //! **FEW ALLOCATIONS, NOT FEW BYTES** (the measurements, 155(e)): Linux's
 //! base allocator is the page allocator, a page at least for each, so a list
@@ -100,7 +102,8 @@ pub const Stats = struct {
 pub const WordCount = struct { word: []const u8, count: usize };
 
 pub const Found = struct {
-    pub const Hit = struct { conv: chat_paths.Reach, msg: Msg };
+    /// `conv`: the hit's conversation's place in the folders asked about.
+    pub const Hit = struct { conv: usize, msg: Msg };
     hits: []const Hit,
     /// Every message holding the word in the conversations walked, listed or not.
     matched: usize,
@@ -360,20 +363,21 @@ pub const Index = struct {
         self.fold.clearAndFree(self.gpa);
     }
 
-    /// Transcripts the build could not read, in the conversations of `reach`.
-    pub fn unreadableFor(self: *const Index, reach: []const chat_paths.Reach) usize {
+    /// Transcripts the build could not read, in the conversations whose
+    /// folders are `dirs`.
+    pub fn unreadableFor(self: *const Index, dirs: []const []const u8) usize {
         var n: usize = 0;
-        for (reach) |r| n += if (self.convs.getPtr(r.dir)) |c| c.unreadable else 0;
+        for (dirs) |d| n += if (self.convs.getPtr(d)) |c| c.unreadable else 0;
         return n;
     }
 
     /// At most `most` words beginning with `prefix` (a key, folded), each
-    /// with how many messages hold it in the conversations of `reach` and no
-    /// others: most first, then by word.
-    pub fn wordsFor(self: *const Index, alloc: Alloc, reach: []const chat_paths.Reach, prefix: []const u8, most: usize) ![]WordCount {
+    /// with how many messages hold it in the conversations whose folders
+    /// are `dirs` and no others: most first, then by word.
+    pub fn wordsFor(self: *const Index, alloc: Alloc, dirs: []const []const u8, prefix: []const u8, most: usize) ![]WordCount {
         var sums: std.StringHashMapUnmanaged(usize) = .empty;
-        for (reach) |r| {
-            const c = self.convs.getPtr(r.dir) orelse continue;
+        for (dirs) |d| {
+            const c = self.convs.getPtr(d) orelse continue;
             var it = c.counts.iterator();
             while (it.next()) |e| {
                 if (e.key_ptr.len > tokens.max_word) continue; // no key names it
@@ -390,18 +394,18 @@ pub const Index = struct {
         return out.items[0..@min(most, out.items.len)];
     }
 
-    /// The messages holding `word` (a key, folded) in the conversations of
-    /// `reach` and no others, in `reach`'s order, each conversation's in the
-    /// order they came; at most `most` listed, and what they cost at most
-    /// `budget.bytes` (past it the listing stops; the first is always
-    /// listed), every one counted.
-    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_paths.Reach, word: []const u8, most: usize, budget: Budget) !Found {
+    /// The messages holding `word` (a key, folded) in the conversations
+    /// whose folders are `dirs` and no others, in `dirs`' order, each
+    /// conversation's in the order they came; at most `most` listed, and
+    /// what they cost at most `budget.bytes` (past it the listing stops; the
+    /// first is always listed), every one counted.
+    pub fn messagesFor(self: *const Index, alloc: Alloc, dirs: []const []const u8, word: []const u8, most: usize, budget: Budget) !Found {
         var hits: std.ArrayList(Found.Hit) = .empty;
         var matched: usize = 0;
         var bytes: usize = 0;
         var full = false;
-        for (reach) |r| {
-            const c = self.convs.getPtr(r.dir) orelse continue;
+        for (dirs, 0..) |d, place| {
+            const c = self.convs.getPtr(d) orelse continue;
             const n = c.counts.get(word) orelse continue;
             matched += n;
             if (full or hits.items.len == most) continue;
@@ -417,7 +421,7 @@ pub const Index = struct {
                     break;
                 }
                 bytes += cost;
-                try hits.append(alloc, .{ .conv = r, .msg = m });
+                try hits.append(alloc, .{ .conv = place, .msg = m });
             }
         }
         return .{ .hits = hits.items, .matched = matched };
@@ -558,7 +562,7 @@ test "words by prefix, counted by message, only in the conversations asked about
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_][]const u8{"c/1_2"};
     const got = try idx.wordsFor(a, &mine, "lay", 20);
     try testing.expectEqual(@as(usize, 2), got.len);
     // "layout" in one message, however often; "layaway" not here.
@@ -570,7 +574,7 @@ test "words by prefix, counted by message, only in the conversations asked about
     try testing.expectEqual(@as(usize, 1), the_words.len);
     try testing.expectEqual(@as(usize, 1), the_words[0].count);
     // Both conversations: counts sum.
-    const both = [_]chat_paths.Reach{ mine[0], .{ .dir = "c/2_3", .base = "/chat/c/2_3", .kind = .dm } };
+    const both = [_][]const u8{ mine[0], "c/2_3" };
     const summed = try idx.wordsFor(a, &both, "the", 20);
     try testing.expectEqual(@as(usize, 2), summed[0].count);
     // At most `most`, the most held first.
@@ -586,7 +590,7 @@ test "messages for a word, at most so many listed and every one counted" {
     }
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_][]const u8{"c/1_2"};
     const f = try idx.messagesFor(arena.allocator(), &mine, "tonight", 3, .{});
     try testing.expectEqual(@as(usize, 4), f.matched);
     try testing.expectEqual(@as(usize, 3), f.hits.len);
@@ -595,6 +599,10 @@ test "messages for a word, at most so many listed and every one counted" {
     try testing.expectEqualStrings("dinner tonight?", f.hits[0].msg.markdown);
     // A word that is only a prefix finds nothing: words are whole.
     try testing.expectEqual(@as(usize, 0), (try idx.messagesFor(arena.allocator(), &mine, "tonig", 10, .{})).matched);
+    // Each hit names its conversation by its place in the folders asked
+    // about, one the index has never seen among them.
+    const placed = try idx.messagesFor(arena.allocator(), &.{ "c/none", "c/1_2" }, "tonight", 1, .{});
+    try testing.expectEqual(@as(usize, 1), placed.hits[0].conv);
 }
 
 test "an index that runs out of memory part way can be dropped without a leak" {
@@ -703,7 +711,7 @@ test "messages for a word stop at a byte budget, every one still counted (the bo
     }
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_][]const u8{"c/1_2"};
     const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 2500 });
     try testing.expectEqual(@as(usize, 3), f.matched);
     try testing.expectEqual(@as(usize, 2), f.hits.len);
@@ -717,7 +725,7 @@ test "a word too long to ask for is never suggested (the box's review of 155, 2)
     try idx.add("c/1_2", "t", msg("t_1", &@as([tokens.max_word + 1]u8, @splat('a')) ++ " " ++ &@as([tokens.max_word]u8, @splat('a'))));
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_][]const u8{"c/1_2"};
     const got = try idx.wordsFor(arena.allocator(), &mine, "aaa", 20);
     try testing.expectEqual(@as(usize, 1), got.len);
     try testing.expectEqual(tokens.max_word, got[0].word.len);
@@ -737,7 +745,7 @@ test "the budget is charged what the JSON costs, not the raw bytes (the review o
     try idx.add("c/1_2", "t", msg("t_2", hostile));
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const mine = [_]chat_paths.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const mine = [_][]const u8{"c/1_2"};
     const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 8000 });
     try testing.expectEqual(@as(usize, 2), f.matched);
     try testing.expectEqual(@as(usize, 1), f.hits.len);

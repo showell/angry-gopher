@@ -8,8 +8,9 @@
 //! answer a smarter search must agree with.
 //!
 //! **ONLY WHAT THE VIEWER CAN SEE** (Steve): the admin's own DMs and channels
-//! (`chat_store.visibleConvs`), as anyone's search will be, not every
-//! conversation on the disk.
+//! (`chat_paths.visibleConvs`), the conversations the chat's search walks
+//! (roc-webbox Search.scope, held to it by chat_actions_twin_test.zig's
+//! scope twin), not every conversation on the disk.
 //!
 //! A match is the key as a substring of a message's markdown, ASCII letters
 //! folded (English on this site; any other byte must match exactly).
