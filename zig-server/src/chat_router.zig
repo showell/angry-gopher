@@ -46,6 +46,8 @@ const markdown = @import("markdown.zig");
 const edge = webbox.edge;
 const Now = @import("request_time.zig").Now;
 const Conv = @import("chat_conv.zig").Conv;
+const upload = @import("chat_upload.zig");
+const download = @import("chat_download.zig");
 
 const Request = std.http.Server.Request;
 const Alloc = std.mem.Allocator;
@@ -253,6 +255,8 @@ pub const Call = struct {
     /// Inside Host.aside! (`asideOf`), and the aside's first failure.
     aside: bool = false,
     aside_failed: ?anyerror = null,
+    /// The topic's bundle Host.bundle_add! builds (metal-vmm QUEUE 291).
+    bundle: download.Bundle = .{},
 
     pub fn host(c: *Call) roc_chat.Host {
         return .{
@@ -265,6 +269,9 @@ pub const Call = struct {
             .read_body = body,
             .serve_file = serveFile,
             .serve_rendered = serveRendered,
+            .serve_upload = serveUpload,
+            .bundle_add = bundleAdd,
+            .serve_bundle = serveBundle,
             .publish = publish,
             .append_line = appendLine,
             .read = read,
@@ -571,6 +578,51 @@ pub const Call = struct {
     /// the server's own markdown (`renderTrusted`: a curated page has far
     /// more links than a message may), held for the answer: `.serving`
     /// when there is one.
+    /// **AN UPLOAD SERVED** as the Roc decided it (Host.serve_upload!,
+    /// metal-vmm QUEUE 291); `.gone` when it went since the Roc's stat.
+    fn serveUpload(ctx: *anyopaque, u: roc_chat.Upload) roc_chat.UploadServed {
+        const c = of(ctx);
+        if (c.dead()) return .served;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, u.path }) catch |e| {
+            c.fail(e);
+            return .served;
+        };
+        const part: upload.Served = switch (u.part) {
+            .whole => .whole,
+            .range => .{ .range = .{ .first = u.first, .last = u.last } },
+            .unsatisfiable => .unsatisfiable,
+        };
+        // absent-ok: not read as absence: the error is kept and returned once the call ends; only a file gone since the stat is gone.
+        const served = upload.serveStored(c.req, c.io, c.alloc, p, u.size, u.content_type, part) catch |e| {
+            c.fail(e);
+            return .served;
+        };
+        if (served == .served) c.answered = true;
+        return switch (served) {
+            .gone => .gone,
+            .served => .served,
+        };
+    }
+
+    /// The file at `path` added to the bundle as `name` (Host.bundle_add!).
+    fn bundleAdd(ctx: *anyopaque, name: []const u8, path: []const u8) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.bundle.add(c.io, c.alloc, name, p) catch |e| return c.no(e);
+        return .ok;
+    }
+
+    /// The bundle answered as `<name>.tar.gz` (Host.serve_bundle!).
+    fn serveBundle(ctx: *anyopaque, name: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.bundle.serve(c.req, c.alloc, name) catch |e| return c.fail(e);
+        c.answered = true;
+    }
+
     fn serveRendered(ctx: *anyopaque, path: []const u8) roc_chat.Serving {
         const c = of(ctx);
         if (c.dead()) return .not_serving;

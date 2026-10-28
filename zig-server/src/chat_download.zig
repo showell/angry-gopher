@@ -22,146 +22,54 @@ const ustar = @import("ustar.zig");
 
 const Request = std.http.Server.Request;
 
-/// serveBundle responds with the topic's .tar.gz, or 404 when the transcript is
-/// missing/unreadable (don't distinguish — same as /raw).
-pub fn serveBundle(
-    req: *Request,
-    io: Io,
-    alloc: Alloc,
-    conv_dir: []const u8,
-    sid: []const u8,
-) !void {
-    const md_name = try std.fmt.allocPrint(
-        alloc,
-        "{s}.md",
-        .{sid},
-    );
-    const md_path = try std.fs.path.join(alloc, &.{
-        conv_dir,
-        "sessions",
-        md_name,
-    });
-    const md = (try disk.readOrNull(
-        io,
-        alloc,
-        md_path,
-        .unlimited,
-    )) orelse return http.notFound(req);
+/// **A TOPIC'S BUNDLE, BUILT A FILE AT A TIME** (Host.bundle_add! and
+/// serve_bundle!, metal-vmm QUEUE 291): the Roc names each file and where it
+/// goes in the tar (roc-webbox chat/main.roc `serve_download!`); this holds
+/// the tar, then serves it gzipped.
+pub const Bundle = struct {
+    tar: std.ArrayList(u8) = .empty,
 
-    var tar: std.ArrayList(u8) = .empty;
-    const md_entry = try std.fmt.allocPrint(
-        alloc,
-        "{s}/{s}.md",
-        .{ sid, sid },
-    );
-    try addTarFile(
-        &tar,
-        alloc,
-        md_entry,
-        md,
-        fileMtime(
+    /// The file at `path` as the entry `name`, dated by its mtime.
+    pub fn add(b: *Bundle, io: Io, alloc: Alloc, name: []const u8, path: []const u8) !void {
+        const data = try disk.read(
             io,
             alloc,
-            md_path,
-        ),
-    );
-
-    // The reaction sidecar rides along when present (absent = nobody reacted).
-    // Only absence leaves it out: a sidecar that cannot be read fails the
-    // download rather than giving a bundle without it.
-    const rx_path = try store.reactionsPath(
-        alloc,
-        conv_dir,
-        sid,
-    );
-    if (disk.read(
-        io,
-        alloc,
-        rx_path,
-        .unlimited,
-    )) |rx| {
-        const rx_entry = try std.fmt.allocPrint(
-            alloc,
-            "{s}/{s}.reactions.jsonl",
-            .{ sid, sid },
+            path,
+            .unlimited,
         );
         try addTarFile(
-            &tar,
+            &b.tar,
             alloc,
-            rx_entry,
-            rx,
+            name,
+            data,
             fileMtime(
                 io,
                 alloc,
-                rx_path,
+                path,
             ),
         );
-    } else |e| if (e != error.FileNotFound) return e;
+    }
 
-    // Images — append-only once written, so an unlocked read is safe. No
-    // folder is no images yet; any other failure, the folder's or an image's,
-    // fails the download: a bundle is the whole topic or nothing.
-    const updir_name = try std.fmt.allocPrint(
-        alloc,
-        "{s}.uploads",
-        .{sid},
-    );
-    const updir = try std.fs.path.join(alloc, &.{
-        conv_dir,
-        "sessions",
-        updir_name,
-    });
-    if (disk.list(
-        io,
-        alloc,
-        updir,
-    )) |entries| {
-        for (entries) |entry| {
-            if (entry.kind == .directory) continue;
-            const p = try std.fs.path.join(alloc, &.{ updir, entry.name });
-            const data = try disk.read(
-                io,
-                alloc,
-                p,
-                .unlimited,
-            );
-            const nm = try std.fmt.allocPrint(
-                alloc,
-                "{s}/uploads/{s}",
-                .{ sid, entry.name },
-            );
-            try addTarFile(
-                &tar,
-                alloc,
-                nm,
-                data,
-                fileMtime(
-                    io,
-                    alloc,
-                    p,
-                ),
-            );
-        }
-    } else |e| if (e != error.FileNotFound) return e;
-
-    // Two zero blocks terminate a tar archive.
-    try tar.appendNTimes(
-        alloc,
-        0,
-        512 * 2,
-    );
-
-    const gz = try gzipBytes(alloc, tar.items);
-    const disp = try std.fmt.allocPrint(
-        alloc,
-        "attachment; filename=\"{s}.tar.gz\"",
-        .{sid},
-    );
-    try req.respond(gz, .{ .extra_headers = &.{
-        .{ .name = "content-type", .value = "application/gzip" },
-        .{ .name = "content-disposition", .value = disp },
-    } });
-}
+    /// The tar closed, gzipped and answered as the attachment `<name>.tar.gz`.
+    pub fn serve(b: *Bundle, req: *Request, alloc: Alloc, name: []const u8) !void {
+        // Two zero blocks terminate a tar archive.
+        try b.tar.appendNTimes(
+            alloc,
+            0,
+            512 * 2,
+        );
+        const gz = try gzipBytes(alloc, b.tar.items);
+        const disp = try std.fmt.allocPrint(
+            alloc,
+            "attachment; filename=\"{s}.tar.gz\"",
+            .{name},
+        );
+        try req.respond(gz, .{ .extra_headers = &.{
+            .{ .name = "content-type", .value = "application/gzip" },
+            .{ .name = "content-disposition", .value = disp },
+        } });
+    }
+};
 
 /// fileMtime returns a file's mtime in whole Unix seconds, or 0 on any error
 /// (the mtime is cosmetic in the archive, so 0 is harmless).

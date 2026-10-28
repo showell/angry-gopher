@@ -44,7 +44,6 @@ const html = @import("webbox").html;
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
 const upload = @import("chat_upload.zig");
-const download = @import("chat_download.zig");
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
@@ -229,18 +228,13 @@ fn topicRoute(
             "chat.topicRoute: the page is the Roc's, and its topic was here",
             .{},
         ),
-        // /uploads/<file>: serve a stored image.
-        .uploads => {
-            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            return upload.serveUpload(
-                req,
-                io,
-                alloc,
-                conv.dir,
-                topic.sid,
-                route.rest,
-            );
-        },
+        // An upload and the bundle: the Roc's decision, the host's bytes
+        // (roc-webbox chat/main.roc `serve_upload!`, `serve_download!`,
+        // metal-vmm QUEUE 291).
+        .uploads, .download => std.debug.panic(
+            "chat.topicRoute: {t} is the Roc's, and its topic was here",
+            .{route.tail},
+        ),
         // The topic's stream: the Roc's decision, the router's to hold
         // (chat_router.zig `.stream`, metal-vmm QUEUE 286).
         .stream => std.debug.panic(
@@ -272,28 +266,11 @@ fn topicRoute(
         // The Roc's (chat/main.roc `act!`), handed back only when the topic
         // was not found, which was answered above.
         .raw => std.debug.panic("chat.topicRoute: raw is the Roc's, and its topic was here", .{}),
-        .download => {
-            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            try download.serveBundle(
-                req,
-                io,
-                alloc,
-                conv.dir,
-                topic.sid,
-            );
-        },
         // The Roc's (roc-webbox chat/main.roc `serve_saved!`).
         .saved => std.debug.panic("chat.topicRoute: saved is the Roc's", .{}),
         // No tail served here, or one with segments after it: the Roc's 404.
         .invalid => std.debug.panic("chat.topicRoute: an invalid tail is the Roc's", .{}),
     }
-}
-
-/// Whether `req` only reads: a GET, or a HEAD (std answers it without the
-/// body). The page and the tails that serve what is stored answer nothing
-/// else: a POST there was served as if it were a GET.
-fn isRead(req: *const Request) bool {
-    return req.head.method == .GET or req.head.method == .HEAD;
 }
 
 // ── send (write path) ────────────────────────────────────────────────────────
