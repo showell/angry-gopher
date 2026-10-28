@@ -5,9 +5,11 @@
 //!
 //! The prelude is the Roc's: a static script is served to anyone; anyone
 //! else must be a member or the agent, or is sent to sign in; and anything
-//! but a stream counts as presence. Who is asking stays here: the Roc asks
-//! (`Host.check_member!`), after the static scripts, so a script's request does no
-//! identity reads, as before.
+//! but a stream counts as presence. Who is asking stays here, the session
+//! cookie and the API key verified against the secrets only the host holds:
+//! the Roc asks (`Host.identify!`), after the static scripts, so a script's
+//! request does no identity reads, as before. Whether that one may use the
+//! chat is the Roc's, from the accounts `Host.list_accounts!` lists.
 //!
 //! **A TOPIC'S REACTIONS, REACT, PIN AND UNPIN ARE THE ROC'S** (C4): it
 //! serves them itself, asking `Call` (below) for presence, the reads its
@@ -247,7 +249,7 @@ pub fn retire(io: Io, alloc: Alloc, report: *chat_retire.Report, p: chat_retire.
     };
     roc_chat.useRequest(alloc);
     // Every effect but these panics: the retire's area reaches nothing else.
-    var h = roc_chat.askingOnly(&call, noMember);
+    var h = roc_chat.askingOnly(&call, noAsking);
     h.list_accounts = Call.accounts;
     h.fail_account = Call.failAccount;
     h.list = Call.list;
@@ -272,8 +274,8 @@ pub fn retire(io: Io, alloc: Alloc, report: *chat_retire.Report, p: chat_retire.
 }
 
 /// The admin retire asks no chat member (its area runs no prelude).
-fn noMember(_: *anyopaque) roc_chat.Membership {
-    @panic("the admin retire asked whether a member is one");
+fn noAsking(_: *anyopaque) roc_chat.Asking {
+    @panic("the admin retire asked who is asking");
 }
 
 pub const Call = struct {
@@ -314,7 +316,7 @@ pub const Call = struct {
     pub fn host(c: *Call) roc_chat.Host {
         return .{
             .ctx = c,
-            .check_member = checkMember,
+            .identify = identify,
             .count_presence = presence_,
             .presence_unspent = presenceUnspent,
             .list_accounts = accounts,
@@ -433,7 +435,12 @@ pub const Call = struct {
         }, whose);
     }
 
-    pub fn checkMember(ctx: *anyopaque) roc_chat.Membership {
+    /// **WHO IS ASKING, VERIFIED, AND NOTHING MORE** (Host.identify!):
+    /// users.currentUserID, the session cookie's HMAC and the API key
+    /// checked here, where the secrets are. Whether that one may use the
+    /// chat (a member or the agent, never a guest) is the Roc's door
+    /// (Members.admit!), from `accounts`.
+    pub fn identify(ctx: *anyopaque) roc_chat.Asking {
         const c = of(ctx);
         c.asked = true;
         // absent-ok: not read as absence: `fail` keeps the error, and handle returns it once the Roc call ends (a C call cannot carry it).
@@ -443,23 +450,9 @@ pub const Call = struct {
             c.req,
         ) catch |e| {
             c.fail(e);
-            return .outsider;
+            return .failed;
         };
-        // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images,
-        // code, the conversations API) is members + agents only. A guest
-        // (name-only, no password) or a stranger is sent to set a password and
-        // returned here: guests may play the game, but chat requires
-        // membership.
-        // absent-ok: the same: the error is kept and returned, never read as "not a member".
-        const authorized = users.principalAuthorized(
-            c.io,
-            c.alloc,
-            c.uid,
-        ) catch |e| {
-            c.fail(e);
-            return .outsider;
-        };
-        return if (authorized) .member else .outsider;
+        return if (c.uid.len == 0) .stranger else .{ .known = c.uid };
     }
 
     /// The member counted online; whether this was the edge, the Roc's to
