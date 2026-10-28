@@ -5078,3 +5078,79 @@ test "every chat stream (metal-vmm QUEUE 286): a DM's topic, a channel's, the fe
         "33fca94b316553c2bf57411f3d212171474778117eeb774687420dade1a7318b",
     );
 }
+
+/// Every key presence's broadcast lands on, for members 1 to 4: each
+/// one's sidebar and notifications.
+const presence_keys = [_][]const u8{ "sb:1", "ntf:1", "sb:2", "ntf:2", "sb:3", "ntf:3", "sb:4", "ntf:4" };
+
+/// **PRESENCE'S CAME-ONLINE BROADCAST** (metal-vmm QUEUE 288), each request
+/// at its own time: a member's first request (the edge: every other
+/// authorized member's sidebar and notifications told), a second inside
+/// the window (nothing), another member's edge, one after the window (the
+/// edge again), a route the Zig serves counted (docs), an account whose
+/// name will not read (the broadcast lost, the request whole) and the
+/// retry once it reads (30 s on). Each answer's status, then every frame
+/// each key carried, drained after each request.
+fn presenceRun(a: Alloc, io: Io) !struct { answers: [][]const u8, frames: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann \"A\"");
+    const zed = try harness.memberSession(a, io, "4", "Zed");
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    var subs: [presence_keys.len]*webbox.bus.Subscriber = undefined;
+    for (presence_keys, &subs) |k, *s| s.* = try hub.open(k);
+    defer chat_router.test_now = null;
+    const name3 = try std.fs.path.join(a, &.{ users.auth_root, "3", "name" });
+    const Step = struct { who: []const u8, target: []const u8, secs: i64, plant: enum { none, break_name, mend_name } = .none };
+    const steps = [_]Step{
+        .{ .who = steve, .target = "/chat/conversations", .secs = 0 },
+        .{ .who = steve, .target = "/chat/conversations", .secs = 1 },
+        .{ .who = debbie, .target = "/chat/conversations", .secs = 2 },
+        .{ .who = steve, .target = "/chat/conversations", .secs = 400 },
+        .{ .who = debbie, .target = "/chat/docs", .secs = 401 },
+        // Docs read no account's name: the request is whole, its broadcast not.
+        .{ .who = zed, .target = "/chat/docs", .secs = 402, .plant = .break_name },
+        .{ .who = zed, .target = "/chat/docs", .secs = 410 },
+        .{ .who = zed, .target = "/chat/docs", .secs = 433, .plant = .mend_name },
+        .{ .who = zed, .target = "/chat/docs", .secs = 470 },
+        .{ .who = zed, .target = "/chat/docs", .secs = 900 },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    var frames: std.ArrayList(u8) = .empty;
+    for (steps) |st| {
+        switch (st.plant) {
+            .none => {},
+            .break_name => {
+                try std.Io.Dir.cwd().deleteFile(io, name3);
+                try std.Io.Dir.cwd().createDirPath(io, name3);
+            },
+            .mend_name => {
+                try std.Io.Dir.cwd().deleteTree(io, name3);
+                try harness.UidSite.disk.write(io, a, name3, "Ann \"A\"", .{});
+            },
+        }
+        chat_router.test_now = Now.at(1_761_400_000 + st.secs);
+        const r = try serveOn(a, io, &hub, try getRaw(a, st.target, st.who));
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} at {d}: {?t} {s}", .{ st.target, st.secs, r.err, harness.status(r.out) }));
+        try frames.print(a, "-- after {s} at {d}\n", .{ st.target, st.secs });
+        for (presence_keys, subs) |k, s| while (s.poll()) |blob| try frames.print(a, "== {s}\n{s}\n", .{ k, blob });
+    }
+    for (subs) |s| hub.close(s);
+    return .{ .answers = answers.items, .frames = frames.items };
+}
+
+test "presence's came-online broadcast (metal-vmm QUEUE 288): the edge tells every other member, once, inside the window nothing, after it again, a Zig route's too; a name that will not read loses the broadcast, never the request, and it is tried again once it reads" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("presenceRun", try presenceRun(a, io), "94d27ba9a55990b2e5cde9fa4e4ef260d0411397ed4186da40fc1b20f31fc2e4");
+}
