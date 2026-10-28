@@ -91,7 +91,6 @@ pub fn refresh(io: Io, base: std.mem.Allocator) Refresh {
         break :blk search_index.buildAll(io, pass.allocator());
     };
     @import("game_limits.zig").forgetUsage();
-    @import("reading_list.zig").forgetCache();
     codex_chat.refresh();
     const ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
     return .{ .backfilled = backfilled, .search = search, .ms = ms };

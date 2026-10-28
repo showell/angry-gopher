@@ -51,7 +51,6 @@ const chat_sse = @import("chat_sse.zig");
 const sse = @import("webbox").sse;
 const edge = @import("webbox").edge;
 const docs = @import("docs.zig");
-const reading_list = @import("reading_list.zig");
 const recent = @import("recent.zig");
 const chat_search = @import("chat_search.zig");
 const images = @import("images.zig");
@@ -231,10 +230,8 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
             try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
         },
-        .saved => {
-            if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            try savedIds(req, io, alloc, uid, conv.key, topic.sid);
-        },
+        // The Roc's (roc-webbox chat/main.roc `serve_saved!`).
+        .saved => std.debug.panic("chat.topicRoute: saved is the Roc's", .{}),
         // No tail served here, or one with segments after it: the Roc's 404.
         .invalid => std.debug.panic("chat.topicRoute: an invalid tail is the Roc's", .{}),
     }
@@ -245,21 +242,6 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
 /// else: a POST there was served as if it were a GET.
 fn isRead(req: *const Request) bool {
     return req.head.method == .GET or req.head.method == .HEAD;
-}
-
-/// savedIds answers GET /<conv>/<sid>/saved → JSON array of the message ids the
-/// caller has saved to their reading list within this topic, for the page to
-/// mark its bubbles. Served from reading_list's mtime-cached parse.
-fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {
-    const ids = try reading_list.savedIdsFor(io, alloc, uid, conv_key, sid);
-    var out: std.ArrayList(u8) = .empty;
-    try out.append(alloc, '[');
-    for (ids, 0..) |id, i| {
-        if (i != 0) try out.append(alloc, ',');
-        try out.appendSlice(alloc, try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(id, .{})}));
-    }
-    try out.append(alloc, ']');
-    try req.respond(out.items, .{ .extra_headers = &.{http.json_ct} });
 }
 
 // ── send (write path) ────────────────────────────────────────────────────────

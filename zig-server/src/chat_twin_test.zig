@@ -107,6 +107,7 @@ const Fn = enum(u8) {
     chat_url_on_site = 71,
     route_kind = 72,
     limits = 73,
+    saved_refs = 74,
 };
 
 /// One Roc call's results, in `a`.
@@ -419,6 +420,40 @@ test "Limits: the Roc's constants the conversation page tells its client are the
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{d}", .{chat_upload.video_max}), got[1]);
     try testing.expectEqualStrings(chat_upload.accept, got[2]);
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{d}", .{@import("search_tokens.zig").min_len}), got[3]);
+}
+
+test "Saved: a reading list's refs as reading_list.parseRefs reads them, both prefixes, every near miss, over text and bytes that are not (metal-vmm QUEUE 273)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    const reading_list = @import("reading_list.zig");
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var found: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0x5a7ed);
+    const r = rng.random();
+    const parts = [_][]const u8{ "/chat/c/", "/channel/", "/chat/c", "/chan", "1_2", "ops", "a.b", "-", "_", "/", "#msg-", "#msg", "#", "Plans", "Plans_3", "Plans_", "_3", "x_y_9", "bad", ")", " ", "\n", "](", "[o]", "\xff", "\xc3\xa9", "/chat/c//", "1_2/Plans#msg-Plans_1", "/chat/c/1_2/Plans#msg-Plans_1", "/channel/ops/Standup#msg-Standup_12", "/chat/c/3_7/a.b#msg-a-b_2" };
+    var texts: std.ArrayList([]const u8) = .empty;
+    for (0..3000) |_| {
+        var t: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 14)) |_| try t.appendSlice(a, parts[r.uintLessThan(usize, parts.len)]);
+        try texts.append(a, t.items);
+    }
+    try texts.appendSlice(a, try byteStrings(a));
+    for (texts.items) |text| {
+        const z = try reading_list.parseRefs(a, text);
+        const got = try roc(a, .saved_refs, &.{text});
+        compared += 1;
+        found += z.len;
+        var same = got.len == 3 * z.len;
+        if (same) for (z, 0..) |ref, k| {
+            if (!std.mem.eql(u8, ref.conv, got[3 * k]) or !std.mem.eql(u8, ref.sid, got[3 * k + 1]) or !std.mem.eql(u8, ref.id, got[3 * k + 2])) same = false;
+        };
+        if (!same) differ.add("parseRefs(\"{f}\"): zig {d} refs, roc {d} parts", .{ std.zig.fmtString(text), z.len, got.len });
+    }
+    try differ.none(compared);
+    try testing.expect(found > 500);
 }
 
 // ── Paths (chat_paths.zig) ─────────────────────────────────────────────────

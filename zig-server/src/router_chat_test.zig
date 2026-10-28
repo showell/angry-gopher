@@ -224,6 +224,51 @@ test "route: a message saved to the reading list is found again at the place it 
     try testing.expectEqualStrings("Plans_3", refs[0].id);
 }
 
+test "route: a topic's saved ids are the reading list's refs to that topic, whatever else the list holds, and none when there is no list (metal-vmm QUEUE 273)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const list = struct {
+        fn write(al: std.mem.Allocator, i: std.Io, text: []const u8) !void {
+            try harness.UidSite.disk.write(i, al, try @import("docs_store.zig").docPath(al, "1", "reading-list"), text, .{});
+        }
+    }.write;
+    const body = struct {
+        fn of(answer: []const u8) []const u8 {
+            const at = std.mem.indexOf(u8, answer, "\r\n\r\n").?;
+            return answer[at + 4 ..];
+        }
+    }.of;
+    // No list: nothing saved.
+    try testing.expectEqualStrings("[]", body(try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans/saved", steve)));
+    // An empty list: nothing saved.
+    try list(a, io, "");
+    try testing.expectEqualStrings("[]", body(try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans/saved", steve)));
+    // Refs to this topic, to another topic and another conversation, a
+    // channel ref whose name is this DM's key (matched by the key's text,
+    // after every DM ref), malformed ones (no anchor, a bad id, an empty
+    // part, a cut-off end), and bytes that are not UTF-8.
+    try list(a, io, "[open](/chat/c/1_2/Plans#msg-Plans_3) and /chat/c/1_2/Other#msg-Other_1\n" ++
+        "/channel/1_2/Plans#msg-Plans_9 /chat/c/1_3/Plans#msg-Plans_2\n" ++
+        "/chat/c/1_2/Plans#msg-bad /chat/c/1_2/Plans /chat/c//Plans#msg-Plans_5 /chat/c/1_2/#msg-Plans_6\n" ++
+        "/chat/c/1_2/Plans#msg-Plans_4) and again /chat/c/1_2/Plans#msg-Plans_3 \xff\n" ++
+        "/chat/c/1_2/Plans#msg-Plans_7");
+    try testing.expectEqualStrings("[\"Plans_3\",\"Plans_4\",\"Plans_3\",\"Plans_7\",\"Plans_9\"]", body(try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans/saved", steve)));
+    // Saved in another topic only: nothing here.
+    try list(a, io, "/chat/c/1_2/Other#msg-Other_1\n");
+    try testing.expectEqualStrings("[]", body(try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans/saved", steve)));
+}
+
 test "route: the conversation page hands the client the upload caps and the accepted types, the server's own, where chat_compose.js kept copies (metal-vmm QUEUE 157(d))" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
