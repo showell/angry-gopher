@@ -912,6 +912,84 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
 
 /// A send as Steve to `target`, on a site where a step of it will fail, the
 /// old way or the Roc's: its error, its status, every frame sent on every
+/// Every key a docs' post publishes on in `docsRun`'s site.
+const docs_keys = [_][]const u8{ "1_2/Plans", "1_2/Other", "1_3/2025-10-25" } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3");
+
+/// A docs' post (POST /chat/docs/post, metal-vmm QUEUE 278) as `cookie`.
+fn postRaw(a: Alloc, cookie: []const u8, target: []const u8, body: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookie, body.len, body });
+}
+
+/// Docs posted to the member's default partner: to the topic they last
+/// viewed, to the first of a DM's topics, to a new one named for the day;
+/// a slug spaced, empty, missing, not a slug, two of them, a form that will
+/// not decode; an empty doc and one not there; a GET, a stranger, a path
+/// past `post`; and last, a member with no partner left to post to. Every
+/// answer, every file, every frame on every key.
+fn docsRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8, frames: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    try harness.writeTranscript(a, io, "1_2", "Other", &.{"three"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "last-sessions", "1_2" }), "Plans\n", .{});
+    for ([_][3][]const u8{
+        .{ "1", "notes", feeds_md },
+        .{ "1", "blank", " \t\r\n" },
+        .{ "2", "hello", "hi -------------\n-------------\nsteve" },
+        .{ "3", "ann", "from ann" },
+    }) |d| try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", d[0], "docs", try std.fmt.allocPrint(a, "{s}.md", .{d[1]}) }), d[2], .{});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+
+    var hub = webbox.bus.Hub.init(io, a);
+    var subs: [docs_keys.len]*webbox.bus.Subscriber = undefined;
+    for (docs_keys, &subs) |k, *s| s.* = try hub.open(k);
+
+    const posts = [_]struct { []const u8, []const u8, []const u8 }{
+        .{ steve, "/chat/docs/post", "slug=notes" },
+        .{ steve, "/chat/docs/post", "slug=+notes%0D%0A" },
+        .{ steve, "/chat/docs/post", "slug=blank" },
+        .{ steve, "/chat/docs/post", "slug=gone" },
+        .{ steve, "/chat/docs/post", "slug=Bad_Slug" },
+        .{ steve, "/chat/docs/post", "" },
+        .{ steve, "/chat/docs/post", "slug=%ZZ" },
+        .{ steve, "/chat/docs/post", "slug=notes&slug=blank" },
+        .{ steve, "/chat/docs/post", "other=1&slug=notes" },
+        .{ steve, "/chat/docs/post/", "slug=notes" },
+        .{ debbie, "/chat/docs/post", "slug=hello" },
+        .{ ann, "/chat/docs/post", "slug=ann" },
+        .{ "", "/chat/docs/post", "slug=notes" },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (posts) |p| {
+        const r = try serveOn(a, io, &hub, try postRaw(a, p[0], p[1], p[2]));
+        try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out }));
+    }
+    const got = try serveOn(a, io, &hub, try getRaw(a, "/chat/docs/post", steve));
+    try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ got.err, got.out }));
+    // Debbie a guest now: Steve has no partner to post to.
+    try harness.UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "password" }));
+    const none = try serveOn(a, io, &hub, try postRaw(a, steve, "/chat/docs/post", "slug=notes"));
+    try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ none.err, none.out }));
+    return .{ .answers = answers.items, .files = try tree(a, io, site.base), .frames = try drained(a, &hub, &docs_keys, &subs) };
+}
+
+test "a doc posted to chat (metal-vmm QUEUE 278): the partner, the topic it resumes, every refusal, and the transcript, the .count files, the feeds and the frames it leaves, as the old Zig's docsPost left them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("docsRun", try docsRun(a, io), "1946b7c80088e0fb7def4c23585284bf1ab1e1f2a50b24144c7c2893ae85f315");
+}
+
 /// key, and every file the site holds.
 fn failedSend(a: Alloc, io: Io, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
     var site = try harness.UidSite.init(a, io);
