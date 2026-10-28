@@ -15,18 +15,9 @@
 //! crosses whole.
 
 const std = @import("std");
-const chat_paths = @import("chat_paths.zig");
-const Now = @import("request_time.zig").Now;
-const Io = @import("host_io").Io;
-const Alloc = std.mem.Allocator;
-const http = @import("webbox").http;
 const chat = @import("chat.zig");
-const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
-const tokens = @import("search_tokens.zig");
 const mem_meter = @import("webbox").mem_meter;
-
-const Request = std.http.Server.Request;
 
 /// Bytes of a message either side of the marked word in its excerpt.
 pub const excerpt_pad = 90;

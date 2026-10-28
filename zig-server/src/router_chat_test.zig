@@ -1,6 +1,7 @@
 //! router.zig's tests: chat's routes.
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_codec = @import("chat_codec.zig");
 const player = @import("player.zig");
@@ -159,7 +160,6 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const chat_state = @import("chat_state.zig");
     const steve = try harness.memberSession(a, io, "1", "Steve");
     _ = try harness.memberSession(a, io, "2", "Debbie");
     // /chat, its bookmark on a conversation with no topic.
@@ -171,7 +171,6 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Fresh/send", steve, "markdown=first&cid=x")));
     const raw = (try chat_paths.readTranscript(io, a, try chat_paths.dmConvDir(a, "1_2"), "Fresh")).?;
     try testing.expectEqual(@as(usize, 1), (try chat_codec.decodeChatFile(a, raw)).len);
-    _ = chat_state;
 }
 
 test "route: a send and a reaction store their author's name and uid each where it goes, never the one for the other" {
@@ -347,16 +346,16 @@ test "route: pin puts a topic in the viewer's Pinned group and unpin takes it ou
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const chat_state = @import("chat_state.zig");
+    const chat_store = @import("chat_store.zig");
     const steve = try harness.memberSession(a, io, "1", "Steve");
     _ = try harness.memberSession(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
-    const pinned = try chat_state.pinnedTopics(io, a, "1", "1_2");
-    try testing.expectEqual(@as(usize, 1), pinned.len);
-    try testing.expectEqualStrings("Plans", pinned[0]);
+    // The pins file, one topic a line (chat_state.pinnedTopics read it so).
+    const pins = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions", "1_2" });
+    try testing.expectEqualStrings("Plans", std.mem.trim(u8, try harness.UidSite.disk.read(io, a, pins, .unlimited), "\n"));
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
-    try testing.expectEqual(@as(usize, 0), (try chat_state.pinnedTopics(io, a, "1", "1_2")).len);
+    try testing.expect(!try harness.UidSite.disk.has(io, a, pins) or std.mem.trim(u8, try harness.UidSite.disk.read(io, a, pins, .unlimited), "\n").len == 0);
 }
 
 test "route: the chat's gate sends an outsider to sign in and back to the request's own path, and a path that is none on this site is a 400, never a redirect (metal-vmm QUEUE 250)" {
@@ -412,7 +411,6 @@ test "route: the welcome DM is seeded on a new member's /chat, once, from the ho
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const chat_count = @import("chat_count.zig");
     // No host yet: Eve's /chat seeds nothing, and her welcome stays pending.
     const eve = try harness.memberSession(a, io, "5", "Eve");
     try users.markWelcomePending(io, a, "5");
@@ -426,7 +424,7 @@ test "route: the welcome DM is seeded on a new member's /chat, once, from the ho
     for (0..2) |_| {
         const got = try harness.UidSite.ask(a, io, "/chat", eve);
         try testing.expect(std.mem.indexOf(u8, got, "location: /chat/c/1_5/general\r\n") != null);
-        try testing.expectEqual(@as(usize, 1), try chat_count.messageCount(io, a, dir, "general"));
+        try testing.expectEqual(@as(usize, 1), try fixtures.messageCount(io, a, dir, "general"));
     }
     try testing.expect(!try users.welcomePending(io, a, users.Uid.of("5").?));
     const transcript = (try chat_paths.readTranscript(io, a, dir, "general")).?;
@@ -437,7 +435,7 @@ test "route: the welcome DM is seeded on a new member's /chat, once, from the ho
     // welcome, and the mark goes.
     try users.markWelcomePending(io, a, "5");
     _ = try harness.UidSite.ask(a, io, "/chat", eve);
-    try testing.expectEqual(@as(usize, 1), try chat_count.messageCount(io, a, dir, "general"));
+    try testing.expectEqual(@as(usize, 1), try fixtures.messageCount(io, a, dir, "general"));
     try testing.expect(!try users.welcomePending(io, a, users.Uid.of("5").?));
     // A DM whose topics will not list (a file where its folder goes): no
     // welcome, and /chat is served all the same.
@@ -456,6 +454,6 @@ test "route: the welcome DM is seeded on a new member's /chat, once, from the ho
     const cy = try harness.memberSession(a, io, "7", "Cy");
     try harness.writeTranscript(a, io, "1_7", "Plans", &.{"one"});
     _ = try harness.UidSite.ask(a, io, "/chat", cy);
-    try testing.expectEqual(@as(usize, 0), try chat_count.messageCount(io, a, try chat_paths.dmConvDir(a, "1_7"), "general"));
-    try testing.expectEqual(@as(usize, 1), try chat_count.messageCount(io, a, try chat_paths.dmConvDir(a, "1_7"), "Plans"));
+    try testing.expectEqual(@as(usize, 0), try fixtures.messageCount(io, a, try chat_paths.dmConvDir(a, "1_7"), "general"));
+    try testing.expectEqual(@as(usize, 1), try fixtures.messageCount(io, a, try chat_paths.dmConvDir(a, "1_7"), "Plans"));
 }

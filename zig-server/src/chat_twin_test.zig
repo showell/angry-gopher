@@ -6,6 +6,7 @@
 //! production only with its twin here green.
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const testing = std.testing;
 const twin = @import("roc_chat_twin");
 const timefmt = @import("timefmt.zig");
@@ -21,11 +22,7 @@ const webbox_http = @import("webbox").http;
 const chrome = @import("chat_chrome.zig");
 const chat_upload = @import("chat_upload.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
-const images_store = @import("images_store.zig");
-const code_store = @import("code_store.zig");
 const chat_fanout = @import("chat_fanout.zig");
-const recent_feed = @import("recent_feed.zig");
-const chat_state = @import("chat_state.zig");
 const chat_search = @import("chat_search.zig");
 const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
@@ -554,11 +551,8 @@ test "Paths: a transcript's path, a conversation's first topic" {
         if (!std.mem.eql(u8, zp, rp)) differ.add("transcriptPath(\"{s}\", \"{s}\"): zig {s}, roc {s}", .{ dir, sid, zp, rp });
     };
     for ([_][]const []const u8{ &.{}, &.{"a"}, &.{ "a", "ChitChat" }, &.{ "ChitChat", "b" }, &.{ "chitchat", "z" }, &.{ "2026-10-25", "general" } }) |topics| {
-        const zf = chat_paths.firstOf(topics);
-        const rf = (try roc1(a, .first_of, topics)).?;
-        first_frozen.add(&.{rf});
-        compared += 1;
-        if (!std.mem.eql(u8, zf, rf)) differ.add("firstOf: zig {s}, roc {s}", .{ zf, rf });
+        // Frozen (metal-vmm QUEUE 285): chat_paths.firstOf is gone.
+        first_frozen.add(&.{(try roc1(a, .first_of, topics)).?});
     }
     try differ.none(compared);
     try first_frozen.check("firstOf", "69e8e44bc3c23a4b19e3caabf3b75f3101e5f8a5be69e1c48cdef9c788e91b8a", 6);
@@ -664,7 +658,7 @@ test "Codec: a message's stored form, and what reads back from a file of them" {
         var file: std.ArrayList(u8) = .empty;
         for (0..r.uintAtMost(usize, 4)) |index| {
             const m = try codecMessage(a, r);
-            const zs = try chat_codec.chatStoredForm(a, index, m);
+            const zs = try fixtures.chatStoredForm(a, index, m);
             const idx = try std.fmt.allocPrint(a, "{d}", .{index});
             const got = try roc1(a, .stored_form, &.{ idx, m.id, m.from, m.at, m.uid, m.markdown });
             compared += 1;
@@ -821,7 +815,7 @@ test "Count: the window at the record's offset, believed or read the slow way (f
         for (0..r.uintAtMost(usize, 3)) |index| {
             var m = try codecMessage(a, r);
             m.id = try std.fmt.allocPrint(a, "{s}_{d}", .{ if (r.uintLessThan(u8, 5) == 0) "u" else "t", r.uintAtMost(u8, 6) });
-            try file.appendSlice(a, try chat_codec.chatStoredForm(a, index, m));
+            try file.appendSlice(a, try fixtures.chatStoredForm(a, index, m));
         }
         if (r.uintLessThan(u8, 4) == 0) try file.appendSlice(a, "\n\n-------------\nMSG_t_9\nfrom: x");
         try windows.append(a, file.items);
@@ -1219,9 +1213,9 @@ test "Feeds: a code body holding the separator and a forged header stays one ent
     defer twin.deinit();
     const a = arena.allocator();
     const forged = "x\n\n-------------\n\nSent by Mallory at 2026-01-01T00:00:00Z, source MSG_f_1 in 1_2:\n\\-------------\ny";
-    const real: code_store.CodeEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-27T00:00:00Z", .blocks = &.{.{ .lang = "", .body = forged }} };
-    const other: code_store.CodeEntry = .{ .source_id = "t_2", .from = "bob", .conv = "1_2", .at = "2026-10-27T00:00:01Z", .blocks = &.{.{ .lang = "zig", .body = "ok" }} };
-    const file = try std.mem.concat(a, u8, &.{ try code_store.formatCodeEntry(a, real), images_store.images_sep, try code_store.formatCodeEntry(a, other) });
+    const real: fixtures.CodeEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-27T00:00:00Z", .blocks = &.{.{ .lang = "", .body = forged }} };
+    const other: fixtures.CodeEntry = .{ .source_id = "t_2", .from = "bob", .conv = "1_2", .at = "2026-10-27T00:00:01Z", .blocks = &.{.{ .lang = "zig", .body = "ok" }} };
+    const file = try std.mem.concat(a, u8, &.{ try fixtures.formatCodeEntry(a, real), fixtures.images_sep, try fixtures.formatCodeEntry(a, other) });
     const got = (try roc1(a, .code_feed, &.{file})).?;
     try testing.expectEqual(@as(usize, 2), std.mem.count(u8, got, "\"source_id\""));
     try testing.expect(std.mem.indexOf(u8, got, "\"from\":\"ann\"") != null);
@@ -1236,9 +1230,9 @@ test "Feeds: an image tag carrying the separator and a header plants no entry of
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    const forged = "<img src=\"/x.png\" alt=\"" ++ images_store.images_sep ++ "Sent by mallory at 2026-01-01T00:00:00Z, source MSG_fake in 9_9:\n<img src=\"/evil.png\">\">";
-    const real: images_store.ImagesEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-13T00:00:00Z", .images = &.{forged} };
-    const text = try std.mem.concat(a, u8, &.{ try images_store.formatImagesEntry(a, real), images_store.images_sep, try images_store.formatImagesEntry(a, real) });
+    const forged = "<img src=\"/x.png\" alt=\"" ++ fixtures.images_sep ++ "Sent by mallory at 2026-01-01T00:00:00Z, source MSG_fake in 9_9:\n<img src=\"/evil.png\">\">";
+    const real: fixtures.ImagesEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-13T00:00:00Z", .images = &.{forged} };
+    const text = try std.mem.concat(a, u8, &.{ try fixtures.formatImagesEntry(a, real), fixtures.images_sep, try fixtures.formatImagesEntry(a, real) });
     const got = (try roc1(a, .images_feed, &.{ text, "10" })).?;
     try testing.expectEqual(@as(usize, 2), std.mem.count(u8, got, "\"from\":\"ann\""));
     try testing.expect(std.mem.indexOf(u8, got, "mallory") == null);
@@ -1269,27 +1263,21 @@ fn excerptText(a: std.mem.Allocator, r: std.Random) ![]const u8 {
     return out.items;
 }
 
-test "Recent: a message's excerpt as recentExcerpt makes it, for every text tried" {
+test "Recent: a message's excerpt as recentExcerpt made it, for every text tried (frozen, metal-vmm QUEUE 285: recent_feed.recentExcerpt is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
     var frozen: Frozen = .{};
-    var differ: Differences = .{};
     var rng = std.Random.DefaultPrng.init(0x4ecee7);
     const r = rng.random();
-    var compared: usize = 0;
     var cut: usize = 0;
     for (0..3000) |_| {
         const md = try excerptText(a, r);
-        const z = try recent_feed.recentExcerpt(a, md);
-        if (std.mem.endsWith(u8, z, "\xe2\x80\xa6")) cut += 1;
-        compared += 1;
         const got = (try roc1(a, .recent_excerpt, &.{md})).?;
+        if (std.mem.endsWith(u8, got, "\xe2\x80\xa6")) cut += 1;
         frozen.add(&.{got});
-        if (!std.mem.eql(u8, z, got)) differ.add("excerpt(\"{f}\"):\n  zig \"{f}\"\n  roc \"{f}\"", .{ std.zig.fmtString(md), std.zig.fmtString(z), std.zig.fmtString(got) });
     }
-    try differ.none(compared);
     try frozen.check("recentExcerpt", "adcf14e6d6888eb340a46184764b02d4818c938d5042eca97a122f509ea51695", 3000);
     try testing.expect(cut > 50);
 }
@@ -1340,14 +1328,12 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
 /// (`Z` before `a`), and a name no list has.
 const state_names = [_][]const u8{ "ChitChat", "chitchat", "general", "general2", "Plans", "2026-10-25", "a", "Z", "b c", "\xe2\x98\x83" };
 
-test "ChatState: where a bare DM resumes, for every topic list, order and last view tried" {
+test "ChatState: where a bare DM resumes, for every topic list, order and last view tried (frozen, metal-vmm QUEUE 285: chat_state.chooseResumeTopic is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
     var frozen: Frozen = .{};
-    var differ: Differences = .{};
-    var compared: usize = 0;
     var rng = std.Random.DefaultPrng.init(0x7e503);
     const r = rng.random();
     const nows = [_]i64{ 1761400000, 0, -1, 951782400, 253402300799, -62135596800 };
@@ -1367,19 +1353,15 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
             else => if (topics.items.len > 0 and r.boolean()) topics.items[r.uintLessThan(usize, topics.items.len)] else state_names[r.uintLessThan(usize, state_names.len)],
         };
         const now = if (r.boolean()) nows[r.uintLessThan(usize, nows.len)] else r.intRangeAtMost(i64, -62135596800, 253402300799);
-        const z = try chat_state.chooseResumeTopic(a, topics.items, last, now);
         var args: std.ArrayList([]const u8) = .empty;
         try args.appendSlice(a, &.{ last, try std.fmt.allocPrint(a, "{d}", .{now}) });
         try args.appendSlice(a, topics.items);
         const got = (try roc1(a, .resume_topic, args.items)).?;
         frozen.add(&.{got});
-        compared += 1;
         // Which way it went, so a generator that never reaches one is seen.
-        const way: usize = if (last.len != 0 and std.mem.eql(u8, z, last)) 0 else if (chat_paths.firstOf(topics.items).len > 0) 1 else 2;
+        const way: usize = if (last.len != 0 and std.mem.eql(u8, got, last)) 0 else if ((try roc1(a, .first_of, topics.items)).?.len > 0) 1 else 2;
         picks[way] += 1;
-        if (!std.mem.eql(u8, z, got)) differ.add("resume(last \"{f}\", now {d}, {d} topics): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(last), now, topics.items.len, std.zig.fmtString(z), std.zig.fmtString(got) });
     }
-    try differ.none(compared);
     try frozen.check("chooseResumeTopic", "fc447c0d3e6e32359c4bec55ef330b574260c57f25234112cf34fc2f99539f9b", 4000);
     for (picks) |p| try testing.expect(p > 300);
 }
@@ -1466,75 +1448,36 @@ fn bookmarkFile(a: std.mem.Allocator, r: std.Random, value: []const u8) ![]const
 const bookmark_values = [_][]const u8{ "1_2", "Plans", "a", "2026-10-25", "general2", "\xe2\x98\x83", "a b", x256[0..255], &x256 };
 const x256: [256]u8 = @splat('x');
 
-test "ChatState: the last-conv and last-sessions files read back as lastUserConv and lastViewedTopic read them, whatever text they hold, and none when there is none" {
+test "ChatState: the last-conv and last-sessions files read back as lastUserConv and lastViewedTopic read them, whatever text they hold, and none when there is none (frozen, metal-vmm QUEUE 285: chat_state is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var d: DiskRoot = undefined;
-    try d.init(a);
-    defer d.deinit();
-    const io = d.threaded.io();
     var frozen: Frozen = .{};
-    var differ: Differences = .{};
-    var compared: usize = 0;
     var rng = std.Random.DefaultPrng.init(0xb00c);
     const r = rng.random();
-    const lc = try d.at(a, "users/1/last-conv");
-    const ls = try d.at(a, "users/1/last-sessions/1_2");
     for (0..3000) |k| {
         const missing = k % 20 == 0;
         const file = try bookmarkFile(a, r, bookmark_values[r.uintLessThan(usize, bookmark_values.len)]);
-        for ([_][]const u8{ lc, ls }) |p| {
-            if (missing) try disk.remove(io, a, p) else try disk.write(io, a, p, file, .{});
-        }
-        // lastUserConv, which read the last-conv file the same way, is
-        // retired (metal-vmm QUEUE 263c); lastViewedTopic still reads.
-        const zv = try chat_state.lastViewedTopic(io, a, "1", "1_2");
-        const got = (try roc1(a, .bookmark, if (missing) &.{ "M", "" } else &.{ "F", file })).?;
-        frozen.add(&.{got});
-        compared += 1;
-        if (!std.mem.eql(u8, zv, got)) differ.add("last-sessions \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(file), std.zig.fmtString(zv), std.zig.fmtString(got) });
+        frozen.add(&.{(try roc1(a, .bookmark, if (missing) &.{ "M", "" } else &.{ "F", file })).?});
     }
-    try differ.none(compared);
     try frozen.check("lastViewedTopic", "e7b931b140333c0a13ac0a595110218409a9b3706e207ad515c87b9ebc49f0cd", 3000);
 }
 
-test "ChatState: whether a bookmark is written, and as what, as setLastViewedTopic decides on disk: unchanged, changed, missing, past 256 bytes, or unreadable" {
+test "ChatState: whether a bookmark is written, and as what, as setLastViewedTopic decided on disk: unchanged, changed, missing, past 256 bytes, or unreadable (frozen, metal-vmm QUEUE 285: chat_state is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var d: DiskRoot = undefined;
-    try d.init(a);
-    defer d.deinit();
-    const io = d.threaded.io();
     var frozen: Frozen = .{};
-    var differ: Differences = .{};
-    var compared: usize = 0;
     var ways = [_]usize{ 0, 0 };
     var rng = std.Random.DefaultPrng.init(0xc4a9);
     const r = rng.random();
-    const lc = try d.at(a, "users/1/last-conv");
-    const ls = try d.at(a, "users/1/last-sessions/1_2");
     for (0..3000) |k| {
         const value = bookmark_values[r.uintLessThan(usize, bookmark_values.len)];
-        // The DM last in already says so: only the topic's file can change.
-        try disk.write(io, a, lc, "1_2\n", .{});
         const How = enum { found, missing, unreadable };
         const how: How = if (k % 25 == 0) .missing else if (k % 25 == 1) .unreadable else .found;
         const file = try bookmarkFile(a, r, value);
-        try std.Io.Dir.cwd().deleteTree(io, ls);
-        switch (how) {
-            .found => try disk.write(io, a, ls, file, .{}),
-            .missing => {},
-            // A folder: it will not read, and will not be written either.
-            .unreadable => try std.Io.Dir.cwd().createDirPath(io, ls),
-        }
-        const before = disk.changes.load(.acquire);
-        // The Zig tried to write when it changed the disk, or when its
-        // write failed (only a write fails on a folder it read past).
-        const z_wrote = if (chat_state.setLastViewedTopic(io, a, "1", "1_2", value)) |_| disk.changes.load(.acquire) > before else |_| true;
         const args: []const []const u8 = switch (how) {
             .found => &.{ "F", file, value },
             .missing => &.{ "M", "", value },
@@ -1542,41 +1485,24 @@ test "ChatState: whether a bookmark is written, and as what, as setLastViewedTop
         };
         const got = try roc(a, .bookmark_changed, args);
         frozen.add(got);
-        compared += 1;
-        const r_wrote = std.mem.eql(u8, got[0], "1");
-        ways[@intFromBool(z_wrote)] += 1;
-        if (z_wrote != r_wrote) differ.add("changed({t}, {d} bytes \"{f}\", \"{f}\"): zig {}, roc {}", .{ how, file.len, std.zig.fmtString(file[0..@min(file.len, 40)]), std.zig.fmtString(value[0..@min(value.len, 40)]), z_wrote, r_wrote });
-        // What the Roc writes is what the Zig wrote.
-        if (z_wrote and how != .unreadable) {
-            const now = try disk.read(io, a, ls, .unlimited);
-            if (!std.mem.eql(u8, now, got[1])) differ.add("written for \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(value), std.zig.fmtString(now), std.zig.fmtString(got[1]) });
-        }
+        ways[@intFromBool(std.mem.eql(u8, got[0], "1"))] += 1;
     }
-    try differ.none(compared);
     try frozen.check("setLastViewedTopic", "1c69917e3bfa8d06daac84b38a5a5acde7b0ca54963ea47fd82c4d2376adb364", 3000);
     for (ways) |w| try testing.expect(w > 300);
 }
 
-test "ChatState: the member's files are where the Zig writes them: the DM last in, the topic last viewed, the pins" {
+test "ChatState: the member's files are where the Zig wrote them: the DM last in, the topic last viewed, the pins, the feeds (metal-vmm QUEUE 285: chat_state is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var d: DiskRoot = undefined;
-    try d.init(a);
-    defer d.deinit();
-    const io = d.threaded.io();
     for ([_][2][]const u8{ .{ "1", "1_2" }, .{ "7", "7_12" }, .{ "12", "12_12" }, .{ "3", "ops" } }) |uc| {
         const uid = uc[0];
         const conv = uc[1];
-        try chat_state.setLastViewedTopic(io, a, uid, conv, "Plans");
         const got = try roc(a, .state_paths, &.{ uid, conv });
-        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n", .{conv}), try disk.read(io, a, try d.at(a, got[0]), .unlimited));
-        try testing.expectEqualStrings("Plans\n", try disk.read(io, a, try d.at(a, got[1]), .unlimited));
-        // The pins the Roc writes (its pin route) are where the Zig reads
-        // them (pinnedTopics); setTopicPinned, the Zig's writer, is retired.
-        try disk.write(io, a, try d.at(a, got[2]), "Plans\n", .{});
-        try testing.expectEqualStrings("Plans", (try chat_state.pinnedTopics(io, a, uid, conv))[0]);
+        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/last-conv", .{uid}), got[0]);
+        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/last-sessions/{s}", .{ uid, conv }), got[1]);
+        try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/pinned-sessions/{s}", .{ uid, conv }), got[2]);
         try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/images.md", .{uid}), got[3]);
         try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/code.md", .{uid}), got[4]);
     }
@@ -1594,6 +1520,7 @@ test "Conversation: who a DM's other half is, for the member or not, over every 
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var other_frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     var found: usize = 0;
@@ -1621,6 +1548,7 @@ test "Conversation: who a DM's other half is, for the member or not, over every 
         for ([_][]const u8{ "1", "2", "3", "", "01", "9223372036854775808" }) |me| {
             const z = try chat.dmOther(a, key, me);
             const got = try roc(a, .dm_other, &.{ key, me });
+            other_frozen.add(got);
             compared += 1;
             const rz: ?[]const u8 = switch (got.len) {
                 0 => null,
@@ -1646,6 +1574,7 @@ test "Conversation: who a DM's other half is, for the member or not, over every 
         }
     }
     try differ.none(compared);
+    try other_frozen.check("dmOther", "a675653fa76d776e55482f453dc579e5e4da9cee71348345809338606aef60da", 26712);
     // The generator reaches the member's DMs, the self-DM among them.
     try testing.expect(found > 300);
 }
@@ -1668,6 +1597,7 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     for (names) |n| for (ids) |id| {
         const z = try chat.dmTitle(a, n, id);
         const got = (try roc1(a, .dm_title, &.{ n, id })).?;
+        has_frozen.add(&.{got});
         compared += 1;
         if (!std.mem.eql(u8, z, got)) differ.add("dmTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(n), std.zig.fmtString(id), std.zig.fmtString(z), std.zig.fmtString(got) });
         for (names) |sid| {
@@ -1676,6 +1606,7 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
             if (!std.unicode.utf8ValidateSlice(sid)) continue;
             const zt = try chat.topicTitle(a, z, sid);
             const rt = (try roc1(a, .topic_title, &.{ z, sid })).?;
+            has_frozen.add(&.{rt});
             compared += 1;
             if (!std.mem.eql(u8, zt, rt)) differ.add("topicTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(sid), std.zig.fmtString(zt), std.zig.fmtString(rt) });
         }
@@ -1685,10 +1616,12 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         if (chat_paths.validChannelName(key)) {
             const zc = try chat.channelTitle(a, key);
             const rc = (try roc1(a, .channel_title, &.{key})).?;
+            has_frozen.add(&.{rc});
             compared += 1;
             if (!std.mem.eql(u8, zc, rc)) differ.add("channelTitle(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(zc), std.zig.fmtString(rc) });
         }
         const bases = try roc(a, .conv_bases, &.{key});
+        has_frozen.add(bases);
         compared += 2;
         if (!std.mem.eql(u8, try chat.dmBase(a, key), bases[0])) differ.add("dmBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[0]) });
         if (!std.mem.eql(u8, try chat.channelBase(a, key), bases[1])) differ.add("channelBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[1]) });
@@ -1705,18 +1638,16 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         var topics: std.ArrayList([]const u8) = .empty;
         for (0..r.uintAtMost(usize, 4)) |_| try topics.append(a, try randomText(a, r, &topic_chars, 3));
         const sid = try randomText(a, r, &topic_chars, 3);
-        const z = chat.hasTopic(topics.items, sid);
         var args: std.ArrayList([]const u8) = .empty;
         try args.append(a, sid);
         try args.appendSlice(a, topics.items);
         const got = yes((try roc1(a, .has_topic, args.items)).?);
+        // Frozen (metal-vmm QUEUE 285): chat.hasTopic is gone.
         has_frozen.add(&.{if (got) "1" else "0"});
-        compared += 1;
-        if (z) hits += 1;
-        if (z != got) differ.add("hasTopic(\"{f}\", {d} topics): zig {}, roc {}", .{ std.zig.fmtString(sid), topics.items.len, z, got });
+        if (got) hits += 1;
     }
     try differ.none(compared);
-    try has_frozen.check("hasTopic", "89750d7725b8e350a69f1ba51ffa0b0a5860bfdbb3c8694f2e33007e3c64d5f3", 4000);
+    try has_frozen.check("the titles, the bases and hasTopic", "7ec7ce995764777492568a8bf305faf5787c6f086a85a8b0d7588388f7df8e0f", 4411);
     try testing.expect(hits > 300);
 }
 
@@ -2227,7 +2158,7 @@ fn sameEach(a: std.mem.Allocator, what: []const u8, args: []const []const u8, zi
     };
 }
 
-test "Fanout: every bus key, the URLs, the notify and topic-added events, the Recent row, and the images and code entries and events, as the Zig's fan-out writes them, over generated keys, names, ids, stamps, tags and blocks that need escaping" {
+test "Fanout: every bus key, the URLs, the notify and topic-added events, the Recent row, and the images and code entries and events, as the Zig's fan-out wrote them, over generated keys, names, ids, stamps, tags and blocks that need escaping (the events and entries frozen, metal-vmm QUEUE 285: images_store, code_store and recent_feed's are gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -2275,18 +2206,14 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         const topic = pick(r, &topics);
         const conv_base = try chat_fanout.convKeyBaseURL(a, conv);
         const url = try std.fmt.allocPrint(a, "{s}/{s}", .{ conv_base, topic });
+        // The image source's URL is frozen with the rest (images_store is
+        // gone, metal-vmm QUEUE 285); the conversation's base and the topic's
+        // page are the live Zig's still.
         const rurls = try roc(a, .fanout_urls, &.{ conv, topic, id });
         frozen.add(rurls);
-        try sameEach(a, "urls", &.{ conv, topic, id }, &.{ conv_base, url, try images_store.imagesSourceURL(a, conv_base, id) }, rurls, &differ);
-        const base = try chat_fanout.convKeyBaseURL(a, key);
-        const kind: chat_store.ConvKind = if (std.mem.indexOfScalar(u8, conv, '_') != null) .dm else .channel;
-        const text = try chat_fanout.notifyText(a, kind, from, conv, topic);
-        const rnotify = try roc(a, .notify_event, &.{ from, conv, topic });
-        frozen.add(rnotify);
-        try sameEach(a, "notify", &.{ conv, topic, from }, &.{try chat_fanout.notifyEvent(a, conv, topic, text, url)}, rnotify, &differ);
-        const radded = try roc(a, .topic_added, &.{ conv, topic });
-        frozen.add(radded);
-        try sameEach(a, "topic-added", &.{ conv, topic }, &.{try chat_fanout.topicAddedEvent(a, conv, topic, url)}, radded, &differ);
+        try sameEach(a, "urls", &.{ conv, topic, id }, &.{ conv_base, url }, rurls[0..2], &differ);
+        frozen.add(try roc(a, .notify_event, &.{ from, conv, topic }));
+        frozen.add(try roc(a, .topic_added, &.{ conv, topic }));
 
         // The Recent row: every field empty now and then (each left out).
         const maybe = struct {
@@ -2294,12 +2221,8 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
                 return if (rr.uintLessThan(u8, 5) == 0) "" else s;
             }
         }.f;
-        const ev: recent_feed.ChatEvent = .{ .at = at, .url = maybe(r, url), .who = maybe(r, from), .where = maybe(r, pick(r, texts)), .topic = maybe(r, sid), .excerpt = maybe(r, pick(r, texts)), .dm = r.boolean() };
-        var zr: std.ArrayList(u8) = .empty;
-        try recent_feed.encodeChatEvent(&zr, a, ev);
-        const rrecent = try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" });
-        frozen.add(rrecent);
-        try sameEach(a, "recent", &.{ ev.at, ev.url }, &.{zr.items}, rrecent, &differ);
+        const ev = .{ .at = at, .url = maybe(r, url), .who = maybe(r, from), .where = maybe(r, pick(r, texts)), .topic = maybe(r, sid), .excerpt = maybe(r, pick(r, texts)), .dm = r.boolean() };
+        frozen.add(try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" }));
 
         // An images entry: tags with CR, LF, quotes and multibyte
         // text, a forged separator now and then.
@@ -2310,40 +2233,27 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
             else => try std.fmt.allocPrint(a, "<img {s}>", .{pick(r, texts)}),
         });
         tags_seen += tags.items.len;
-        const ie: images_store.ImagesEntry = .{ .source_id = id, .from = from, .conv = key, .at = at, .images = tags.items };
-        var zi: std.ArrayList(u8) = .empty;
-        try images_store.encodeImagesEvent(&zi, a, ie, try images_store.imagesSourceURL(a, base, id));
         var iargs: std.ArrayList([]const u8) = .empty;
         try iargs.appendSlice(a, &.{ id, from, key, at });
         try iargs.appendSlice(a, tags.items);
-        const rimages = try roc(a, .images_entry, iargs.items);
-        frozen.add(rimages);
-        try sameEach(a, "images", iargs.items, &.{ try images_store.formatImagesEntry(a, ie), zi.items }, rimages, &differ);
+        frozen.add(try roc(a, .images_entry, iargs.items));
 
         // A code entry: languages and bodies with fences, newlines and
         // escapes, none, one or several blocks.
-        var blocks: std.ArrayList(code_store.CodeBlock) = .empty;
         var cargs: std.ArrayList([]const u8) = .empty;
         try cargs.appendSlice(a, &.{ id, from, key, at });
         for (0..r.uintAtMost(usize, 3)) |_| {
-            const b: code_store.CodeBlock = .{ .lang = if (r.boolean()) "" else pick(r, &.{ "zig", "c++", pick(r, texts) }), .body = pick(r, &.{ "", "x", "const x = 1;\n```\ninner\n```", "a\r\nb\\c\"d", pick(r, texts) }) };
-            try blocks.append(a, b);
-            try cargs.appendSlice(a, &.{ b.lang, b.body });
+            try cargs.appendSlice(a, &.{ if (r.boolean()) "" else pick(r, &.{ "zig", "c++", pick(r, texts) }), pick(r, &.{ "", "x", "const x = 1;\n```\ninner\n```", "a\r\nb\\c\"d", pick(r, texts) }) });
+            blocks_seen += 1;
         }
-        blocks_seen += blocks.items.len;
-        const ce: code_store.CodeEntry = .{ .source_id = id, .from = from, .conv = key, .at = at, .blocks = blocks.items };
-        var zc: std.ArrayList(u8) = .empty;
-        try code_store.encodeCodeEvent(&zc, a, ce, try images_store.imagesSourceURL(a, base, id));
-        const rcode = try roc(a, .code_entry, cargs.items);
-        frozen.add(rcode);
-        try sameEach(a, "code", cargs.items, &.{ try code_store.formatCodeEntry(a, ce), zc.items }, rcode, &differ);
+        frozen.add(try roc(a, .code_entry, cargs.items));
     }
     try differ.none(compared);
     try frozen.check("the fan-out's events and entries", "f1fad22e3fbc764d65dacb5b5d398bea9fd0abcba897c69bb14b00cce4eddb70", 18000);
     try testing.expect(tags_seen > 3000 and blocks_seen > 2000);
 }
 
-test "Fanout: recentWhere for every viewer, as the Zig reads the other member's name from generated account trees: a DM's (the DM with yourself too), a channel's, a name with CR LF, none, and one that will not read (\"\")" {
+test "Fanout: recentWhere for every viewer (frozen, metal-vmm QUEUE 285: chat_fanout.recentWhere is gone), as the Zig read the other member's name from generated account trees: a DM's (the DM with yourself too), a channel's, a name with CR LF, none, and one that will not read (\"\")" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -2356,9 +2266,6 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
     defer threaded.deinit();
     const io = threaded.io();
     var frozen: Frozen = .{};
-    var differ: Differences = .{};
-    var compared: usize = 0;
-    var unreadable: usize = 0;
     var rng = std.Random.DefaultPrng.init(0x4e7e);
     const r = rng.random();
     const names = [_]?[]const u8{ null, "Ann", "Bo\r\n", "", "q\"\\" };
@@ -2380,23 +2287,14 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
             .{ "1_1", .{ .kind = .dm, .members = &.{"1"} } },
             .{ "ops", .{ .kind = .channel, .members = &.{ "1", "2", "3" } } },
         }) |c| for (c[1].members) |viewer| {
-            const z = chat_fanout.recentWhere(io, a, c[1], c[0], viewer) catch blk: {
-                unreadable += 1;
-                break :blk "";
-            };
             var args: std.ArrayList([]const u8) = .empty;
             try args.appendSlice(a, &.{ if (c[1].kind == .dm) "d" else "c", viewer, c[0], try std.fmt.allocPrint(a, "{d}", .{c[1].members.len}) });
             try args.appendSlice(a, c[1].members);
             try args.appendSlice(a, try accountArgs(a, held));
-            compared += 1;
-            const rwhere = try roc(a, .recent_where, args.items);
-            frozen.add(rwhere);
-            try sameEach(a, "recentWhere", &.{ c[0], viewer }, &.{z}, rwhere, &differ);
+            frozen.add(try roc(a, .recent_where, args.items));
         };
     }
-    try differ.none(compared);
     try frozen.check("recentWhere", "512c4f29d349d1e78b3180d34ad80fb7e34d3f7c8c99aab9987e100c019d502b", 3200);
-    try testing.expect(unreadable > 50);
 }
 
 /// `s` when it is UTF-8, else `other`: a generator's bytes made text, for a

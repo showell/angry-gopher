@@ -35,11 +35,9 @@ const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const Now = @import("request_time.zig").Now;
-const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
-const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const html = @import("webbox").html;
@@ -49,15 +47,12 @@ const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zi
 const chrome = @import("chat_chrome.zig");
 const chat_sse = @import("chat_sse.zig");
 const sse = @import("webbox").sse;
-const edge = @import("webbox").edge;
 const docs = @import("docs.zig");
 const recent = @import("recent.zig");
-const chat_search = @import("chat_search.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
 const upload = @import("chat_upload.zig");
 const presence = @import("presence.zig");
-const chat_state = @import("chat_state.zig");
 const download = @import("chat_download.zig");
 const Bus = @import("webbox").bus.Bus;
 
@@ -160,15 +155,6 @@ pub fn channelTitle(alloc: Alloc, name: []const u8) ![]const u8 {
 /// A topic's title: its conversation's, ": ", its id.
 pub fn topicTitle(alloc: Alloc, title: []const u8, sid: []const u8) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{s}: {s}", .{ title, sid });
-}
-
-/// Whether a topic named `sid` without case is among `topics` (case does
-/// not tell topics apart, on FAT or on Linux).
-pub fn hasTopic(topics: []const []const u8, sid: []const u8) bool {
-    for (topics) |s| {
-        if (std.ascii.eqlIgnoreCase(s, sid)) return true;
-    }
-    return false;
 }
 
 /// channelRoute serves a tail of /channel/<name>/<topic> the Roc handed

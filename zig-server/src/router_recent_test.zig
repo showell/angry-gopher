@@ -4,6 +4,7 @@
 //! the Roc took the gathering over, when this test passed against the Zig.
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const Io = @import("host_io").Io;
 const harness = @import("router_harness.zig");
 const chat_paths = @import("chat_paths.zig");
@@ -25,7 +26,7 @@ fn transcript(a: std.mem.Allocator, io: Io, dir: []const u8, sid: []const u8, bl
     const offsets = try a.alloc(u64, blocks.len);
     for (blocks, 0..) |b, i| {
         const msg: chat_store.ChatMessage = .{ .id = try std.fmt.allocPrint(a, "{s}_{d}", .{ sid, i + 1 }), .from = b.from, .at = b.at, .uid = b.uid, .markdown = b.body };
-        const stored = try chat_codec.chatStoredForm(a, i, msg);
+        const stored = try fixtures.chatStoredForm(a, i, msg);
         offsets[i] = t.items.len + (if (i == 0) 0 else chat_store.sep.len);
         try t.appendSlice(a, stored);
     }

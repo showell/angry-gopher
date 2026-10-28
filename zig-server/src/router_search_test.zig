@@ -1,6 +1,7 @@
 //! router.zig's tests: search.
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const chat_paths = @import("chat_paths.zig");
 const Now = @import("request_time.zig").Now;
 const users = @import("users.zig");
@@ -158,7 +159,7 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=secretly", deb), "\"matched\":2") != null);
 
     // **A MESSAGE THAT LANDS IS FOUND**, without a build from the disk.
-    _ = try chat_store.storeForTest(io, a, Now.read(io), .{ .dir = try chat_paths.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight");
+    _ = try fixtures.storeForTest(io, a, Now.read(io), .{ .dir = try chat_paths.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight");
     chat_search.forgetAll();
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
 
@@ -243,7 +244,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
             try body.appendSlice(a, vocabulary[rand.uintLessThan(usize, vocabulary.len)]);
         }
         const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, pl[0] });
-        const m = try chat_store.storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = pl[0], .sid = pl[1] }, .{ .name = "Someone", .id = "1" }, body.items);
+        const m = try fixtures.storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = pl[0], .sid = pl[1] }, .{ .name = "Someone", .id = "1" }, body.items);
         const base = if (channel) try std.fmt.allocPrint(a, "/channel/{s}", .{pl[0]["channels/".len..]}) else try std.fmt.allocPrint(a, "/chat/c/{s}", .{pl[0]});
         try holds.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ base, pl[1], m.id }), body.items);
         _ = n;

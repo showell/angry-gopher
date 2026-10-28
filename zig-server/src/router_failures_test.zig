@@ -1,6 +1,7 @@
 //! router.zig's tests: the store-failure class: a failure is a 500, never silence or a lie.
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_codec = @import("chat_codec.zig");
 const Io = @import("host_io").Io;
@@ -1240,7 +1241,7 @@ test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mti
     try testing.expectEqual(@as(?anyerror, error.IsDir), call.failed);
 }
 
-test "a send numbers its message by the Roc's count as chat_count.messageCount counts, over every sidecar the store can be left with (metal-vmm QUEUE 275)" {
+test "a send numbers its message by the Roc's count as fixtures.messageCount counts, over every sidecar the store can be left with (metal-vmm QUEUE 275)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -1285,7 +1286,7 @@ test "a send numbers its message by the Roc's count as chat_count.messageCount c
             const text = try std.mem.replaceOwned(u8, a, raw, "{size}", try std.fmt.allocPrint(a, "{d}", .{st.size}));
             try harness.UidSite.disk.write(io, a, try chat_count.countPath(a, dir, sid), text, .{});
         }
-        const z = try chat_count.messageCount(io, a, dir, sid);
+        const z = try fixtures.messageCount(io, a, dir, sid);
         const answer = try harness.postAs(a, io, try std.fmt.allocPrint(a, "/chat/c/1_2/{s}/send", .{sid}), steve, "markdown=next");
         try testing.expectEqualStrings("303 See Other", harness.status(answer));
         const transcript = (try chat_paths.readTranscript(io, a, dir, sid)).?;
@@ -1318,7 +1319,7 @@ test "a send numbers its message by the Roc's count as chat_count.messageCount c
     // A transcript that cannot be read: an error to the Zig, the send's 500
     // to the Roc, nothing stored. The truth's failure still fails.
     try harness.UidSite.disk.makeDir(io, a, try chat_paths.transcriptPath(a, dir, "Folder"));
-    try testing.expect(std.meta.isError(chat_count.messageCount(io, a, dir, "Folder")));
+    try testing.expect(std.meta.isError(fixtures.messageCount(io, a, dir, "Folder")));
     try testing.expectError(error.IsDir, harness.postAs(a, io, "/chat/c/1_2/Folder/send", steve, "markdown=next"));
 }
 

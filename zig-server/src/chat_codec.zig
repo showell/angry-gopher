@@ -4,12 +4,10 @@
 //! and the count of blocks refused.
 
 const std = @import("std");
-const Now = @import("request_time.zig").Now;
+const fixtures = @import("chat_fixtures_test.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const store = @import("webbox").store;
 const bus_mod = @import("webbox").bus;
-const Bus = bus_mod.Bus;
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
@@ -20,9 +18,8 @@ const backfillSidecars = chat_count.backfillSidecars;
 const countPath = chat_count.countPath;
 const readTranscript = chat_paths.readTranscript;
 const transcriptPath = chat_paths.transcriptPath;
-const ConvMeta = chat_store.ConvMeta;
 const cutSeq = chat_store.cutSeq;
-const CountFixture = chat_store.CountFixture;
+const CountFixture = fixtures.CountFixture;
 const sep = chat_store.sep;
 const dashes = chat_store.dashes;
 const ChatMessage = chat_store.ChatMessage;
@@ -139,40 +136,6 @@ pub fn unescapeBodyLine(line: []const u8) []const u8 {
 
 // ── write path + live fan-out ───────────
 
-/// chatStoredForm is exactly what message `index` contributes to the file: its
-/// block, preceded by `sep` for every message after the first.
-pub fn chatStoredForm(alloc: Alloc, index: usize, msg: ChatMessage) ![]u8 {
-    const block = try encodeChatBlock(alloc, msg);
-    if (index == 0) return block;
-    return std.fmt.allocPrint(alloc, "{s}{s}", .{ sep, block });
-}
-
-/// encodeChatBlock renders one message to its on-disk block: the MSG_ id line,
-/// the from/date header and, when the author is known, `uid:`; a blank line,
-/// then the body with each line escaped against a separator collision.
-fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
-    var body: std.ArrayList(u8) = .empty;
-    var it = std.mem.splitScalar(u8, msg.markdown, '\n');
-    var first = true;
-    while (it.next()) |line| {
-        if (!first) try body.append(alloc, '\n');
-        first = false;
-        try body.appendSlice(alloc, try escapeBodyLine(alloc, line));
-    }
-    if (msg.uid.len == 0) return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\n\n{s}", .{ msg.id, msg.from, msg.at, body.items });
-    return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\nuid: {s}\n\n{s}", .{ msg.id, msg.from, msg.at, msg.uid, body.items });
-}
-
-/// escapeBodyLine protects a body line that would collide with `sep` by
-/// prepending a backslash — it matches `^\\*-------------$` (ZERO or more
-/// backslashes then exactly 13 hyphens). Symmetric with unescapeBodyLine.
-pub fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
-    var k: usize = 0;
-    while (k < line.len and line[k] == '\\') k += 1;
-    if (std.mem.eql(u8, line[k..], dashes)) return std.fmt.allocPrint(alloc, "\\{s}", .{line});
-    return line;
-}
-
 // ── the last message, for /chat/recent ────────────────────────────────────────
 
 test "a message's author is stored as `uid:` after its date, read back, and adds only that line" {
@@ -180,7 +143,7 @@ test "a message's author is stored as `uid:` after its date, read back, and adds
     defer arena.deinit();
     const a = arena.allocator();
     const with = ChatMessage{ .id = "t_1", .from = "Steve", .at = "2026-10-25T12:00:00Z", .markdown = "hi\nthere", .uid = "1" };
-    const block = try chatStoredForm(a, 0, with);
+    const block = try fixtures.chatStoredForm(a, 0, with);
     try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\nuid: 1\n\nhi\nthere", block);
     const back = (try decodeChatFile(a, block))[0];
     try testing.expectEqualStrings("1", back.uid);
@@ -189,8 +152,8 @@ test "a message's author is stored as `uid:` after its date, read back, and adds
     // No author known: no `uid:` line, the block as it always was.
     var without = with;
     without.uid = "";
-    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\n\nhi\nthere", try chatStoredForm(a, 0, without));
-    try testing.expectEqualStrings("", (try decodeChatFile(a, try chatStoredForm(a, 0, without)))[0].uid);
+    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\n\nhi\nthere", try fixtures.chatStoredForm(a, 0, without));
+    try testing.expectEqualStrings("", (try decodeChatFile(a, try fixtures.chatStoredForm(a, 0, without)))[0].uid);
 }
 
 test "the decoder refuses a block with no id, author or date, counted; a blank piece is a torn append's and skipped (metal-vmm QUEUE 156(h))" {

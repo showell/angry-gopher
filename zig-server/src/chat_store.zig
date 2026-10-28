@@ -19,29 +19,24 @@
 //! this decoder parses them).
 
 const chat_codec = @import("chat_codec.zig");
-const chatStoredForm = chat_codec.chatStoredForm;
+const chatStoredForm = fixtures.chatStoredForm;
 const chat_fanout = @import("chat_fanout.zig");
-const fanoutCrossPage = chat_fanout.fanoutCrossPage;
-const chat_frame = @import("chat_frame.zig");
-const fanoutFailed = chat_fanout.fanoutFailed;
 const chat_count = @import("chat_count.zig");
 const writeCount = chat_count.writeCount;
-const messageCount = chat_count.messageCount;
+const messageCount = fixtures.messageCount;
 const chat_paths = @import("chat_paths.zig");
 const decodeChatFile = chat_codec.decodeChatFile;
-const indexOf = chat_count.indexOf;
 const dmConvDir = chat_paths.dmConvDir;
 const transcriptPath = chat_paths.transcriptPath;
 const readTranscript = chat_paths.readTranscript;
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const Now = @import("request_time.zig").Now;
 
 const Io = @import("host_io").Io;
 
 const Alloc = std.mem.Allocator;
-
-const timefmt = @import("timefmt.zig");
 
 const store = @import("webbox").store;
 
@@ -138,19 +133,6 @@ pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u
     // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
     // takes the message, or drops itself whole if it cannot.
     search_index.noteAppend(io, topic.dir, topic.sid, msg);
-}
-
-/// A message stored as the Roc's send stores it (`Host.store_message!`,
-/// roc-webbox chat/main.roc `append_message!`): numbered by the count,
-/// stamped `now`, its block appended by `storeMessage`. For the tests that
-/// need messages on disk; a send's frame and fan-out are the Roc's.
-pub fn storeForTest(io: Io, alloc: Alloc, now: Now, topic: TopicAddress, from: Author, markdown: []const u8) !ChatMessage {
-    const index = try messageCount(io, alloc, topic.dir, topic.sid);
-    const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
-    const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
-    const msg = ChatMessage{ .id = id, .from = from.name, .at = at, .markdown = markdown, .uid = from.id };
-    try storeMessage(io, alloc, topic, try chatStoredForm(alloc, index, msg), index, msg);
-    return msg;
 }
 
 // ── reactions sidecar ─────────────────────────────────────────────────────────
@@ -269,7 +251,7 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     defer threaded.deinit();
     const io = threaded.io();
     const dir = try dmConvDir(a, "1_2");
-    _ = try storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world");
+    _ = try fixtures.storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world");
 
     const msgs = try decodeChatFile(a, (try readTranscript(io, a, dir, "topic")).?);
     try testing.expectEqual(@as(usize, 1), msgs.len);
@@ -277,69 +259,10 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
 }
 
-/// A store over a throwaway directory, for the count tests below. The test
-/// makes the Io and hands it in: the host's thread pool may only be named inside
-/// a `test {}` block (tools/lint_portable.shale).
-pub const CountFixture = struct {
-    arena: std.heap.ArenaAllocator,
-    tmp: testing.TmpDir,
-    io: Io,
-    hub: bus_mod.Hub,
-    bus: Bus,
-    dir: []const u8,
-    saved: roots.Saved,
-
-    pub fn init(self: *CountFixture, io: Io) !void {
-        self.arena = std.heap.ArenaAllocator.init(testing.allocator);
-        const a = self.arena.allocator();
-        self.tmp = testing.tmpDir(.{});
-        // Every root under its own tree (157(c)), accounts included, empty
-        // unless a test makes one: an author is looked up by name where no
-        // sidecar says.
-        self.saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &self.tmp.sub_path }));
-        self.io = io;
-        self.hub = bus_mod.Hub.init(io, a);
-        self.bus = Bus.of(&self.hub);
-        self.dir = try dmConvDir(a, "1_2");
-    }
-
-    pub fn deinit(self: *CountFixture) void {
-        self.saved.restore();
-        self.tmp.cleanup();
-        self.arena.deinit();
-    }
-
-    pub fn send(self: *CountFixture, text: []const u8) !ChatMessage {
-        return storeForTest(self.io, self.arena.allocator(), Now.read(self.io), .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text);
-    }
-
-    /// A message as a server from before `uid:` stored it: its block names
-    /// its author by name only, for the tests of how such a block is credited.
-    pub fn sendLegacy(self: *CountFixture, text: []const u8) !ChatMessage {
-        return storeForTest(self.io, self.arena.allocator(), Now.read(self.io), .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "" }, text);
-    }
-
-    pub fn decoded(self: *CountFixture) !usize {
-        const a = self.arena.allocator();
-        return (try decodeChatFile(a, (try readTranscript(self.io, a, self.dir, "topic")).?)).len;
-    }
-};
-
-/// Whether the subscriber has been sent a blob holding `needle` since it was
-/// last drained; drains it.
-fn echoed(sub: *bus_mod.Subscriber, needle: []const u8) bool {
-    var found = false;
-    while (sub.poll()) |blob| {
-        defer sub.gpa.free(blob);
-        if (std.mem.indexOf(u8, blob, needle) != null) found = true;
-    }
-    return found;
-}
-
 test "a line after a torn one starts its own line: the torn line is lost, the next is not" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();

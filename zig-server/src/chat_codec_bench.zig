@@ -16,6 +16,7 @@
 //! builds (twin.roc's function 15 returns every field of every message).
 
 const std = @import("std");
+const fixtures = @import("chat_fixtures_test.zig");
 const twin = @import("roc_chat_twin");
 const chat_codec = @import("chat_codec.zig");
 const chat_count = @import("chat_count.zig");
@@ -57,7 +58,7 @@ fn synthetic(a: std.mem.Allocator) ![]u8 {
             .uid = if (i % 3 == 0) "1" else "2",
             .markdown = md.items,
         };
-        try file.appendSlice(a, try chat_codec.chatStoredForm(a, i, m));
+        try file.appendSlice(a, try fixtures.chatStoredForm(a, i, m));
     }
     return file.items;
 }

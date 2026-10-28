@@ -4,13 +4,12 @@
 //! startup backfill (split from chat_store.zig by metal-vmm QUEUE 174).
 
 const std = @import("std");
-const Now = @import("request_time.zig").Now;
+const fixtures = @import("chat_fixtures_test.zig");
 const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
 const bus_mod = @import("webbox").bus;
-const Bus = bus_mod.Bus;
 const users = @import("users.zig");
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");
@@ -18,7 +17,6 @@ const chat_codec = @import("chat_codec.zig");
 const chat_paths = @import("chat_paths.zig");
 const channelConvDir = chat_paths.channelConvDir;
 const decodeChatFile = chat_codec.decodeChatFile;
-const CountFixture = chat_store.CountFixture;
 const no_uid = chat_store.no_uid;
 const sep = chat_store.sep;
 const ChatMessage = chat_store.ChatMessage;
@@ -112,32 +110,6 @@ pub fn backfillAll(io: Io, alloc: Alloc) usize {
 pub fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.count", .{sid});
     return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
-}
-
-/// messageCount is how many messages a topic holds — the N that numbers the
-/// next one — WITHOUT reading the transcript when the count sidecar can say.
-///
-/// Numbering a message used to mean reading and decoding the whole transcript
-/// on every send. That is cheap out of Linux's page cache and was the largest
-/// cost of a send on a host without one, growing with the conversation.
-///
-/// **THE SIDECAR IS A CACHE; THE TRANSCRIPT IS THE TRUTH.** The count is
-/// trusted only when the transcript is still the size it was taken at — one
-/// stat, not a read. Anything else is recounted from the transcript: a
-/// conversation from before the sidecar existed, a crash between an append and
-/// its count, or the file edited by hand. The one thing a size cannot catch is
-/// a rewrite to exactly the same length with a different number of messages.
-pub fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
-    const md = try transcriptPath(alloc, conv_dir, sid);
-    // No transcript is no messages; a transcript that cannot be looked at or
-    // read is an error, never 0: numbering from 0 would glue the next message
-    // onto the last and count wrong from then on.
-    const size = (store.stat(io, alloc, md) catch |e| switch (e) {
-        error.FileNotFound => return 0,
-        else => return e,
-    }).size;
-    if (believedCount(readCount(io, alloc, conv_dir, sid), size)) |n| return n;
-    return countBlocks(try store.read(io, alloc, md, .unlimited));
 }
 
 /// The count a sidecar gives, believed only when the transcript is still
@@ -250,17 +222,17 @@ pub fn countText(alloc: Alloc, count: usize, size: u64, last: ?Last) ![]u8 {
 
 // The fixture's reads and writes of the files it made, beside the tests
 // that use them (a test helper, so it may touch the disk directly).
-fn fixtureSidecar(self: *CountFixture) !?[]u8 {
+fn fixtureSidecar(self: *fixtures.CountFixture) !?[]u8 {
     const a = self.arena.allocator();
     return Io.Dir.cwd().readFileAlloc(self.io, try countPath(a, self.dir, "topic"), a, .limited(1024)) catch null;
 }
 
-fn fixtureSetSidecar(self: *CountFixture, text: []const u8) !void {
+fn fixtureSetSidecar(self: *fixtures.CountFixture, text: []const u8) !void {
     const a = self.arena.allocator();
     try Io.Dir.cwd().writeFile(self.io, .{ .sub_path = try countPath(a, self.dir, "topic"), .data = text });
 }
 
-fn fixtureTranscriptSize(self: *CountFixture) !u64 {
+fn fixtureTranscriptSize(self: *fixtures.CountFixture) !u64 {
     const a = self.arena.allocator();
     return (try Io.Dir.cwd().statFile(self.io, try transcriptPath(a, self.dir, "topic"), .{})).size;
 }
@@ -277,7 +249,7 @@ test "a message's number has one spelling: digits after the topic and its unders
 test "count: every send records the count and the transcript size it was taken at" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     for (0..5) |_| _ = try f.send("hello");
@@ -296,7 +268,7 @@ test "count: every send records the count and the transcript size it was taken a
 test "count: ids stay consecutive, and agree with the transcript's own numbering" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     for (1..8) |n| {
@@ -310,7 +282,7 @@ test "count: a conversation from before the sidecar is counted from its transcri
     // Prod has every existing conversation in this state on the first deploy.
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     for (0..3) |_| _ = try f.send("old");
@@ -326,7 +298,7 @@ test "count: a count taken at another size is not believed" {
     // one short, recorded at the transcript's previous size.
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     for (0..4) |_| _ = try f.send("x");
@@ -338,7 +310,7 @@ test "count: a count taken at another size is not believed" {
 test "count: a sidecar that does not parse is a stale one" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
@@ -357,7 +329,7 @@ test "count: a sidecar at the RIGHT size is believed — the transcript is not r
     // same length would go unnoticed.)
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
@@ -370,10 +342,10 @@ test "count: a sidecar at the RIGHT size is believed — the transcript is not r
 test "count: an empty conversation has none, and its first message is number one" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
-    try testing.expectEqual(@as(usize, 0), try messageCount(f.io, f.arena.allocator(), f.dir, "topic"));
+    try testing.expectEqual(@as(usize, 0), try fixtures.messageCount(f.io, f.arena.allocator(), f.dir, "topic"));
     const m = try f.send("first");
     try testing.expectEqualStrings("topic_1", m.id);
 }
@@ -381,19 +353,19 @@ test "count: an empty conversation has none, and its first message is number one
 test "count: a transcript that cannot be read is an error, never no messages" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
     // A folder where the transcript should be: there, and unreadable.
     try store.makeDir(f.io, a, try transcriptPath(a, f.dir, "topic"));
-    try testing.expect(std.meta.isError(messageCount(f.io, a, f.dir, "topic")));
+    try testing.expect(std.meta.isError(fixtures.messageCount(f.io, a, f.dir, "topic")));
 }
 
 test "backfill: a session with no last-message record gets one, and only once" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     _ = try f.send("first");
@@ -416,7 +388,7 @@ test "backfill: a session with no last-message record gets one, and only once" {
 test "backfill: a session with no sidecar at all gets one" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     _ = try f.send("only");
@@ -432,7 +404,7 @@ test "backfill: a session with no sidecar at all gets one" {
 test "backfill: one pass reaches DMs and channels alike" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
@@ -461,7 +433,7 @@ test "backfill: the record it writes can be read back" {
     // writes has to PARSE, not merely lead to the right answer.
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
@@ -488,7 +460,7 @@ test "a send writes no .lastauthor, and its .count names the author over one an 
     // where it is, and nothing asks it.
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
@@ -500,34 +472,10 @@ test "a send writes no .lastauthor, and its .count names the author over one an 
     try testing.expectEqualStrings("1", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
 }
 
-test "the last session and conversation are written only when they change (zig-metal-unikernel 153(1))" {
-    const chat_state = @import("chat_state.zig");
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    try chat_state.setLastViewedTopic(f.io, a, "1", "1_2", "topic");
-    const lc = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-conv" });
-    const ls = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions", "1_2" });
-    try testing.expectEqualStrings("1_2\n", try store.read(f.io, a, lc, .limited(64)));
-    // The same values again, stored without their newline: a write would put
-    // it back.
-    try store.write(f.io, a, lc, "1_2", .{});
-    try store.write(f.io, a, ls, "topic", .{});
-    try chat_state.setLastViewedTopic(f.io, a, "1", "1_2", "topic");
-    try testing.expectEqualStrings("1_2", try store.read(f.io, a, lc, .limited(64)));
-    try testing.expectEqualStrings("topic", try store.read(f.io, a, ls, .limited(64)));
-    // A new one is written.
-    try chat_state.setLastViewedTopic(f.io, a, "1", "1_2", "other");
-    try testing.expectEqualStrings("other\n", try store.read(f.io, a, ls, .limited(64)));
-}
-
 test "the author where no sidecar says is the member the last message names; the backfill writes it in (the box's must-fix)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
@@ -550,7 +498,7 @@ test "the author where no sidecar says is the member the last message names; the
 test "a current record that says nobody is believed: a name reused after its member left gets no credit (the Who cell's review)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
@@ -566,7 +514,7 @@ test "a current record that says nobody is believed: a name reused after its mem
 test "a lookup that fails at boot records nothing, so a later boot finds the author (the box's should-fix after fce504f)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
@@ -588,7 +536,7 @@ test "a lookup that fails at boot records nothing, so a later boot finds the aut
 test "backfill: a sidecar that will not write is not counted as written (metal-vmm QUEUE 172: the start's report said 'backfilled N' for writes that failed)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
-    var f: CountFixture = undefined;
+    var f: fixtures.CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     _ = try f.send("only");
