@@ -298,6 +298,16 @@ pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool
     return std.mem.eql(u8, user, x) or std.mem.eql(u8, user, y);
 }
 
+/// validPairKey reports whether `key` is a canonical DM key, as
+/// chatKeyParticipant reads one: two uids, the smaller first. The host's
+/// check of a key the Roc hands it before it joins one into a path
+/// (metal-vmm QUEUE 268).
+pub fn validPairKey(alloc: Alloc, key: []const u8) !bool {
+    const cut = cutSeq(key, "_") orelse return false;
+    if (!canonicalUid(cut.before) or !canonicalUid(cut.after)) return false;
+    return std.mem.eql(u8, try chatPairKey(alloc, cut.before, cut.after), key);
+}
+
 /// chatPairKey is the canonical DM key: the smaller numeric id first, joined by
 /// '_'.
 pub fn chatPairKey(alloc: Alloc, a: []const u8, b: []const u8) ![]u8 {
@@ -435,4 +445,13 @@ test "firstOf: ChitChat wins wherever it sorts, else the first, else none" {
     try std.testing.expectEqualStrings("ChitChat", firstOf(&.{ "2026-01-01", "ChitChat", "zebra" }));
     try std.testing.expectEqualStrings("2026-01-01", firstOf(&.{ "2026-01-01", "zebra" }));
     try std.testing.expectEqualStrings("", firstOf(&.{}));
+}
+
+test "validPairKey: two uids, the smaller first; anything else is no DM key, never a path (metal-vmm QUEUE 268)" {
+    const a = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const x = arena.allocator();
+    try std.testing.expect(try validPairKey(x, "1_2") and try validPairKey(x, "2_10"));
+    for ([_][]const u8{ "", "1", "2_1", "10_2", "01_2", "1_2_3", "../x", "1_..", "a_b", "1_" }) |bad| try std.testing.expect(!try validPairKey(x, bad));
 }

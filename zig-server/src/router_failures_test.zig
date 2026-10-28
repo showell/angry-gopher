@@ -1177,3 +1177,27 @@ test "route: a DM's new topic whose announcement will not store is made all the 
     // The topic is there, so a second make of it is the 409 it should be.
     try testing.expectEqualStrings("409 Conflict", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Ideas")));
 }
+
+test "route: a send too big for its form is the host's 413 and the whole answer: nothing stored, and one response, never a second (metal-vmm QUEUE 268)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try site(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const dir = try chat_paths.dmConvDir(a, "1_2");
+    const before = (try chat_paths.readTranscript(io, a, dir, "Plans")).?;
+    const big = try a.alloc(u8, 70 * 1024);
+    @memset(big, 'x');
+    const got = try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, try std.fmt.allocPrint(a, "markdown={s}&cid=x", .{big}));
+    try testing.expectEqualStrings("413 Payload Too Large", harness.status(got));
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, got, "HTTP/1.1 "));
+    try testing.expectEqualStrings(before, (try chat_paths.readTranscript(io, a, dir, "Plans")).?);
+}

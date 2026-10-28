@@ -86,6 +86,15 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     // A failure the Roc could not be told (the store, reading who it is)
     // fails the request, as it did before the router.
     if (call.failed) |e| return e;
+    // **ONE ANSWER, AND ONLY ONE** (metal-vmm QUEUE 268): what the host
+    // answered itself is the request's whole answer; a Roc that answers it
+    // again is its bug, said and never sent. `.answered` with neither a
+    // host answer nor a failure behind it is the router's 500, not silence.
+    if (call.answered) {
+        if (decision != .answered) std.log.err("chat: the Roc answered {f} after the host had answered", .{decision});
+        return;
+    }
+    if (decision == .answered) return error.AnsweredWithoutAnswer;
     // Answered before asking, by design: a redirect, a static asset, and a
     // path that is not UTF-8 (the Roc's 400 at the door, chat/main.roc `handle!`).
     if (decision != .redirect and decision != .malformed_form and !(decision == .serve and decision.serve.route.family == .asset) and !call.asked)
@@ -154,6 +163,10 @@ pub const Call = struct {
     /// The accounts as `accounts` listed them, each read that failed kept
     /// with its error, for `failAccount`.
     listed: []const users.Account = &.{},
+    /// **THE HOST ANSWERED THE REQUEST ITSELF** (a body too big, a message
+    /// refused as hostile): from then on the call is as dead as a failed
+    /// one, so nothing more is done and no second answer goes out.
+    answered: bool = false,
     /// Inside Host.aside! (`asideOf`), and the aside's first failure.
     aside: bool = false,
     aside_failed: ?anyerror = null,
@@ -212,7 +225,7 @@ pub const Call = struct {
     /// or "failed" value, so a Roc that goes on writes nothing more. Inside
     /// an aside, after the aside's failure, the same until it ends.
     fn dead(c: *Call) bool {
-        return c.failed != null or (c.aside and c.aside_failed != null);
+        return c.failed != null or c.answered or (c.aside and c.aside_failed != null);
     }
 
     /// **AN ASIDE** (Host.aside!, metal-vmm QUEUE 267): from `begin` to
@@ -351,10 +364,20 @@ pub const Call = struct {
         const who = try c.alloc.alloc([]const u8, conv.members.len);
         for (conv.members, who) |m, *out| out.* = try c.alloc.dupe(u8, m);
         const key = try c.alloc.dupe(u8, conv.key);
+        // **A ROC VALUE CHECKED, NEVER TRUSTED** (metal-vmm QUEUE 268): a
+        // family that is no conversation's, or a key that is not one, is the
+        // Roc's bug and the request's failure, never a panic or a path
+        // joined from it.
         const kind: store.ConvKind, const dir = switch (conv.family) {
-            .dm => .{ .dm, try chat_paths.dmConvDir(c.alloc, key) },
-            .channel => .{ .channel, try chat_paths.channelConvDir(c.alloc, key) },
-            else => std.debug.panic("a conversation of family {t}", .{conv.family}),
+            .dm => blk: {
+                if (!try chat_paths.validPairKey(c.alloc, key)) return error.NotAConversationKey;
+                break :blk .{ .dm, try chat_paths.dmConvDir(c.alloc, key) };
+            },
+            .channel => blk: {
+                if (!chat_paths.validChannelName(key)) return error.NotAConversationKey;
+                break :blk .{ .channel, try chat_paths.channelConvDir(c.alloc, key) };
+            },
+            else => return error.NotAConversationFamily,
         };
         return .{ .meta = .{ .kind = kind, .members = who }, .key = key, .base = try c.alloc.dupe(u8, conv.base), .dir = dir };
     }
@@ -362,6 +385,7 @@ pub const Call = struct {
     /// Topic `sid_` of `conv`, as the store addresses it.
     fn address(c: *Call, conv: roc_chat.Conv, sid_: []const u8) !store.TopicAddress {
         const r = try c.resolved(conv);
+        if (!chat_paths.validTopicID(sid_)) return error.NotATopicId;
         return .{ .dir = r.dir, .key = r.key, .sid = try c.alloc.dupe(u8, sid_) };
     }
 
@@ -384,12 +408,14 @@ pub const Call = struct {
             .reaction => reactions.max_body_bytes,
             .message => limits.body.chat_message,
         };
-        // Null when it answered 413 (or 400) itself.
+        // Null when it answered 413 (or 400) itself: the call is answered.
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return http.readLimitedBody(c.req, c.alloc, limit) catch |e| {
+        const got = http.readLimitedBody(c.req, c.alloc, limit) catch |e| {
             c.fail(e);
             return null;
         };
+        if (got == null) c.answered = true;
+        return got;
     }
 
     /// The file at `path` under the chat root (Host.serve_file!: a topic's
@@ -724,6 +750,7 @@ pub const Call = struct {
         if (reason == null) return .fine;
         // absent-ok: the same: a refusal that will not send is the request's failure.
         edge.reject(c.req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n") catch |e| c.fail(e);
+        c.answered = true;
         return .refused;
     }
 };
