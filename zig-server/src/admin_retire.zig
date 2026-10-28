@@ -20,7 +20,6 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
@@ -39,7 +38,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // The re-entry, throttled like sign-in (QUEUE.md item 100).
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, defaults(), b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.retire_form)) orelse return;
-    const password = (try chat.formField(alloc, sent, "password")) orelse "";
+    const password = (try http.formField(alloc, sent, "password")) orelse "";
     const in = try readForm(alloc, sent);
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
@@ -52,7 +51,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // **THE PLAN IS THE ROC'S** (roc-webbox chat/Retire.roc, metal-vmm
     // QUEUE 293), the keep list's check with it; its steps are carried out
     // here, behind this page's password.
-    const mode: retire.Mode = if (std.mem.eql(u8, (try chat.formField(alloc, sent, "confirm")) orelse "", "1")) .apply else .dry_run;
+    const mode: retire.Mode = if (std.mem.eql(u8, (try http.formField(alloc, sent, "confirm")) orelse "", "1")) .apply else .dry_run;
     var report: retire.Report = .{ .alloc = alloc, .io = io, .mode = mode };
     if (try chat_router.retire(io, alloc, &report, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) })) |why| return form(req, alloc, in, why, .bad_request);
     return result(req, alloc, in, &report);
@@ -81,9 +80,9 @@ const default_keep_text = "Steve, apoorva, damian, Claude, Debbie";
 /// no one (every account is removed) — the caller sees the count before it
 /// confirms, so an empty box is caught by eye, not by a silent default.
 fn readForm(alloc: Alloc, body: []const u8) !Input {
-    const days_text = std.mem.trim(u8, (try chat.formField(alloc, body, "days")) orelse "30", " \t\r\n");
+    const days_text = std.mem.trim(u8, (try http.formField(alloc, body, "days")) orelse "30", " \t\r\n");
     const parsed = std.fmt.parseInt(u32, days_text, 10) catch null;
-    const keep_text = std.mem.trim(u8, (try chat.formField(alloc, body, "keep")) orelse default_keep_text, " \t\r\n");
+    const keep_text = std.mem.trim(u8, (try http.formField(alloc, body, "keep")) orelse default_keep_text, " \t\r\n");
     return .{
         .days = if (parsed) |d| d else retire.default_days,
         .days_text = days_text,

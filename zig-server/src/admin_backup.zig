@@ -46,7 +46,6 @@ const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
@@ -80,7 +79,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // uid 1's account (the same counters sign-in uses).
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
-    const password = (try chat.formField(alloc, sent, "password")) orelse "";
+    const password = (try http.formField(alloc, sent, "password")) orelse "";
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);

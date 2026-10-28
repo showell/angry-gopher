@@ -14,7 +14,6 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const chrome = @import("chat_chrome.zig");
 const html = @import("webbox").html;
 const presence = @import("presence.zig");
@@ -40,7 +39,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (req.head.method != .POST) return http.redirect(req, .literal("/settings"));
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
-    const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
+    const revoke = (try http.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         try users.clearUserAPIKey(io, alloc, uid);
         return http.redirect(req, .literal("/settings?keyrevoked=1"));

@@ -6,7 +6,8 @@
 //! areas. What a rule says better than a golden is a rule, over the whole
 //! corpus: a path that is not UTF-8 is the door's 400, nothing asked; one
 //! who is no member is sent to sign in and back to the request's own path,
-//! but for a script. Test-only. The corpus (chat_route_paths_test.zig) also
+//! but for a script, which the host serves (or 404s) to anyone, nothing
+//! asked. Test-only. The corpus (chat_route_paths_test.zig) also
 //! feeds chat_twin_test.zig's check of the pre-turn hooks.
 //!
 //! A golden that differs writes what the Roc gave to
@@ -86,7 +87,8 @@ test "the Roc router decides every golden path as it was frozen: the decision, a
             .{
                 if (channel) "/channel" else "/chat",
                 std.zig.fmtString(sub),
-                try said(a, d),
+                // A script the host answered: which one.
+                if (ask.script) |s| try std.fmt.allocPrint(a, "script {s}, {s}", .{ s, try said(a, d) }) else try said(a, d),
                 if (ask.asked) "a" else "-",
                 if (ask.marked) "m" else "-",
             },
@@ -165,7 +167,10 @@ test "the router's rules over the whole corpus: a path that is not UTF-8 is the 
         const ok = if (!std.unicode.utf8ValidateSlice(sub))
             d == .malformed_form and !ask.asked and !ask.marked
         else if (script)
-            d == .serve and d.serve.route.family == .asset and !ask.asked
+            !ask.asked and !ask.marked and if (ask.script) |s|
+                d == .answered and std.mem.eql(u8, s, sub[1..])
+            else
+                d == .not_found
         else if (!member)
             d == .to_login and std.mem.eql(
                 u8,

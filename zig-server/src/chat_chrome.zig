@@ -20,7 +20,8 @@ const Alloc = std.mem.Allocator;
 pub const Asset = @import("chat_client").Bundle;
 
 /// The chat's client scripts (the `chat-client` checkout's `chat_client`).
-/// Served verbatim at /chat/<name> with a JS content type (chat.zig), named
+/// Served verbatim at /chat/<name> with a JS content type (chat_router.zig
+/// `serveScript`, as the Roc decides), named
 /// by the pages by their bytes (`src`).
 pub const assets = @import("chat_client").bundles;
 

@@ -27,7 +27,6 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const html = @import("webbox").html;
 const settings = @import("settings.zig");
 const ui = @import("admin_ui.zig");
@@ -69,9 +68,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method != .POST) return http.redirect(req, .literal("/admin"));
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
-    const id = std.mem.trim(u8, (try chat.formField(alloc, body, "user")) orelse "", " \t\r\n");
+    const id = std.mem.trim(u8, (try http.formField(alloc, body, "user")) orelse "", " \t\r\n");
     if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, .literal("/admin"));
-    const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
+    const revoke = (try http.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         try users.clearUserAPIKey(io, alloc, id);
         return http.redirect(req, try http.Target.format(alloc, "/admin?keyrevoked={s}", .{id}));

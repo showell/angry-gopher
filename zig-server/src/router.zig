@@ -26,7 +26,6 @@ const delivery = @import("delivery.zig");
 const chess = @import("chess.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
-const chat = @import("chat.zig");
 const chat_router = @import("chat_router.zig");
 const settings = @import("settings.zig");
 const admin = @import("admin.zig");

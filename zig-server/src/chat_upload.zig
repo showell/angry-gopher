@@ -5,7 +5,7 @@
 //! Uploads land in the topic's sidecar dir (sessions/<sid>.uploads/) under a
 //! random unguessable name whose extension is derived from the SNIFFED magic
 //! bytes (never the client's filename). Both DMs and channels route here; the
-//! conv-base + sid + dir are supplied by the caller (chat.topicRoute), so this
+//! conv-base + sid + dir are supplied by the caller (the Roc), so this
 //! module is shape-agnostic.
 //!
 //! Limits: a per-file cap that depends on kind (10 MiB image / 100 MiB video)

@@ -24,7 +24,6 @@ const chat_upload = @import("chat_upload.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
 const chat_fanout = @import("chat_fanout.zig");
 const chat_search = @import("chat_search.zig");
-const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
 const chat_store = @import("chat_store.zig");
 const disk = @import("webbox").store;

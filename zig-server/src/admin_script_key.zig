@@ -18,7 +18,6 @@ const http = webbox.http;
 const html = webbox.html;
 const script_route = @import("shale").script_route;
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
 
@@ -28,14 +27,14 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     if (req.head.method != .POST) return form(req, io, alloc, "", .ok);
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, io, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
-    const password = (try chat.formField(alloc, sent, "password")) orelse "";
+    const password = (try http.formField(alloc, sent, "password")) orelse "";
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, io, alloc, "That is not the password.", .forbidden);
     }
     throttle.clearAddress(client);
-    const key = std.mem.trim(u8, (try chat.formField(alloc, sent, "public_key")) orelse "", " \t\r\n");
-    const target = std.mem.trim(u8, (try chat.formField(alloc, sent, "target")) orelse "", " \t\r\n");
+    const key = std.mem.trim(u8, (try http.formField(alloc, sent, "public_key")) orelse "", " \t\r\n");
+    const target = std.mem.trim(u8, (try http.formField(alloc, sent, "target")) orelse "", " \t\r\n");
     const prefix = "public_key = ";
     const key_hex = if (std.mem.startsWith(u8, key, prefix)) key[prefix.len..] else key;
     const text = try std.fmt.allocPrint(alloc, "public_key = {s}\ntarget = {s}\n", .{ key_hex, target });

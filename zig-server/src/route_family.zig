@@ -19,7 +19,7 @@ pub fn familyOf(path: []const u8) Family {
     if (in_chat) |sub| {
         // As routeBodyLimit reads an upload: `.../upload/` is the upload.
         if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload") or std.mem.indexOf(u8, sub, "/uploads/") != null) return .uploads;
-        // `.../stream/` is a topic's stream too (chat.zig's segments skip
+        // `.../stream/` is a topic's stream too (Route.roc's segments skip
         // empty ones), as the router holds it (the hooks test below).
         if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/stream") or std.mem.eql(u8, sub, "/notifications")) return .streams;
         if (http.pathUnder(sub, "/docs") != null) return .docs;
@@ -40,7 +40,7 @@ pub fn routeBodyLimit(path: []const u8) u64 {
     const caps = request_limits.body;
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
-        // chat.zig's segments skip empty ones: `.../upload/` is the upload.
+        // Route.roc's segments skip empty ones: `.../upload/` is the upload.
         if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload")) return caps.upload_any;
         if (http.pathUnder(sub, "/docs") != null) return caps.doc;
         return caps.chat_message;

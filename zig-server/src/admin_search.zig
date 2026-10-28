@@ -22,7 +22,6 @@ const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
-const chat = @import("chat.zig");
 
 const Request = std.http.Server.Request;
 
@@ -123,7 +122,7 @@ fn snippetAround(text: []const u8, at: usize, len: usize) []const u8 {
 /// render writes the page. The caller has already checked the admin gate.
 pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     const raw_key = http.queryValue(try http.target(req, alloc), "key") orelse "";
-    const key = std.mem.trim(u8, try chat.urlDecode(alloc, raw_key), " \t\r\n");
+    const key = std.mem.trim(u8, try http.formDecode(alloc, raw_key), " \t\r\n");
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "🐹 Search your messages", "/admin/search");
     try b.print(alloc, "<form method=\"get\" action=\"/admin/search\"><input name=\"key\" value=\"{s}\" autofocus> <button>Search</button></form>\n", .{try html.htmlEscape(alloc, key)});

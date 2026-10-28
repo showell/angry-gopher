@@ -14,7 +14,7 @@
 //!
 //! This is the only surface on the GENERIC app chrome (the shared stylesheet +
 //! the "Home · Chat" top bar + the "Playing as X / Log in" identity area);
-//! the chat subsystem renders its own chat-flavored chrome in chat.zig. Kept as
+//! the chat subsystem renders its own chat-flavored chrome in chat_chrome.zig. Kept as
 //! string literals, like chat's chrome.
 //!
 //! `/version` lives here too: a tiny JSON build-identity probe, the smallest

@@ -35,7 +35,6 @@ const uid_cookie = @import("uid_cookie.zig");
 const storage = @import("storage.zig");
 const client_address = @import("webbox").client_address;
 const throttle = @import("login_throttle.zig");
-const chat = @import("chat.zig");
 const html = @import("webbox").html;
 const Bus = @import("webbox").bus.Bus;
 
@@ -129,7 +128,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
         return renderPwPage(req, alloc, mode, name, next, "");
     }
 
-    const password = (try chat.formField(alloc, body, "password")) orelse "";
+    const password = (try http.formField(alloc, body, "password")) orelse "";
 
     switch (mode) {
         .member_login => {
@@ -165,7 +164,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             };
             const valid = checked.text();
             const member_id = try users.findMemberByName(io, alloc, valid);
-            const action = (try chat.formField(alloc, body, "action")) orelse "";
+            const action = (try http.formField(alloc, body, "action")) orelse "";
             if (std.mem.eql(u8, action, "login")) {
                 if (member_id == null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "No account named \u{201C}{s}\u{201D}. Create one instead?", .{valid}));
                 switch (try checkPasswordThrottled(req, io, alloc, address, member_id.?, password)) {
@@ -249,7 +248,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
 
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
-        const release = (try chat.formField(alloc, body, "release")) orelse "";
+        const release = (try http.formField(alloc, body, "release")) orelse "";
         const target = releaseTarget(user.id, local.id, local.id.len != 0 and try users.principalExists(io, alloc, local.id));
         // **A RELEASE THAT CAN RELEASE NOTHING SAYS SO** (metal-vmm QUEUE
         // 172): a player cookie naming an account (its session lapsed) is
@@ -358,13 +357,13 @@ fn sendHTML(req: *Request, alloc: Alloc, body: []const u8, cookies: []const []co
 /// formValue reads a form field from the POST body first, then the query string
 ///. `body` is "" for non-POST; `target` is the duped
 /// request target (the body read invalidates the live one). The query after '?'
-/// has the same a=b&c=d shape chat.formField parses.
+/// has the same a=b&c=d shape http.formField parses.
 fn formValue(alloc: Alloc, target: []const u8, body: []const u8, name: []const u8) !?[]const u8 {
     if (body.len != 0) {
-        if (try chat.formField(alloc, body, name)) |v| return v;
+        if (try http.formField(alloc, body, name)) |v| return v;
     }
     const q = std.mem.indexOfScalar(u8, target, '?') orelse return null;
-    return chat.formField(alloc, target[q + 1 ..], name);
+    return http.formField(alloc, target[q + 1 ..], name);
 }
 
 /// sanitizeNext keeps only internal redirect targets, to avoid open redirects

@@ -1,7 +1,7 @@
 //! **EVERY /chat AND /channel REQUEST, THROUGH THE ROC ROUTER** (roc-webbox
 //! docs/ROC-CHAT.md §3, milestone 1): the Roc chat (`roc_chat`, its
-//! chat/main.roc) runs the prelude and parses the path; chat.zig serves the
-//! route it answers, once the Roc call has ended.
+//! chat/main.roc) runs the prelude, parses the path and decides the answer;
+//! `handle` sends it, once the Roc call has ended.
 //!
 //! The prelude is the Roc's: a static script is served to anyone; anyone
 //! else must be a member or the agent, or is sent to sign in; and anything
@@ -30,7 +30,6 @@ const webbox = @import("webbox");
 const http = webbox.http;
 const Bus = webbox.bus.Bus;
 const roc_chat = @import("roc_chat");
-const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
 const store = @import("chat_store.zig");
@@ -113,9 +112,10 @@ pub fn handle(
         return;
     }
     if (decision == .answered) return error.AnsweredWithoutAnswer;
-    // Answered before asking, by design: a redirect, a static asset, and a
-    // path that is not UTF-8 (the Roc's 400 at the door, chat/main.roc `handle!`).
-    if (decision != .redirect and decision != .malformed_form and !(decision == .serve and decision.serve.route.family == .asset) and !call.asked)
+    // Answered before asking, by design: a redirect, a path that is not
+    // UTF-8 (the Roc's 400 at the door, chat/main.roc `handle!`), and a
+    // static script's 404 (a served one is answered above).
+    if (decision != .redirect and decision != .malformed_form and !call.script_asked and !call.asked)
         std.debug.panic("the Roc router answered {f} without asking who is asking", .{decision});
     switch (decision) {
         // Built by the Roc from a conversation's base and a topic, which the
@@ -131,9 +131,6 @@ pub fn handle(
             alloc,
             next,
         ),
-        .serve => |s| {
-            return chat.serve(req, s.route);
-        },
         .respond => |r| {
             const headers = [_]std.http.Header{
                 .{ .name = "content-type", .value = r.content_type },
@@ -287,6 +284,9 @@ pub const Call = struct {
     now: Now,
     uid: []const u8 = "",
     asked: bool = false,
+    /// The Roc asked for a static script (Host.serve_script!), which is
+    /// answered without asking who is asking.
+    script_asked: bool = false,
     /// The bytes a `held` answer carries (Host.serve_file!, Host.serve_rendered!), read or
     /// rendered here and never copied into the Roc and out.
     held: []const u8 = "",
@@ -325,6 +325,7 @@ pub const Call = struct {
             .serve_upload = serveUpload,
             .bundle_add = bundleAdd,
             .serve_bundle = serveBundle,
+            .serve_script = serveScript,
             .read_upload = readUpload,
             .refuse_upload = refuseUpload,
             .reserve_upload = reserveUpload,
@@ -640,6 +641,27 @@ pub const Call = struct {
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         c.bundle.serve(c.req, c.alloc, name) catch |e| return c.fail(e);
         c.answered = true;
+    }
+
+    /// **A STATIC SCRIPT SERVED** (Host.serve_script!): the chat client's
+    /// script `name`, as webbox serves every embedded file (its hash its
+    /// ETag, immutable when asked for by it, a 304 for a tag it names);
+    /// `.missing`, nothing answered, when the table has none of the name.
+    fn serveScript(ctx: *anyopaque, name: []const u8) roc_chat.ScriptServed {
+        const c = of(ctx);
+        c.script_asked = true;
+        if (c.dead()) return .served;
+        for (chrome.assets) |s| {
+            if (!std.mem.eql(u8, s.name, name)) continue;
+            // absent-ok: not read as absence: the error is kept and returned once the call ends.
+            http.serveEmbedded(c.req, s.body, http.js_ct) catch |e| {
+                c.fail(e);
+                return .served;
+            };
+            c.answered = true;
+            return .served;
+        }
+        return .missing;
     }
 
     /// The admin's days, the names kept (one to a line) and now

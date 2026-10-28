@@ -19,7 +19,6 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
@@ -35,13 +34,13 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // against the address and uid 1's account.
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
-    const password = (try chat.formField(alloc, sent, "password")) orelse "";
+    const password = (try http.formField(alloc, sent, "password")) orelse "";
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
     }
     throttle.clearAddress(client);
-    const days_text = std.mem.trim(u8, (try chat.formField(alloc, sent, "days")) orelse "", " ");
+    const days_text = std.mem.trim(u8, (try http.formField(alloc, sent, "days")) orelse "", " ");
     const days = std.fmt.parseInt(i64, days_text, 10) catch -1;
     if (days < 0 or days > max_days)
         return form(req, alloc, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);

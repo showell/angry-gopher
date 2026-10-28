@@ -64,11 +64,11 @@
 /channel	"/sidebar/stream"	404 text/html; charset=utf-8	am
 /chat	"/sidebar"	404	am
 /channel	"/sidebar"	404 text/html; charset=utf-8	am
-/chat	"/chat.js"	asset rest="chat.js" landing page	--
+/chat	"/chat.js"	script chat.js, answered by the host	--
 /channel	"/chat.js"	404	am
-/chat	"/.js"	asset rest=".js" landing page	--
+/chat	"/.js"	404	--
 /channel	"/.js"	404	am
-/chat	"/a/b.js"	asset rest="a/b.js" landing page	--
+/chat	"/a/b.js"	404	--
 /channel	"/a/b.js"	404 text/html; charset=utf-8	am
 /chat	"/js"	404	am
 /channel	"/js"	404 text/html; charset=utf-8	am
@@ -1296,7 +1296,7 @@
 /channel	"/general/Plans/send"	404 text/html; charset=utf-8	am
 /chat	"/c/1_2/T/send"	404	am
 /channel	"/c/1_2/T/send"	404 text/html; charset=utf-8	am
-/chat	"/colors.js"	asset rest="colors.js" landing page	--
+/chat	"/colors.js"	script colors.js, answered by the host	--
 /channel	"/colors.js"	404	am
 /chat	"/c/{s}_{s}/scripts"	404	am
 /channel	"/c/{s}_{s}/scripts"	404 text/html; charset=utf-8	am
