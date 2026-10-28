@@ -17,43 +17,12 @@ const http = @import("webbox").http;
 const top_bar = @import("top_bar.zig");
 const Alloc = std.mem.Allocator;
 
-pub const Asset = struct { name: []const u8, body: []const u8 };
+pub const Asset = @import("chat_client").Bundle;
 
-/// The embedded prod client bundles (wired in build.zig). Served verbatim at
-/// /chat/<name> with a JS content type (chat.zig), named by the pages by
-/// their bytes (`src`).
-pub const assets = [_]Asset{
-    .{ .name = "colors.js", .body = @embedFile("chat_js_colors") },
-    .{ .name = "viewport.js", .body = @embedFile("chat_js_viewport") },
-    .{ .name = "chat_theme.js", .body = @embedFile("chat_js_theme") },
-    .{ .name = "chrome_drawer.js", .body = @embedFile("chat_js_chrome_drawer") },
-    .{ .name = "chat_image_popup.js", .body = @embedFile("chat_js_image_popup") },
-    .{ .name = "chat_code_popup.js", .body = @embedFile("chat_js_code_popup") },
-    .{ .name = "chat_time_popup.js", .body = @embedFile("chat_js_time_popup") },
-    .{ .name = "chat_save_popup.js", .body = @embedFile("chat_js_save_popup") },
-    .{ .name = "message.js", .body = @embedFile("chat_js_message") },
-    .{ .name = "message_view.js", .body = @embedFile("chat_js_message_view") },
-    .{ .name = "nav_stack.js", .body = @embedFile("chat_js_nav_stack") },
-    .{ .name = "middle_pane.js", .body = @embedFile("chat_js_middle_pane") },
-    .{ .name = "chat_search.js", .body = @embedFile("chat_js_search") },
-    .{ .name = "chat_drag_to_pin.js", .body = @embedFile("chat_js_drag_to_pin") },
-    .{ .name = "chat_add_topic.js", .body = @embedFile("chat_js_add_topic") },
-    .{ .name = "chat_first_topic.js", .body = @embedFile("chat_js_first_topic") },
-    .{ .name = "chat_left_sidebar.js", .body = @embedFile("chat_js_left_sidebar") },
-    .{ .name = "chat_right_sidebar.js", .body = @embedFile("chat_js_right_sidebar") },
-    .{ .name = "chat_emoji.js", .body = @embedFile("chat_js_emoji") },
-    .{ .name = "chat_reactions.js", .body = @embedFile("chat_js_reactions") },
-    .{ .name = "chat_compose.js", .body = @embedFile("chat_js_compose") },
-    .{ .name = "chat_help.js", .body = @embedFile("chat_js_help") },
-    .{ .name = "chat_responsive.js", .body = @embedFile("chat_js_responsive") },
-    .{ .name = "chat.js", .body = @embedFile("chat_js_chat") },
-    .{ .name = "notify.js", .body = @embedFile("chat_js_notify") },
-    .{ .name = "docs.js", .body = @embedFile("chat_js_docs") },
-    .{ .name = "recent.js", .body = @embedFile("chat_js_recent") },
-    .{ .name = "styles.js", .body = @embedFile("chat_js_styles") },
-    .{ .name = "images.js", .body = @embedFile("chat_js_images") },
-    .{ .name = "code.js", .body = @embedFile("chat_js_code") },
-};
+/// The chat's client scripts (the `chat-client` checkout's `chat_client`).
+/// Served verbatim at /chat/<name> with a JS content type (chat.zig), named
+/// by the pages by their bytes (`src`).
+pub const assets = @import("chat_client").bundles;
 
 /// **WHERE A CHAT PAGE NAMES ITS SCRIPT `name`**: `/chat/<name>?h=<hash of
 /// its bytes>` (http.hashedSrc), which the browser keeps for good. A name

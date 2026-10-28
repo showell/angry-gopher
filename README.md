@@ -427,7 +427,7 @@ is the only credential `/admin/script` takes.
 | Where | Role |
 |---|---|
 | [`zig-server/`](zig-server/) | **the server (zig)** — every surface (home, login, chat, docs, Lyn Rummy `/game` + `/puzzles`, driving, `/admin`, `/settings`) as per-module handlers in `src/*.zig` over the shared data tree; front-end assets embedded via `build.zig`. See [`zig-server/README.md`](zig-server/README.md). |
-| `chat/` | the embedded chat **client** (`chat.js`) + the reference API client / example bot (`chat_client.py`: discover, read, post) |
+| `chat/` | the chat's README and the reference API client / example bot (`chat_client.py`: discover, read, post); the browser client is the chat-client repository, and the markdown dialect the chat-markdown repository, each a sibling checkout |
 | `delivery/` | the Delivery display client (TS) + `delivery/zig/` — the CVRP solver, compiled to `solver.wasm`, gated bit-exact against the retired TS solver (`ops/check_delivery`) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
 | `games/lynrummy/zig/` | the solver — the strategic brain (hints, certificates, Player Two, self-play sim), compiled to `solver.wasm` for the browser |
@@ -445,10 +445,10 @@ DSL-over-the-wire idea in full.
 
 **Responsive / mobile** (the chat surfaces — our mobile user is Apoorva;
 Steve is desktop-only). Small-screen layout is decided client-side. One JS
-authority, `Viewport` (`chat/viewport.js`), owns the single breakpoint and
+authority, `Viewport` (chat-client's viewport.js), owns the single breakpoint and
 exposes it two ways — an `html.vp-narrow` class for CSS and `onChange` for
 JS — so the number lives in exactly one place. The shared nav drawer
-(`chrome_drawer.js`) and the chat page's mobile layout (`chat_responsive.js`)
+(chrome_drawer.js) and the chat page's mobile layout (chat_responsive.js)
 both key off it; the server (`chat_chrome.zig`) just ships the desktop top bar and
 loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 
