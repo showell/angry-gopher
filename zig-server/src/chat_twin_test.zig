@@ -539,6 +539,7 @@ test "Paths: a transcript's path, a conversation's first topic" {
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var first_frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     // The Roc joins no hostile parts (std.fs.path.join's twin is gone): a
@@ -555,10 +556,12 @@ test "Paths: a transcript's path, a conversation's first topic" {
     for ([_][]const []const u8{ &.{}, &.{"a"}, &.{ "a", "ChitChat" }, &.{ "ChitChat", "b" }, &.{ "chitchat", "z" }, &.{ "2026-10-25", "general" } }) |topics| {
         const zf = chat_paths.firstOf(topics);
         const rf = (try roc1(a, .first_of, topics)).?;
+        first_frozen.add(&.{rf});
         compared += 1;
         if (!std.mem.eql(u8, zf, rf)) differ.add("firstOf: zig {s}, roc {s}", .{ zf, rf });
     }
     try differ.none(compared);
+    try first_frozen.check("firstOf", "69e8e44bc3c23a4b19e3caabf3b75f3101e5f8a5be69e1c48cdef9c788e91b8a", 6);
 }
 
 // ── Codec (chat_codec.zig) ─────────────────────────────────────────────────
@@ -1271,6 +1274,7 @@ test "Recent: a message's excerpt as recentExcerpt makes it, for every text trie
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var frozen: Frozen = .{};
     var differ: Differences = .{};
     var rng = std.Random.DefaultPrng.init(0x4ecee7);
     const r = rng.random();
@@ -1282,9 +1286,11 @@ test "Recent: a message's excerpt as recentExcerpt makes it, for every text trie
         if (std.mem.endsWith(u8, z, "\xe2\x80\xa6")) cut += 1;
         compared += 1;
         const got = (try roc1(a, .recent_excerpt, &.{md})).?;
+        frozen.add(&.{got});
         if (!std.mem.eql(u8, z, got)) differ.add("excerpt(\"{f}\"):\n  zig \"{f}\"\n  roc \"{f}\"", .{ std.zig.fmtString(md), std.zig.fmtString(z), std.zig.fmtString(got) });
     }
     try differ.none(compared);
+    try frozen.check("recentExcerpt", "adcf14e6d6888eb340a46184764b02d4818c938d5042eca97a122f509ea51695", 3000);
     try testing.expect(cut > 50);
 }
 
@@ -1339,6 +1345,7 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     var rng = std.Random.DefaultPrng.init(0x7e503);
@@ -1365,6 +1372,7 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
         try args.appendSlice(a, &.{ last, try std.fmt.allocPrint(a, "{d}", .{now}) });
         try args.appendSlice(a, topics.items);
         const got = (try roc1(a, .resume_topic, args.items)).?;
+        frozen.add(&.{got});
         compared += 1;
         // Which way it went, so a generator that never reaches one is seen.
         const way: usize = if (last.len != 0 and std.mem.eql(u8, z, last)) 0 else if (chat_paths.firstOf(topics.items).len > 0) 1 else 2;
@@ -1372,6 +1380,7 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
         if (!std.mem.eql(u8, z, got)) differ.add("resume(last \"{f}\", now {d}, {d} topics): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(last), now, topics.items.len, std.zig.fmtString(z), std.zig.fmtString(got) });
     }
     try differ.none(compared);
+    try frozen.check("chooseResumeTopic", "fc447c0d3e6e32359c4bec55ef330b574260c57f25234112cf34fc2f99539f9b", 4000);
     for (picks) |p| try testing.expect(p > 300);
 }
 
@@ -1466,6 +1475,7 @@ test "ChatState: the last-conv and last-sessions files read back as lastUserConv
     try d.init(a);
     defer d.deinit();
     const io = d.threaded.io();
+    var frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     var rng = std.Random.DefaultPrng.init(0xb00c);
@@ -1482,10 +1492,12 @@ test "ChatState: the last-conv and last-sessions files read back as lastUserConv
         // retired (metal-vmm QUEUE 263c); lastViewedTopic still reads.
         const zv = try chat_state.lastViewedTopic(io, a, "1", "1_2");
         const got = (try roc1(a, .bookmark, if (missing) &.{ "M", "" } else &.{ "F", file })).?;
+        frozen.add(&.{got});
         compared += 1;
         if (!std.mem.eql(u8, zv, got)) differ.add("last-sessions \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(file), std.zig.fmtString(zv), std.zig.fmtString(got) });
     }
     try differ.none(compared);
+    try frozen.check("lastViewedTopic", "e7b931b140333c0a13ac0a595110218409a9b3706e207ad515c87b9ebc49f0cd", 3000);
 }
 
 test "ChatState: whether a bookmark is written, and as what, as setLastViewedTopic decides on disk: unchanged, changed, missing, past 256 bytes, or unreadable" {
@@ -1497,6 +1509,7 @@ test "ChatState: whether a bookmark is written, and as what, as setLastViewedTop
     try d.init(a);
     defer d.deinit();
     const io = d.threaded.io();
+    var frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     var ways = [_]usize{ 0, 0 };
@@ -1528,6 +1541,7 @@ test "ChatState: whether a bookmark is written, and as what, as setLastViewedTop
             .unreadable => &.{ "X", "", value },
         };
         const got = try roc(a, .bookmark_changed, args);
+        frozen.add(got);
         compared += 1;
         const r_wrote = std.mem.eql(u8, got[0], "1");
         ways[@intFromBool(z_wrote)] += 1;
@@ -1539,6 +1553,7 @@ test "ChatState: whether a bookmark is written, and as what, as setLastViewedTop
         }
     }
     try differ.none(compared);
+    try frozen.check("setLastViewedTopic", "1c69917e3bfa8d06daac84b38a5a5acde7b0ca54963ea47fd82c4d2376adb364", 3000);
     for (ways) |w| try testing.expect(w > 300);
 }
 
@@ -1640,6 +1655,7 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var has_frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     // Names as an account may hold them, and as it must not: markup, quotes,
@@ -1694,11 +1710,13 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         try args.append(a, sid);
         try args.appendSlice(a, topics.items);
         const got = yes((try roc1(a, .has_topic, args.items)).?);
+        has_frozen.add(&.{if (got) "1" else "0"});
         compared += 1;
         if (z) hits += 1;
         if (z != got) differ.add("hasTopic(\"{f}\", {d} topics): zig {}, roc {}", .{ std.zig.fmtString(sid), topics.items.len, z, got });
     }
     try differ.none(compared);
+    try has_frozen.check("hasTopic", "89750d7725b8e350a69f1ba51ffa0b0a5860bfdbb3c8694f2e33007e3c64d5f3", 4000);
     try testing.expect(hits > 300);
 }
 
@@ -2214,6 +2232,7 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     const strings = try byteStrings(a);
@@ -2256,12 +2275,18 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         const topic = pick(r, &topics);
         const conv_base = try chat_fanout.convKeyBaseURL(a, conv);
         const url = try std.fmt.allocPrint(a, "{s}/{s}", .{ conv_base, topic });
-        try sameEach(a, "urls", &.{ conv, topic, id }, &.{ conv_base, url, try images_store.imagesSourceURL(a, conv_base, id) }, try roc(a, .fanout_urls, &.{ conv, topic, id }), &differ);
+        const rurls = try roc(a, .fanout_urls, &.{ conv, topic, id });
+        frozen.add(rurls);
+        try sameEach(a, "urls", &.{ conv, topic, id }, &.{ conv_base, url, try images_store.imagesSourceURL(a, conv_base, id) }, rurls, &differ);
         const base = try chat_fanout.convKeyBaseURL(a, key);
         const kind: chat_store.ConvKind = if (std.mem.indexOfScalar(u8, conv, '_') != null) .dm else .channel;
         const text = try chat_fanout.notifyText(a, kind, from, conv, topic);
-        try sameEach(a, "notify", &.{ conv, topic, from }, &.{try chat_fanout.notifyEvent(a, conv, topic, text, url)}, try roc(a, .notify_event, &.{ from, conv, topic }), &differ);
-        try sameEach(a, "topic-added", &.{ conv, topic }, &.{try chat_fanout.topicAddedEvent(a, conv, topic, url)}, try roc(a, .topic_added, &.{ conv, topic }), &differ);
+        const rnotify = try roc(a, .notify_event, &.{ from, conv, topic });
+        frozen.add(rnotify);
+        try sameEach(a, "notify", &.{ conv, topic, from }, &.{try chat_fanout.notifyEvent(a, conv, topic, text, url)}, rnotify, &differ);
+        const radded = try roc(a, .topic_added, &.{ conv, topic });
+        frozen.add(radded);
+        try sameEach(a, "topic-added", &.{ conv, topic }, &.{try chat_fanout.topicAddedEvent(a, conv, topic, url)}, radded, &differ);
 
         // The Recent row: every field empty now and then (each left out).
         const maybe = struct {
@@ -2272,7 +2297,9 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         const ev: recent_feed.ChatEvent = .{ .at = at, .url = maybe(r, url), .who = maybe(r, from), .where = maybe(r, pick(r, texts)), .topic = maybe(r, sid), .excerpt = maybe(r, pick(r, texts)), .dm = r.boolean() };
         var zr: std.ArrayList(u8) = .empty;
         try recent_feed.encodeChatEvent(&zr, a, ev);
-        try sameEach(a, "recent", &.{ ev.at, ev.url }, &.{zr.items}, try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" }), &differ);
+        const rrecent = try roc(a, .recent_event, &.{ ev.at, ev.url, ev.who, ev.where, ev.topic, ev.excerpt, if (ev.dm) "1" else "0" });
+        frozen.add(rrecent);
+        try sameEach(a, "recent", &.{ ev.at, ev.url }, &.{zr.items}, rrecent, &differ);
 
         // An images entry: tags with CR, LF, quotes and multibyte
         // text, a forged separator now and then.
@@ -2289,7 +2316,9 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         var iargs: std.ArrayList([]const u8) = .empty;
         try iargs.appendSlice(a, &.{ id, from, key, at });
         try iargs.appendSlice(a, tags.items);
-        try sameEach(a, "images", iargs.items, &.{ try images_store.formatImagesEntry(a, ie), zi.items }, try roc(a, .images_entry, iargs.items), &differ);
+        const rimages = try roc(a, .images_entry, iargs.items);
+        frozen.add(rimages);
+        try sameEach(a, "images", iargs.items, &.{ try images_store.formatImagesEntry(a, ie), zi.items }, rimages, &differ);
 
         // A code entry: languages and bodies with fences, newlines and
         // escapes, none, one or several blocks.
@@ -2305,9 +2334,12 @@ test "Fanout: every bus key, the URLs, the notify and topic-added events, the Re
         const ce: code_store.CodeEntry = .{ .source_id = id, .from = from, .conv = key, .at = at, .blocks = blocks.items };
         var zc: std.ArrayList(u8) = .empty;
         try code_store.encodeCodeEvent(&zc, a, ce, try images_store.imagesSourceURL(a, base, id));
-        try sameEach(a, "code", cargs.items, &.{ try code_store.formatCodeEntry(a, ce), zc.items }, try roc(a, .code_entry, cargs.items), &differ);
+        const rcode = try roc(a, .code_entry, cargs.items);
+        frozen.add(rcode);
+        try sameEach(a, "code", cargs.items, &.{ try code_store.formatCodeEntry(a, ce), zc.items }, rcode, &differ);
     }
     try differ.none(compared);
+    try frozen.check("the fan-out's events and entries", "f1fad22e3fbc764d65dacb5b5d398bea9fd0abcba897c69bb14b00cce4eddb70", 18000);
     try testing.expect(tags_seen > 3000 and blocks_seen > 2000);
 }
 
@@ -2323,6 +2355,7 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
+    var frozen: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     var unreadable: usize = 0;
@@ -2356,10 +2389,13 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
             try args.appendSlice(a, c[1].members);
             try args.appendSlice(a, try accountArgs(a, held));
             compared += 1;
-            try sameEach(a, "recentWhere", &.{ c[0], viewer }, &.{z}, try roc(a, .recent_where, args.items), &differ);
+            const rwhere = try roc(a, .recent_where, args.items);
+            frozen.add(rwhere);
+            try sameEach(a, "recentWhere", &.{ c[0], viewer }, &.{z}, rwhere, &differ);
         };
     }
     try differ.none(compared);
+    try frozen.check("recentWhere", "512c4f29d349d1e78b3180d34ad80fb7e34d3f7c8c99aab9987e100c019d502b", 3200);
     try testing.expect(unreadable > 50);
 }
 
