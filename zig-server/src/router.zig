@@ -362,7 +362,7 @@ const testing = std.testing;
 
 // Every file of router.zig's tests, so they run (build.zig's root is this file).
 test {
-    _ = @import("chat_route_twin.zig");
+    _ = @import("chat_route_corpus_test.zig");
     _ = @import("chat_actions_twin_test.zig");
     _ = @import("router_edges_test.zig");
     _ = @import("router_script_test.zig");
@@ -458,7 +458,7 @@ test "the pre-turn hooks agree with the Roc router: an upload's path gets the up
     const a = arena.allocator();
     const caps = request_limits.body;
     var checked: usize = 0;
-    for (try @import("chat_route_twin.zig").corpus(a)) |sub| for ([_][]const u8{ "/chat", "/channel" }) |area| {
+    for (try @import("chat_route_corpus_test.zig").corpus(a)) |sub| for ([_][]const u8{ "/chat", "/channel" }) |area| {
         const path = try std.mem.concat(a, u8, &.{ area, sub });
         if ((http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel")) == null) continue;
         roc_chat.use(a);

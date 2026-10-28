@@ -2,7 +2,7 @@
 //! C4, C3): a /chat or /channel request served as before the Roc took a
 //! topic's reactions, react, pin and unpin (C4), and a conversation's
 //! landing and a topic's page (C3): decided by the Zig parse the router
-//! replaced (chat_route_twin.zig), and those served by their Zig handlers
+//! replaced (`route_twin` below), and those served by their Zig handlers
 //! as they were (reactions.zig `serveFile` and `handleReact`, chat.zig
 //! `pinTopic` at angry-gopher dc3445e; chat.zig's landings and the page's
 //! tail at ffe98f1; chat.zig's newTopic, chatDefault, chatConversations
@@ -22,7 +22,6 @@ const Bus = webbox.bus.Bus;
 const roc_chat = @import("roc_chat");
 const chat = @import("chat.zig");
 const chat_router = @import("chat_router.zig");
-const chat_route_twin = @import("chat_route_twin.zig");
 const presence = @import("presence.zig");
 const reactions = @import("reactions.zig");
 const chat_state = @import("chat_state.zig");
@@ -54,11 +53,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     const now = chat_router.test_now orelse Now.read(io);
     var call: chat_router.Call = .{ .req = req, .io = io, .alloc = alloc, .bus = bus, .now = now };
     // A static script before the gate, asking nobody.
-    const first = try chat_route_twin.decide(alloc, sub, channel, true);
+    const first = try route_twin.decide(alloc, sub, channel, true);
     if (first == .serve and first.serve.route.family == .asset) return chat.serve(req, io, alloc, bus, "", first.serve.route, now);
     const member = chat_router.Call.checkMember(&call) == .member;
     if (call.failed) |e| return e;
-    const decision = try chat_route_twin.decide(alloc, sub, channel, member);
+    const decision = try route_twin.decide(alloc, sub, channel, member);
     switch (decision) {
         .redirect => |location| return http.redirect(req, try http.Target.format(alloc, "{s}", .{location})),
         .to_login => |next| return chat_router.toLogin(req, alloc, next),
@@ -592,3 +591,109 @@ fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !voi
     try b.appendSlice(alloc, safe);
     try b.appendSlice(alloc, "</script>");
 }
+
+/// **THE ROC ROUTER'S TWIN, FOR THIS ORACLE ALONE** (roc-webbox
+/// docs/ROC-CHAT.md A3): chat.zig's dispatch as it was before the Roc router
+/// took it (`handle`, `handleChannel`, `convRoute`, `topicRoute`, at
+/// angry-gopher 112349a), a pure function of the path, the area and whether
+/// the one asking is a member. The router's own agreement with it is frozen
+/// as goldens (chat_route_corpus_test.zig, metal-vmm QUEUE 263b); it goes with
+/// this file.
+const route_twin = struct {
+    const Route = roc_chat.Route;
+    const Decision = roc_chat.Decision;
+
+    pub fn decide(alloc: std.mem.Allocator, sub: []const u8, channel: bool, member: bool) !Decision {
+        if (!channel and sub.len > 1 and std.mem.endsWith(u8, sub, ".js"))
+            return .{ .serve = .{ .route = .{ .family = .asset, .rest = sub[1..] }, .presence = false } };
+        if (!member) return .{ .to_login = try std.fmt.allocPrint(alloc, "{s}{s}", .{ if (channel) "/channel" else "/chat", sub }) };
+        const route = if (channel) underChannel(sub) else underChat(sub);
+        return .{ .serve = .{ .route = route, .presence = !isStream(route) } };
+    }
+
+    /// **ONE CHANGE FROM THE OLD CODE, ON PURPOSE**: whether a request counts as
+    /// presence is read from its route. The old code read the path's spelling
+    /// (`endsWith "/stream"` or `/notifications`), so `.../general/stream/`, a
+    /// stream, counted as presence, and a topic named `stream`, a page, did not
+    /// (found by router.zig's hooks test, which this agreement made possible).
+    fn isStream(r: Route) bool {
+        return r.tail == .stream or r.family == .notifications or r.family == .sidebar_stream or
+            ((r.family == .recent or r.family == .images or r.family == .code) and std.mem.eql(u8, r.rest, "/stream"));
+    }
+
+    fn underChat(sub: []const u8) Route {
+        if (sub.len == 0 or std.mem.eql(u8, sub, "/")) return .{ .family = .default };
+        inline for (.{ .{ "/docs", .docs }, .{ "/recent", .recent }, .{ "/images", .images }, .{ "/code", .code }, .{ "/links", .links } }) |f| {
+            if (matchPrefix(sub, f[0])) |rest| {
+                if (rest.len == 0 or rest[0] == '/') return .{ .family = f[1], .rest = rest };
+            }
+        }
+        if (matchPrefix(sub, "/search")) |rest| return .{ .family = .search, .rest = rest };
+        if (std.mem.eql(u8, sub, "/default")) return .{ .family = .default };
+        if (std.mem.eql(u8, sub, "/conversations")) return .{ .family = .conversations };
+        if (matchPrefix(sub, "/msg/")) |id| return .{ .family = .msg, .rest = id };
+        if (matchPrefix(sub, "/c/")) |rest| return conversation(.dm, rest);
+        if (std.mem.eql(u8, sub, "/notifications")) return .{ .family = .notifications };
+        if (std.mem.eql(u8, sub, "/sidebar/stream")) return .{ .family = .sidebar_stream };
+        return .{ .family = .not_found };
+    }
+
+    fn underChannel(sub: []const u8) Route {
+        return conversation(.channel, sub);
+    }
+
+    fn conversation(family: roc_chat.Family, path: []const u8) Route {
+        var segs = segments(path);
+        const key = segs.next() orelse return .{ .family = .not_found };
+        if (family == .channel and !chat_paths.validChannelName(key)) return .{ .family = .not_found };
+        const sid = segs.next() orelse return .{ .family = family, .key = key };
+        if (std.mem.eql(u8, sid, "new")) return .{ .family = family, .key = key, .part = .new };
+        if (!chat_paths.validTopicID(sid)) return .{ .family = family, .key = key, .part = .invalid };
+        var r: Route = .{ .family = family, .key = key, .topic = sid, .part = .topic };
+        var peek = segs;
+        const is_send = if (peek.next()) |t| std.mem.eql(u8, t, "send") else false;
+        const tail = segs.next() orelse return r;
+        if (std.mem.eql(u8, tail, "uploads")) {
+            const file = segs.next() orelse return bad(r, is_send);
+            if (segs.next() != null) return bad(r, is_send);
+            r.tail = .uploads;
+            r.rest = file;
+            return r;
+        }
+        if (segs.next() != null) return bad(r, is_send);
+        inline for (.{ "stream", "send", "upload", "pin", "unpin", "raw", "download", "saved", "reactions", "react" }) |t| {
+            if (std.mem.eql(u8, tail, t)) {
+                r.tail = @field(roc_chat.Tail, t);
+                return r;
+            }
+        }
+        return bad(r, is_send);
+    }
+
+    fn bad(r: Route, is_send: bool) Route {
+        var b = r;
+        b.tail = if (is_send) .invalid_send else .invalid;
+        return b;
+    }
+
+    const SegIter = struct {
+        rest: []const u8,
+        fn next(self: *SegIter) ?[]const u8 {
+            while (self.rest.len > 0 and self.rest[0] == '/') self.rest = self.rest[1..];
+            if (self.rest.len == 0) return null;
+            const end = std.mem.indexOfScalar(u8, self.rest, '/') orelse self.rest.len;
+            const seg = self.rest[0..end];
+            self.rest = self.rest[end..];
+            return seg;
+        }
+    };
+
+    fn segments(path: []const u8) SegIter {
+        return .{ .rest = path };
+    }
+
+    fn matchPrefix(s: []const u8, prefix: []const u8) ?[]const u8 {
+        if (!std.mem.startsWith(u8, s, prefix)) return null;
+        return s[prefix.len..];
+    }
+};
