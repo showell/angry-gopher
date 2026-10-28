@@ -1205,7 +1205,7 @@ test "route: a send too big for its form is the host's 413 and the whole answer:
     try testing.expectEqualStrings(before, (try chat_paths.readTranscript(io, a, dir, "Plans")).?);
 }
 
-test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mtime in seconds, a window of it and a short one, nothing for a missing file, and a folder the call's failure" {
+test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mtime in seconds, a window of it and a short one, nothing for a missing file, and a folder the stat's failure, a window's miss" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -1232,6 +1232,9 @@ test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mti
     try testing.expectEqualStrings("lo", chat_router.Call.readAt(ctx, "users/1/f.txt", 3, 9).found);
     try testing.expectEqualStrings("", chat_router.Call.readAt(ctx, "users/1/f.txt", 9, 4).found);
     try testing.expect(chat_router.Call.readAt(ctx, "users/1/gone", 0, 4) == .missing);
+    try testing.expect(call.failed == null);
+    // A cache's read (metal-vmm QUEUE 284): a folder is a miss, never the call's failure.
+    try testing.expect(chat_router.Call.readAt(ctx, "users/1/dir", 0, 4) == .failed);
     try testing.expect(call.failed == null);
     try testing.expect(chat_router.Call.stat(ctx, "users/1/dir") == .failed);
     try testing.expectEqual(@as(?anyerror, error.IsDir), call.failed);
@@ -1292,8 +1295,28 @@ test "a send numbers its message by the Roc's count as chat_count.messageCount c
             return error.TestUnexpectedResult;
         }
     }
+    // **A SIDECAR WHOSE READ FAILS IS A MISS** (metal-vmm QUEUE 284): a
+    // count that would be believed, unread, and a folder in the sidecar's
+    // place: the transcript recounted, never a failed send.
+    const chat_router = @import("chat_router.zig");
+    for ([_]bool{ true, false }) |plant_folder| {
+        const sid = if (plant_folder) "FolderCount" else "Unread";
+        try harness.writeTranscript(a, io, "1_2", sid, &.{ "hi", "hi" });
+        if (plant_folder) {
+            try harness.UidSite.disk.makeDir(io, a, try chat_count.countPath(a, dir, sid));
+        } else {
+            const st = try harness.UidSite.disk.stat(io, a, try chat_paths.transcriptPath(a, dir, sid));
+            try harness.UidSite.disk.write(io, a, try chat_count.countPath(a, dir, sid), try std.fmt.allocPrint(a, "41 {d}\n", .{st.size}), .{});
+            chat_router.test_cache_fails = true;
+        }
+        defer chat_router.test_cache_fails = false;
+        const answer = try harness.postAs(a, io, try std.fmt.allocPrint(a, "/chat/c/1_2/{s}/send", .{sid}), steve, "markdown=next");
+        try testing.expectEqualStrings("303 See Other", harness.status(answer));
+        const transcript = (try chat_paths.readTranscript(io, a, dir, sid)).?;
+        try testing.expect(std.mem.indexOf(u8, transcript, try std.fmt.allocPrint(a, "MSG_{s}_3\n", .{sid})) != null);
+    }
     // A transcript that cannot be read: an error to the Zig, the send's 500
-    // to the Roc, nothing stored.
+    // to the Roc, nothing stored. The truth's failure still fails.
     try harness.UidSite.disk.makeDir(io, a, try chat_paths.transcriptPath(a, dir, "Folder"));
     try testing.expect(std.meta.isError(chat_count.messageCount(io, a, dir, "Folder")));
     try testing.expectError(error.IsDir, harness.postAs(a, io, "/chat/c/1_2/Folder/send", steve, "markdown=next"));

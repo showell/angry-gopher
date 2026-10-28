@@ -53,6 +53,9 @@ const Alloc = std.mem.Allocator;
 /// **TESTS ONLY: THE REQUEST'S TIME**, when set, for both ways of serving
 /// (a reaction is stamped with it). Read only under `builtin.is_test`.
 pub var test_now: ?Now = null;
+/// Tests: every cache's read fails (Host.read_at!, metal-vmm QUEUE 284), as
+/// a disk would fail one, so an answer can be held to a miss's.
+pub var test_cache_fails: bool = false;
 
 fn requestTime(io: Io) Now {
     if (builtin.is_test) if (test_now) |t| return t;
@@ -482,19 +485,29 @@ pub const Call = struct {
         return .failed;
     }
 
-    /// **AT MOST `max` BYTES FROM `offset`** (Host.read_at!): fewer where
-    /// the file ends first.
+    /// **AT MOST `max` BYTES FROM `offset`** (Host.read_at!, a cache's read:
+    /// `missed` for one that failed): fewer where the file ends first.
     pub fn readAt(ctx: *anyopaque, path: []const u8, offset: u64, max: u64) roc_chat.Read {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unread(e);
-        // absent-ok: not read as absence: a failed stat is kept and returned once the call ends; only "no file" is missing.
-        const st = (webbox.store.statOrNull(c.io, c.alloc, p) catch |e| return c.unread(e)) orelse return .missing;
-        if (st.kind != .file) return c.unread(error.IsDir);
-        const buf = c.alloc.alloc(u8, @intCast(@min(max, st.size -| offset))) catch |e| return c.unread(e);
+        if (test_cache_fails) return missed(path, error.InputOutput);
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return missed(path, e);
+        // absent-ok: a cache's read: a failed stat is a miss (logged), and the Roc reads the truth.
+        const st = (webbox.store.statOrNull(c.io, c.alloc, p) catch |e| return missed(path, e)) orelse return .missing;
+        if (st.kind != .file) return missed(path, error.IsDir);
+        const buf = c.alloc.alloc(u8, @intCast(@min(max, st.size -| offset))) catch |e| return missed(path, e);
         if (buf.len == 0) return .{ .found = buf };
-        const n = webbox.store.readAt(c.io, c.alloc, p, offset, buf) catch |e| return c.unread(e);
+        // absent-ok: a cache's read: a failed read is a miss (logged), and the Roc reads the truth.
+        const n = webbox.store.readAt(c.io, c.alloc, p, offset, buf) catch |e| return missed(path, e);
         return .{ .found = buf[0..n] };
+    }
+
+    /// **A CACHE'S READ THAT FAILED IS A MISS** (metal-vmm QUEUE 284): said
+    /// in the log, never the request's failure; the Roc recounts or reads
+    /// the transcript, whose failure is.
+    fn missed(path: []const u8, e: anyerror) roc_chat.Read {
+        std.log.warn("chat: a cache's read failed, a miss: {s}: {t}", .{ path, e });
+        return .failed;
     }
 
     /// `fail`, answering the Roc that the read failed.

@@ -48,7 +48,7 @@ fn touch(io: Io, path: []const u8, secs: i96) !void {
     try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = secs * std.time.ns_per_s + 500_000_000 } } });
 }
 
-test "route: /chat/recent's rows as gatherRows and lastMessage made them: DMs, a channel, an empty topic, a bad date, docs, and every sidecar a last message is read through (metal-vmm QUEUE 276, 277)" {
+test "route: /chat/recent's rows as gatherRows and lastMessage made them: DMs, a channel, an empty topic, a bad date, docs, and every sidecar a last message is read through, and one whose read fails a miss (metal-vmm QUEUE 276, 277, 284)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -145,6 +145,37 @@ test "route: /chat/recent's rows as gatherRows and lastMessage made them: DMs, a
     const from = (std.mem.indexOf(u8, page, open) orelse return error.TestUnexpectedResult) + open.len;
     const json = page[from .. std.mem.indexOfPos(u8, page, from, "</script>") orelse return error.TestUnexpectedResult];
     try testing.expectEqualStrings(want, json);
+
+    // **A CACHE WHOSE READ FAILS IS A MISS** (metal-vmm QUEUE 284): every
+    // sidecar's and window's read failing answers as no sidecar at all, and a
+    // folder where a sidecar goes the same.
+    const chat_router = @import("chat_router.zig");
+    chat_router.test_cache_fails = true;
+    const failing = try recentJson(a, io, steve);
+    chat_router.test_cache_fails = false;
+    const sessions = try std.fs.path.join(a, &.{ dm, "sessions" });
+    var current_count: []const u8 = "";
+    for (try disk.list(io, a, sessions)) |e| {
+        if (!std.mem.endsWith(u8, e.name, ".count")) continue;
+        const p = try std.fs.path.join(a, &.{ sessions, e.name });
+        try disk.remove(io, a, p);
+        if (std.mem.eql(u8, e.name, "Current.count")) current_count = p;
+    }
+    try testing.expect(current_count.len > 0);
+    const missing = try recentJson(a, io, steve);
+    try testing.expectEqualStrings(missing, failing);
+    try testing.expect(!std.mem.eql(u8, want, missing));
+    try disk.makeDir(io, a, current_count);
+    try testing.expectEqualStrings(missing, try recentJson(a, io, steve));
+}
+
+/// /chat/recent's JSON, as `steve` asks for it.
+fn recentJson(a: std.mem.Allocator, io: Io, steve: []const u8) ![]const u8 {
+    const page = try harness.UidSite.ask(a, io, "/chat/recent", steve);
+    try testing.expectEqualStrings("200 OK", harness.status(page));
+    const open = "<script id=\"recent-data\" type=\"application/json\">";
+    const from = (std.mem.indexOf(u8, page, open) orelse return error.TestUnexpectedResult) + open.len;
+    return page[from .. std.mem.indexOfPos(u8, page, from, "</script>") orelse return error.TestUnexpectedResult];
 }
 
 /// The JSON for the tree above, newest first: an empty topic, a bad date
