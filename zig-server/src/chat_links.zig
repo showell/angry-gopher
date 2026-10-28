@@ -11,7 +11,7 @@ const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const chrome = @import("chat_chrome.zig");
-const markdown = @import("markdown.zig");
+const markdown = @import("chat_markdown");
 const disk = @import("webbox").store;
 
 const Alloc = std.mem.Allocator;

@@ -1,6 +1,6 @@
 const std = @import("std");
 const chat_codec = @import("chat_codec.zig");
-const markdown = @import("markdown.zig");
+const markdown = @import("chat_markdown");
 const chat_store = @import("chat_store.zig");
 const Io = @import("host_io").Io;
 

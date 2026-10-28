@@ -18,5 +18,11 @@
         // under /codex-chat: the `cobble-webbox` checkout (../../cobble-webbox
         // from here), module `codex_chat`.
         .cobble_webbox = .{ .path = "../../cobble-webbox" },
+        // The chat's markdown dialect: the `chat-markdown` checkout
+        // (../../chat-markdown from here), module `chat_markdown`.
+        .chat_markdown = .{ .path = "../../chat-markdown" },
+        // The chat's browser client: the `chat-client` checkout
+        // (../../chat-client from here), module `chat_client`.
+        .chat_client = .{ .path = "../../chat-client" },
     },
 }

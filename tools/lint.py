@@ -426,7 +426,7 @@ def find_violations(path: pathlib.Path, src: str, prog, known_globals) -> list[d
 
 
 def main() -> int:
-    files = sorted((REPO / "chat").glob("*.js")) + sorted((REPO / "learn").glob("*.js"))
+    files = sorted((REPO.parent / "chat-client" / "js").glob("*.js")) + sorted((REPO / "learn").glob("*.js"))
     # First pass: parse every file once and collect the cross-file
     # window.X globals, so the undefined-call rule can resolve a bare call
     # to a module defined in a sibling file.

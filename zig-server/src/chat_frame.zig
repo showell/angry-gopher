@@ -12,7 +12,7 @@
 //! `data-me-name`.
 
 const std = @import("std");
-const markdown = @import("markdown.zig");
+const markdown = @import("chat_markdown");
 
 const Alloc = std.mem.Allocator;
 

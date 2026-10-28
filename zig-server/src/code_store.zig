@@ -17,7 +17,7 @@ const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const disk = @import("webbox").store;
 const images_store = @import("images_store.zig");
-const fence = @import("markdown_fence.zig");
+const fence = @import("chat_markdown").fence;
 const chat_codec = @import("chat_codec.zig");
 
 /// code_sep joins entries on disk (same shape as the Images feed).

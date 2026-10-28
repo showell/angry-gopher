@@ -20,7 +20,7 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const disk = @import("webbox").store;
-const markdown_media = @import("markdown_media.zig");
+const markdown_media = @import("chat_markdown").media;
 
 /// images_sep joins entries on disk (blank line, 13 hyphens, blank line).
 pub const images_sep = "\n\n-------------\n\n";

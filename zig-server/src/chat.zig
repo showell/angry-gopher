@@ -40,7 +40,7 @@ const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
-const markdown = @import("markdown.zig");
+const markdown = @import("chat_markdown");
 const html = @import("webbox").html;
 // Escaping lives in html.zig, not here, so chat_chrome.zig and the non-chat
 // pages (login, game, admin, …) escape without importing the chat dispatcher.

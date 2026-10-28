@@ -58,25 +58,18 @@ A few load-bearing ideas worth knowing before you dig in:
   project like this) is the subject of the essay
   **"Afford Your Own Markdown Dialect"** (unpublished since the blog was retired).
 
-## This directory — the browser client
+## The browser client
 
-`chat/*.js` is the front end: **hand-written JavaScript, no build step**, embedded
-into the zig binary (`@embedFile`) and served as-is. It's organized by a deliberate
-"workhorse, edges, and substrate" policy:
+The front end is its own repository, **chat-client** (a sibling checkout,
+`../chat-client`): hand-written JavaScript, no build step, embedded into the
+zig binary through its `chat_client` module and served as-is. Its README
+says how it is organized. The JS is still held honest from here:
+`tools/jsparse.py` parses the (ES5-ish) dialect we write, and `tools/lint.py`
+runs rules over the AST (silent-catch, dead-code, undefined-call,
+called-once, …) on `../chat-client/js/*.js`. Both run in `ops/check_chat`.
 
-- **`chat.js` is the workhorse** — URL hash, view switching, SSE orchestration,
-  cross-session navigation, and the wiring that holds the modules together.
-- **Edges** (`chat_search.js`, `chat_compose.js`, the sidebars, `chat_help.js`, …)
-  are stable, self-contained widgets that each own their own DOM *and* CSS.
-- **Substrate** (`message.js`, `message_view.js`, `nav_stack.js`, the popups) are
-  the shared abstractions — one bubble, the list-of-bubbles widget, the
-  back/forward state machine. They self-style, so they drop into other pages
-  and just work.
-
-The JS is held honest by a homegrown linter: `tools/jsparse.py` parses the (ES5-ish)
-dialect we actually write here, and `tools/lint.py` runs rules over the AST
-(silent-catch, dead-code, undefined-call, called-once, …). Both run in
-`ops/check_chat`.
+The markdown dialect is its own repository too, **chat-markdown**
+(`../chat-markdown`, module `chat_markdown`).
 
 The **server** side lives over in `zig-server/src/` — `chat.zig` and its focused
 neighbors (`chat_page.zig`, `chat_sse.zig`, `chat_conv.zig`, `chat_chrome.zig`, `recent.zig`,

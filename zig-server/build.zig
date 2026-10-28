@@ -46,6 +46,13 @@ pub fn build(b: *std.Build) void {
     // /uo: `uo_town`, Damian's UO town (TownWatch), the same way.
     const uo_town = cobble.module("uo_town");
     root.addImport("uo_town", uo_town);
+    // The chat's markdown dialect and its browser client, each its own
+    // checkout (chat-markdown, chat-client): `chat_markdown` and
+    // `chat_client`, nothing but std.
+    const chat_markdown = b.dependency("chat_markdown", .{ .target = target, .optimize = optimize }).module("chat_markdown");
+    const chat_client = b.dependency("chat_client", .{ .target = target, .optimize = optimize }).module("chat_client");
+    root.addImport("chat_markdown", chat_markdown);
+    root.addImport("chat_client", chat_client);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -131,6 +138,7 @@ pub fn build(b: *std.Build) void {
         const tool_mod = b.createModule(.{ .root_source_file = b.path(tool.path), .target = target, .optimize = tool.optimize });
         tool_mod.addImport("webbox", webbox);
         tool_mod.addImport("host_io", host_io);
+        tool_mod.addImport("chat_markdown", chat_markdown);
         const tool_exe = b.addExecutable(.{ .name = tool.step, .root_module = tool_mod });
         const tool_run = b.addRunArtifact(tool_exe);
         tool_run.addPassthruArgs();
@@ -166,6 +174,8 @@ pub fn build(b: *std.Build) void {
     router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("codex_chat", codex_chat);
     router_tests.root_module.addImport("uo_town", uo_town);
+    router_tests.root_module.addImport("chat_markdown", chat_markdown);
+    router_tests.root_module.addImport("chat_client", chat_client);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
@@ -173,7 +183,7 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(router_tests).step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/reactions.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/reactions.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,
@@ -184,6 +194,7 @@ pub fn build(b: *std.Build) void {
         unit.root_module.addImport("webbox_linux", webbox_linux);
         unit.root_module.addImport("shale", shale);
         unit.root_module.addImport("host_io", host_io);
+        unit.root_module.addImport("chat_markdown", chat_markdown);
         unit.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }

@@ -13,9 +13,8 @@
 // not wall-time. Run: cd zig-server && zig build markdown-probe
 const std = @import("std");
 const chat_codec = @import("chat_codec.zig");
-const markdown = @import("markdown.zig");
+const markdown = @import("chat_markdown");
 const chat_store = @import("chat_store.zig");
-const mtext = @import("markdown_text.zig");
 const Io = @import("host_io").Io;
 
 const CHAT_DIR_CANDIDATES = [_][]const u8{
@@ -95,12 +94,12 @@ pub fn main(init: std.process.Init.Minimal) !void {
                 const w = try markdown.workUnits(alloc, m.markdown);
                 const ratio = @as(f64, @floatFromInt(w)) / @as(f64, @floatFromInt(m.markdown.len));
                 try recs.append(alloc, .{ .id = m.id, .bytes = m.markdown.len, .work = w, .ratio = ratio });
-                if (w > mtext.Budget.per_byte * m.markdown.len + mtext.Budget.base) would_trip += 1;
+                if (w > markdown.Budget.per_byte * m.markdown.len + markdown.Budget.base) would_trip += 1;
             }
         }
         std.mem.sort(Rec, recs.items, {}, worstRatio);
         std.debug.print("== part 1: work/byte over {d} real messages\n", .{recs.items.len});
-        std.debug.print("   current ceiling = {d}*bytes + {d}.  messages that would TRIP it: {d}\n", .{ mtext.Budget.per_byte, mtext.Budget.base, would_trip });
+        std.debug.print("   current ceiling = {d}*bytes + {d}.  messages that would TRIP it: {d}\n", .{ markdown.Budget.per_byte, markdown.Budget.base, would_trip });
         std.debug.print("   densest by work/byte (work / bytes / ratio / id):\n", .{});
         const top = @min(@as(usize, 8), recs.items.len);
         for (recs.items[0..top]) |r| {
