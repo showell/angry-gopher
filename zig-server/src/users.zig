@@ -96,6 +96,11 @@ fn isAgent(id: []const u8) bool {
 }
 
 /// userIsAuthorized = member OR agent.
+///
+/// **THE RULE HAS A SECOND HOME** until auth is all Roc: the chat's door
+/// asks roc-webbox chat/Accounts.roc `can_use_chat` (through `admits`);
+/// chat_twin_test.zig ("who may use the chat, a rule with two homes held
+/// equal") holds the two equal.
 pub fn userIsAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
     return (try userIsMember(io, alloc, id)) or isAgent(id);
 }
