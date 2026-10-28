@@ -522,7 +522,7 @@ test "ZigText: a string as std.json.fmt writes it, and as the readers trim it" {
     for (ss) |s| {
         // json_string takes text: the strings that are not UTF-8 go, since
         // the Roc's door refuses them and `roc test` covers that refusal
-        // (JsonText's str_at_door expects).
+        // (ZigText.json_string's expects).
         if (std.unicode.utf8ValidateSlice(s)) {
             const z = try std.fmt.allocPrint(
                 a,
