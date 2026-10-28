@@ -21,21 +21,18 @@
 //! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
-const chat_paths = @import("chat_paths.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
-const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
 const markdown = @import("markdown.zig");
 const edge = @import("webbox").edge;
 const chat = @import("chat.zig");
 const chrome = @import("chat_chrome.zig");
 const html = @import("webbox").html;
-const chat_state = @import("chat_state.zig");
 const timefmt = @import("timefmt.zig");
 const feed = @import("recent_feed.zig");
 const reading_list = @import("reading_list.zig");
@@ -66,7 +63,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     if (std.mem.eql(u8, seg, "new")) return docsNew(req, io, alloc, bus, uid, now);
     if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, bus, uid, now);
     if (std.mem.eql(u8, seg, "render")) return docsRender(req, alloc);
-    if (std.mem.eql(u8, seg, "post")) return docsPost(req, io, alloc, bus, uid, now);
+    // `post` is the Roc's (roc-webbox chat/main.roc `post_doc!`, metal-vmm QUEUE 278).
     if (std.mem.eql(u8, seg, "save_to_reading_list")) return docsSaveToReadingList(req, io, alloc, bus, uid, now);
 
     if (std.mem.indexOfScalar(u8, seg, '/') != null) return http.notFound(req);
@@ -267,43 +264,6 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
     try req.respond(rendered, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// docsPost appends the doc's current body as a chat message to the caller's
-/// default partner and returns {conv, session, id} so the client can navigate to
-/// the posted message.
-fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
-    const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
-    const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
-    const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
-    if (!docs_store.validDocSlug(slug)) return req.respond("bad slug\n", .{ .status = .bad_request });
-
-    const doc_body = try docs_store.readUserDoc(io, alloc, uid, slug);
-    if (std.mem.trim(u8, doc_body, " \t\r\n").len == 0) {
-        return req.respond("doc is empty\n", .{ .status = .bad_request });
-    }
-    // Don't broadcast hostile / over-formatted markdown to a chat partner.
-    if (try markdown.hostileReason(alloc, doc_body)) |_| {
-        return edge.reject(req, .malformed_markdown, "not posted: too much markdown formatting; break the doc up\n");
-    }
-
-    const partner = defaultChatPartner(uid);
-    if (!try validChatPartner(io, alloc, uid, partner)) {
-        return req.respond("no default chat partner available\n", .{ .status = .bad_request });
-    }
-    const conv = try chat_paths.chatPairKey(alloc, uid, partner);
-    const sid = try chat_state.resumeTopic(io, alloc, uid, conv, now);
-
-    const conv_dir = try chat_paths.dmConvDir(alloc, conv);
-    const from_name = try users.getUserName(io, alloc, uid);
-    const meta = try store.ConvMeta.dm(alloc, uid, partner);
-    const msg = try store.appendMessage(io, alloc, bus, now, meta, .{ .dir = conv_dir, .key = conv, .sid = sid }, .{ .name = from_name, .id = uid }, doc_body, "");
-
-    const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"session\":{f},\"id\":{f}}}", .{
-        std.json.fmt(conv, .{}), std.json.fmt(sid, .{}), std.json.fmt(msg.id, .{}),
-    });
-    try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
-}
-
 /// docsSaveToReadingList appends one saved chat message to the caller's
 /// reading-list doc (creating it on first save) → 204. The client sends the
 /// snapshot as-seen (body markdown, author, display date) plus the conv/sid/id
@@ -335,23 +295,6 @@ fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []
 }
 
 // ── post-to-chat helpers ───────
-
-/// defaultChatPartner picks the partner id for "post to chat": Steve (id 1) talks
-/// to Apoorva (id 2); everyone else talks to Steve. Hard-wired.
-fn defaultChatPartner(uid: []const u8) []const u8 {
-    if (std.mem.eql(u8, uid, "1")) return "2";
-    return "1";
-}
-
-/// validChatPartner: another authorized principal, not yourself or empty.
-fn validChatPartner(io: Io, alloc: Alloc, uid: []const u8, partner: []const u8) !bool {
-    if (partner.len == 0 or std.mem.eql(u8, partner, uid)) return false;
-    for (try users.listAuthorized(io, alloc)) |u| {
-        if (std.mem.eql(u8, u.id, partner)) return true;
-    }
-    return false;
-}
-
 // ── docsCSS ────────────────
 
 const docs_css =

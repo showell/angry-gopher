@@ -14,7 +14,6 @@
 
 const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
-const Now = @import("request_time.zig").Now;
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
@@ -104,23 +103,9 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 
 // ── resume target (the bare-conv landing topic) ─────────────────────────────
 
-/// resumeTopic picks the topic a bare /chat/c/<conv> (or docs post-to-chat)
-/// lands on for `uid`: the one they last viewed, if it still exists; else the
-/// conversation's first topic (chat_paths.firstOf); else today's date, so a
-/// brand-new conversation makes today's topic on its first post. Shared by
-/// /chat/default and the docs post flow. Where the viewer does not count,
-/// chat_paths.firstTopic.
-pub fn resumeTopic(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, now: Now) ![]const u8 {
-    const dir = try chat_paths.dmConvDir(alloc, conv);
-    const topics = try chat_paths.listTopics(io, alloc, dir);
-
-    const last = try lastViewedTopic(io, alloc, uid, conv);
-    return chooseResumeTopic(alloc, topics, last, now.unixSecs());
-}
-
-/// chooseResumeTopic is resumeTopic's decision, pure: `last` (the topic last
-/// viewed, "" for none) while `topics` has it, else their firstOf, else the
-/// date of `now_secs`. The Roc chat makes the same choice (roc-webbox
+/// chooseResumeTopic is where a member resumes a DM, the decision pure:
+/// `last` (the topic last viewed, "" for none) while `topics` has it, else
+/// their firstOf, else the date of `now_secs`. The Roc chat makes the same choice (roc-webbox
 /// chat/ChatState.roc `resume_topic`); chat_twin_test.zig holds it to this.
 pub fn chooseResumeTopic(alloc: Alloc, topics: []const []const u8, last: []const u8, now_secs: i64) ![]const u8 {
     if (last.len != 0) {

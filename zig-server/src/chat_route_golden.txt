@@ -1278,6 +1278,8 @@
 /channel	"/c/1_2/{s}/send"	404 text/html; charset=utf-8	am
 /chat	"/c/1_2/Folder/send"	404	am
 /channel	"/c/1_2/Folder/send"	404 text/html; charset=utf-8	am
+/chat	"/docs/post"	405 allow POST	am
+/channel	"/docs/post"	404 text/html; charset=utf-8	am
 /chat	"/c/1_2/ChitChat#msg-ChitChat_1"	404	am
 /channel	"/c/1_2/ChitChat#msg-ChitChat_1"	404 text/html; charset=utf-8	am
 /chat	"/general/Trips#msg-Trips_1"	not_found landing page +presence	a-

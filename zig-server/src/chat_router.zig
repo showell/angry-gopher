@@ -395,6 +395,7 @@ pub const Call = struct {
         const limit: usize = switch (which) {
             .reaction => limits.body.reaction,
             .message => limits.body.chat_message,
+            .doc => limits.body.doc,
         };
         // Null when it answered 413 (or 400) itself: the call is answered.
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
@@ -714,7 +715,7 @@ pub const Call = struct {
         return c.alloc.dupe([]const u8, &.{v}) catch |e| c.none(e);
     }
 
-    fn hostile(ctx: *anyopaque, md: []const u8) roc_chat.Hostility {
+    fn hostile(ctx: *anyopaque, md: []const u8, refusal: []const u8) roc_chat.Hostility {
         const c = of(ctx);
         if (c.dead()) return .failed;
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
@@ -724,7 +725,7 @@ pub const Call = struct {
         };
         if (reason == null) return .fine;
         // absent-ok: the same: a refusal that will not send is the request's failure.
-        edge.reject(c.req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n") catch |e| c.fail(e);
+        edge.reject(c.req, .malformed_markdown, refusal) catch |e| c.fail(e);
         c.answered = true;
         return .refused;
     }

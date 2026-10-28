@@ -1298,3 +1298,22 @@ test "a send numbers its message by the Roc's count as chat_count.messageCount c
     try testing.expect(std.meta.isError(chat_count.messageCount(io, a, dir, "Folder")));
     try testing.expectError(error.IsDir, harness.postAs(a, io, "/chat/c/1_2/Folder/send", steve, "markdown=next"));
 }
+
+test "a doc posted to chat that is not UTF-8 text fails the request with NotUtf8, and nothing is stored (metal-vmm QUEUE 278: it is the message)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try site(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "docs", "notes.md" }), "caf\xe9", .{});
+    try testing.expectError(error.NotUtf8, harness.postAs(a, io, "/chat/docs/post", steve, "slug=notes"));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2" })));
+}
