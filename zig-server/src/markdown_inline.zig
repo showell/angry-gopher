@@ -143,7 +143,7 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
     var email_dead: usize = 0;
     while (i < text.len) {
         budget.charge(1);
-        if (budget.blown()) return error.Hostile;
+        if (budget.isBlown()) return error.Hostile;
         const c = text[i];
         var consumed = false;
         // A MSG_ ref is recognized FIRST (when linkify), as one atomic token —
@@ -231,7 +231,7 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
     try flushText(&inl, a, text[run_start..]);
 
     processEmphasis(&inl, a, budget);
-    if (budget.blown()) return error.Hostile;
+    if (budget.isBlown()) return error.Hostile;
     try emitInline(out, a, &inl);
 }
 
@@ -284,7 +284,7 @@ fn processEmphasis(inl: *Inline, a: std.mem.Allocator, budget: *Budget) void {
     var closer = inl.dhead;
     while (closer) |ci| {
         budget.charge(1);
-        if (budget.blown()) return; // bail; renderInline aborts to malformed after
+        if (budget.isBlown()) return; // bail; renderInline aborts to malformed after
         if (!inl.nodes.items[ci].can_close) {
             closer = inl.nodes.items[ci].dnext;
             continue;

@@ -25,7 +25,7 @@ const hasPassword = users.hasPassword;
 const hasAccount = users.hasAccount;
 const tmpRoots = users.tmpRoots;
 const getUserName = users.getUserName;
-const nowUnix = users.readNowUnix;
+const readNowUnix = users.readNowUnix;
 const allDigits = users.allDigits;
 
 const session_max_age_secs: i64 = 365 * 24 * 60 * 60;
@@ -80,7 +80,7 @@ const SessionRead = struct { id: []const u8, value: []const u8, legacy: bool };
 /// The session a request carries, verified, and whether under the legacy
 /// name (until `http.legacy_names_until_unix`).
 fn readSession(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRead {
-    const now = nowUnix(io);
+    const now = readNowUnix(io);
     var one: [1][]const u8 = undefined;
     const named = try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy, http.namesNow(now));
     const values: []const []const u8 = switch (named.values) {
@@ -349,7 +349,7 @@ pub fn loadCurrentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Res
 /// issuance counterpart to verifySessionWithSecret.
 pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     const secret = (try loadSecret(io, alloc)) orelse return null;
-    return try signSession(alloc, secret, id, nowUnix(io));
+    return try signSession(alloc, secret, id, readNowUnix(io));
 }
 
 // ══ TESTS ════════════════════════════════════════════════════════════════════

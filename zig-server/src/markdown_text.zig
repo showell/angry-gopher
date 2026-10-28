@@ -47,7 +47,7 @@ pub const Budget = struct {
         self.spent += n;
     }
 
-    pub fn blown(self: *const Budget) bool {
+    pub fn isBlown(self: *const Budget) bool {
         return self.spent > self.ceiling;
     }
 };

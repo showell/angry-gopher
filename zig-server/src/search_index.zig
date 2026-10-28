@@ -460,13 +460,13 @@ pub fn buildAll(io: Io, scratch: Alloc) ?Stats {
     // absent-ok: no conversations listed is no index, and the first search builds again; nothing is written.
     const dirs = chat_paths.listConvDirs(io, scratch) catch |e| {
         idx.deinit();
-        failed_at_ms = nowMs(io);
+        failed_at_ms = readNowMs(io);
         failed_with = e;
         return null;
     };
     idx.build(io, scratch, dirs) catch |e| {
         idx.deinit();
-        failed_at_ms = nowMs(io);
+        failed_at_ms = readNowMs(io);
         failed_with = e;
         return null;
     };
@@ -476,7 +476,7 @@ pub fn buildAll(io: Io, scratch: Alloc) ?Stats {
     return idx.stats;
 }
 
-fn nowMs(io: Io) i64 {
+fn readNowMs(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds, std.time.ns_per_ms));
 }
 
@@ -484,7 +484,7 @@ fn nowMs(io: Io) i64 {
 /// not within `retry_ms` of a build that failed.
 pub fn indexOrBuild(io: Io, scratch: Alloc) ?*Index {
     if (the == null) {
-        const now = nowMs(io);
+        const now = readNowMs(io);
         const waiting = if (failed_at_ms) |t| now >= t and now - t < retry_ms else false;
         if (!waiting) _ = buildAll(io, scratch);
     }
@@ -502,7 +502,7 @@ pub fn noteAppend(io: Io, conv_dir: []const u8, sid: []const u8, m: chat_store.C
         error.ConversationTooBig => {},
         else => {
             drop();
-            failed_at_ms = nowMs(io);
+            failed_at_ms = readNowMs(io);
         },
     };
 }

@@ -162,7 +162,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         // Charge one unit per block line and bail if the budget is blown — this
         // is also where inline charges from the previous line get noticed.
         budget.charge(1);
-        if (budget.blown()) return error.Hostile;
+        if (budget.isBlown()) return error.Hostile;
         const eol = lineEnd(md, pos);
         const line = md[pos..eol];
         const next = if (eol < md.len) eol + 1 else md.len;

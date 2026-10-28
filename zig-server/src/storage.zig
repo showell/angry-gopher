@@ -97,19 +97,19 @@ pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: player.Id) !i64 {
 
 /// The puzzle session id a page offers: the one its first move will make.
 /// Nothing is written (zig-metal-unikernel QUEUE item 52: no write on a GET).
-pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: player.Id) !i64 {
+pub fn readNextPuzzleSessionID(io: Io, alloc: Alloc, user_id: player.Id) !i64 {
     return counter.peek(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
 /// Makes puzzle session `session_id`, with `meta`, if it is the one a page
-/// offered (`nextPuzzleSessionID`) and is not there yet; answers whether the
+/// offered (`readNextPuzzleSessionID`) and is not there yet; answers whether the
 /// session is there afterwards. An id never offered makes nothing. "Is it
 /// there, and is it the one offered" and the making of it are one step
 /// because one handler runs at a time (no lock: HOST.md's turn), so two
 /// first moves make one session, not two.
 fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64, meta: []const u8) !bool {
-    if (try puzzleSessionExists(io, alloc, user_id, session_id)) return true;
-    if (session_id != try nextPuzzleSessionID(io, alloc, user_id)) return false;
+    if (try hasPuzzleSession(io, alloc, user_id, session_id)) return true;
+    if (session_id != try readNextPuzzleSessionID(io, alloc, user_id)) return false;
     const got = try allocatePuzzleSessionID(io, alloc, user_id);
     std.debug.assert(got == session_id); // one handler at a time
     try writePuzzleSessionFile(io, alloc, user_id, session_id, "meta", meta);
@@ -124,8 +124,8 @@ fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: player.Id, session_id: 
     try store.write(io, alloc, full, body, .{});
 }
 
-/// puzzleSessionExists reports whether a session directory is on disk.
-pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !bool {
+/// hasPuzzleSession reports whether a session directory is on disk.
+pub fn hasPuzzleSession(io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !bool {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
@@ -239,8 +239,8 @@ pub fn readSessionFile(io: Io, alloc: Alloc, id: player.Id, session_id: i64, rel
     };
 }
 
-/// sessionExists reports whether a full-game session directory is on disk.
-pub fn sessionExists(io: Io, alloc: Alloc, id: player.Id, session_id: i64) !bool {
+/// hasSession reports whether a full-game session directory is on disk.
+pub fn hasSession(io: Io, alloc: Alloc, id: player.Id, session_id: i64) !bool {
     const dir = try sessionDir(alloc, id, session_id);
     const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
@@ -439,7 +439,7 @@ test "fs: a session made counts one against its player; its lines, and a puzzle'
     try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
     for (0..3) |_| try std.testing.expect(try appendGameLine(io, a, payer, made.id, .actions, "a line") == null);
     try std.testing.expectEqual(@as(?u32, 1), game_limits.countedSessions("p1"));
-    const offered = try nextPuzzleSessionID(io, a, test_p1);
+    const offered = try readNextPuzzleSessionID(io, a, test_p1);
     try std.testing.expect(try appendPuzzleMove(io, a, payer, offered, 0, "first", "puzzle meta") == .done);
     try std.testing.expectEqual(@as(?u32, 2), game_limits.countedSessions("p1"));
     try std.testing.expect(try appendPuzzleMove(io, a, payer, offered, 0, "second", null) == .done);

@@ -56,13 +56,13 @@ fn canonical(s: []const u8) bool {
     if (s[0] == ' ' or s[s.len - 1] == ' ' or std.mem.indexOf(u8, s, "  ") != null) return false;
     var has_alnum = false;
     for (s) |c| {
-        if (!allowedNameByte(c)) return false;
+        if (!isAllowedNameByte(c)) return false;
         if (isNameAlnumByte(c)) has_alnum = true;
     }
     return has_alnum and !std.ascii.eqlIgnoreCase(s, "you") and !std.ascii.eqlIgnoreCase(s, "me");
 }
 
-fn allowedNameByte(c: u8) bool {
+fn isAllowedNameByte(c: u8) bool {
     return std.ascii.isAlphanumeric(c) or c == ' ' or c == '\'' or c >= 0x80;
 }
 
@@ -89,7 +89,7 @@ pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
     var last_space = false;
     var has_alnum = false;
     for (trimmed) |c| {
-        if (!allowedNameByte(c)) {
+        if (!isAllowedNameByte(c)) {
             return .{ .refused = "Names can use only letters, numbers, spaces, and apostrophes." };
         }
         if (c == ' ') {
