@@ -9,9 +9,7 @@
 //! because the route table must not reach for the machine (router.zig's rule).
 
 const std = @import("std");
-const chat_paths = @import("chat_paths.zig");
-const chat_codec = @import("chat_codec.zig");
-const chat_fanout = @import("chat_fanout.zig");
+const operator_counts = @import("operator_counts.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
@@ -70,10 +68,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
         try row(&b, alloc, "the slowest", if (t.n_slowest > 0) slow.written() else "none yet");
     }
     try row(&b, alloc, "requests refused at the edge", try edge.countsText(alloc));
-    try row(&b, alloc, "chat fan-out failures since boot", try chat_fanout.fanoutText(alloc));
-    try row(&b, alloc, "listings that skipped a malformed channel", try chat_paths.malformedText(alloc));
-    try row(&b, alloc, "what the chat dropped rather than fail a page for", try chat_paths.droppedText(alloc));
-    try row(&b, alloc, "reads that met a refused transcript block", try chat_codec.refusedText(alloc));
+    for (std.enums.values(operator_counts.Kind)) |k| try row(&b, alloc, count_labels.get(k), try operator_counts.text(alloc, k));
     try b.appendSlice(alloc, "</table>\n<h2>The host</h2>\n");
 
     const facts = try host_facts.facts(io, alloc);
@@ -98,6 +93,16 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     try ui.end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
+
+/// Each operator count's row, as the operator reads it.
+const count_labels: std.EnumArray(operator_counts.Kind, []const u8) = .init(.{
+    .dropped_announcement = "new-topic announcements the chat dropped rather than fail a page for",
+    .dropped_feed_entry = "damaged feeds the chat dropped entries of rather than fail a page for",
+    .dropped_recent_row = "damaged recent rows the chat dropped rather than fail a page for",
+    .fanout_failure = "chat fan-out failures since boot",
+    .malformed_channel = "listings that skipped a malformed channel",
+    .refused_block = "reads that met a refused transcript block",
+});
 
 fn row(b: *std.ArrayList(u8), alloc: Alloc, label: []const u8, value: []const u8) !void {
     try b.print(alloc, "<tr><td>{s}</td><td>{s}</td></tr>", .{

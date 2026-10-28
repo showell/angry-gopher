@@ -12,6 +12,7 @@ const store = @import("webbox").store;
 const users = @import("users.zig");
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");
+const operator_counts = @import("operator_counts.zig");
 const CountFixture = fixtures.CountFixture;
 const cutSeq = chat_store.cutSeq;
 const ConvKind = chat_store.ConvKind;
@@ -292,81 +293,6 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
     return false;
 }
 
-/// Channel files a listing skipped as malformed, since boot (Steve,
-/// 2026-10-10, on 156(d)): a listing reads every channel for every member,
-/// so one bad file made chat a 500 for everyone; now each listing that meets
-/// it skips it, counts it, and names it on /admin/host (`malformedText`). The
-/// channel's own route still refuses it. Counted per listing, not per file.
-pub var malformed_channels: usize = 0;
-
-var malformed_last_buf: [64]u8 = undefined;
-
-pub var malformed_last: []const u8 = "";
-
-/// Channel `name` counted as one a listing skipped as malformed: the count,
-/// and the last one's name (its first 64 bytes). The Roc's listing asks it
-/// too (roc-webbox Host.count_malformed_channel!).
-pub fn countMalformed(name: []const u8) void {
-    malformed_channels += 1;
-    const n = @min(name.len, malformed_last_buf.len);
-    @memcpy(malformed_last_buf[0..n], name[0..n]);
-    malformed_last = malformed_last_buf[0..n];
-}
-
-/// The malformed channels as /admin/host shows them.
-pub fn malformedText(alloc: Alloc) ![]const u8 {
-    if (malformed_channels == 0) return "none";
-    return std.fmt.allocPrint(
-        alloc,
-        "{d}; the last: #{s}",
-        .{ malformed_channels, malformed_last },
-    );
-}
-
-/// **WHAT THE ROC CHAT DROPPED RATHER THAN FAIL A REQUEST FOR**, since boot
-/// (metal-vmm QUEUE 267, roc-webbox Host.count_dropped!): one damaged
-/// entry, row or announcement is its own, skipped and counted here, never a
-/// lasting 500 for every reader of the page. By kind, and the last one's
-/// kind and what it was about (its first 64 bytes).
-pub const Dropped = enum {
-    announcement,
-    feed_entry,
-    recent_row,
-};
-pub var dropped: std.EnumArray(Dropped, usize) = .initFill(0);
-
-var dropped_last_buf: [64]u8 = undefined;
-var dropped_last: []const u8 = "";
-var dropped_last_kind: Dropped = .feed_entry;
-
-/// One drop of `what`, about `whose` (a topic, a feed's path, a row's key).
-pub fn countDropped(what: Dropped, whose: []const u8) void {
-    dropped.getPtr(what).* += 1;
-    const n = @min(whose.len, dropped_last_buf.len);
-    @memcpy(dropped_last_buf[0..n], whose[0..n]);
-    dropped_last = dropped_last_buf[0..n];
-    dropped_last_kind = what;
-}
-
-/// The drops as /admin/host shows them.
-pub fn droppedText(alloc: Alloc) ![]const u8 {
-    const a = dropped.get(.announcement);
-    const f = dropped.get(.feed_entry);
-    const r = dropped.get(.recent_row);
-    if (a + f + r == 0) return "none";
-    return std.fmt.allocPrint(
-        alloc,
-        "{d} damaged feeds, {d} damaged recent rows, {d} new-topic announcements; the last: {t} {f}",
-        .{
-            f,
-            r,
-            a,
-            dropped_last_kind,
-            std.zig.fmtString(dropped_last),
-        },
-    );
-}
-
 /// listUserChannels returns the names of channels `uid` is a member of, sorted:
 /// every channel's roster read (channelRosters), then memberChannels.
 pub fn listUserChannels(
@@ -386,8 +312,12 @@ pub const Roster = struct { name: []const u8, members: [][]const u8 };
 
 /// Every channel's roster, in the listing's order: scans
 /// {chat_store.chat_root}/channels/*.channel (missing dir → none). A
-/// malformed one is skipped and counted (`malformed_channels`), a file gone
-/// since the listing skipped.
+/// malformed one is skipped and counted for the operator (Steve, 2026-10-10,
+/// on 156(d): a listing reads every channel for every member, so one bad file
+/// made chat a 500 for everyone; the channel's own route still refuses it;
+/// counted per listing, not per file), a file gone since the listing skipped.
+/// The Roc's listing counts its own the same way (roc-webbox main.roc
+/// `count_malformed!`).
 pub fn channelRosters(io: Io, alloc: Alloc) ![]Roster {
     const dir_path = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels" });
     const entries = try store.list(
@@ -410,7 +340,7 @@ pub fn channelRosters(io: Io, alloc: Alloc) ![]Roster {
             name,
         ) catch |e| switch (e) {
             error.MalformedChannel => {
-                countMalformed(name);
+                operator_counts.count(.malformed_channel, &.{ "#", name });
                 continue;
             },
             else => return e,
@@ -682,13 +612,13 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
         ));
         // A listing skips it and counts it (Steve, 2026-10-10): one bad file
         // is not every member's chat down.
-        const before = malformed_channels;
+        const before = operator_counts.counted(.malformed_channel);
         try testing.expectEqual(@as(usize, 0), (try listUserChannels(
             f.io,
             a,
             "1",
         )).len);
-        try testing.expectEqual(before + 1, malformed_channels);
-        try testing.expectEqualStrings("team", malformed_last);
+        try testing.expectEqual(before + 1, operator_counts.counted(.malformed_channel));
+        try testing.expectEqualStrings("#team", operator_counts.last(.malformed_channel));
     }
 }

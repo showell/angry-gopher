@@ -11,6 +11,7 @@ const testing = std.testing;
 const chat_store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
+const operator_counts = @import("operator_counts.zig");
 const readCount = chat_count.readCount;
 const backfillSidecars = chat_count.backfillSidecars;
 const countPath = chat_count.countPath;
@@ -22,45 +23,25 @@ const sep = chat_store.sep;
 const dashes = chat_store.dashes;
 const ChatMessage = chat_store.ChatMessage;
 
-/// Reads that met a refused transcript block, since boot (metal-vmm QUEUE
-/// 156(h)): a block with no `MSG_` id, author or date, which decoded as a
-/// message of "" before. **A COUNT OF READS, NOT OF BLOCKS**: one bad block
-/// is counted again by every page, stream and search build that reads it, so
-/// the number grows with traffic; any number above none is the signal, and
-/// /admin/host (`refusedText`) names the last one's first line.
-pub var refused_blocks: usize = 0;
-
-var refused_last_buf: [96]u8 = undefined;
-
-var refused_last: []const u8 = "";
-
-/// The refused blocks as /admin/host shows them.
-pub fn refusedText(alloc: Alloc) ![]const u8 {
-    if (refused_blocks == 0) return "none";
-    return std.fmt.allocPrint(
-        alloc,
-        "{d}; the last began: {s}",
-        .{ refused_blocks, refused_last },
-    );
-}
-
 /// Whether a decoded block is a message: it has an id, an author and a date
 /// (the decoder and search's in-place reading ask the same).
 pub fn isMessage(m: ChatMessage) bool {
     return m.id.len > 0 and m.from.len > 0 and m.at.len > 0;
 }
 
-/// A block that is not a message: counted, and its first line kept to say.
+/// A block that is not a message (metal-vmm QUEUE 156(h): no `MSG_` id,
+/// author or date; it decoded as a message of "" before): counted for the
+/// operator, by its first line. **A COUNT OF READS, NOT OF BLOCKS**: one bad
+/// block is counted again by every page, stream and search build that reads
+/// it, so the number grows with traffic; any number above none is the
+/// signal. The Roc's decoder counts its own the same way (roc-webbox
+/// TopicStream.roc).
 pub fn refuseBlock(piece: []const u8) void {
-    refused_blocks += 1;
-    const first = piece[0 .. std.mem.indexOfScalar(
+    operator_counts.count(.refused_block, &.{piece[0 .. std.mem.indexOfScalar(
         u8,
         piece,
         '\n',
-    ) orelse piece.len];
-    const n = @min(first.len, refused_last_buf.len);
-    @memcpy(refused_last_buf[0..n], first[0..n]);
-    refused_last = refused_last_buf[0..n];
+    ) orelse piece.len]});
 }
 
 /// decodeChatFile parses a whole topic file into messages. Splits on `sep`
@@ -226,7 +207,7 @@ test "the decoder refuses a block with no id, author or date, counted; a blank p
     defer arena.deinit();
     const x = arena.allocator();
     const good = "MSG_t_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello";
-    const before = refused_blocks;
+    const before = operator_counts.counted(.refused_block);
     inline for ([_][]const u8{
         "from: Steve\ndate: 2026-10-10T00:00:00Z\n\nno id",
         "MSG_t_2\ndate: 2026-10-10T00:00:00Z\n\nno author",
@@ -235,11 +216,11 @@ test "the decoder refuses a block with no id, author or date, counted; a blank p
     }, 1..) |bad, n| {
         const msgs = try decodeChatFile(x, good ++ sep ++ bad);
         try testing.expectEqual(@as(usize, 1), msgs.len);
-        try testing.expectEqual(before + n, refused_blocks);
+        try testing.expectEqual(before + n, operator_counts.counted(.refused_block));
     }
     // A blank piece (an append torn right after its separator) is no block.
     try testing.expectEqual(@as(usize, 1), (try decodeChatFile(x, good ++ sep ++ "  \n")).len);
-    try testing.expectEqual(before + 4, refused_blocks);
+    try testing.expectEqual(before + 4, operator_counts.counted(.refused_block));
 }
 
 test "a refused block keeps its number: a recount counts blocks, so no id is given twice; and no message is written with no author (the review of 156: the Roc's append_message! refuses one)" {

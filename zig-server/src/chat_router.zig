@@ -36,9 +36,7 @@ const users = @import("users.zig");
 const presence = @import("presence.zig");
 const store = @import("chat_store.zig");
 const sse = @import("webbox").sse;
-const chat_fanout = @import("chat_fanout.zig");
-const chat_paths = @import("chat_paths.zig");
-const chat_codec = @import("chat_codec.zig");
+const operator_counts = @import("operator_counts.zig");
 const chat_search = @import("chat_search.zig");
 const search_index = @import("search_index.zig");
 const chrome = @import("chat_chrome.zig");
@@ -391,9 +389,7 @@ pub const Call = struct {
             .list = list,
             .fail = refuse,
             .fail_text = failText,
-            .count_malformed_channel = malformedChannel,
-            .count_refused_block = refusedBlock,
-            .count_dropped = droppedOf,
+            .count = countOf,
             .aside = asideOf,
             .check_online = online,
             .admit = admitOf,
@@ -410,7 +406,6 @@ pub const Call = struct {
             .render_preview = renderPreview,
             .index_message = indexMessage,
             .write_cache = writeCache,
-            .report_fanout_failure = fanoutFailed,
             .read_header = header,
             .check_hostile = hostile,
         };
@@ -470,20 +465,15 @@ pub const Call = struct {
         }
     }
 
-    /// Something the Roc dropped rather than fail the request for, counted
-    /// for /admin/host (chat_paths.countDropped).
-    fn droppedOf(
-        ctx: *anyopaque,
-        what: roc_chat.Dropped,
-        whose: []const u8,
-    ) void {
+    /// **THE OPERATOR'S COUNT** (Host.count!): `kind` counted, in the Roc's
+    /// words, on operator_counts' table for /admin/host, the kind there by
+    /// its name.
+    fn countOf(ctx: *anyopaque, kind: roc_chat.CountKind, text: []const u8) void {
         const c = of(ctx);
         if (c.dead()) return;
-        chat_paths.countDropped(switch (what) {
-            .announcement => .announcement,
-            .feed_entry => .feed_entry,
-            .recent_row => .recent_row,
-        }, whose);
+        switch (kind) {
+            inline else => |k| operator_counts.count(@field(operator_counts.Kind, @tagName(k)), &.{text}),
+        }
     }
 
     /// **WHO IS ASKING, VERIFIED, AND NOTHING MORE** (Host.identify!):
@@ -1060,24 +1050,6 @@ pub const Call = struct {
         c.fail(error.NotUtf8);
     }
 
-    /// A channel the Roc's listing skipped as malformed, counted for
-    /// /admin/host (chat_paths.countMalformed: the operator's count, kept
-    /// for the process's life).
-    fn malformedChannel(ctx: *anyopaque, name_: []const u8) void {
-        const c = of(ctx);
-        if (c.dead()) return;
-        chat_paths.countMalformed(name_);
-    }
-
-    /// A transcript block the Roc's decoder refused, counted for
-    /// /admin/host (chat_codec.refuseBlock: the reads that met one, and the
-    /// last one's first line, as every reader of a transcript counts it).
-    fn refusedBlock(ctx: *anyopaque, first: []const u8) void {
-        const c = of(ctx);
-        if (c.dead()) return;
-        chat_codec.refuseBlock(first);
-    }
-
     /// **THE BUS, AS A PRIMITIVE** (Host.publish!): webbox's bus.publish,
     /// which copies the bytes to each subscriber, so the Roc's go with the
     /// call. It cannot fail; after a failure it sends nothing.
@@ -1395,29 +1367,6 @@ pub const Call = struct {
         // absent-ok: a cache: one not written is recounted from the transcript (Count.believed).
         webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e|
             std.log.warn("chat: a cache's write failed, a miss: {s}: {t}", .{ path, e });
-    }
-
-    /// **A SURFACE THAT FAILED FOR ONE MEMBER, COUNTED AND SAID**
-    /// (Host.report_fanout_failure!): chat_fanout.fanoutFailed, the operator's count
-    /// and last failure on /admin/host, in its words: "<surface> for member
-    /// <uid>, <error>, on <key>/<sid>".
-    fn fanoutFailed(
-        ctx: *anyopaque,
-        surface: roc_chat.Surface,
-        member_: []const u8,
-        key: []const u8,
-        sid: []const u8,
-        e: anyerror,
-    ) void {
-        const c = of(ctx);
-        if (c.dead()) return;
-        chat_fanout.fanoutFailed(
-            @tagName(surface),
-            member_,
-            e,
-            key,
-            sid,
-        );
     }
 
     fn header(ctx: *anyopaque, name: []const u8) []const []const u8 {

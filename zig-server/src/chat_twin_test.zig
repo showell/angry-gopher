@@ -13,6 +13,7 @@ const timefmt = @import("timefmt.zig");
 const decimal = @import("decimal.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_codec = @import("chat_codec.zig");
+const operator_counts = @import("operator_counts.zig");
 const chat_count = @import("chat_count.zig");
 const markdown = @import("chat_markdown");
 const http = @import("webbox").http;
@@ -1262,9 +1263,9 @@ fn decodeAgrees(
     data: []const u8,
     differ: *Differences,
 ) !void {
-    const before = chat_codec.refused_blocks;
+    const before = operator_counts.counted(.refused_block);
     const zm = try chat_codec.decodeChatFile(a, data);
-    const zrefused = chat_codec.refused_blocks - before;
+    const zrefused = operator_counts.counted(.refused_block) - before;
     const got = try roc(
         a,
         .decode_file,
@@ -4220,10 +4221,10 @@ test "Paths: every channel's roster, as channelRosters reads them from generated
                 );
             }
         }
-        const before = chat_paths.malformed_channels;
+        const before = operator_counts.counted(.malformed_channel);
         const z = chat_paths.channelRosters(io, a);
-        const z_counted = chat_paths.malformed_channels - before;
-        const z_last = try a.dupe(u8, chat_paths.malformed_last);
+        const z_counted = operator_counts.counted(.malformed_channel) - before;
+        const z_last = try a.dupe(u8, operator_counts.last(.malformed_channel));
         // The Roc's way: the folder listed, the names it chose read as the
         // host reads them, its rosters and malformed ones; each malformed
         // one counted by the host's primitive.
@@ -4271,21 +4272,22 @@ test "Paths: every channel's roster, as channelRosters reads them from generated
             got[0],
             10,
         );
-        const before_r = chat_paths.malformed_channels;
-        for (got[1 .. 1 + m]) |n| chat_paths.countMalformed(n);
-        const r_counted = chat_paths.malformed_channels - before_r;
+        // Counted as the Roc's main.roc `count_malformed!` counts it.
+        const before_r = operator_counts.counted(.malformed_channel);
+        for (got[1 .. 1 + m]) |n| operator_counts.count(.malformed_channel, &.{ "#", n });
+        const r_counted = operator_counts.counted(.malformed_channel) - before_r;
         compared += 1;
         counted += z_counted;
         if (z_counted != r_counted or (z_counted > 0 and !std.mem.eql(
             u8,
             z_last,
-            chat_paths.malformed_last,
+            operator_counts.last(.malformed_channel),
         )))
             differ.add("malformed: zig {d} (last \"{f}\"), roc {d} (last \"{f}\")", .{
                 z_counted,
                 std.zig.fmtString(z_last),
                 r_counted,
-                std.zig.fmtString(chat_paths.malformed_last),
+                std.zig.fmtString(operator_counts.last(.malformed_channel)),
             });
         if (z) |rosters| {
             if (rosters.len > 0) listed_some += 1;

@@ -4,11 +4,10 @@
 //! split from chat_store.zig by 174).
 //!
 //! **THE FAN-OUT IS THE ROC'S** (roc-webbox chat/Fanout.roc, over the host's
-//! `append!` in an aside and `report_fanout_failure!`, chat_router.zig; metal-vmm
-//! QUEUE 279 took the last Zig writer). What stays: the bus keys the streams
-//! subscribe on, the encoders and `recentWhere` chat_twin_test.zig holds the
-//! Roc's to, and the count of failures and the last one, the process's,
-//! said on /admin/host.
+//! `append!` in an aside and `count!`, chat_router.zig; metal-vmm QUEUE 279
+//! took the last Zig writer). What stays: the bus keys the streams
+//! subscribe on, and the encoders and `recentWhere` chat_twin_test.zig holds
+//! the Roc's to.
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;
@@ -78,46 +77,5 @@ pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
         alloc,
         "/channel/{s}",
         .{conv_key},
-    );
-}
-
-/// The fan-out's failures since boot: a surface that failed for one member
-/// (metal-vmm QUEUE 156(c)). Said on /admin/host (`fanoutText`), with the
-/// last one named: the route table has no stderr of its own.
-pub var fanout_failures: usize = 0;
-
-var fanout_last_buf: [192]u8 = undefined;
-
-var fanout_last: []const u8 = "";
-
-/// A fan-out step that failed, counted and said.
-pub fn fanoutFailed(
-    surface: []const u8,
-    who: []const u8,
-    e: anyerror,
-    conv_key: []const u8,
-    sid: []const u8,
-) void {
-    fanout_failures += 1;
-    fanout_last = std.fmt.bufPrint(
-        &fanout_last_buf,
-        "{s} for member {s}, {s}, on {s}/{s}",
-        .{
-            surface,
-            who,
-            @errorName(e),
-            conv_key,
-            sid,
-        },
-    ) catch surface;
-}
-
-/// The fan-out's failures as /admin/host shows them.
-pub fn fanoutText(alloc: Alloc) ![]const u8 {
-    if (fanout_failures == 0) return "none";
-    return std.fmt.allocPrint(
-        alloc,
-        "{d}; the last: {s}",
-        .{ fanout_failures, fanout_last },
     );
 }

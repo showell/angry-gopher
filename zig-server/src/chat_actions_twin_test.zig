@@ -11,8 +11,8 @@ const roc_chat = @import("roc_chat");
 const store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
-const chat_codec = @import("chat_codec.zig");
 const chat_fanout = @import("chat_fanout.zig");
+const operator_counts = @import("operator_counts.zig");
 const chat_search = @import("chat_search.zig");
 const search_index = @import("search_index.zig");
 const Now = @import("request_time.zig").Now;
@@ -4331,7 +4331,7 @@ fn feedFailRun(a: Alloc, io: Io) !struct {
     } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3");
     var subs: [keys.len]*webbox.bus.Subscriber = undefined;
     for (keys, &subs) |k, *s| s.* = try hub.open(k);
-    const before = chat_fanout.fanout_failures;
+    const before = operator_counts.counted(.fanout_failure);
     var answers: std.ArrayList(u8) = .empty;
     for ([_][]const u8{ "/chat/c/1_2/Plans/send", "/channel/ops/Standup/send" }) |target| {
         const r = try serveOn(
@@ -4353,12 +4353,7 @@ fn feedFailRun(a: Alloc, io: Io) !struct {
             .{ r.err, harness.status(r.out) },
         );
     }
-    const text = try chat_fanout.fanoutText(a);
-    const last = text[(std.mem.indexOf(
-        u8,
-        text,
-        "; the last: ",
-    ) orelse return error.TestUnexpectedResult) + "; the last: ".len ..];
+    const last = try a.dupe(u8, operator_counts.last(.fanout_failure));
     return .{
         .answers = answers.items,
         .frames = try drained(
@@ -4372,7 +4367,7 @@ fn feedFailRun(a: Alloc, io: Io) !struct {
             io,
             site.base,
         ),
-        .counted = chat_fanout.fanout_failures - before,
+        .counted = operator_counts.counted(.fanout_failure) - before,
         .last = last,
     };
 }
@@ -4393,7 +4388,7 @@ test "a member whose images.md will not take an entry: that surface fails for th
         "2f09f8284d0a7db3b5b52362faf823024a39d7a5f0af5895b9cd038c597b2bed",
     );
     // It reached what it means to: both sends done, one failure each, the
-    // last said in fanoutFailed's words; member 2's code and every other
+    // last said in the old Zig's words (Fanout.failure's now); member 2's code and every other
     // member's images arrived, member 2's images never sent.
     try testing.expectEqual(@as(usize, 2), std.mem.count(
         u8,
@@ -4752,7 +4747,7 @@ fn pageRun(a: Alloc, io: Io) !struct { answers: [][]const u8, malformed: usize }
 
     chat_router.test_now = t;
     defer chat_router.test_now = null;
-    const before = chat_paths.malformed_channels;
+    const before = operator_counts.counted(.malformed_channel);
     const answers = try a.alloc([]const u8, page_asks.len);
     for (page_asks, answers) |p, *got| got.* = try harness.serve(
         a,
@@ -4763,7 +4758,7 @@ fn pageRun(a: Alloc, io: Io) !struct { answers: [][]const u8, malformed: usize }
             .{ p.target, cookies[p.cookie] },
         ),
     );
-    return .{ .answers = answers, .malformed = chat_paths.malformed_channels - before };
+    return .{ .answers = answers, .malformed = operator_counts.counted(.malformed_channel) - before };
 }
 
 /// That `want` is in `page` after `from`; where it ends.
@@ -5233,7 +5228,7 @@ const BacklogAsk = struct {
 
 /// Each topic stream answered (its head, preamble and backlog), then, for
 /// one kept, a blob published on its key and the frame it makes; the
-/// refused blocks each request met (chat_codec.refused_blocks), and the
+/// refused blocks each request met (operator_counts' refused_block), and the
 /// operator's line for them at the end.
 fn backlogRun(a: Alloc, io: Io) !struct { answers: [][]const u8, refused: []const u8 } {
     var site = try harness.UidSite.init(a, io);
@@ -5321,11 +5316,11 @@ fn backlogRun(a: Alloc, io: Io) !struct { answers: [][]const u8, refused: []cons
         var req = try server.receiveHead();
         req.head.keep_alive = false;
         var b = webbox.bus.Bus.of(&hub);
-        const refused_before = chat_codec.refused_blocks;
+        const refused_before = operator_counts.counted(.refused_block);
         const got = router.route(&req, io, a, &b);
         try out.writer.flush();
         var line: std.ArrayList(u8) = .empty;
-        try line.print(a, "{s} {s} [{s}] refused {d}: ", .{ q.method, q.target, q.extra, chat_codec.refused_blocks - refused_before });
+        try line.print(a, "{s} {s} [{s}] refused {d}: ", .{ q.method, q.target, q.extra, operator_counts.counted(.refused_block) - refused_before });
         if (got) |kept| {
             try line.appendSlice(a, out.written());
             if (kept) |k| {
@@ -5339,9 +5334,8 @@ fn backlogRun(a: Alloc, io: Io) !struct { answers: [][]const u8, refused: []cons
         try answers.append(a, line.items);
     }
     // The count is the binary's since it began; the last block's line is this run's.
-    const said = try chat_codec.refusedText(a);
-    const last = "; the last began: ";
-    return .{ .answers = answers.items, .refused = said[(std.mem.indexOf(u8, said, last) orelse return error.NoRefusedBlock) + last.len ..] };
+    if (operator_counts.counted(.refused_block) == 0) return error.NoRefusedBlock;
+    return .{ .answers = answers.items, .refused = try a.dupe(u8, operator_counts.last(.refused_block)) };
 }
 
 /// The bus key of a topic stream's target: `1_2/<topic>` under /chat/c/1_2/,
@@ -6501,10 +6495,8 @@ fn countersRun(a: Alloc, io: Io) !struct { answers: []const u8, rows: []const u8
     defer @import("presence.zig").forgetForTest();
     chat_router.test_now = Now.at(1_761_400_000);
     defer chat_router.test_now = null;
-    chat_paths.malformed_channels = 0;
-    chat_paths.dropped = .initFill(0);
-    chat_codec.refused_blocks = 0;
-    chat_fanout.fanout_failures = 0;
+    operator_counts.forgetForTest();
+    defer operator_counts.forgetForTest();
     const channels = try std.fs.path.join(a, &.{ store.chat_root, "channels" });
     try disk.write(io, a, try std.fs.path.join(a, &.{ channels, "Abad.channel" }), "1\nnot a uid\n", .{});
     try disk.write(io, a, try std.fs.path.join(a, &.{ channels, "bad.channel" }), "1\n\xff\n", .{});
@@ -6551,12 +6543,12 @@ fn countersRun(a: Alloc, io: Io) !struct { answers: []const u8, rows: []const u8
         try answers.print(a, "a refused block: {?t} {s}\n", .{ r.err, harness.status(r.out) });
     }
     const page = try harness.UidSite.ask(a, io, "/admin/host", steve);
-    const first = std.mem.indexOf(u8, page, "<tr><td>chat fan-out failures since boot</td>") orelse return error.NoCounterRows;
+    const first = std.mem.indexOf(u8, page, "<tr><td>new-topic announcements the chat dropped") orelse return error.NoCounterRows;
     const end = std.mem.indexOfPos(u8, page, first, "</table>") orelse return error.NoCounterRows;
     return .{ .answers = answers.items, .rows = page[first..end] };
 }
 
-test "the operator's counters (the pure-Roc chat plan, item 7): a malformed channel, a feed's damaged entry, a fan-out failure, a dropped recent row and announcement, a refused block, each counted and the last said on /admin/host, as the old Zig said them" {
+test "the operator's counters (the pure-Roc chat plan, item 7): a malformed channel, a feed's damaged entry, a fan-out failure, a dropped recent row and announcement, a refused block, each counted on the operator's one table and the last said on /admin/host in the Roc's words, a row a kind" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -6566,5 +6558,5 @@ test "the operator's counters (the pure-Roc chat plan, item 7): a malformed chan
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const got = try countersRun(a, io);
-    try freezeRun("countersRun", got, "99382535391d25ba64fde9113faa2ae79baac9861cfab56e065a31932eb9ce2e");
+    try freezeRun("countersRun", got, "cd4b3b60f78e629ffaec630b4b49cb028d5d36c8305f4f9f3b1276f45ecca1eb");
 }
