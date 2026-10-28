@@ -5367,3 +5367,104 @@ test "the docs' writes (metal-vmm QUEUE 290): a new doc, a save, the live previe
     defer meter.restore();
     try freezeRun("docsWriteRun", try docsWriteRun(a, io), "1eb961a4576e13db45c14d059b209786c9aa92e857220bc71588079420762c72");
 }
+
+/// **A TOPIC'S DOWNLOAD AND ITS UPLOADS, FROZEN ON THE OLD ZIG** (metal-vmm
+/// QUEUE 291): the bundle (its transcript, reactions and uploads, a folder
+/// among them passed over; a topic with none of them), by GET and HEAD and
+/// the wrong method, and to one who is not in the DM; an upload whole, every
+/// shape of range (a start and end, open-ended, a suffix, a list, past the
+/// end, reversed, not bytes, empty file), one streamed past the size read
+/// whole, a name no upload has, one not there, HEAD and POST.
+fn downloadsRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    const sessions = try std.fs.path.join(a, &.{ store.chat_root, "1_2", "sessions" });
+    const png = "0123456789abcdef0123456789abcdef.png";
+    const mp4 = "fedcba9876543210fedcba9876543210.mp4";
+    const empty = "00000000000000000000000000000000.gif";
+    const big = try a.alloc(u8, 5 << 20);
+    for (big, 0..) |*b, i| b.* = @intCast(i % 251);
+    for ([_]struct { []const u8, []const u8 }{
+        .{ "Plans.md", "## Steve at 2026-01-01T00:00:00Z\n\nhello\n" },
+        .{ "Plans.count", "1\n" },
+        .{ "Plans.reactions.jsonl", "{\"msg\":1,\"emoji\":\"x\"}\n" },
+        .{ "Plans.uploads/" ++ png, "\x89PNG\r\n\x1a\nsome image bytes" },
+        .{ "Plans.uploads/" ++ mp4, big },
+        .{ "Plans.uploads/" ++ empty, "" },
+        .{ "Bare.md", "## Debbie at 2026-01-01T00:00:00Z\n\nbare\n" },
+    }) |f| {
+        const p = try std.fs.path.join(a, &.{ sessions, f[0] });
+        try harness.UidSite.disk.write(io, a, p, f[1], .{});
+        var h = try std.Io.Dir.cwd().openFile(io, p, .{ .mode = .read_write });
+        defer h.close(io);
+        try h.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = @as(i96, 1_767_225_600) * std.time.ns_per_s } } });
+    }
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ sessions, "Plans.uploads", "sub" }));
+    const up = "/chat/c/1_2/Plans/uploads/";
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    const Get = struct { who: []const u8, method: []const u8 = "GET", target: []const u8, range: ?[]const u8 = null };
+    const asks = [_]Get{
+        .{ .who = steve, .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .method = "HEAD", .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .method = "POST", .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .target = "/chat/c/1_2/Bare/download" },
+        .{ .who = steve, .target = "/chat/c/1_2/Gone/download" },
+        .{ .who = ann, .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .target = up ++ png },
+        .{ .who = steve, .method = "HEAD", .target = up ++ png },
+        .{ .who = steve, .method = "POST", .target = up ++ png },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=0-3" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=5-" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=-4" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=-400" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=2-4,8-9" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes= 1 - 2 " },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=3-100" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=100-200" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=4-2" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=-0" },
+        .{ .who = steve, .target = up ++ png, .range = "items=0-1" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=x-1" },
+        .{ .who = steve, .target = up ++ png, .range = "" },
+        .{ .who = steve, .target = up ++ empty },
+        .{ .who = steve, .target = up ++ empty, .range = "bytes=0-1" },
+        .{ .who = steve, .target = up ++ mp4 },
+        .{ .who = steve, .method = "HEAD", .target = up ++ mp4 },
+        .{ .who = steve, .target = up ++ mp4, .range = "bytes=1000-" },
+        .{ .who = steve, .target = up ++ mp4, .range = "bytes=-10" },
+        .{ .who = steve, .target = up ++ "a.png" },
+        .{ .who = steve, .target = up ++ "0123456789abcdef0123456789abcdef.exe" },
+        .{ .who = steve, .target = up ++ "11111111111111111111111111111111.png" },
+        .{ .who = steve, .target = up ++ "sub" },
+        .{ .who = ann, .target = up ++ png },
+    };
+    var hub = webbox.bus.Hub.init(io, a);
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const raw = if (q.range) |r|
+            try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nRange: {s}\r\n\r\n", .{ q.method, q.target, q.who, r })
+        else
+            try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ q.method, q.target, q.who });
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} {s} {?s}: {?t}\n{s}", .{ q.method, q.target, q.range, r.err, r.out }));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "a topic's download and its uploads (metal-vmm QUEUE 291): the bundle by GET, HEAD and the wrong method, to a member and not; an upload whole, streamed and by every shape of range; names no upload has, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("downloadsRun", try downloadsRun(a, io), "88d2a760d8f1e99b5a8fac0f1d4ea164038f2702c7c683c61c6a643ae8c3a611");
+}
