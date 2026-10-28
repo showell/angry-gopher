@@ -1136,6 +1136,89 @@ test "search's words (metal-vmm QUEUE 281): each prefix as typed, over what each
     try freezeRun("wordsRun", try wordsRun(a, io), "960f33ab4676af6a70d56f4409852d5056841c9d4b8e503621c4555dcd7fba62");
 }
 
+/// GET /chat/search/messages (metal-vmm QUEUE 282) over one built index, as
+/// members who see different conversations: words at a message's very start
+/// and end, in its middle past the pad either side, among multibyte text
+/// both sides of the cut, cased and quoted as typed, shorter than a word,
+/// not UTF-8, held by more messages than an answer lists; a DM the asker is
+/// not in; a method it refuses, a path past it, a stranger, the sixth search
+/// in a second. Every answer.
+fn messagesRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    // 2-byte characters (210 bytes), and 4-byte ones (240), either side.
+    var pad: std.ArrayList(u8) = .empty;
+    for (0..30) |_| try pad.appendSlice(a, "\u{00E9}t\u{00E9} ");
+    var quad: std.ArrayList(u8) = .empty;
+    for (0..40) |_| try quad.appendSlice(a, "\u{1F44D}x ");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{
+        "zeppelin at the start",
+        "at the end, a zeppelin",
+        try std.mem.concat(a, u8, &.{ pad.items, "the Zeppelin, mid ", pad.items }),
+        try std.mem.concat(a, u8, &.{ quad.items, "\u{201C}zeppelin\u{201D} ", quad.items }),
+        "zeppelin",
+        "a zeppelins plural, not the word",
+    });
+    try harness.writeTranscript(a, io, "2_3", "Secret", &.{"a secret zeppelin"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n3\n", .{});
+    var many: [520][]const u8 = undefined;
+    for (&many, 0..) |*m, k| m.* = try std.fmt.allocPrint(a, "blimp number {d}", .{k});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &many);
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" }), "MSG_Bytes_1\nfrom: S\xffomeone\ndate: 2026-10-10T00:00:00Z\n\nzeppelin \xff\xfe tail", .{});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    var hub = webbox.bus.Hub.init(io, a);
+    const asks = [_]struct { []const u8, []const u8, []const u8 }{
+        .{ steve, "GET", "/chat/search/messages?word=zeppelin" },
+        .{ steve, "GET", "/chat/search/messages?word=ZEPPELIN" },
+        .{ steve, "GET", "/chat/search/messages?word=+%22Zeppelin%22+" },
+        .{ steve, "GET", "/chat/search/messages?word=z" },
+        .{ steve, "GET", "/chat/search/messages?word=" },
+        .{ steve, "GET", "/chat/search/messages" },
+        .{ steve, "GET", "/chat/search/messages?word=%FF" },
+        .{ steve, "GET", "/chat/search/messages?word=%ZZ" },
+        .{ steve, "GET", "/chat/search/messages?word=blimp" },
+        .{ steve, "GET", "/chat/search/messages?word=nowhere" },
+        .{ debbie, "GET", "/chat/search/messages?word=zeppelin" },
+        .{ ann, "GET", "/chat/search/messages?word=zeppelin" },
+        .{ steve, "POST", "/chat/search/messages?word=zeppelin" },
+        .{ steve, "GET", "/chat/search/messages/?word=zeppelin" },
+        .{ "", "GET", "/chat/search/messages?word=zeppelin" },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        chat_search.forgetAll();
+        const r = try serveOn(a, io, &hub, try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{ q[1], q[2], q[0] }));
+        try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out }));
+    }
+    chat_search.forgetAll();
+    for (0..6) |_| {
+        const r = try serveOn(a, io, &hub, try getRaw(a, "/chat/search/messages?word=zeppelin", ann));
+        try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out }));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "search's messages (metal-vmm QUEUE 282): each word as typed, its excerpt cut at a character's edge either side, over what each member sees, the most an answer lists, every refusal and the rate limit, as the old Zig answered" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("messagesRun", try messagesRun(a, io), "5fc8215d052307ecfdc4e80a615c225651c5a1967b4f26e3ad815dd99ab46489");
+}
+
 /// key, and every file the site holds.
 fn failedSend(a: Alloc, io: Io, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
     var site = try harness.UidSite.init(a, io);
