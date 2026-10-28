@@ -4,12 +4,13 @@
 //! detection — the server's view of "is this user touching things?" IS the
 //! definition.
 //!
-//! Lifecycle: every counted page/action route runs through
-//! markActiveAndBroadcast, which bumps the user's lastSeen. On the offline→online
-//! edge (first sighting OR >= PresenceWindow of inactivity) it fans a came-online
-//! event to every OTHER authorized user across both attention streams — the
-//! sidebar bus (the partner-row presence dot) and the notify bus (the status
-//! strip). No background sweeper, no offline broadcast: a row goes gray lazily on
+//! Lifecycle: every counted page/action route runs through markActive
+//! (Host.count_presence!), which bumps the user's lastSeen. On the
+//! offline→online edge (first sighting OR >= PresenceWindow of inactivity) the
+//! Roc fans a came-online event to every OTHER authorized user across both
+//! attention streams — the sidebar bus (the partner-row presence dot) and the
+//! notify bus (the status strip) — and gives the edge back (giveBack) when it
+//! cannot (metal-vmm QUEUE 288). No background sweeper, no offline broadcast: a row goes gray lazily on
 //! the next page render when isOnline returns false.
 //!
 //! In-memory only, lost on restart, 5-minute fuzz. The
@@ -17,13 +18,7 @@
 //! process-lifetime page allocator, NOT the per-request arena.
 
 const std = @import("std");
-const chat_paths = @import("chat_paths.zig");
-const chat_fanout = @import("chat_fanout.zig");
-const Io = @import("host_io").Io;
-const Alloc = std.mem.Allocator;
-const users = @import("users.zig");
 const mem_meter = @import("webbox").mem_meter;
-const Bus = @import("webbox").bus.Bus;
 const Now = @import("request_time.zig").Now;
 
 /// PresenceWindow: a markActive within this window (5 min) means online.
@@ -64,7 +59,7 @@ pub fn forgetForTest() void {
 /// markActive bumps `uid`'s lastSeen and reports whether THIS bump was the
 /// transition edge from offline to online (true on first-ever sighting OR after
 /// >= PresenceWindow of inactivity), at the request's time `at`. Pure state
-/// mutation — callers that need to broadcast use markActiveAndBroadcast.
+/// mutation: the Roc broadcasts the edge (metal-vmm QUEUE 288).
 pub fn markActive(uid: []const u8, at: Now) bool {
     if (uid.len == 0) return false;
     const now: i128 = at.real_ns;
@@ -93,13 +88,23 @@ pub fn markActive(uid: []const u8, at: Now) bool {
     return false;
 }
 
-/// `uid`'s came-online edge given back, owed: their first markActive (a
-/// request) after `owed_retry_ns` is the edge again. Its last sighting stands, so it is
-/// still online (177.6: it was set back a window, which showed an active
-/// user offline).
-fn unmark(uid: []const u8, at: Now) void {
+/// **THE EDGE GIVEN BACK** (Host.presence_unspent!, metal-vmm QUEUE 172,
+/// 288): the Roc could not tell it, so `uid` is owed, and their first
+/// markActive (a request) after `owed_retry_ns` is the edge again. Its last
+/// sighting stands, so it is still online (177.6: it was set back a window,
+/// which showed an active user offline).
+pub fn giveBack(uid: []const u8, at: Now) void {
     const key = last_seen.getKey(uid) orelse return;
     owed.put(gpa, key, at.real_ns) catch {};
+}
+
+/// **SEEN WHERE NO ONE IS TOLD** (/settings, metal-vmm QUEUE 288): `uid`
+/// counted online now, and an edge kept, owed at once, so the member's next
+/// chat request is the edge the Roc broadcasts.
+pub fn markSeen(uid: []const u8, at: Now) void {
+    if (!markActive(uid, at)) return;
+    const key = last_seen.getKey(uid) orelse return;
+    owed.put(gpa, key, at.real_ns - owed_retry_ns) catch {};
 }
 
 /// isOnline reports whether `uid` was markActive'd within PresenceWindow of
@@ -111,59 +116,13 @@ pub fn isOnline(uid: []const u8, at: Now) bool {
     return (@as(i128, at.real_ns) - v) < window_ns;
 }
 
-/// markActiveAndBroadcast bumps `uid` and, ONLY on the came-online edge, fans the
-/// event out to every OTHER authorized user across both attention streams:
-/// sidebar (the partner-row dot) + notify (the status strip + favicon flash).
-/// Self is excluded. Best-effort — a failure for one recipient/surface is
-/// swallowed.
-pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, at: Now) void {
-    if (!markActive(uid, at)) return;
-    // **AN EDGE NOT TOLD IS NOT SPENT** (metal-vmm QUEUE 172): a broadcast
-    // that cannot start gives the edge back, so the next request tries again
-    // (it was lost until the user had been idle five minutes).
-    // absent-ok: a best-effort online broadcast: nothing is written from it, and the edge is kept.
-    const name = users.getUserName(io, alloc, uid) catch return unmark(uid, at);
-    // absent-ok: the same.
-    const authorized = users.listAuthorized(io, alloc) catch return unmark(uid, at);
-    const text = std.fmt.allocPrint(alloc, "{s} has come online.", .{name}) catch return unmark(uid, at);
-
-    for (authorized) |other| {
-        if (std.mem.eql(u8, other.id, uid)) continue;
-
-        // sidebar: flip the partner row's presence dot (user-online, UserID-only).
-        if (chat_fanout.sidebarBusKey(alloc, other.id)) |k| {
-            const ev = std.fmt.allocPrint(alloc, "{{\"kind\":\"user-online\",\"user_id\":{f},\"user_name\":{f}}}", .{
-                std.json.fmt(uid, .{}), std.json.fmt(name, .{}),
-            }) catch continue;
-            bus.publish(k, ev);
-        } else |_| {}
-
-        // notify: status strip. LinkURL = the recipient's default conv with the
-        // user who came online (pair-key is per-recipient — convs sort numerically).
-        if (chat_fanout.notifyBusKey(alloc, other.id)) |k| {
-            const pk = chat_paths.chatPairKey(alloc, other.id, uid) catch continue;
-            const link = std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pk}) catch continue;
-            const ev = std.fmt.allocPrint(alloc, "{{\"text\":{f},\"link_url\":{f}}}", .{
-                std.json.fmt(text, .{}), std.json.fmt(link, .{}),
-            }) catch continue;
-            bus.publish(k, ev);
-        } else |_| {}
-    }
-}
-
-test "presence: a broadcast that could not start leaves its user online, and a lasting failure is tried again once a while, not on every request (metal-vmm QUEUE 177.6)" {
+test "presence: an edge given back leaves its user online, and a lasting failure is tried again once a while, not on every request (metal-vmm QUEUE 177.6)" {
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-    var hub = @import("webbox").bus.Hub.init(io, std.testing.allocator);
-    defer hub.entries.deinit(std.testing.allocator);
-    var bus = Bus.of(&hub);
-    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const uid = "presence-owed-177";
     const t = Now.at(1_761_400_000);
-    markActiveAndBroadcast(io, failing.allocator(), &bus, uid, t);
+    try std.testing.expect(markActive(uid, t));
+    giveBack(uid, t);
     // Active a moment ago: online, whatever the broadcast did.
     try std.testing.expect(isOnline(uid, t.plus(1)));
     // Owed, but not tried again at once: the user list is not re-read on
@@ -175,20 +134,17 @@ test "presence: a broadcast that could not start leaves its user online, and a l
     try std.testing.expect(!isOnline(uid, t.plus(32 + 5 * 60)));
 }
 
-test "presence: a came-online edge whose broadcast could not start is not spent: the next request tries again (metal-vmm QUEUE 172)" {
+test "presence: a member seen on /settings is online, and their next chat request is still the edge (metal-vmm QUEUE 288)" {
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-    var hub = @import("webbox").bus.Hub.init(io, std.testing.allocator);
-    defer hub.entries.deinit(std.testing.allocator);
-    var bus = Bus.of(&hub);
-    // Nothing to be had: the name, the members, the text.
-    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    const uid = "presence-edge-172";
+    const uid = "presence-seen-288";
     const t = Now.at(1_761_400_000);
-    markActiveAndBroadcast(io, failing.allocator(), &bus, uid, t);
-    // Not told to anyone, so still the edge, on the next request past the wait.
-    try std.testing.expect(markActive(uid, t.plus(31)));
+    markSeen(uid, t);
+    try std.testing.expect(isOnline(uid, t.plus(1)));
+    try std.testing.expect(markActive(uid, t.plus(1)));
+    // Spent there: the next is not.
+    try std.testing.expect(!markActive(uid, t.plus(2)));
+    // Seen again while online: no edge to keep.
+    markSeen(uid, t.plus(3));
+    try std.testing.expect(!markActive(uid, t.plus(4)));
 }

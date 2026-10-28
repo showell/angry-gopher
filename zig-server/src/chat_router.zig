@@ -130,13 +130,6 @@ pub fn handle(
             next,
         ),
         .serve => |s| {
-            if (s.presence) presence.markActiveAndBroadcast(
-                io,
-                alloc,
-                bus,
-                call.uid,
-                now,
-            );
             return chat.serve(
                 req,
                 io,
@@ -268,6 +261,7 @@ pub const Call = struct {
             .ctx = c,
             .check_member = checkMember,
             .count_presence = presence_,
+            .presence_unspent = presenceUnspent,
             .list_accounts = accounts,
             .fail_account = failAccount,
             .read_body = body,
@@ -396,16 +390,17 @@ pub const Call = struct {
         return if (authorized) .member else .outsider;
     }
 
-    fn presence_(ctx: *anyopaque) void {
+    /// The member counted online; whether this was the edge, the Roc's to
+    /// broadcast (metal-vmm QUEUE 288).
+    fn presence_(ctx: *anyopaque) roc_chat.PresenceEdge {
         const c = of(ctx);
-        if (c.dead()) return;
-        presence.markActiveAndBroadcast(
-            c.io,
-            c.alloc,
-            c.bus,
-            c.uid,
-            c.now,
-        );
+        if (c.dead()) return .steady;
+        return if (presence.markActive(c.uid, c.now)) .came_online else .steady;
+    }
+
+    /// The edge's broadcast lost: given back, tried again 30 s on.
+    fn presenceUnspent(ctx: *anyopaque) void {
+        presence.giveBack(of(ctx).uid, of(ctx).now);
     }
 
     /// **EVERY ACCOUNT, THE ROC'S ONE IDENTITY READ** (Host.list_accounts!):

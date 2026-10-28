@@ -18,17 +18,17 @@ const chat = @import("chat.zig");
 const chrome = @import("chat_chrome.zig");
 const html = @import("webbox").html;
 const presence = @import("presence.zig");
-const Bus = @import("webbox").bus.Bus;
 
 const Request = std.http.Server.Request;
 
 /// handle dispatches /settings* — `sub` is the path after "/settings" ("" or
-/// "/apikey"). Members only; presence is marked on entry.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
+/// "/apikey"). Members only; presence is marked on entry, and an edge
+/// kept for the member's next chat request to tell (metal-vmm QUEUE 288).
+pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, .literal("/login/full"));
     if (!try users.isMember(io, alloc, uid)) return http.notFound(req); // NEED_PASSWORD
-    presence.markActiveAndBroadcast(io, alloc, bus, uid, Now.read(io));
+    presence.markSeen(uid, Now.read(io));
 
     if (sub.len == 0) return renderSettings(req, io, alloc, uid);
     if (std.mem.eql(u8, sub, "/apikey")) return handleAPIKey(req, io, alloc, uid);
