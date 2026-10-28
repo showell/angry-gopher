@@ -5243,3 +5243,127 @@ test "the docs' read pages (metal-vmm QUEUE 289): the landing, a doc's editor, i
     defer meter.restore();
     try freezeRun("docsReadRun", try docsReadRun(a, io), "9f6b8fcbb3407025b30fcd72aed467f2cf97d17ffd52035c3ac7a3950b843589");
 }
+
+/// **THE DOCS' WRITES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 290): a new
+/// doc (its slug made of the title, suffixed past one there, a reserved name
+/// stepped over, nothing made of no title), a save (trimmed slug, emptied,
+/// refused without a body, for a name no slug, for a doc not there), the
+/// live preview (hostile markdown its placeholder, counted), a message saved
+/// to the reading list (a DM's, a channel's, a fence longer than the body's,
+/// one-line fields, the default note, a missing field, a full list), the
+/// wrong methods, malformed and too-big forms, another member's doc never
+/// reached, and a docs folder that will not take a file: each answer, the
+/// files each leaves and the recent feed's frames.
+fn docsWriteRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8, frames: []const u8, hostile: usize } {
+    const limits = @import("limits.zig");
+    const reading_list = @import("reading_list.zig");
+    const docs_store = @import("docs_store.zig");
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "docs" }), "", .{});
+    var hub = webbox.bus.Hub.init(io, a);
+    const keys = [_][]const u8{ try chat_fanout.recentBusKey(a, "1"), try chat_fanout.recentBusKey(a, "2") };
+    var subs: [keys.len]*webbox.bus.Subscriber = undefined;
+    for (keys, &subs) |k, *s| s.* = try hub.open(k);
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    var long_title: std.ArrayList(u8) = .empty;
+    try long_title.appendSlice(a, "title=");
+    for (0..30) |_| try long_title.appendSlice(a, "Abc+");
+    const huge = try a.alloc(u8, limits.body.doc + 1);
+    @memset(huge, 'x');
+    const huge_save = try std.fmt.allocPrint(a, "slug=plans&body={s}", .{huge[0 .. huge.len - 40]});
+    var hostile_md: std.ArrayList(u8) = .empty;
+    try hostile_md.appendSlice(a, "body=");
+    for (0..4000) |_| try hostile_md.appendSlice(a, "%5B%5D(");
+    const reading = "conv=1_2&sid=Plans&id=MSG_7&from=Deb%0Abie&at=2026-10-27+14%3A00&body=line+one%0A~~~~+inner%0Aend&note=Read+%0D%0Athis";
+    const WriteAsk = struct { who: []const u8, method: []const u8 = "POST", target: []const u8, body: []const u8 = "", plant: enum { none, full_list } = .none };
+    const asks = [_]WriteAsk{
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/new" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=Plans" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=Plans" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=++%09" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "other=1" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=%21%21%21" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=list" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=Caf%C3%A9+Menu%3A+2026" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = long_title.items },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=%ZZ" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=a&title=b" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans&body=%23+Hi%0A%0Asome+*text*" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans-2&body=" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=Bad&body=x" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=gone&body=x" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=+untitled%0A&body=kept" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "body=x" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans&body=%G1" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = huge_save },
+        .{ .who = steve, .target = "/chat/docs/save", .body = huge },
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/save" },
+        .{ .who = debbie, .target = "/chat/docs/save", .body = "slug=plans&body=hers" },
+        .{ .who = steve, .target = "/chat/docs/render", .body = "body=%23+Hi%0A%0Aa+*b*+%3Cscript%3E" },
+        .{ .who = steve, .target = "/chat/docs/render", .body = "other=1" },
+        .{ .who = steve, .target = "/chat/docs/render", .body = hostile_md.items },
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/render" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = reading },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=general&sid=Hello&id=MSG_2&from=Ann&at=today&body=hi+there&note=" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=+1_3+&sid=Q&id=MSG_3&body=x" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=1_2&sid=Plans&body=no+id" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=1_2&sid=Plans&id=MSG_9&body=" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=1_2&sid=Plans&id=MSG_9&body=%ZZ" },
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/save_to_reading_list" },
+        .{ .who = debbie, .target = "/chat/docs/save_to_reading_list", .body = reading, .plant = .full_list },
+        .{ .who = ann, .target = "/chat/docs/new", .body = "title=Mine" },
+        .{ .who = ann, .target = "/chat/docs/save_to_reading_list", .body = reading },
+    };
+    const before = webbox.edge.countOf(.malformed_markdown);
+    var answers: std.ArrayList([]const u8) = .empty;
+    var frames: std.ArrayList(u8) = .empty;
+    for (asks) |q| {
+        if (q.plant == .full_list) {
+            const full = try a.alloc(u8, reading_list.max_reading_list_bytes - 64);
+            @memset(full, '.');
+            try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, "2", reading_list.reading_list_slug), full, .{});
+        }
+        const raw = if (std.mem.eql(u8, q.method, "GET")) try getRaw(a, q.target, q.who) else try postRaw(a, q.who, q.target, q.body);
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} {s} {s}: {?t}\n{s}", .{ q.method, q.target, q.body[0..@min(q.body.len, 60)], r.err, r.out }));
+        for (keys, subs) |k, s| while (s.poll()) |blob| try frames.print(a, "== {s} after {s}\n{s}\n", .{ k, q.target, blob });
+    }
+    for (subs) |s| hub.close(s);
+    // Every member's docs as they were left: each file, by name, its bytes
+    // (a long one by its length and its first and last lines).
+    var files: std.ArrayList(u8) = .empty;
+    for ([_][]const u8{ "1", "2" }) |uid| {
+        const dir = try docs_store.userDocsDir(a, uid);
+        const entries = try harness.UidSite.disk.list(io, a, dir);
+        std.mem.sort(harness.UidSite.disk.Entry, entries, {}, struct {
+            fn lt(_: void, x: harness.UidSite.disk.Entry, y: harness.UidSite.disk.Entry) bool {
+                return std.mem.lessThan(u8, x.name, y.name);
+            }
+        }.lt);
+        for (entries) |e| {
+            const bytes = try harness.UidSite.disk.readOrEmpty(io, a, try std.fs.path.join(a, &.{ dir, e.name }), .unlimited);
+            if (bytes.len > 4096) {
+                try files.print(a, "-- {s}/{s}: {d} bytes, ending {s}\n", .{ uid, e.name, bytes.len, bytes[bytes.len - 200 ..] });
+            } else try files.print(a, "-- {s}/{s}\n{s}\n", .{ uid, e.name, bytes });
+        }
+    }
+    return .{ .answers = answers.items, .files = files.items, .frames = frames.items, .hostile = webbox.edge.countOf(.malformed_markdown) - before };
+}
+
+test "the docs' writes (metal-vmm QUEUE 290): a new doc, a save, the live preview and a message saved to the reading list, every refusal, the files they leave and the recent feed's frames, as the old Zig did them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("docsWriteRun", try docsWriteRun(a, io), "1eb961a4576e13db45c14d059b209786c9aa92e857220bc71588079420762c72");
+}
