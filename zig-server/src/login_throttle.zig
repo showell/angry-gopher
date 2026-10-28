@@ -97,7 +97,7 @@ pub fn refused() u64 {
 /// production: the real wall clock.
 var test_now: ?i64 = null;
 
-fn now(io: Io) i64 {
+fn readNow(io: Io) i64 {
     return test_now orelse @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
@@ -154,7 +154,7 @@ fn fresh(s: *Slot, key: []const u8, t: i64) void {
 /// password be checked. `address` may be null (the host gave no peer); then only
 /// the account dimension applies. A refusal is counted (`refused`).
 pub fn check(io: Io, address: ?[]const u8, account_id: []const u8) ?Bound {
-    const t = now(io);
+    const t = readNow(io);
     if (address) |a| if (peek(&addrs, a, t, addr_window_s) >= addr_fails) {
         _ = @atomicRmw(u64, &refused_count, .Add, 1, .monotonic);
         return .address;
@@ -168,7 +168,7 @@ pub fn check(io: Io, address: ?[]const u8, account_id: []const u8) ?Bound {
 
 /// A password check failed: count it against both the address and the account.
 pub fn recordFailure(io: Io, address: ?[]const u8, account_id: []const u8) void {
-    const t = now(io);
+    const t = readNow(io);
     if (address) |a| bump(&addrs, a, t, addr_window_s, addr_fails);
     bump(&accounts, account_id, t, account_window_s, account_fails);
 }
@@ -194,7 +194,7 @@ pub fn clearAddress(address: ?[]const u8) void {
 /// counts the creation it goes on to make with `recordCreate`.
 pub fn createAllowed(io: Io, address: ?[]const u8) ?Bound {
     const a = address orelse return null;
-    if (peek(&creates, a, now(io), create_window_s) >= create_max) {
+    if (peek(&creates, a, readNow(io), create_window_s) >= create_max) {
         _ = @atomicRmw(u64, &refused_count, .Add, 1, .monotonic);
         return .creates;
     }
@@ -204,7 +204,7 @@ pub fn createAllowed(io: Io, address: ?[]const u8) ?Bound {
 /// An account was created from `address`: count it.
 pub fn recordCreate(io: Io, address: ?[]const u8) void {
     const a = address orelse return;
-    bump(&creates, a, now(io), create_window_s, create_max);
+    bump(&creates, a, readNow(io), create_window_s, create_max);
 }
 
 /// For the tests: forget everything (the tables are process-lifetime).

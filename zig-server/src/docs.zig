@@ -56,18 +56,18 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
         // Land straight in the doc you last touched (incl. the reading list right
         // after a save) rather than an empty nudge. Only the bare landing falls
         // back to the picker, and only when you have no docs at all.
-        if (try docs_store.mostRecentDocSlug(io, alloc, uid)) |slug| {
+        if (try docs_store.findMostRecentDocSlug(io, alloc, uid)) |slug| {
             return http.redirect(req, try http.Target.format(alloc, "/chat/docs/{s}", .{slug}));
         }
         return renderDocsEditor(req, io, alloc, uid, "");
     }
     const seg = rest[1..]; // rest starts with '/'
-    if (std.mem.eql(u8, seg, "list")) return docsList(req, io, alloc, uid);
-    if (std.mem.eql(u8, seg, "new")) return docsNew(req, io, alloc, bus, uid, now);
-    if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, bus, uid, now);
+    if (std.mem.eql(u8, seg, "list")) return serveDocsList(req, io, alloc, uid);
+    if (std.mem.eql(u8, seg, "new")) return createDoc(req, io, alloc, bus, uid, now);
+    if (std.mem.eql(u8, seg, "save")) return saveDoc(req, io, alloc, bus, uid, now);
     if (std.mem.eql(u8, seg, "render")) return docsRender(req, alloc);
-    if (std.mem.eql(u8, seg, "post")) return docsPost(req, io, alloc, bus, uid, now);
-    if (std.mem.eql(u8, seg, "save_to_reading_list")) return docsSaveToReadingList(req, io, alloc, bus, uid, now);
+    if (std.mem.eql(u8, seg, "post")) return postDoc(req, io, alloc, bus, uid, now);
+    if (std.mem.eql(u8, seg, "save_to_reading_list")) return saveDocToReadingList(req, io, alloc, bus, uid, now);
 
     if (std.mem.indexOfScalar(u8, seg, '/') != null) return http.notFound(req);
     if (std.mem.endsWith(u8, seg, ".md")) {
@@ -83,7 +83,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
 fn renderDocsEditor(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug_raw: []const u8) !void {
     const list = try docs_store.listUserDocs(io, alloc, uid);
     const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
-    if (slug.len != 0 and (!docs_store.validDocSlug(slug) or !slugInList(list, slug))) {
+    if (slug.len != 0 and (!docs_store.validDocSlug(slug) or !hasSlug(list, slug))) {
         return http.redirect(req, .literal("/chat/docs"));
     }
     var body: []const u8 = "";
@@ -91,7 +91,7 @@ fn renderDocsEditor(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug_r
     try renderDocsPage(req, io, alloc, uid, list, slug, body);
 }
 
-fn slugInList(list: []docs_store.DocSummary, slug: []const u8) bool {
+fn hasSlug(list: []docs_store.DocSummary, slug: []const u8) bool {
     for (list) |d| if (std.mem.eql(u8, d.slug, slug)) return true;
     return false;
 }
@@ -173,7 +173,7 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
 fn serveRawDoc(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !void {
     // **AN ERROR IS NOT "NO SUCH DOC"** (metal-vmm QUEUE 114): a 404 would
     // tell an API client there is none, and invite a save over it.
-    const exists = docs_store.docExists(io, alloc, uid, slug) catch |e|
+    const exists = docs_store.hasDoc(io, alloc, uid, slug) catch |e|
         return req.respond(try std.fmt.allocPrint(alloc, "The doc cannot be read: {s}.\n", .{@errorName(e)}), .{ .status = .internal_server_error });
     if (!exists) return http.notFound(req);
     const body = try docs_store.readUserDoc(io, alloc, uid, slug);
@@ -182,9 +182,9 @@ fn serveRawDoc(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug: []con
     } });
 }
 
-/// docsList serves GET /chat/docs/list: a JSON listing of the principal's docs
+/// serveDocsList serves GET /chat/docs/list: a JSON listing of the principal's docs
 /// (slug + display title) for API-key clients.
-fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+fn serveDocsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const list = try docs_store.listUserDocs(io, alloc, uid);
 
@@ -204,9 +204,9 @@ fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 
 // ── write verbs (POST) ────────────────────────────────────────────────────────
 
-/// docsNew creates a new empty doc and 303s to it. Title is required (else back
+/// createDoc creates a new empty doc and 303s to it. Title is required (else back
 /// to /chat/docs).
-fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
+fn createDoc(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.redirect(req, .literal("/chat/docs"));
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const title_raw = (try chat.formField(alloc, body, "title")) orelse "";
@@ -217,9 +217,9 @@ fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now:
     return http.redirect(req, try http.Target.format(alloc, "/chat/docs/{s}", .{slug}));
 }
 
-/// docsSave overwrites an existing doc's body (autosave target) → 204. A POST for
+/// saveDoc overwrites an existing doc's body (autosave target) → 204. A POST for
 /// an unknown slug is rejected (autosave must not spawn a doc from a stale URL).
-fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
+fn saveDoc(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
@@ -267,10 +267,10 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
     try req.respond(rendered, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// docsPost appends the doc's current body as a chat message to the caller's
+/// postDoc appends the doc's current body as a chat message to the caller's
 /// default partner and returns {conv, session, id} so the client can navigate to
 /// the posted message.
-fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
+fn postDoc(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
@@ -287,7 +287,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now
     }
 
     const partner = defaultChatPartner(uid);
-    if (!try validChatPartner(io, alloc, uid, partner)) {
+    if (!try isValidChatPartner(io, alloc, uid, partner)) {
         return req.respond("no default chat partner available\n", .{ .status = .bad_request });
     }
     const conv = try chat_paths.chatPairKey(alloc, uid, partner);
@@ -304,14 +304,14 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
 }
 
-/// docsSaveToReadingList appends one saved chat message to the caller's
+/// saveDocToReadingList appends one saved chat message to the caller's
 /// reading-list doc (creating it on first save) → 204. The client sends the
 /// snapshot as-seen (body markdown, author, display date) plus the conv/sid/id
 /// locating the source message, plus the annotation. Acts only on the
 /// authenticated principal's own doc — uid is the session principal, never the
 /// request. reading_list.save caps the doc size (DocTooLarge → 413 here; a
 /// hammering client hits the bound, not unbounded growth).
-fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
+fn saveDocToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, now: Now) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const conv = std.mem.trim(u8, (try chat.formField(alloc, body, "conv")) orelse "", " \t\r\n");
@@ -343,8 +343,8 @@ fn defaultChatPartner(uid: []const u8) []const u8 {
     return "1";
 }
 
-/// validChatPartner: another authorized principal, not yourself or empty.
-fn validChatPartner(io: Io, alloc: Alloc, uid: []const u8, partner: []const u8) !bool {
+/// isValidChatPartner: another authorized principal, not yourself or empty.
+fn isValidChatPartner(io: Io, alloc: Alloc, uid: []const u8, partner: []const u8) !bool {
     if (partner.len == 0 or std.mem.eql(u8, partner, uid)) return false;
     for (try users.listAuthorized(io, alloc)) |u| {
         if (std.mem.eql(u8, u.id, partner)) return true;

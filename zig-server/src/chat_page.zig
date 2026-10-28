@@ -34,14 +34,14 @@ const page_scripts = [_][]const u8{
     "chat.js",               "notify.js",
 };
 
-/// noTopicsPage renders the "no topics yet" bootstrap shell for a conversation
+/// serveNoTopicsPage renders the "no topics yet" bootstrap shell for a conversation
 /// that is addressable (a DM pair, or a channel the viewer is in) but has no
 /// topics on disk. The shell is deliberately thin: chrome + an empty mount
 /// carrying the conv base; the ChatFirstTopic client module owns the intro, the
 /// styling, and the ChatAddTopic widget (pre-filled "general") that POSTs
 /// <base>/new and navigates to the created topic. `base` is "/chat/c/<pair>" or
 /// "/channel/<name>"; the widget is base-shape-agnostic.
-pub fn noTopicsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
+pub fn serveNoTopicsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
     var page = try chrome.page(alloc, "Chat", title, viewer, "chat");
     const b = &page.body;
@@ -53,7 +53,7 @@ pub fn noTopicsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: 
 
 /// **A 404 THAT SAYS WHY** (metal-vmm QUEUE 156(j)): `what` names what is not
 /// there, and `back` is where to go instead. A page, not a bare "not found".
-pub fn notFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: []const u8, back: []const u8) !void {
+pub fn serveNotFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: []const u8, back: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
     var page = try chrome.page(alloc, "Chat", "Not here", viewer, "chat");
     const b = &page.body;
@@ -63,7 +63,7 @@ pub fn notFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: 
 
 // ── the conversation page (boots the prod JS) ────────────────────────────────
 
-pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) !void {
+pub fn serveConversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) !void {
     const conv = topic.conv;
     // Remember where this user is — the /chat/default resume pointer, keyed by
     // pair. Only convs that persist a cursor (DMs) do this; channels don't.
@@ -138,7 +138,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: No
 
     // Topics split by pinned state: the conv's
     // pins (conv-key form) intersect the live topic list — stale ids drop out.
-    const pins = try chat_state.pinnedTopics(io, alloc, uid, conv.key);
+    const pins = try chat_state.readPinnedTopics(io, alloc, uid, conv.key);
     const topics = try chat_paths.listTopics(io, alloc, conv.dir);
 
     try b.appendSlice(alloc, "],\"pinned_sessions\":[");
@@ -174,11 +174,11 @@ fn emitTopicItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []con
 
 // ── the "no conversations" landing (replaces the old /chat index) ─────────────
 
-/// noConversationsPage is the empty state for /chat: the standard chrome shell
+/// serveNoConversationsPage serves the empty state for /chat: the standard chrome shell
 /// with a plain message, rendered when the viewer has no conversation to resume.
 /// We don't yet enforce that every member has SOME conversation, so this is the
 /// honest empty case — a real page, not a redirect into a half-real index.
-pub fn noConversationsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+pub fn serveNoConversationsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
     var page = try chrome.page(alloc, "Chat", "Chat", viewer, "chat");
     const b = &page.body;

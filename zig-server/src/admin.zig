@@ -70,7 +70,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method != .POST) return http.redirect(req, .literal("/admin"));
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const id = std.mem.trim(u8, (try chat.formField(alloc, body, "user")) orelse "", " \t\r\n");
-    if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, .literal("/admin"));
+    if (!try isApiKeyTarget(io, alloc, id)) return http.redirect(req, .literal("/admin"));
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         try users.clearUserAPIKey(io, alloc, id);
@@ -81,16 +81,16 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
 }
 
 /// **AN ID FROM A FORM IS A UID BEFORE IT IS A PATH.** The key is written to
-/// and removed from {auth_root}/<id>/api-key, and principalExists and
-/// principalAuthorized look at what is on disk, not at the characters: `1/.`
+/// and removed from {auth_root}/<id>/api-key, and hasPrincipal and
+/// isPrincipalAuthorized look at what is on disk, not at the characters: `1/.`
 /// or `1/../2` passed both and named a folder.
-fn apiKeyTarget(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return users.validUid(id) and try users.principalExists(io, alloc, id) and try users.principalAuthorized(io, alloc, id);
+fn isApiKeyTarget(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return users.validUid(id) and try users.hasPrincipal(io, alloc, id) and try users.isPrincipalAuthorized(io, alloc, id);
 }
 
 /// The name the revoked-key flash shows, or null for an id that is not a uid
 /// (the query is raw, so it could hold a path that reads another `name`).
-fn revokedName(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
+fn loadRevokedName(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     if (!users.validUid(id)) return null;
     return try users.getUserName(io, alloc, id);
 }
@@ -102,7 +102,7 @@ fn renderRoster(req: *Request, io: Io, alloc: Alloc) !void {
     try ui.begin(&b, alloc, "🐹 Angry Gopher members", "/admin");
 
     if (http.queryValue(try http.target(req, alloc), "keyrevoked")) |k| {
-        if (try revokedName(io, alloc, k)) |n| {
+        if (try loadRevokedName(io, alloc, k)) |n| {
             const name = try html.htmlEscape(alloc, n);
             try b.print(alloc, "<p class=\"flash\">Revoked the API key for <strong>{s}</strong>.</p>", .{name});
         }
@@ -139,7 +139,7 @@ fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
         if (row.is_admin) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(admin)</span>", .{name});
         if (row.is_agent) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(agent)</span>", .{name});
         // absent-ok: a total that cannot be read is shown as "unreadable", never as 0.
-        const used = if (users.userUploadBytes(io, alloc, row.id)) |n| try ui.humanBytes(alloc, n) else |_| "unreadable";
+        const used = if (users.readUploadBytes(io, alloc, row.id)) |n| try ui.humanBytes(alloc, n) else |_| "unreadable";
         const images = try std.fmt.allocPrint(alloc, "{s} / {s}", .{
             used,
             try ui.humanBytes(alloc, users.max_upload_lifetime_bytes),
@@ -154,7 +154,7 @@ fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
 /// appendApiKeyCell writes the API-key controls for one member: Generate (becomes
 /// Regenerate + Revoke once a key exists), all POSTing to /admin/apikey.
 fn appendApiKeyCell(b: *std.ArrayList(u8), io: Io, alloc: Alloc, id: []const u8) !void {
-    const has = users.userHasAPIKey(io, alloc, id);
+    const has = users.hasAPIKey(io, alloc, id);
     const gen = if (has) "Regenerate" else "Generate";
     const esc = try html.htmlEscape(alloc, id);
     try b.print(alloc, "<form class=\"inline\" method=\"post\" action=\"/admin/apikey\">" ++
@@ -199,12 +199,12 @@ test "fs: the admin's key form and revoked flash take uids only" {
         try store.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, id, "password" }), "x", .{});
         try store.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, id, "name" }), id, .{});
     }
-    try testing.expect(try apiKeyTarget(io, a, "1"));
-    try testing.expect(!try apiKeyTarget(io, a, "9")); // no such member
+    try testing.expect(try isApiKeyTarget(io, a, "1"));
+    try testing.expect(!try isApiKeyTarget(io, a, "9")); // no such member
     // Paths that name member folders by another spelling.
     for ([_][]const u8{ "1/.", "1/../2", "./1", "" }) |id| {
-        try testing.expect(!try apiKeyTarget(io, a, id));
-        try testing.expect((try revokedName(io, a, id)) == null);
+        try testing.expect(!try isApiKeyTarget(io, a, id));
+        try testing.expect((try loadRevokedName(io, a, id)) == null);
     }
-    try testing.expectEqualStrings("2", (try revokedName(io, a, "2")).?);
+    try testing.expectEqualStrings("2", (try loadRevokedName(io, a, "2")).?);
 }

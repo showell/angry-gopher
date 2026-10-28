@@ -87,7 +87,7 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc) !void {
 
     for (slots) |s| {
         try b.appendSlice(alloc, "<figure class=\"card\">");
-        if (try imageFile(io, alloc, s.slug)) |file| {
+        if (try findImageFile(io, alloc, s.slug)) |file| {
             try b.print(alloc, "<img src=\"/gallery/{s}\" alt=\"{s}\">", .{
                 try html.htmlEscape(alloc, file),
                 try html.htmlEscape(alloc, s.label),
@@ -101,9 +101,9 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// imageFile returns the basename of the existing image for `slug` (preferring
+/// findImageFile returns the basename of the existing image for `slug` (preferring
 /// .png, then .svg), or null if neither is present.
-fn imageFile(io: Io, alloc: Alloc, slug: []const u8) !?[]const u8 {
+fn findImageFile(io: Io, alloc: Alloc, slug: []const u8) !?[]const u8 {
     for ([_][]const u8{ "png", "svg" }) |ext| {
         const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ slug, ext });
         const path = try std.fs.path.join(alloc, &.{ gallery_root, name });

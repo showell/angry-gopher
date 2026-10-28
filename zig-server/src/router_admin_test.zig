@@ -25,7 +25,7 @@ test "route: HEAD /admin/backup reads nothing" {
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const admin_backup = @import("admin_backup.zig");
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
 
     const before = admin_backup.files_archived;
     const head = try harness.serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/backup HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
@@ -105,7 +105,7 @@ test "route: only a member's own session is the admin; a non-member's session, o
 
     // Once a member, the session is the admin; a signed gopher_uid for the
     // same id is not a session, and is no one here.
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
     try testing.expectEqualStrings("200 OK", harness.status(try ask.admin(a, io, me)));
     try testing.expectEqualStrings("303 See Other", harness.status(try ask.admin(a, io, try harness.signedUid(a, "1"))));
 }
@@ -120,7 +120,7 @@ test "route: /admin/backup asks for the password again, and gives nothing withou
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const admin_backup = @import("admin_backup.zig");
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
     const before = admin_backup.files_archived;
 
     // The session alone: a form, not the archive.
@@ -184,7 +184,7 @@ test "route: /admin/log is the host's whole log as text, by the admin's key only
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
 
     // A host with no log of its own says so.
     @import("webbox").host_facts.provideLogs(null);
@@ -248,7 +248,7 @@ test "route: /admin/host counts the requests since boot, the slowest, and puts e
     const saved = traffic.global;
     defer traffic.global = saved;
     traffic.global = .{};
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
     _ = try harness.UidSite.ask(a, io, "/chat", me);
     _ = try harness.UidSite.ask(a, io, "/nope", me);
     // No errors yet: none said.
@@ -274,7 +274,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
     const id = try player.allocate(io, a, .literal("Nikhil"));
     const old_uid = try harness.signedUid(a, id); // signed with the secret before the change
     const secret_path = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });
@@ -306,7 +306,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     const renewed = try harness.UidSite.ask(a, io, "/play", old_uid);
     try testing.expectEqualStrings("303 See Other", harness.status(renewed));
     const fresh = harness.setUid(renewed) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, harness.nowSecs(io)).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, harness.readNowSecs(io)).?);
     try testing.expect(harness.playingAs(try harness.UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{fresh})), "Nikhil"));
 
     // Once the days are over, the old cookie names no one.
@@ -326,7 +326,7 @@ test "route: an admin delete of a player there is not says so, 404, where it wen
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
     try testing.expectEqualStrings("404 Not Found", harness.status(try harness.postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
     try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
     const id = try player.allocate(io, a, .literal("Nikhil"));
@@ -344,8 +344,8 @@ test "route: a retire's preview removes nothing, and its confirm removes what th
     defer uid_site.deinit();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const me = try harness.adminSession(a, io);
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const me = try harness.loginAdmin(a, io);
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     const preview = try harness.postForm(a, io, "/admin/retire", me, "password=hunter2&days=30&keep=Steve");
     try testing.expectEqualStrings("200 OK", harness.status(preview));
     try testing.expect(std.mem.indexOf(u8, preview, "nothing removed yet") != null);

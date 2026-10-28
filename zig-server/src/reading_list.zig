@@ -39,7 +39,7 @@ pub const reading_list_slug = "reading-list";
 pub const max_reading_list_bytes: usize = 1 << 20;
 
 /// jumpURL is the unambiguous deep link to a saved message — the same shape
-/// chatMsgLookup redirects to, but built from the conv we already know instead of
+/// redirectToMsg redirects to, but built from the conv we already know instead of
 /// re-derived. DM: /chat/c/<conv>/<sid>#msg-<id>; channel: /channel/<name>/<sid>#msg-<id>.
 pub fn jumpURL(alloc: Alloc, ref: Ref) ![]u8 {
     const base = try chat_fanout.convKeyBaseURL(alloc, ref.conv);
@@ -193,11 +193,11 @@ fn evictOldest() void {
 const cache_alloc = mem_meter.base(); // server-lifetime, metered so the cache's growth is visible to the leak meter
 var cache: std.StringHashMapUnmanaged(Entry) = .empty;
 
-/// savedIdsFor returns the message ids the user has saved within (conv, sid) —
+/// loadSavedIds returns the message ids the user has saved within (conv, sid) —
 /// the read-back set a chat page marks its bubbles against. Consults the cache,
 /// re-parsing the reading-list doc only when its mtime has advanced. The returned
 /// ids are copied into `req_alloc`, so nothing cache-owned outlives the request.
-pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, sid: []const u8) ![]const []const u8 {
+pub fn loadSavedIds(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, sid: []const u8) ![]const []const u8 {
     const path = docs_store.docPath(req_alloc, uid, reading_list_slug) catch return &.{};
     const st = (try disk.statOrNull(io, req_alloc, path)) orelse return &.{}; // no doc → nothing saved
     const file_mtime: i96 = st.mtime;
@@ -429,7 +429,7 @@ fn writeReadingList(io: Io, a: Alloc, uid: []const u8, body: []const u8, mtime_n
     try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = mtime_ns } } });
 }
 
-test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
+test "loadSavedIds: filters by conv+sid, re-parses only when mtime advances" {
     // Be the host: name the base allocator before anything allocates through it.
     // testing.allocator, so that dropCache() below turns any refresh that failed
     // to free its predecessor into a reported leak.
@@ -456,31 +456,31 @@ test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
     try writeReadingList(io, a, uid, v1, 1_000_000_000);
 
     // filter by (conv, sid): each topic sees only its own saved ids
-    const dm = try savedIdsFor(io, a, uid, "1_2", "2026-05-28");
+    const dm = try loadSavedIds(io, a, uid, "1_2", "2026-05-28");
     try testing.expectEqual(@as(usize, 1), dm.len);
     try testing.expectEqualStrings("2026-05-28_5", dm[0]);
-    const ch = try savedIdsFor(io, a, uid, "General", "general1");
+    const ch = try loadSavedIds(io, a, uid, "General", "general1");
     try testing.expectEqual(@as(usize, 1), ch.len);
     try testing.expectEqualStrings("general1_3", ch[0]);
-    try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, uid, "1_2", "other")).len);
+    try testing.expectEqual(@as(usize, 0), (try loadSavedIds(io, a, uid, "1_2", "other")).len);
 
     // content removed but mtime UNCHANGED → cache hit, still sees v1
     try writeReadingList(io, a, uid, "(emptied)", 1_000_000_000);
-    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
+    try testing.expectEqual(@as(usize, 1), (try loadSavedIds(io, a, uid, "1_2", "2026-05-28")).len);
 
     // mtime advanced → re-parse, now reflects the emptied doc
     try writeReadingList(io, a, uid, "(emptied)", 2_000_000_000);
-    try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
+    try testing.expectEqual(@as(usize, 0), (try loadSavedIds(io, a, uid, "1_2", "2026-05-28")).len);
 
     // And back again, twice, so there are several refreshes for a leak to show
     // up in rather than one.
     try writeReadingList(io, a, uid, v1, 3_000_000_000);
-    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
+    try testing.expectEqual(@as(usize, 1), (try loadSavedIds(io, a, uid, "1_2", "2026-05-28")).len);
     try writeReadingList(io, a, uid, v1, 4_000_000_000);
-    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, uid, "General", "general1")).len);
+    try testing.expectEqual(@as(usize, 1), (try loadSavedIds(io, a, uid, "General", "general1")).len);
 }
 
-test "savedIdsFor: a missing doc is nothing saved, and allocates nothing process-wide" {
+test "loadSavedIds: a missing doc is nothing saved, and allocates nothing process-wide" {
     const meter = mem_meter.useForTest(testing.allocator);
     defer meter.restore();
     defer dropCache();
@@ -497,13 +497,13 @@ test "savedIdsFor: a missing doc is nothing saved, and allocates nothing process
     const io = threaded.io();
 
     const before = mem_meter.snapshot();
-    try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, "888", "1_2", "x")).len);
+    try testing.expectEqual(@as(usize, 0), (try loadSavedIds(io, a, "888", "1_2", "x")).len);
     // No doc → an early return, before the cache is touched.
     try testing.expectEqual(before.total_allocs, mem_meter.snapshot().total_allocs);
     try testing.expectEqual(@as(u32, 0), cache.count());
 }
 
-test "savedIdsFor: a list that cannot be read is an error that leaves nothing in the cache, for a new reader (metal-vmm QUEUE 172)" {
+test "loadSavedIds: a list that cannot be read is an error that leaves nothing in the cache, for a new reader (metal-vmm QUEUE 172)" {
     const meter = mem_meter.useForTest(testing.allocator);
     defer meter.restore();
     defer dropCache();
@@ -521,13 +521,13 @@ test "savedIdsFor: a list that cannot be read is an error that leaves nothing in
 
     // The doc's path is a folder: it stats, and cannot be read.
     try Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "999", reading_list_slug));
-    try testing.expect(std.meta.isError(savedIdsFor(io, a, "999", "1_2", "x")));
+    try testing.expect(std.meta.isError(loadSavedIds(io, a, "999", "1_2", "x")));
     // No entry keyed by the request's memory, with an undefined value, left
     // for the next reader to trip over.
     try testing.expectEqual(@as(u32, 0), cache.count());
 }
 
-test "savedIdsFor: the cache holds at most its entries and bytes, the least recently asked given up first (metal-vmm QUEUE 184)" {
+test "loadSavedIds: the cache holds at most its entries and bytes, the least recently asked given up first (metal-vmm QUEUE 184)" {
     const meter = mem_meter.useForTest(testing.allocator);
     defer meter.restore();
     defer dropCache();
@@ -546,20 +546,20 @@ test "savedIdsFor: the cache holds at most its entries and bytes, the least rece
     const doc = "[a](/chat/c/1_2/t#msg-t_1)";
     for ([_][]const u8{ "901", "902", "903", "904" }) |uid| try writeReadingList(io, a, uid, doc, 1_000_000_000);
     // At the most: all three held.
-    for ([_][]const u8{ "901", "902", "903" }) |uid| _ = try savedIdsFor(io, a, uid, "1_2", "t");
+    for ([_][]const u8{ "901", "902", "903" }) |uid| _ = try loadSavedIds(io, a, uid, "1_2", "t");
     try testing.expectEqual(@as(u32, 3), cache.count());
     // 901 asked again, so 902 is the least recent: one more gives it up.
-    _ = try savedIdsFor(io, a, "901", "1_2", "t");
-    _ = try savedIdsFor(io, a, "904", "1_2", "t");
+    _ = try loadSavedIds(io, a, "901", "1_2", "t");
+    _ = try loadSavedIds(io, a, "904", "1_2", "t");
     try testing.expectEqual(@as(u32, 3), cache.count());
     try testing.expect(cache.get("902") == null);
     try testing.expect(cache.get("901") != null);
     // Its answer is the same, cached or not.
-    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, "902", "1_2", "t")).len);
+    try testing.expectEqual(@as(usize, 1), (try loadSavedIds(io, a, "902", "1_2", "t")).len);
     // And the bytes: a budget smaller than two lists holds one.
     cache_most_bytes_for_test = cache.get("902").?.bytes + 1;
     defer cache_most_bytes_for_test = null;
-    _ = try savedIdsFor(io, a, "903", "1_2", "t");
+    _ = try loadSavedIds(io, a, "903", "1_2", "t");
     try testing.expectEqual(@as(u32, 1), cache.count());
     try testing.expect(held_bytes <= cache_most_bytes_for_test.?);
 }

@@ -49,13 +49,13 @@ const max_append_bytes = limits.body.game_append;
 /// `client` is the caller's address as the router read it, for the bound on
 /// what one address may write (game_limits.zig); null when the host gave none.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
-    const user_id = player.Id.of((try player.current(io, alloc, req)).id) orelse {
+    const user_id = player.Id.of((try player.loadCurrent(io, alloc, req)).id) orelse {
         try http.redirect(req, .literal("/play?next=/game"));
         return;
     };
 
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try playPage(req, io, alloc, user_id, 0);
+        try servePlayPage(req, io, alloc, user_id, 0);
     } else if (std.mem.eql(u8, sub, "/elm.js")) {
         try http.serveEmbedded(req, elm_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/engine.js")) {
@@ -63,25 +63,25 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]c
     } else if (std.mem.eql(u8, sub, "/engine_glue.js")) {
         try http.serveEmbedded(req, engine_glue_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/new-session")) {
-        try newSession(req, io, alloc, user_id, client);
+        try createSession(req, io, alloc, user_id, client);
     } else if (std.mem.eql(u8, sub, "/sessions")) {
-        try sessionsList(req, io, alloc, user_id);
+        try serveSessionsList(req, io, alloc, user_id);
     } else if (std.mem.eql(u8, sub, "/api/sessions")) {
-        try sessionsJSON(req, io, alloc, user_id);
+        try serveSessionsJSON(req, io, alloc, user_id);
     } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
-        try sessionRoute(req, io, alloc, user_id, client, sub["/sessions/".len..]);
+        try routeSession(req, io, alloc, user_id, client, sub["/sessions/".len..]);
     } else {
         // /game/<id> — resume a session by numeric id.
         const trimmed = std.mem.trim(u8, sub, "/");
         const id = std.fmt.parseInt(i64, trimmed, 10) catch return http.notFound(req);
         if (id <= 0) return http.notFound(req);
-        try playPage(req, io, alloc, user_id, id);
+        try servePlayPage(req, io, alloc, user_id, id);
     }
 }
 
-/// sessionRoute fans out the per-session URL space (`rest` is the path after
+/// routeSession fans out the per-session URL space (`rest` is the path after
 /// "/sessions/").
-fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, rest: []const u8) !void {
+fn routeSession(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -90,7 +90,7 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client:
     const seg1 = it.next();
     if (seg1 == null) {
         // /sessions/<id> — detail view.
-        try sessionDetail(req, io, alloc, user_id, session_id);
+        try serveSessionDetail(req, io, alloc, user_id, session_id);
         return;
     }
     if (it.next() != null) return http.notFound(req); // more than two segments
@@ -99,7 +99,7 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client:
         if (req.head.method == .POST) {
             try appendSessionLine(req, io, alloc, user_id, client, session_id, .actions);
         } else {
-            try sessionBootstrap(req, io, alloc, user_id, session_id);
+            try serveSessionBootstrap(req, io, alloc, user_id, session_id);
         }
     } else if (std.mem.eql(u8, seg1.?, "annotations")) {
         try appendSessionLine(req, io, alloc, user_id, client, session_id, .annotations);
@@ -110,17 +110,17 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client:
 
 // ── session creation ─────────────────────────────────────────────────────────
 
-/// newSession creates a fresh full-game session: the POST body is Elm's
+/// createSession creates a fresh full-game session: the POST body is Elm's
 /// DSL-encoded GameState; the server prepends a server-owned created_at, writes
 /// the merged DSL to <session>/meta, and returns the id as JSON. The game-state
 /// DSL is stored verbatim.
-fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8) !void {
+fn createSession(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     const game_state_dsl = (try http.readLimitedBody(req, alloc, max_new_session_bytes)) orelse return;
 
     const meta = SessionMeta{
-        .created_at = nowUnix(io),
+        .created_at = readNowUnix(io),
         .label = "",
         .game_state_dsl = game_state_dsl,
     };
@@ -144,7 +144,7 @@ const LineKind = storage.LineKind;
 /// are JSONL (compacted).
 fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, session_id: i64, kind: LineKind) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
-    if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
+    if (!try storage.hasSession(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const body = (try http.readLimitedBody(req, alloc, max_append_bytes)) orelse return;
     if (try storage.appendGameLine(io, alloc, .{ .id = user_id, .client = client }, session_id, kind, body)) |r| return game_limits.refuse(req, r);
@@ -153,11 +153,11 @@ fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, cl
 
 // ── session reads ────────────────────────────────────────────────────────────
 
-/// sessionBootstrap returns the resume bundle as one text/plain document: the
+/// serveSessionBootstrap returns the resume bundle as one text/plain document: the
 /// meta DSL, a `---` separator line, then the action log DSL. Elm splits on the
 /// separator.
-fn sessionBootstrap(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
-    if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
+fn serveSessionBootstrap(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
+    if (!try storage.hasSession(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const meta_bytes = (try storage.readSessionFile(io, alloc, user_id, session_id, "meta")) orelse "";
     const actions_bytes = (try storage.readSessionFile(io, alloc, user_id, session_id, "actions.dsl")) orelse "";
@@ -167,9 +167,9 @@ fn sessionBootstrap(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, ses
     try req.respond(body, .{ .extra_headers = &.{http.plain_ct} });
 }
 
-/// sessionsList renders the HTML browser of a player's full-game sessions,
+/// serveSessionsList renders the HTML browser of a player's full-game sessions,
 /// newest first.
-fn sessionsList(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
+fn serveSessionsList(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     const ids = try storage.listSessionIDs(io, alloc, user_id);
     std.mem.sort(i64, ids, {}, std.sort.desc(i64)); // newest first
 
@@ -190,8 +190,8 @@ fn sessionsList(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// sessionsJSON is the api/sessions equivalent of sessionsList.
-fn sessionsJSON(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
+/// serveSessionsJSON serves the api/sessions equivalent of serveSessionsList.
+fn serveSessionsJSON(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     const ids = try storage.listSessionIDs(io, alloc, user_id);
     std.mem.sort(i64, ids, {}, std.sort.desc(i64));
 
@@ -210,10 +210,10 @@ fn sessionsJSON(req: *Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });
 }
 
-/// sessionDetail renders a debug view for a session dir — no replay, just what's
+/// serveSessionDetail renders a debug view for a session dir — no replay, just what's
 /// on disk.
-fn sessionDetail(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
-    if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
+fn serveSessionDetail(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
+    if (!try storage.hasSession(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const meta = try readMeta(io, alloc, user_id, session_id);
     const action_count = try storage.countSessionActions(io, alloc, user_id, session_id);
@@ -237,14 +237,14 @@ fn sessionDetail(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, sessio
 
 // ── play page ────────────────────────────────────────────────────────────────
 
-/// playPage renders the Elm host. `session_id` 0 = new game (initialSessionId
+/// servePlayPage renders the Elm host. `session_id` 0 = new game (initialSessionId
 /// null); >0 resumes.
-fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
+fn servePlayPage(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id: i64) !void {
     const initial = if (session_id > 0)
         try std.fmt.allocPrint(alloc, "{d}", .{session_id})
     else
         "null";
-    const name = try player.nameOf(io, alloc, user_id.text());
+    const name = try player.readName(io, alloc, user_id.text());
     const name_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(name, .{})});
 
     // The two spaces in the format are the literal spaces after `=` and after
@@ -266,7 +266,7 @@ fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id:
 
 // ── small helpers ────────────────────────────────────────────────────────────
 
-fn nowUnix(io: Io) i64 {
+fn readNowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
@@ -425,7 +425,7 @@ const play_a =
     \\
 ;
 
-/// After the scripts (`playPage` names them by their bytes).
+/// After the scripts (`servePlayPage` names them by their bytes).
 const play_a_tail =
     \\
     \\<script>

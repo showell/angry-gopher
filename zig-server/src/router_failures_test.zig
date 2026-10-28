@@ -18,7 +18,7 @@ const router = @import("router.zig");
 test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-vmm QUEUE 114)" {
     // A 404 says "no such doc", and an API client's next save may then
     // replace one that is there (QUEUE 105's pattern, through a wrapper:
-    // docs_store.docExists).
+    // docs_store.hasDoc).
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -60,7 +60,7 @@ var refuse_under: []const u8 = "";
 /// the name alone as std's deleteTree asks (QUEUE 138(f)).
 var refuse_named: []const u8 = "";
 
-fn removalsFail(io: Io, vt: *Io.VTable) Io {
+fn failRemovals(io: Io, vt: *Io.VTable) Io {
     const refused = struct {
         // Not std's failingDirDeleteFile, which answers FileNotFound: that
         // is "already gone", which a revoke rightly takes as done.
@@ -99,7 +99,7 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
     const key = try users.setUserAPIKey(io, a, "2");
 
     var vt: Io.VTable = undefined;
-    const failing = removalsFail(io, &vt);
+    const failing = failRemovals(io, &vt);
     const raw = try std.fmt.allocPrint(a, "POST /settings/apikey HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nrevoke=1", .{member});
     var reader: std.Io.Reader = .fixed(raw);
     var out: std.Io.Writer.Allocating = .init(a);
@@ -139,7 +139,7 @@ test "route: a release whose removals fail is not answered as done, and the acco
     try harness.UidSite.disk.write(io, a, data, "2\n", .{});
 
     var vt: Io.VTable = undefined;
-    const failing = removalsFail(io, &vt);
+    const failing = failRemovals(io, &vt);
     const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
     var reader: std.Io.Reader = .fixed(raw);
     var out: std.Io.Writer.Allocating = .init(a);
@@ -152,7 +152,7 @@ test "route: a release whose removals fail is not answered as done, and the acco
     try out.writer.flush();
     try testing.expect(std.mem.startsWith(u8, harness.status(out.written()), "500"));
     // The account is there, and still logs in.
-    try testing.expect(try users.principalExists(io, a, "2"));
+    try testing.expect(try users.hasPrincipal(io, a, "2"));
     try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
     _ = try harness.UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
 }
@@ -182,7 +182,7 @@ test "route: a release whose last removal fails leaves an account that can relea
     var vt: Io.VTable = undefined;
     refuse_under = private;
     defer refuse_under = "";
-    const failing = removalsFail(io, &vt);
+    const failing = failRemovals(io, &vt);
     const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
     var reader: std.Io.Reader = .fixed(raw);
     var out: std.Io.Writer.Allocating = .init(a);
@@ -199,7 +199,7 @@ test "route: a release whose last removal fails leaves an account that can relea
     // And again, the disk willing: released, nothing left.
     refuse_under = "";
     try testing.expect(std.mem.indexOf(u8, try harness.postForm(a, io, "/logout", member, "release=yes"), "500") == null);
-    try testing.expect(!try users.principalExists(io, a, "2"));
+    try testing.expect(!try users.hasPrincipal(io, a, "2"));
     try testing.expect(!try harness.UidSite.disk.has(io, a, private));
 }
 
@@ -235,7 +235,7 @@ test "route: a release whose removal inside the account fails keeps the password
         var vt: Io.VTable = undefined;
         refuse_named = refused;
         defer refuse_named = "";
-        const failing = removalsFail(io, &vt);
+        const failing = failRemovals(io, &vt);
         const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
         var reader: std.Io.Reader = .fixed(raw);
         var out: std.Io.Writer.Allocating = .init(a);
@@ -252,7 +252,7 @@ test "route: a release whose removal inside the account fails keeps the password
         // And again, the disk willing: released, nothing left.
         refuse_named = "";
         try testing.expect(std.mem.indexOf(u8, try harness.postForm(a, io, "/logout", member, "release=yes"), "500") == null);
-        try testing.expect(!try users.principalExists(io, a, "2"));
+        try testing.expect(!try users.hasPrincipal(io, a, "2"));
         try testing.expect(!try harness.UidSite.disk.has(io, a, account));
     }
 }
@@ -358,8 +358,8 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const steve = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     // The pins' folder is a file: the pin cannot be written.
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions" }), "", .{});
@@ -464,14 +464,14 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     // Where the topic's uploads go is a file: the upload cannot be stored.
     const updir = try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, key), "sessions", "scripts.uploads" });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
-    const before = try users.userUploadBytes(io, a, ada);
+    const before = try users.readUploadBytes(io, a, ada);
     const png = "\x89PNG\r\n\x1a\n" ++ repeated("\x00", 64);
     const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\n" ++ png ++ "\r\n--B--\r\n";
     // The handler's error goes on to the host (site.zig answers it 500 and
     // hands it on to be logged): here, to the test.
     const got = harness.serve(a, io, try std.fmt.allocPrint(a, "POST {s}/upload HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: multipart/form-data; boundary=B\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
     try testing.expect(std.meta.isError(got));
-    try testing.expectEqual(before, try users.userUploadBytes(io, a, ada));
+    try testing.expectEqual(before, try users.readUploadBytes(io, a, ada));
 }
 
 test "a release that can release nothing says so, never the page a release that deleted gets (metal-vmm QUEUE 172)" {
@@ -490,7 +490,7 @@ test "a release that can release nothing says so, never the page a release that 
     try player.mirror(io, a, ada, "Ada");
     const got = try harness.postAs(a, io, "/logout", try harness.signedUid(a, ada), "release=yes");
     try testing.expectEqualStrings("403 Forbidden", harness.status(got));
-    try testing.expect(try users.principalExists(io, a, ada));
+    try testing.expect(try users.hasPrincipal(io, a, ada));
     // The logout half still happens (its cold review): every identity
     // cookie is cleared, as a logout without a release clears them.
     try testing.expect(std.mem.indexOf(u8, got, uid_cookie.cookie_name ++ "=; Path=/; Max-Age=0") != null);

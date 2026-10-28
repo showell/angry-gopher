@@ -79,13 +79,13 @@ pub fn fanoutText(alloc: Alloc) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{d}; the last: {s}", .{ fanout_failures, fanout_last });
 }
 
-/// fanoutCrossPage publishes one new message to every cross-page attention feed
+/// fanOutCrossPage publishes one new message to every cross-page attention feed
 ///: notify (status strip), recent (Recent page), images /
 /// code (per-user transcripts) per member, plus a sidebar topic-added on the
 /// topic's FIRST message (index == 0). Best-effort: the message is saved
 /// before; a failure for one member's surface is counted and said, and never
 /// blocks the write or that member's other surfaces.
-pub fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
+pub fn fanOutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
     // What every surface shares: a failure here is counted, never a surface
     // skipped in silence (metal-vmm QUEUE 172: images and code, durable and
     // with no rebuild, were lost uncounted).
@@ -187,7 +187,7 @@ const Fan = struct {
     /// the recipient who authored it; everyone else sees the name.
     fn recent(f: *const Fan, uid: []const u8) !void {
         // absent-ok: the recent feed's "where" label only; the row itself is sent.
-        const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
+        const where = formatRecentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
         const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
         var rj: std.ArrayList(u8) = .empty;
         try recent_feed.encodeChatEvent(&rj, f.alloc, .{ .at = f.msg.at, .url = f.rec_url, .who = who, .where = where, .topic = f.sid, .excerpt = try f.excerpt, .dm = f.meta.kind == .dm });
@@ -217,10 +217,10 @@ const Fan = struct {
     }
 };
 
-/// recentWhere is the per-recipient context label the What column reads as
+/// formatRecentWhere formats the per-recipient context label the What column reads as
 /// "message <where> (<topic>)": a channel names itself ("in <name>"); a DM names
 /// the OTHER party ("to <name>").
-fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
+fn formatRecentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
     if (meta.kind == .channel) return std.fmt.allocPrint(alloc, "in {s}", .{conv_key});
     var other: []const u8 = "";
     for (meta.members) |m| {

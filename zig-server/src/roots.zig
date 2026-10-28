@@ -232,14 +232,14 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
         try testing.expect(!try store.has(io, a, try join(a, old, name)));
         try testing.expect(try store.has(io, a, try join(a, new, name)));
     }
-    try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
+    try testing.expectEqualStrings(secret, (try users.loadSessionSecret(io, a)).?);
 
     // A stale copy left in the old home (a crash mid-move) is cleaned, not kept
     // beside the new one, and the new secret is untouched.
     try store.write(io, a, try join(a, old, "_session_secret"), "stale", .{});
     migrateSecret(io, a);
     try testing.expect(!try store.has(io, a, try join(a, old, "_session_secret")));
-    try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
+    try testing.expectEqualStrings(secret, (try users.loadSessionSecret(io, a)).?);
 }
 
 test "migrateSecret: a copy in auth/ cut short by a failed write is copied again, never trusted over the whole old one (metal-vmm QUEUE 172)" {

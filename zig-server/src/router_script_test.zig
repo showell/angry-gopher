@@ -43,8 +43,8 @@ test "route: a signed script deletes a topic, memory follows the store (search f
     store.durable_now = scriptDurable;
     defer store.durable_now = null;
 
-    const me = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const me = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     const key = try users.setUserAPIKey(io, a, "1");
     const debbie_key = try users.setUserAPIKey(io, a, "2");
     const bearer = try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{key});
@@ -119,7 +119,7 @@ test "route: a background script is answered at once, stepped by the Site betwee
     store.durable_now = scriptDurable;
     defer store.durable_now = null;
 
-    const me = try harness.memberSession(a, io, "1", "Steve");
+    const me = try harness.loginMember(a, io, "1", "Steve");
     const key = try users.setUserAPIKey(io, a, "1");
     const bearer = try std.fmt.allocPrint(a, "Authorization: Bearer {s}\r\n", .{key});
     try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"the zebra crossing"});

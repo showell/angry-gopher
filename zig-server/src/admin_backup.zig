@@ -73,17 +73,17 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // **A HEAD READS NOTHING**: it is the form's, as a GET is. Walking the data to write it into
     // nothing cost a whole backup's reads; on metal, that is every other
     // request waiting.
-    if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    if (req.head.method != .POST) return serveForm(req, alloc, "", .ok);
     // **THE RE-ENTRY IS THROTTLED LIKE SIGN-IN** (QUEUE.md item 100): a stolen
     // admin session must not guess the password unbounded, which is what the
     // re-entry exists to stop. Refused before the hash, against the address and
     // uid 1's account (the same counters sign-in uses).
-    if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
+    if (throttle.check(io, client, ui.admin_uid)) |b| return serveForm(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
-        return form(req, alloc, "That is not the password.", .forbidden);
+        return serveForm(req, alloc, "That is not the password.", .forbidden);
     }
     throttle.clearAddress(client);
 
@@ -107,7 +107,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
 }
 
 /// The page that asks for the password, with `err` above the form if any.
-fn form(req: *Request, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
+fn serveForm(req: *Request, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "Download a backup", "");
     try b.appendSlice(alloc,
@@ -163,7 +163,7 @@ pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: 
 /// read) failed only once the archive had begun.
 pub fn checkRoots(io: Io, alloc: Alloc, data: []const u8, auth: []const u8) !void {
     for ([_][]const u8{ data, auth }) |root| {
-        if (try rootStat(io, alloc, root) != null) _ = try store.list(io, alloc, root);
+        if (try readRootStat(io, alloc, root) != null) _ = try store.list(io, alloc, root);
     }
 }
 
@@ -172,7 +172,7 @@ pub fn checkRoots(io: Io, alloc: Alloc, data: []const u8, auth: []const u8) !voi
 /// cannot be looked at, and fails the backup. `store.statOrNull` counts those
 /// as absent, as a lookup by a request's name should; a root is the
 /// backup's own setting, and missing it whole must be loud.
-fn rootStat(io: Io, alloc: Alloc, path: []const u8) !?store.Stat {
+fn readRootStat(io: Io, alloc: Alloc, path: []const u8) !?store.Stat {
     return store.stat(io, alloc, path) catch |e| switch (e) {
         error.FileNotFound => null,
         else => e,
@@ -218,7 +218,7 @@ fn walk(b: Backup, dir: []const u8, name: []const u8, where: Where) !void {
     // is left out unsaid, and one that cannot be looked at fails the backup
     // (QUEUE 110, `checkRoots`).
     // absent-ok: a folder inside the tree that cannot be looked at is a named skip, in backup-skipped.txt (QUEUE 104, 110).
-    const st = (if (where == .root) try rootStat(b.io, b.alloc, dir) else store.statOrNull(b.io, b.alloc, dir) catch |e| {
+    const st = (if (where == .root) try readRootStat(b.io, b.alloc, dir) else store.statOrNull(b.io, b.alloc, dir) catch |e| {
         try b.skipped.print(b.alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
         return;
     }) orelse return;

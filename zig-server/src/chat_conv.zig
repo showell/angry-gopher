@@ -7,7 +7,7 @@ const store = @import("chat_store.zig");
 
 /// Conv is a resolved, access-checked conversation: the kind+members the fanout
 /// needs (`meta`), plus the URL/storage coordinates every per-conv handler shares.
-/// convRoute (DM) and handleChannel (channel) each build one once the viewer's
+/// routeConv (DM) and handleChannel (channel) each build one once the viewer's
 /// access is confirmed — that's where the dm/channel knowledge is concrete, so it
 /// gets earned exactly once and travels as data from there on.
 pub const Conv = struct {
@@ -25,5 +25,5 @@ pub const Conv = struct {
 };
 
 /// Topic is a Conv plus a validated topic id and its page title — the unit the
-/// per-topic tail (topicRoute and below) operates on.
+/// per-topic tail (routeTopic and below) operates on.
 pub const Topic = struct { conv: Conv, sid: []const u8, title: []const u8 };

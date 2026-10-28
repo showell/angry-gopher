@@ -17,7 +17,7 @@
 //!       regex of its own, and they had already come apart on Unicode spaces).
 //!
 //! **WHAT THE VIEWER CAN SEE, ASKED ON EVERY REQUEST** (`chat_store.
-//! visibleConvs`), never a list kept from an earlier one: a DM between two
+//! listVisibleConvs`), never a list kept from an earlier one: a DM between two
 //! others, or a channel the viewer is not in, is neither suggested nor found.
 //!
 //! **A CRUDE RATE LIMIT** (Steve): `per_second` searches a second per
@@ -67,7 +67,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     const raw = http.queryValue(try http.target(req, alloc), if (words_route) "prefix" else "word") orelse "";
     var buf: [tokens.max_word]u8 = undefined;
     const key = tokens.key(try chat.urlDecode(alloc, raw), &buf);
-    const reach = try chat_paths.visibleConvs(io, alloc, uid);
+    const reach = try chat_paths.listVisibleConvs(io, alloc, uid);
     const idx = search_index.indexOrBuild(io, alloc) orelse {
         return req.respond("{\"error\":\"search is not ready\"}", .{ .status = .service_unavailable, .extra_headers = &.{http.json_ct} });
     };

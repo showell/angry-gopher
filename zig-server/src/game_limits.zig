@@ -105,10 +105,10 @@ var tick: u64 = 0;
 /// `new_session`; null when it may, and then it is counted against both.
 pub fn admit(io: Io, alloc: Alloc, id: player.Id, client: ?[]const u8, new_session: bool, bytes: u64) !?Refusal {
     if (free_space.read()) |s| if (s.free < s.total / 4) return .floor;
-    const u = try slot(io, alloc, id);
+    const u = try findSlot(io, alloc, id);
     if (new_session and u.sessions >= max_sessions) return .sessions;
     if (u.bytes + bytes > max_bytes) return .bytes;
-    const a: ?*Seen = if (client) |c| seenSlot(c, now(io)) else null;
+    const a: ?*Seen = if (client) |c| seenSlot(c, readNow(io)) else null;
     if (a) |s| if (s.bytes + bytes > bytes_per_hour) return .address_bytes;
     if (new_session) u.sessions += 1;
     u.bytes += bytes;
@@ -120,17 +120,17 @@ pub fn admit(io: Io, alloc: Alloc, id: player.Id, client: ?[]const u8, new_sessi
 /// (metal-vmm QUEUE 172: a first move for a session not offered was counted
 /// as written).
 pub fn giveBack(io: Io, alloc: Alloc, id: player.Id, client: ?[]const u8, new_session: bool, bytes: u64) !void {
-    const u = try slot(io, alloc, id);
+    const u = try findSlot(io, alloc, id);
     if (new_session) u.sessions -|= 1;
     u.bytes -|= bytes;
-    if (client) |c| seenSlot(c, now(io)).bytes -|= bytes;
+    if (client) |c| seenSlot(c, readNow(io)).bytes -|= bytes;
 }
 
 /// Whether `client` may have another legacy cookie re-signed this hour; null
 /// when it may, and then it is counted.
 pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
     const c = client orelse return null;
-    const s = seenSlot(c, now(io));
+    const s = seenSlot(c, readNow(io));
     if (s.resigns >= resigns_per_hour) return .address_resigns;
     s.resigns += 1;
     return null;
@@ -140,13 +140,13 @@ pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
 /// then it is counted.
 pub fn admitPlayer(io: Io, client: ?[]const u8) !?Refusal {
     const c = client orelse return null;
-    const s = seenSlot(c, now(io));
+    const s = seenSlot(c, readNow(io));
     if (s.players >= players_per_hour) return .address_players;
     s.players += 1;
     return null;
 }
 
-fn now(io: Io) i64 {
+fn readNow(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
@@ -242,7 +242,7 @@ fn fresh(addr: []const u8, t: i64) Seen {
 }
 
 /// `id`'s slot: found, or the least recently asked one measured afresh.
-fn slot(io: Io, alloc: Alloc, checked: player.Id) !*Usage {
+fn findSlot(io: Io, alloc: Alloc, checked: player.Id) !*Usage {
     const id = checked.text();
     std.debug.assert(id.len <= id_max); // isSafeID's bound, which Id.of holds
     tick += 1;
@@ -273,7 +273,7 @@ const Measured = struct { sessions: u32 = 0, bytes: u64 = 0 };
 fn measure(io: Io, alloc: Alloc, id: player.Id) !Measured {
     const root = try storage.userDataDir(alloc, id);
     var m: Measured = .{};
-    m.bytes = try sizeOf(io, alloc, root, 0);
+    m.bytes = try countDirBytes(io, alloc, root, 0);
     for ([_][]const u8{ "lynrummy-elm", "puzzle" }) |game| {
         const dir = try std.fs.path.join(alloc, &.{ root, game, "sessions" });
         for (try store.list(io, alloc, dir)) |e| {
@@ -283,14 +283,14 @@ fn measure(io: Io, alloc: Alloc, id: player.Id) !Measured {
     return m;
 }
 
-fn sizeOf(io: Io, alloc: Alloc, dir: []const u8, depth: u8) !u64 {
+fn countDirBytes(io: Io, alloc: Alloc, dir: []const u8, depth: u8) !u64 {
     if (depth > 8) return 0; // the store is four deep; anything deeper is not ours
     var total: u64 = 0;
     for (try store.list(io, alloc, dir)) |e| {
         const p = try std.fs.path.join(alloc, &.{ dir, e.name });
         switch (e.kind) {
             .file => total += ((try store.statOrNull(io, alloc, p)) orelse continue).size,
-            .directory => total += try sizeOf(io, alloc, p, depth + 1),
+            .directory => total += try countDirBytes(io, alloc, p, depth + 1),
             .other => {},
         }
     }

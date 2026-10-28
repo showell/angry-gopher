@@ -41,7 +41,7 @@ pub const LastMessage = struct {
     number: usize,
 };
 
-/// lastMessage answers a topic's last message **without a stat and without
+/// loadLastMessage answers a topic's last message **without a stat and without
 /// reading the whole transcript**, when the sidecar can say where it begins:
 /// one small read of the sidecar, one bounded read of the tail.
 ///
@@ -49,7 +49,7 @@ pub const LastMessage = struct {
 /// every topic; the message carries its own date, so neither is needed. The
 /// price is that a transcript appended to behind this server's back is not
 /// noticed until the next message or the next read of the whole thing — which
-/// for a listing is a stale excerpt, where for `messageCount` it would be a
+/// for a listing is a stale excerpt, where for `countMessages` it would be a
 /// misnumbered message. That is why the count checks the size and this does
 /// not.
 ///
@@ -57,14 +57,14 @@ pub const LastMessage = struct {
 /// this topic, numbered at least what the sidecar says. Anything else — a
 /// hand-edited transcript, a sidecar from another file, a message too long for
 /// the window — falls back to reading the whole thing.
-pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
+pub fn loadLastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
     const counted = readCount(io, alloc, conv_dir, sid);
     if (counted) |c| {
         if (c.last) |l| if (c.count > 0) {
             const path = try transcriptPath(alloc, conv_dir, sid);
             const buf = try alloc.alloc(u8, tail_window);
             // absent-ok: the sidecar is a cache: a window that will not read falls back to the transcript.
-            const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid, counted);
+            const n = store.readAt(io, alloc, path, l.offset, buf) catch return readLastFromTranscript(io, alloc, conv_dir, sid, counted);
             // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
             // and nothing below could tell. Read it the slow way instead.
             if (n < tail_window) {
@@ -85,14 +85,14 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
                         .at = got.at,
                         // A current record's answer stands, nobody included;
                         // a record behind: the newer message's author.
-                        .uid = if (number == c.count) l.uid else authorOf(io, alloc, got),
+                        .uid = if (number == c.count) l.uid else findAuthor(io, alloc, got),
                         .number = number,
                     };
                 }
             }
         };
     }
-    return fallbackLast(io, alloc, conv_dir, sid, counted);
+    return readLastFromTranscript(io, alloc, conv_dir, sid, counted);
 }
 
 /// **THE AUTHOR WHERE NO SIDECAR SAYS** (the box's must-fix after 153(1)):
@@ -109,19 +109,19 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 ///
 /// **ONE MEMBER, OR NOBODY** (the box's review of 155): a name two members
 /// share (108's sign-up race) names neither.
-fn authorOf(io: Io, alloc: Alloc, msg: ChatMessage) []const u8 {
+fn findAuthor(io: Io, alloc: Alloc, msg: ChatMessage) []const u8 {
     // absent-ok: an author that cannot be looked up is shown as nobody, for this read only: nothing records it.
     return lookupAuthor(io, alloc, msg) catch "";
 }
 
-/// `authorOf`, its failure kept: what the backfill records is believed
+/// `findAuthor`, its failure kept: what the backfill records is believed
 /// for good (a current record is never asked again), so a lookup that
 /// failed must record nothing, never nobody (the box's should-fix). A
 /// message that names its author is not looked up at all.
 fn lookupAuthor(io: Io, alloc: Alloc, msg: ChatMessage) ![]const u8 {
     if (msg.uid.len > 0) return msg.uid;
     if (msg.from.len == 0) return "";
-    return (try users.onlyMemberNamed(io, alloc, msg.from)) orelse "";
+    return (try users.findOnlyMemberNamed(io, alloc, msg.from)) orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -141,7 +141,7 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
 /// tail that would not read, still has its author in the `.count` when the
 /// transcript is exactly the one it counted, in messages and in size.
 /// Otherwise none: unknown, never an older author.
-fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, counted: ?Count) !?LastMessage {
+fn readLastFromTranscript(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, counted: ?Count) !?LastMessage {
     const raw = (try readTranscript(io, alloc, conv_dir, sid)) orelse return null;
     const msgs = try decodeChatFile(alloc, raw);
     if (msgs.len == 0) return null;
@@ -150,7 +150,7 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     // included; else the last author by name.
     const blocks = countBlocks(raw);
     const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == blocks and c.size == raw.len) l.uid else null) else null) else null;
-    return .{ .markdown = last.markdown, .at = last.at, .uid = recorded orelse authorOf(io, alloc, last), .number = blocks };
+    return .{ .markdown = last.markdown, .at = last.at, .uid = recorded orelse findAuthor(io, alloc, last), .number = blocks };
 }
 
 /// **EVERY TOPIC GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -216,7 +216,7 @@ pub fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
 }
 
-/// messageCount is how many messages a topic holds — the N that numbers the
+/// countMessages counts the messages a topic holds — the N that numbers the
 /// next one — WITHOUT reading the transcript when the count sidecar can say.
 ///
 /// Numbering a message used to mean reading and decoding the whole transcript
@@ -229,7 +229,7 @@ pub fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
 /// conversation from before the sidecar existed, a crash between an append and
 /// its count, or the file edited by hand. The one thing a size cannot catch is
 /// a rewrite to exactly the same length with a different number of messages.
-pub fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
+pub fn countMessages(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
     const md = try transcriptPath(alloc, conv_dir, sid);
     // No transcript is no messages; a transcript that cannot be looked at or
     // read is an error, never 0: numbering from 0 would glue the next message
@@ -291,7 +291,7 @@ const Count = struct { count: usize, size: u64, last: ?Last = null };
 /// the whole thing and recounts from the transcript — slower, never wrong.
 pub fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count {
     const path = countPath(alloc, conv_dir, sid) catch return null;
-    // absent-ok: a cache: a count that will not read is recounted from the transcript (messageCount).
+    // absent-ok: a cache: a count that will not read is recounted from the transcript (countMessages).
     const raw = store.read(io, alloc, path, .limited(1024)) catch return null;
     // **WHOLE, OR NOT AT ALL**: written by `write`, a crash can leave it cut
     // short, and a uid cut short is another uid (the review of 153(1)).
@@ -478,7 +478,7 @@ test "count: an empty conversation has none, and its first message is number one
     var f: CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
-    try testing.expectEqual(@as(usize, 0), try messageCount(f.io, f.arena.allocator(), f.dir, "topic"));
+    try testing.expectEqual(@as(usize, 0), try countMessages(f.io, f.arena.allocator(), f.dir, "topic"));
     const m = try f.send("first");
     try testing.expectEqualStrings("topic_1", m.id);
 }
@@ -492,7 +492,7 @@ test "count: a transcript that cannot be read is an error, never no messages" {
     const a = f.arena.allocator();
     // A folder where the transcript should be: there, and unreadable.
     try store.makeDir(f.io, a, try transcriptPath(a, f.dir, "topic"));
-    try testing.expect(std.meta.isError(messageCount(f.io, a, f.dir, "topic")));
+    try testing.expect(std.meta.isError(countMessages(f.io, a, f.dir, "topic")));
 }
 
 test "last message: the sidecar answers without reading the transcript" {
@@ -505,7 +505,7 @@ test "last message: the sidecar answers without reading the transcript" {
     _ = try f.send("second");
     const sent = try f.send("the last word");
 
-    const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
     try testing.expectEqualStrings("the last word", got.markdown);
     try testing.expectEqualStrings(sent.at, got.at);
     try testing.expectEqualStrings("1", got.uid);
@@ -519,7 +519,7 @@ test "last message: one message, and the block that begins the file" {
     try f.init(threaded.io());
     defer f.deinit();
     _ = try f.send("alone");
-    const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
     try testing.expectEqualStrings("alone", got.markdown);
     try testing.expectEqual(@as(usize, 1), got.number);
 }
@@ -535,7 +535,7 @@ test "last message: a body that contains the separator still comes back whole" {
     _ = try f.send("innocent");
     const nasty = "before\n-------------\nafter";
     _ = try f.send(nasty);
-    const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
     try testing.expectEqualStrings(nasty, got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
 }
@@ -557,7 +557,7 @@ test "last message: a sidecar pointing at the wrong place is not believed" {
         try std.fmt.allocPrint(a, "9 {d}\n0 1\n", .{size}), // a message the topic does not have
     }) |junk| {
         try fixtureSetSidecar(&f, junk);
-        const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+        const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
         try testing.expectEqualStrings("the real last", got.markdown);
     }
 }
@@ -572,7 +572,7 @@ test "last message: a session from before the sidecar is read from its transcrip
     _ = try f.send("second");
     const a = f.arena.allocator();
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
     // No sidecar says, and the message does: its own `uid:`.
@@ -589,7 +589,7 @@ test "last message: a block from before `uid:` names nobody where nothing else s
     // A transcript an older server wrote: no `uid:` lines, and no sidecar.
     // "Tester" is no member's name here, so nobody, never a guess.
     try store.write(f.io, a, try transcriptPath(a, f.dir, "topic"), "MSG_topic_1\nfrom: Tester\ndate: 2026-10-10T00:00:00Z\n\nfirst" ++ sep ++ "MSG_topic_2\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nsecond", .{});
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
     try testing.expectEqualStrings("", got.uid);
@@ -612,7 +612,7 @@ test "backfill: a session with no last-message record gets one, and only once" {
 
     const dirs = [_][]const u8{f.dir};
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("last", got.markdown);
     // Not the `.lastauthor`: the message's own `uid:`.
     try testing.expectEqualStrings("1", got.uid);
@@ -631,7 +631,7 @@ test "backfill: a session with no sidecar at all gets one" {
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
     const dirs = [_][]const u8{f.dir};
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("only", got.markdown);
     try testing.expectEqual(@as(usize, 1), got.number);
 }
@@ -657,7 +657,7 @@ test "backfill: one pass reaches DMs and channels alike" {
     try testing.expectEqual(@as(usize, 2), dirs.len);
     // The DM already has its record from the send; the channel does not.
     try testing.expectEqual(@as(usize, 1), backfillAll(f.io, a));
-    const got = (try lastMessage(f.io, a, chan, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, chan, "topic")).?;
     try testing.expectEqualStrings("in a channel", got.markdown);
     try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.at);
 }
@@ -665,7 +665,7 @@ test "backfill: one pass reaches DMs and channels alike" {
 test "backfill: the record it writes can be read back" {
     // **THE ASSERTION THAT WAS MISSING.** The backfill has no uid to record
     // (no `.lastauthor` is read, zig-metal-unikernel 153(1)), and a field left empty made the line one field short —
-    // so the record was unreadable, `lastMessage` quietly read the whole
+    // so the record was unreadable, `loadLastMessage` quietly read the whole
     // transcript instead, and every test still passed. What the backfill
     // writes has to PARSE, not merely lead to the right answer.
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
@@ -690,7 +690,7 @@ test "backfill: the record it writes can be read back" {
     // Which makes the pass idempotent: nothing left to do next boot.
     try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
 
-    const got = (try lastMessage(f.io, a, dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, dir, "topic")).?;
     try testing.expectEqualStrings("who said this", got.markdown);
     try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.at);
 }
@@ -716,7 +716,7 @@ test "last message: a record left one behind still answers with the true last me
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
     try store.write(f.io, a, try std.fs.path.join(a, &.{ f.dir, "sessions", "topic.lastauthor" }), "9", .{});
 
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("the second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
     // The stale uid is not used, nor a `.lastauthor` (zig-metal-unikernel 153(1)):
@@ -737,7 +737,7 @@ test "last message: one too long for the window is read the slow way, and is rig
     for (huge, 0..) |*b, i| b.* = 'a' + @as(u8, @intCast(i % 26));
     _ = try f.send(huge);
 
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqual(huge.len, got.markdown.len);
     try testing.expectEqualStrings(huge, got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
@@ -750,7 +750,7 @@ test "last message: one too long for the window is read the slow way, and is rig
     // (9), but the last message's own.
     const c = readCount(f.io, a, f.dir, "topic").?;
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "{d} {d}\n{d} 9\n", .{ c.count, c.size + 1, c.last.?.offset }));
-    try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("1", (try loadLastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
 
 test "last message: a sidecar claiming a size far past the file does not ask for that much" {
@@ -764,7 +764,7 @@ test "last message: a sidecar claiming a size far past the file does not ask for
     const a = f.arena.allocator();
     _ = try f.send("modest");
     try fixtureSetSidecar(&f, "1 999999999999\n0 1\n");
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("modest", got.markdown);
 }
 
@@ -783,7 +783,7 @@ test "a send writes no .lastauthor, and its .count names the author over one an 
     try testing.expect(!try store.has(f.io, a, la));
     try store.write(f.io, a, la, "9", .{}); // as an older server left it
     _ = try f.send("the second");
-    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    const got = (try loadLastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("1", got.uid);
 }
 
@@ -825,17 +825,17 @@ test "the author where no sidecar says is the member the last message names; the
     _ = try f.sendLegacy("the second");
     // One behind, its uid someone else's: the newer message's author by name.
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
-    try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("1", (try loadLastMessage(f.io, a, f.dir, "topic")).?.uid);
     // No sidecar at all: the slow path, and the backfill's record, by name.
     try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
-    try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("1", (try loadLastMessage(f.io, a, f.dir, "topic")).?.uid);
     const dirs = [_][]const u8{f.dir};
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
     try testing.expectEqualStrings("1", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
     // A name no member has: nobody, never a guess.
     try users.setUserName(f.io, a, "1", "Renamed");
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
-    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("", (try loadLastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
 
 test "a current record that says nobody is believed: a name reused after its member left gets no credit (the Who cell's review)" {
@@ -855,7 +855,7 @@ test "a current record that says nobody is believed: a name reused after its mem
     // A newcomer takes the name: the record still says nobody.
     try users.setUserName(f.io, a, "9", "Tester");
     try users.setUserPassword(f.io, a, "9", "pw");
-    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("", (try loadLastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
 
 test "a name two members share names nobody (the box's review of 155, 4)" {
@@ -873,7 +873,7 @@ test "a name two members share names nobody (the box's review of 155, 4)" {
     const after_first = try fixtureTranscriptSize(&f);
     _ = try f.sendLegacy("the second");
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
-    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    try testing.expectEqualStrings("", (try loadLastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
 
 test "a lookup that fails at boot records nothing, so a later boot finds the author (the box's should-fix after fce504f)" {

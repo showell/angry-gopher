@@ -95,7 +95,7 @@ pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 
 /// The cookie, for webbox's reading and writing of signed cookies.
 const cookie: signed_cookie.Cookie([]const u8) = .{ .name = cookie_name, .legacy_name = legacy_cookie_name, .kind = kind };
 
-fn nowUnix(io: Io) i64 {
+fn readNowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
@@ -124,7 +124,7 @@ pub fn issue(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 pub const grace_seconds: i64 = 10 * 60;
 
 fn issueMarked(io: Io, alloc: Alloc, id: []const u8, marker: []const u8) !?[]const u8 {
-    if ((try users.sessionSecret(io, alloc)) == null) return null;
+    if ((try users.loadSessionSecret(io, alloc)) == null) return null;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     try store.write(io, alloc, try markerPath(alloc, id), marker, .{});
     return signed_cookie.issue(cookie, io, alloc, users.session_secret_dir, id, now);
@@ -182,7 +182,7 @@ test "uid_cookie: a marker dated after now fails closed, refused as past its gra
 /// time this is asked and closes `window_seconds` later; a time written
 /// into the file sooner closes it then. A file that will not read or parse
 /// closes it.
-pub fn windowOpen(io: Io, alloc: Alloc) bool {
+pub fn isWindowOpen(io: Io, alloc: Alloc) bool {
     const path = std.fs.path.join(alloc, &.{ player.player_root, "unsigned-window" }) catch return false;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     // absent-ok: fails closed: a window that will not read is shut.
@@ -197,15 +197,15 @@ pub fn windowOpen(io: Io, alloc: Alloc) bool {
 }
 
 /// Whether an unsigned cookie naming `id` is honoured: see the file header.
-fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
+fn isLegacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
     if (!validId(id)) return false;
     // absent-ok: fails closed: a member or an agent is never honoured, and one that cannot be told is taken as one.
-    if (users.principalAuthorized(io, alloc, id) catch true) return false;
+    if (users.isPrincipalAuthorized(io, alloc, id) catch true) return false;
     if (isMarked(io, alloc, id)) return false;
     const row = std.fs.path.join(alloc, &.{ player.player_root, id, "name" }) catch return false;
     // absent-ok: fails closed: a player that cannot be looked up is not honoured.
-    if (!(store.has(io, alloc, row) catch return false) and !(users.principalExists(io, alloc, id) catch return false)) return false;
-    return windowOpen(io, alloc);
+    if (!(store.has(io, alloc, row) catch return false) and !(users.hasPrincipal(io, alloc, id) catch return false)) return false;
+    return isWindowOpen(io, alloc);
 }
 
 /// The id this request's `gopher_uid` names, signed; null when it names no
@@ -218,7 +218,7 @@ pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8
     // **AFTER A CHANGE OF SECRET**, a player's cookie signed with the old one
     // still names them for the days the change allowed (users.rotateSecret);
     // the next GET re-signs it (`reissue`).
-    return switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, nowUnix(io))) {
+    return switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, readNowUnix(io))) {
         .verified => |v| v.id,
         .none, .no_secret, .invalid => null,
     };
@@ -242,7 +242,7 @@ pub const Reissue = union(enum) {
 /// legacy id. Null when there is nothing to re-sign.
 pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
     if (req.head.method != .GET) return null;
-    const now = nowUnix(io);
+    const now = readNowUnix(io);
     switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, now)) {
         // No cookie, or no secret: nothing re-signed, and nothing counted
         // against the address.
@@ -267,7 +267,7 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
         .one => |v| v,
         .none, .several => return null,
     };
-    if (!legacyHonoured(io, alloc, value)) return null;
+    if (!isLegacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
     const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});
     return .{ .cookie = .{ .set = (try issueMarked(io, alloc, value, marker)) orelse return null, .clear_legacy = true } };
@@ -355,8 +355,8 @@ test "a signed value names its id for its lifetime, and not from the future (met
 
 test "an id of 20 digits is a name, not a number: u64's largest and one past it both sign and read back" {
     // validId bounds the digits' count, not their value: no reader of a
-    // cookie's id parses it as an integer (users.currentUserID and
-    // player.current use it as a path's name), so 18446744073709551616,
+    // cookie's id parses it as an integer (users.loadCurrentUserID and
+    // player.loadCurrent use it as a path's name), so 18446744073709551616,
     // past u64, is an id like any other of 20 digits.
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

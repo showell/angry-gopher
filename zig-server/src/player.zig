@@ -60,16 +60,16 @@ pub const Player = struct { id: []const u8, name: []const u8 };
 
 // ── resolution ───────────────────────────────────────────────────────────────
 
-/// current resolves the player a request acts as: the cookie's id if it names a
+/// loadCurrent resolves the player a request acts as: the cookie's id if it names a
 /// player on disk, else the zero value (id == ""). An id that does not exist is
 /// no identity at all, so a stale cookie sends someone to the name page rather
 /// than filing games under a phantom.
-pub fn current(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
+pub fn loadCurrent(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
     // **SIGNED, OR ONCE** (uid_cookie.zig): a gopher_uid set by hand names no
     // one. A member whose cookie is unsigned is filed under their session.
     const id = blk: {
         if (try uid_cookie.resolve(io, alloc, req)) |signed| break :blk signed;
-        if (try users.sessionUser(io, alloc, req)) |member| break :blk member;
+        if (try users.loadSessionUser(io, alloc, req)) |member| break :blk member;
         return .{ .id = "", .name = "" };
     };
     if (!isSafeID(id)) return .{ .id = "", .name = "" };
@@ -156,8 +156,8 @@ pub fn deleteRecord(io: Io, alloc: Alloc, id: []const u8) !void {
     try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ player_root, id }));
 }
 
-/// nameOf answers a player's display name, "" when there is none.
-pub fn nameOf(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
+/// readName answers a player's display name, "" when there is none.
+pub fn readName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     if (!isSafeID(id)) return "";
     return (try readField(io, alloc, id, "name")) orelse "";
 }
@@ -199,10 +199,10 @@ fn readField(io: Io, alloc: Alloc, id: []const u8, field: []const u8) !?[]const 
     return std.mem.trimEnd(u8, raw, "\r\n");
 }
 
-/// cookie is the Set-Cookie value that binds a browser to a player: signed,
+/// issueCookie gives the Set-Cookie value that binds a browser to a player: signed,
 /// with the player marked so an unsigned spelling of it is never honoured.
 /// Null without a session secret: nothing unsigned is issued.
-pub fn cookie(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
+pub fn issueCookie(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     return uid_cookie.issue(io, alloc, id);
 }
 
@@ -217,7 +217,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
     // Header-derived state is read BEFORE the body: the body read invalidates
     // the live head, so the target and the current player are resolved up front.
     const target = try http.target(req, alloc);
-    const cur = try current(io, alloc, req);
+    const cur = try loadCurrent(io, alloc, req);
 
     const from_query = try queryNext(alloc, target);
 
@@ -234,7 +234,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
 
     if (try game_limits.admitPlayer(io, client)) |r| return game_limits.refuse(req, r);
     const id = try allocate(io, alloc, name);
-    const ck = (try cookie(io, alloc, id)) orelse
+    const ck = (try issueCookie(io, alloc, id)) orelse
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     return http.redirectWith(req, next, .{ .headers = &.{.{ .name = "set-cookie", .value = ck }} });
 }
@@ -367,7 +367,7 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
     const id = try allocate(io, a, .literal("Nikhil"));
     try testing.expect(std.mem.startsWith(u8, id, local_prefix));
     try testing.expect(!std.ascii.isDigit(id[0])); // never collides with an account id
-    try testing.expectEqualStrings("Nikhil", try nameOf(io, a, id));
+    try testing.expectEqualStrings("Nikhil", try readName(io, a, id));
 
     // A second player gets a distinct id.
     const id2 = try allocate(io, a, .literal("Debbie"));
@@ -375,10 +375,10 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
 
     // mirror gives an account id a row under its own numeric spelling.
     try mirror(io, a, "1", "Steve");
-    try testing.expectEqualStrings("Steve", try nameOf(io, a, "1"));
+    try testing.expectEqualStrings("Steve", try readName(io, a, "1"));
 
     // An id with no row is no identity.
-    try testing.expectEqualStrings("", try nameOf(io, a, "p999"));
+    try testing.expectEqualStrings("", try readName(io, a, "p999"));
 }
 
 test "fs: mirror writes a name only when it changed (zig-metal-unikernel 153(3))" {

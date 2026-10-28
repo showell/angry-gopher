@@ -29,7 +29,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     try testing.expectEqualStrings("303 See Other", harness.status(first));
     try testing.expect(std.mem.indexOf(u8, first, "location: /play?next=/game") != null);
     const signed = harness.setUid(first) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, signed, harness.nowSecs(io)).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, signed, harness.readNowSecs(io)).?);
     try testing.expect(harness.UidSite.isSigned(a, io, id));
 
     // The signed cookie is the player.
@@ -42,7 +42,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     // been lost): re-signed again. Once the grace is over: no one.
     const lost = try harness.UidSite.ask(a, io, "/play", unsigned);
     try testing.expectEqualStrings("303 See Other", harness.status(lost));
-    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, harness.setUid(lost).?, harness.nowSecs(io)).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(harness.UidSite.secret, harness.setUid(lost).?, harness.readNowSecs(io)).?);
     const marker = try std.fs.path.join(a, &.{ player.player_root, id, "signed" });
     try harness.UidSite.disk.replace(io, a, marker, "1790000000\n", .{}); // signed long ago
     const again = try harness.UidSite.ask(a, io, "/play", unsigned);
@@ -152,7 +152,7 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     const r = try harness.serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
     try testing.expectEqualStrings("303 See Other", harness.status(r));
     const v = harness.setUid(r) orelse return error.NoSetCookie;
-    const id = uid_cookie.verify(harness.UidSite.secret, v, harness.nowSecs(io)) orelse return error.Unsigned;
+    const id = uid_cookie.verify(harness.UidSite.secret, v, harness.readNowSecs(io)) orelse return error.Unsigned;
     try testing.expect(harness.UidSite.isSigned(a, io, id));
     // Its unsigned spelling is refused from the start: not re-signed, even
     // within a re-sign's grace, since this id never had an unsigned cookie.
@@ -206,7 +206,7 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const id = try player.allocate(io, a, .literal("Nikhil"));
-    const now = harness.nowSecs(io);
+    const now = harness.readNowSecs(io);
     const old = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
     const renewed = try harness.UidSite.ask(a, io, "/play", old);
     try testing.expectEqualStrings("303 See Other", harness.status(renewed));

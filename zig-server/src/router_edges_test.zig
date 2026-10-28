@@ -42,8 +42,8 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "sse.zig", .func = "resumeAt" },
     .{ .file = "chat_upload.zig", .func = "parseRange" },
     .{ .file = "game.zig", .func = "handle" },
-    .{ .file = "game.zig", .func = "sessionRoute" },
-    .{ .file = "puzzles.zig", .func = "sessionRoute" },
+    .{ .file = "game.zig", .func = "routeSession" },
+    .{ .file = "puzzles.zig", .func = "routeSession" },
     .{ .file = "reactions.zig", .func = "handleReact" },
     .{ .file = "signed.zig", .func = "verify" },
     .{ .file = "signed.zig", .func = "issuedOf" },
@@ -55,7 +55,7 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "log_view.zig", .func = "parseFilter" },
     .{ .file = "script_route.zig", .func = "parse" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
-    .{ .file = "chat.zig", .func = "highestGeneralTopic", .unreachable_because = "topic folder names on the disk" },
+    .{ .file = "chat.zig", .func = "findHighestGeneralTopic", .unreachable_because = "topic folder names on the disk" },
     .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "readCount", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseLast", .unreachable_because = "a .count file the server wrote" },
@@ -67,10 +67,10 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "stress.zig", .func = "chatPairKey", .unreachable_because = "the stress tool, not the server" },
     .{ .file = "timefmt.zig", .func = "at", .unreachable_because = "message dates the server stamped" },
     .{ .file = "uid_cookie.zig", .func = "isMarked", .unreachable_because = "a marker file the server wrote (182: saturating)" },
-    .{ .file = "uid_cookie.zig", .func = "windowOpen", .unreachable_because = "a window file the server wrote" },
+    .{ .file = "uid_cookie.zig", .func = "isWindowOpen", .unreachable_because = "a window file the server wrote" },
     .{ .file = "users.zig", .func = "lessThanByNumericID", .unreachable_because = "user ids the server allocated" },
     .{ .file = "users.zig", .func = "lessThanNumericID", .unreachable_because = "user ids the server allocated" },
-    .{ .file = "users.zig", .func = "userUploadBytes", .unreachable_because = "an allowance file the server wrote" },
+    .{ .file = "users.zig", .func = "readUploadBytes", .unreachable_because = "an allowance file the server wrote" },
 };
 
 /// The requests, `{N}` an edge number, `{C}` the member's cookies.
@@ -175,8 +175,8 @@ test "request edges: every number a request carries, at its type's edges, as a m
     // A member, a player, a topic with a message, and an upload in it.
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const steve = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const steve = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     const id = try player.allocate(io, a, .literal("Steve"));
     const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try harness.signedUid(a, id) });
     const bearer = try users.setUserAPIKey(io, a, "1");

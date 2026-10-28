@@ -29,18 +29,18 @@ fn userChatStateDir(alloc: Alloc, uid: []const u8) ![]u8 {
 
 // ── last conv / topic (the /chat/default resume pointer) ────────────────────
 
-/// lastUserConv returns the conv-key this user was most recently looking at, or
+/// readLastUserConv returns the conv-key this user was most recently looking at, or
 /// "" if they've never had one.
-pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
+pub fn readLastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-conv" });
     const b = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return "";
     return std.mem.trim(u8, b, " \t\r\n");
 }
 
-/// lastViewedTopic returns the topic id this user last viewed for `conv_key`,
+/// readLastViewedTopic returns the topic id this user last viewed for `conv_key`,
 /// or "" if never.
-pub fn lastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
+pub fn readLastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key });
     const b = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return "";
@@ -71,10 +71,10 @@ fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) !vo
 
 // ── pinned topics (the sidebar's Pinned group) ──────────────────────────────
 
-/// pinnedTopics returns the set of topic ids this user has pinned in the
+/// readPinnedTopics returns the set of topic ids this user has pinned in the
 /// conversation `conv_key`, sorted (the file's content order). A missing file →
 /// empty. Stale ids are harmless — callers intersect with the live topic list.
-pub fn pinnedTopics(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
+pub fn readPinnedTopics(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
     return parsePinned(alloc, try readPinnedFile(io, alloc, uid, conv_key));
 }
 
@@ -158,12 +158,12 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// conversation's first topic (chat_paths.firstOf); else today's date, so a
 /// brand-new conversation makes today's topic on its first post. Shared by
 /// /chat/default and the docs post flow. Where the viewer does not count,
-/// chat_paths.firstTopic.
+/// chat_paths.findFirstTopic.
 pub fn resumeTopic(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8, now: Now) ![]const u8 {
     const dir = try chat_paths.dmConvDir(alloc, conv);
     const topics = try chat_paths.listTopics(io, alloc, dir);
 
-    const last = try lastViewedTopic(io, alloc, uid, conv);
+    const last = try readLastViewedTopic(io, alloc, uid, conv);
     if (last.len != 0) {
         for (topics) |s| if (std.mem.eql(u8, s, last)) return last;
     }

@@ -75,7 +75,7 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     const id = try player.allocate(io, a, .literal("Nikhil"));
-    const value = try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600);
+    const value = try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.readNowSecs(io), http.legacy_issued_before_unix) - 3600);
     const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
     const moved = try harness.UidSite.ask(a, io, "/play", legacy);
     try testing.expectEqualStrings("303 See Other", harness.status(moved));
@@ -89,18 +89,18 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     // A sibling's plant under the old name, beside the site's own new one,
     // is not read at all.
     const other = try player.allocate(io, a, .literal("Debbie"));
-    const planted = try std.fmt.allocPrint(a, "gopher_uid={s}; __Host-gopher_uid={s}", .{ try uid_cookie.sign(a, harness.UidSite.secret, other, harness.nowSecs(io)), value });
+    const planted = try std.fmt.allocPrint(a, "gopher_uid={s}; __Host-gopher_uid={s}", .{ try uid_cookie.sign(a, harness.UidSite.secret, other, harness.readNowSecs(io)), value });
     try testing.expect(harness.playingAs(try harness.UidSite.ask(a, io, "/play", planted), "Nikhil"));
 }
 
-/// Who `users.currentUser` says a raw request is for.
-fn currentId(a: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
+/// Who `users.loadCurrentUser` says a raw request is for.
+fn askCurrentId(a: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
     var reader: std.Io.Reader = .fixed(raw);
     var out_buf: [64]u8 = undefined;
     var out: std.Io.Writer = .fixed(&out_buf);
     var server = std.http.Server.init(&reader, &out);
     var req = try server.receiveHead();
-    return (try users.currentUser(io, a, &req)).id;
+    return (try users.loadCurrentUser(io, a, &req)).id;
 }
 
 test "route: a legacy session is read on a POST (never redirected), not read past the end date, and not read nor moved when signed after the cutoff (metal-vmm QUEUE 176.1, 176.8)" {
@@ -113,21 +113,21 @@ test "route: a legacy session is read on a POST (never redirected), not read pas
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
-    const before = @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600;
+    const before = @min(harness.readNowSecs(io), http.legacy_issued_before_unix) - 3600;
     const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", before)});
     const post = try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{legacy});
     // A POST: read under the old name, as it was meant.
-    try testing.expectEqualStrings("2", try currentId(a, io, post));
+    try testing.expectEqualStrings("2", try askCurrentId(a, io, post));
     try testing.expect(!std.mem.startsWith(u8, harness.status(try harness.postForm(a, io, "/play", legacy, "")), "303"));
     // Signed after the cutoff: a plant, read as no one, never moved.
     const late = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "2", http.legacy_issued_before_unix + 60)});
-    try testing.expectEqualStrings("", try currentId(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{late})));
+    try testing.expectEqualStrings("", try askCurrentId(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{late})));
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/play", late), "set-cookie: __Host-gopher_auth=") == null);
     // Past the end date: the legacy name is not read at all.
     const saved_clock = http.names_clock_for_test;
     defer http.names_clock_for_test = saved_clock;
     http.names_clock_for_test = http.legacy_names_until_unix;
-    try testing.expectEqualStrings("", try currentId(a, io, post));
+    try testing.expectEqualStrings("", try askCurrentId(a, io, post));
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/play", legacy), "set-cookie: __Host-gopher_auth=") == null);
 }
 
@@ -145,7 +145,7 @@ test "route: a legacy uid signed after the cutoff names no one and is not moved;
     const got = try harness.UidSite.ask(a, io, "/play", late);
     try testing.expect(!harness.playingAs(got, "Nikhil"));
     try testing.expect(harness.setUid(got) == null);
-    const ok = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.nowSecs(io), http.legacy_issued_before_unix) - 3600)});
+    const ok = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, harness.UidSite.secret, id, @min(harness.readNowSecs(io), http.legacy_issued_before_unix) - 3600)});
     const saved_clock = http.names_clock_for_test;
     defer http.names_clock_for_test = saved_clock;
     http.names_clock_for_test = http.legacy_names_until_unix;

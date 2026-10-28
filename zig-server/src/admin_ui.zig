@@ -30,7 +30,7 @@ pub const admin_uid = "1";
 /// identity, a 404 for anyone else (an admin surface should not confirm it
 /// exists).
 pub fn requireAdmin(req: *Request, io: Io, alloc: Alloc) !bool {
-    const uid = try users.currentUserID(io, alloc, req);
+    const uid = try users.loadCurrentUserID(io, alloc, req);
     if (uid.len == 0) {
         try http.redirect(req, .literal("/login/full"));
         return false;
@@ -86,7 +86,7 @@ pub fn humanBytes(alloc: Alloc, n: i64) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{d:.1} {c}B", .{ val, "KMGTPE"[exp] });
 }
 
-pub fn nowUnix(io: Io) i64 {
+pub fn readNowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 

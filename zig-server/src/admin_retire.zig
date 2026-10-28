@@ -33,25 +33,25 @@ const Request = std.http.Server.Request;
 const max_days = 3650;
 
 pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
-    if (req.head.method != .POST) return form(req, alloc, defaults(), "", .ok);
+    if (req.head.method != .POST) return serveForm(req, alloc, defaults(), "", .ok);
 
     // The re-entry, throttled like sign-in (QUEUE.md item 100).
-    if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, defaults(), b.text(), .too_many_requests);
+    if (throttle.check(io, client, ui.admin_uid)) |b| return serveForm(req, alloc, defaults(), b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.retire_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     const in = try readForm(alloc, sent);
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
-        return form(req, alloc, in, "That is not the password.", .forbidden);
+        return serveForm(req, alloc, in, "That is not the password.", .forbidden);
     }
     throttle.clearAddress(client);
 
-    if (in.days_err) return form(req, alloc, in, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
+    if (in.days_err) return serveForm(req, alloc, in, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
 
-    if (try retire.keepProblem(io, alloc, in.keep)) |why| return form(req, alloc, in, why, .bad_request);
+    if (try retire.keepProblem(io, alloc, in.keep)) |why| return serveForm(req, alloc, in, why, .bad_request);
 
     const mode: retire.Mode = if (std.mem.eql(u8, (try chat.formField(alloc, sent, "confirm")) orelse "", "1")) .apply else .dry_run;
-    var pl = try retire.plan(io, alloc, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) }, mode);
+    var pl = try retire.plan(io, alloc, .{ .days = in.days, .keep = in.keep, .now = ui.readNowUnix(io) }, mode);
     return result(req, alloc, in, &pl);
 }
 
@@ -101,7 +101,7 @@ fn parseKeep(alloc: Alloc, text: []const u8) ![]const []const u8 {
     return out.toOwnedSlice(alloc);
 }
 
-fn form(req: *Request, alloc: Alloc, in: Input, err: []const u8, status: std.http.Status) !void {
+fn serveForm(req: *Request, alloc: Alloc, in: Input, err: []const u8, status: std.http.Status) !void {
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "Retire old topics and users", "");
     try b.appendSlice(alloc,

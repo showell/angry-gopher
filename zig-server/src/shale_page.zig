@@ -37,7 +37,7 @@ pub fn handle(req: *Request, sub: []const u8) !void {
     return http.notFound(req);
 }
 
-fn served(name: []const u8) bool {
+fn isServed(name: []const u8) bool {
     for (files) |f| if (std.mem.eql(u8, f.name, name)) return true;
     return false;
 }
@@ -69,7 +69,7 @@ test "every file a /shale page loads or links is one /shale serves" {
     // The landing page's button, its picture, and the tutorial's module.
     try std.testing.expect(names.items.len >= 3);
     for (names.items) |n| {
-        if (!served(n)) {
+        if (!isServed(n)) {
             std.debug.print("/shale's pages load {s}, which /shale does not serve\n", .{n});
             return error.TestUnexpectedResult;
         }

@@ -58,13 +58,13 @@ const Alloc = std.mem.Allocator;
 /// never re-check. The resolved id is the storage key for every write below.
 /// `client`: the caller's address, as game.handle takes it.
 pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
-    const user_id = player.Id.of((try player.current(io, alloc, req)).id) orelse {
+    const user_id = player.Id.of((try player.loadCurrent(io, alloc, req)).id) orelse {
         try http.redirect(req, .literal("/play?next=/puzzles"));
         return;
     };
 
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try page(req, io, alloc, user_id);
+        try servePage(req, io, alloc, user_id);
     } else if (std.mem.eql(u8, sub, "/puzzle.js")) {
         try http.serveEmbedded(req, puzzle_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/engine.js")) {
@@ -74,16 +74,16 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const 
     } else if (std.mem.eql(u8, sub, "/solver.wasm")) {
         try http.serveEmbedded(req, solver_wasm, http.wasm_ct);
     } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
-        try sessionRoute(req, io, alloc, user_id, client, sub["/sessions/".len..]);
+        try routeSession(req, io, alloc, user_id, client, sub["/sessions/".len..]);
     } else {
         try http.notFound(req);
     }
 }
 
-/// sessionRoute handles the one session route:
+/// routeSession handles the one session route:
 ///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
 /// `rest` is the path after "/sessions/".
-fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, rest: []const u8) !void {
+fn routeSession(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -114,9 +114,9 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: pl
 fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id, client: ?[]const u8, session_id: i64, puzzle_idx: i32) !void {
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
     // The meta of the session this move makes, if it is the one offered.
-    const new_meta: ?[]const u8 = if (try storage.puzzleSessionExists(io, alloc, user_id, session_id)) null else blk: {
-        if (session_id != try storage.nextPuzzleSessionID(io, alloc, user_id)) return http.notFound(req);
-        break :blk try metaDsl(io, alloc);
+    const new_meta: ?[]const u8 = if (try storage.hasPuzzleSession(io, alloc, user_id, session_id)) null else blk: {
+        if (session_id != try storage.readNextPuzzleSessionID(io, alloc, user_id)) return http.notFound(req);
+        break :blk try formatMetaDsl(io, alloc);
     };
     switch (try storage.appendPuzzleMove(io, alloc, .{ .id = user_id, .client = client }, session_id, puzzle_idx, body, new_meta)) {
         .done => try req.respond("", .{ .status = .no_content }),
@@ -129,21 +129,21 @@ fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: pl
 /// snapshot of the catalog it was bound to (so replay-by-index survives later
 /// catalog drift). The catalog is compiled in, so it is the one the page
 /// offered.
-fn metaDsl(io: Io, alloc: Alloc) ![]const u8 {
+fn formatMetaDsl(io: Io, alloc: Alloc) ![]const u8 {
     const indented = try indentLines(alloc, try loadCatalog(alloc));
     const created_at: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     return std.fmt.allocPrint(alloc, "created_at: {d}\n\ncatalog:\n{s}\n", .{ created_at, indented });
 }
 
-/// page renders the HTML host with the session id its first move will make and
+/// servePage renders the HTML host with the session id its first move will make and
 /// the full catalog baked into the Elm flag. Zero post-load round trips before
 /// play, and **NOTHING WRITTEN**: a GET made a session (a folder and its meta)
 /// on every load, which a bot reloading the page could turn into a full disk.
-fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
+fn servePage(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: player.Id) !void {
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);
 
-    const session_id = try storage.nextPuzzleSessionID(io, alloc, user_id);
+    const session_id = try storage.readNextPuzzleSessionID(io, alloc, user_id);
 
     // Flag is one DSL string — `session_id:` scalar then a `catalog:` block.
     // Elm's Lib.PuzzleFlagDsl parses it whole.
@@ -213,7 +213,7 @@ const page_pre =
     \\
 ;
 
-/// After the scripts (`page` names them by their bytes).
+/// After the scripts (`servePage` names them by their bytes).
 const page_pre_tail =
     \\
     \\<script>
