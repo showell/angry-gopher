@@ -5502,3 +5502,114 @@ test "a topic's download and its uploads (metal-vmm QUEUE 291): the bundle by GE
     defer meter.restore();
     try freezeRun("downloadsRun", try downloadsRun(a, io), "41aaffad2eee14f66e78350ef9988971fa9124f6123c60c9803e2c6ade74022b");
 }
+
+/// Each stored name's fresh 32-hex token as `<token>`, so a run whose names
+/// are random hashes the same every time.
+fn untokened(a: Alloc, bytes: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        if (i + 33 <= bytes.len and bytes[i + 32] == '.' and for (bytes[i .. i + 32]) |c| {
+            if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) break false;
+        } else true) {
+            try out.appendSlice(a, "<token>");
+            i += 32;
+        } else {
+            try out.append(a, bytes[i]);
+            i += 1;
+        }
+    }
+    return out.items;
+}
+
+/// **AN UPLOAD'S POST, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 292): an
+/// image and a video stored, each named, typed and answered; a type the chat
+/// takes not, an image past its cap, a member past their allowance, no
+/// content type, no boundary, no file part, a form too big, the wrong method,
+/// one not in the DM, a client's name that is not UTF-8, and an uploads
+/// folder that will not take the file (its bytes given back): each answer,
+/// the files left, every allowance after.
+fn uploadsRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    const sessions = try std.fs.path.join(a, &.{ store.chat_root, "1_2", "sessions" });
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ sessions, "Plans.md" }), "## Steve at 2026-01-01T00:00:00Z\n\nhi\n", .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ sessions, "Full.md" }), "## Steve at 2026-01-01T00:00:00Z\n\nhi\n", .{});
+    // Full's uploads folder is a file: it takes no upload.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ sessions, "Full.uploads" }), "", .{});
+    // Debbie is a byte short of her allowance.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ users.users_root, "2", "upload-bytes" }), try std.fmt.allocPrint(a, "{d}", .{users.max_upload_lifetime_bytes - 1}), .{});
+    const png = "\x89PNG\r\n\x1a\nimage bytes";
+    const mp4 = "\x00\x00\x00\x18ftypisom video bytes";
+    const big_png = try a.alloc(u8, (10 << 20) + 1);
+    @memcpy(big_png[0..8], "\x89PNG\r\n\x1a\n");
+    @memset(big_png[8..], 'x');
+    const Up = struct { who: []const u8, method: []const u8 = "POST", target: []const u8 = "/chat/c/1_2/Plans/upload", ct: ?[]const u8 = "multipart/form-data; boundary=XX", body: []const u8 };
+    const form = struct {
+        fn of(al: Alloc, filename: []const u8, data: []const u8) ![]const u8 {
+            return std.fmt.allocPrint(al, "--XX\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{s}\"\r\nContent-Type: application/octet-stream\r\n\r\n{s}\r\n--XX--\r\n", .{ filename, data });
+        }
+    }.of;
+    const asks = [_]Up{
+        .{ .who = steve, .body = try form(a, "cat.png", png) },
+        .{ .who = steve, .body = try form(a, "clip \"one\".mp4", mp4) },
+        .{ .who = steve, .body = try form(a, "caf\xe9.png", png) },
+        .{ .who = steve, .body = try form(a, "notes.txt", "just text") },
+        .{ .who = steve, .body = try form(a, "huge.png", big_png) },
+        .{ .who = debbie, .body = try form(a, "two.png", png) },
+        .{ .who = steve, .ct = null, .body = try form(a, "cat.png", png) },
+        .{ .who = steve, .ct = "multipart/form-data", .body = try form(a, "cat.png", png) },
+        .{ .who = steve, .ct = "text/plain", .body = try form(a, "cat.png", png) },
+        .{ .who = steve, .body = "--XX\r\nContent-Disposition: form-data; name=\"other\"\r\n\r\nx\r\n--XX--\r\n" },
+        .{ .who = steve, .body = "" },
+        .{ .who = steve, .method = "GET", .body = "" },
+        .{ .who = ann, .body = try form(a, "cat.png", png) },
+        .{ .who = steve, .target = "/chat/c/1_2/Full/upload", .body = try form(a, "cat.png", png) },
+        .{ .who = steve, .target = "/chat/c/1_2/Gone/upload", .body = try form(a, "cat.png", png) },
+    };
+    var hub = webbox.bus.Hub.init(io, a);
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        var raw: std.ArrayList(u8) = .empty;
+        try raw.print(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n", .{ q.method, q.target, q.who });
+        if (q.ct) |ct| try raw.print(a, "Content-Type: {s}\r\n", .{ct});
+        try raw.print(a, "Content-Length: {d}\r\n\r\n{s}", .{ q.body.len, q.body });
+        const r = try serveOn(a, io, &hub, raw.items);
+        try answers.append(a, try untokened(a, try std.fmt.allocPrint(a, "{s} {s} {s}: {?t}\n{s}", .{ q.method, q.target, q.body[0..@min(q.body.len, 80)], r.err, r.out })));
+    }
+    var files: std.ArrayList(u8) = .empty;
+    const updir = try std.fs.path.join(a, &.{ sessions, "Plans.uploads" });
+    const entries = try harness.UidSite.disk.list(io, a, updir);
+    var names: std.ArrayList([]const u8) = .empty;
+    for (entries) |e| {
+        const bytes = try harness.UidSite.disk.readOrEmpty(io, a, try std.fs.path.join(a, &.{ updir, e.name }), .unlimited);
+        try names.append(a, try std.fmt.allocPrint(a, "{s}: {s}\n", .{ try untokened(a, e.name), bytes }));
+    }
+    std.mem.sort([]const u8, names.items, {}, struct {
+        fn lt(_: void, x: []const u8, y: []const u8) bool {
+            return std.mem.lessThan(u8, x, y);
+        }
+    }.lt);
+    for (names.items) |n| try files.appendSlice(a, n);
+    for ([_][]const u8{ "1", "2", "3" }) |uid| try files.print(a, "allowance {s}: {d}\n", .{ uid, try users.userUploadBytes(io, a, uid) });
+    return .{ .answers = answers.items, .files = files.items };
+}
+
+test "an upload's POST (metal-vmm QUEUE 292): an image and a video stored, named and answered; an unsupported type, past the cap, past the allowance, every malformed form, the wrong method, a non-member, a name not UTF-8 and a folder that takes no file, the allowance given back, as the old Zig did them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("uploadsRun", try uploadsRun(a, io), "f05ab883040c8780e6d6128322d0cc815d4328864ce4d37bdd4ef03ed1a01f64");
+}
