@@ -6481,3 +6481,90 @@ test "the chat's static scripts (/chat/<name>.js): every script by name, signed 
     defer meter.restore();
     try freezeRun("scriptsRun", try scriptsRun(a, io), "476cee49281a47c83f930d3b53ef5885a4f5d9c0d5ad9cf7c8c06529d480893c");
 }
+
+/// **THE OPERATOR'S COUNTERS, AS /admin/host SAYS THEM** (the pure-Roc chat
+/// plan, item 7), each counted event met through the Roc chat from counts of
+/// none: two listings' malformed channels (a member file naming no uid, one
+/// not UTF-8), a feed's damaged entry, a fan-out surface that failed for one
+/// member in a DM and a channel, a recent row whose author's name will not
+/// read, a DM's new-topic announcement that would not store, and a
+/// transcript's refused block on its stream. Each answer's status line,
+/// then /admin/host's counter rows, as the operator reads them. The counts
+/// write no log line of their own (the failed aside's is the aside's).
+fn countersRun(a: Alloc, io: Io) !struct { answers: []const u8, rows: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    chat_paths.malformed_channels = 0;
+    chat_paths.dropped = .initFill(0);
+    chat_codec.refused_blocks = 0;
+    chat_fanout.fanout_failures = 0;
+    const channels = try std.fs.path.join(a, &.{ store.chat_root, "channels" });
+    try disk.write(io, a, try std.fs.path.join(a, &.{ channels, "Abad.channel" }), "1\nnot a uid\n", .{});
+    try disk.write(io, a, try std.fs.path.join(a, &.{ channels, "bad.channel" }), "1\n\xff\n", .{});
+    try disk.write(io, a, try std.fs.path.join(a, &.{ channels, "ops.channel" }), "1\n2\n3\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    const head = "Sent by Debbie at 2026-10-10T00:00:00Z, source MSG_Plans_{d} in 1_2:\n";
+    try disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "images.md" }), std.fmt.comptimePrint(head, .{1}) ++ "<img src=\"/a.png\">\n\n-------------\n\n" ++ std.fmt.comptimePrint(head, .{2}) ++ "<img src=\"/\xf0\x9f.png\">", .{});
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ store.chat_root, "users", "2", "images.md" }));
+    var hub = webbox.bus.Hub.init(io, a);
+    var answers: std.ArrayList(u8) = .empty;
+    const Step = struct { what: []const u8, raw: []const u8 };
+    const md = "<img src=\"/x.png\">\n\n```\ncode\n```";
+    const steps_a = [_]Step{
+        .{ .what = "the listings, two malformed channels", .raw = try getRaw(a, "/chat/recent", steve) },
+        .{ .what = "a feed's damaged entry", .raw = try getRaw(a, "/chat/images", steve) },
+        .{ .what = "a DM's images failed for member 2", .raw = try sendRaw(a, "/chat/c/1_2/Plans/send", steve, md, null, .sync) },
+        .{ .what = "a channel's images failed for member 2", .raw = try sendRaw(a, "/channel/ops/Standup/send", steve, md, null, .sync) },
+        .{ .what = "a send by Debbie", .raw = try sendRaw(a, "/chat/c/1_2/Plans/send", debbie, "fine", null, .sync) },
+    };
+    for (steps_a) |s| {
+        const r = try serveOn(a, io, &hub, s.raw);
+        try answers.print(a, "{s}: {?t} {s}\n", .{ s.what, r.err, harness.status(r.out) });
+    }
+    // Debbie's name will not read: her row is the one dropped.
+    const debbie_name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
+    try disk.write(io, a, debbie_name, "Deb\xc3", .{});
+    {
+        const r = try serveOn(a, io, &hub, try getRaw(a, "/chat/recent", steve));
+        try answers.print(a, "a recent row dropped: {?t} {s}\n", .{ r.err, harness.status(r.out) });
+    }
+    try disk.write(io, a, debbie_name, "Debbie", .{});
+    // general2 is a topic nothing can be appended to: a link into a folder
+    // that is not there, so the new topic's announcement will not store.
+    const dir = try chat_paths.dmConvDir(a, "1_2");
+    try std.Io.Dir.cwd().symLink(io, "nowhere/general2.md", try std.fs.path.join(a, &.{ dir, "sessions", "general2.md" }), .{});
+    {
+        const r = try serveOn(a, io, &hub, try postRaw(a, steve, "/chat/c/1_2/new", "topic=Ideas"));
+        try answers.print(a, "an announcement dropped: {?t} {s}\n", .{ r.err, harness.status(r.out) });
+    }
+    try disk.write(io, a, try std.fs.path.join(a, &.{ dir, "sessions", "Refused.md" }), "from: Nobody\n\nonly a refused block", .{});
+    {
+        const r = try serveOn(a, io, &hub, try getRaw(a, "/chat/c/1_2/Refused/stream", steve));
+        try answers.print(a, "a refused block: {?t} {s}\n", .{ r.err, harness.status(r.out) });
+    }
+    const page = try harness.UidSite.ask(a, io, "/admin/host", steve);
+    const first = std.mem.indexOf(u8, page, "<tr><td>chat fan-out failures since boot</td>") orelse return error.NoCounterRows;
+    const end = std.mem.indexOfPos(u8, page, first, "</table>") orelse return error.NoCounterRows;
+    return .{ .answers = answers.items, .rows = page[first..end] };
+}
+
+test "the operator's counters (the pure-Roc chat plan, item 7): a malformed channel, a feed's damaged entry, a fan-out failure, a dropped recent row and announcement, a refused block, each counted and the last said on /admin/host, as the old Zig said them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const got = try countersRun(a, io);
+    try freezeRun("countersRun", got, "99382535391d25ba64fde9113faa2ae79baac9861cfab56e065a31932eb9ce2e");
+}
