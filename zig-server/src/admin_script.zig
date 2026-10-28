@@ -100,7 +100,7 @@ var stepped: bool = false;
 
 /// **ONE SLICE BETWEEN REQUESTS**, for the host (webbox's `Site.between`):
 /// whether the run goes on.
-pub fn between(io: Io, now: i64) bool {
+pub fn runSlice(io: Io, now: i64) bool {
     stepped = true;
     return script_route.sliceBackground(io, now);
 }

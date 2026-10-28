@@ -56,7 +56,7 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const id = std.mem.trim(u8, (try formField(alloc, body, "user")) orelse "", " \t\r\n");
-        if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);
+        if (!try isKnownPlayer(io, alloc, id)) return noSuchPlayer(req, alloc, id);
         const checked = player.Id.of(id) orelse return noSuchPlayer(req, alloc, id);
         storage.deleteUserData(io, alloc, checked) catch |e| {
             // A volume refusing writes is site.route's 503 (metal-vmm QUEUE 188.2).
@@ -66,7 +66,7 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
         return http.redirect(req, try http.Target.format(alloc, self_url ++ "?deleted={s}", .{id}));
     }
     const id = std.mem.trim(u8, http.queryValue(try http.target(req, alloc), "user") orelse "", " \t\r\n");
-    if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);
+    if (!try isKnownPlayer(io, alloc, id)) return noSuchPlayer(req, alloc, id);
     return renderDeleteConfirm(req, io, alloc, id);
 }
 
@@ -77,9 +77,9 @@ fn noSuchPlayer(req: *Request, alloc: Alloc, id: []const u8) !void {
     return req.respond(text, .{ .status = .not_found });
 }
 
-/// exists is the guard every id from a form or a query passes through: a player
+/// isKnownPlayer is the guard every id from a form or a query passes through: a player
 /// we know, never a path someone typed.
-fn exists(io: Io, alloc: Alloc, id: []const u8) !bool {
+fn isKnownPlayer(io: Io, alloc: Alloc, id: []const u8) !bool {
     if (id.len == 0) return false;
     return (try player.readName(io, alloc, id)).len != 0;
 }
@@ -205,7 +205,7 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
 
     st.game_sessions = countSubdirs(io, alloc, games_dir, &st.unreadable);
     st.puzzle_sessions = countSubdirs(io, alloc, puzzles_dir, &st.unreadable);
-    st.disk_bytes = dirBytes(io, alloc, uroot, &st.unreadable);
+    st.disk_bytes = countDirBytes(io, alloc, uroot, &st.unreadable);
 
     // Total actions = nonempty lines across every game session's actions.dsl.
     // absent-ok: an admin count; a folder that will not list is counted as such.
@@ -237,8 +237,8 @@ fn countSubdirs(io: Io, alloc: Alloc, dir_path: []const u8, unreadable: *u32) i6
     return n;
 }
 
-/// dirBytes sums file sizes under `path`, recursively (0 if missing).
-fn dirBytes(io: Io, alloc: Alloc, path: []const u8, unreadable: *u32) i64 {
+/// countDirBytes sums file sizes under `path`, recursively (0 if missing).
+fn countDirBytes(io: Io, alloc: Alloc, path: []const u8, unreadable: *u32) i64 {
     var total: i64 = 0;
     // absent-ok: an admin size: a folder that will not list is counted as such.
     for (store.list(io, alloc, path) catch {
@@ -250,7 +250,7 @@ fn dirBytes(io: Io, alloc: Alloc, path: []const u8, unreadable: *u32) i64 {
             continue;
         };
         switch (entry.kind) {
-            .directory => total += dirBytes(io, alloc, child, unreadable),
+            .directory => total += countDirBytes(io, alloc, child, unreadable),
             .file => {
                 // A size by its stat, never by reading the file whole (memory
                 // that ran out on a big one counted it as nothing).
@@ -285,7 +285,7 @@ fn countTextLines(io: Io, alloc: Alloc, path: []const u8, unreadable: *u32) i64 
 // ── forms ────────────────────────────────────────────────────────────────────
 
 /// formField reads one `a=b&c=d` field. Ids are the only values this page
-/// accepts, and `exists` re-checks every one against the player store, so the
+/// accepts, and `isKnownPlayer` re-checks every one against the player store, so the
 /// parse stays deliberately small — this module does not import chat.
 fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
     var it = std.mem.splitScalar(u8, body, '&');

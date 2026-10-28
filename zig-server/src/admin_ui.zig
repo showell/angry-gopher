@@ -86,7 +86,7 @@ pub fn humanBytes(alloc: Alloc, n: i64) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{d:.1} {c}B", .{ val, "KMGTPE"[exp] });
 }
 
-pub fn nowUnix(io: Io) i64 {
+pub fn readNowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 

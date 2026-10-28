@@ -30,25 +30,25 @@ const Request = std.http.Server.Request;
 pub const max_days = 90;
 
 pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
-    if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    if (req.head.method != .POST) return serveForm(req, alloc, "", .ok);
     // Throttled like sign-in (QUEUE.md item 100): refused before the hash,
     // against the address and uid 1's account.
-    if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
+    if (throttle.check(io, client, ui.admin_uid)) |b| return serveForm(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
-        return form(req, alloc, "That is not the password.", .forbidden);
+        return serveForm(req, alloc, "That is not the password.", .forbidden);
     }
     throttle.clearAddress(client);
     const days_text = std.mem.trim(u8, (try chat.formField(alloc, sent, "days")) orelse "", " ");
     const days = std.fmt.parseInt(i64, days_text, 10) catch -1;
     if (days < 0 or days > max_days)
-        return form(req, alloc, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
+        return serveForm(req, alloc, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
     users.rotateSecret(io, alloc, days) catch |e| {
         // A volume refusing writes is site.route's 503 (metal-vmm QUEUE 188.2).
         if (e == error.ReadOnlyFileSystem) return e;
-        return form(req, alloc, try std.fmt.allocPrint(alloc, "The secret was not changed: {s}.", .{@errorName(e)}), .internal_server_error);
+        return serveForm(req, alloc, try std.fmt.allocPrint(alloc, "The secret was not changed: {s}.", .{@errorName(e)}), .internal_server_error);
     };
 
     var b: std.ArrayList(u8) = .empty;
@@ -62,7 +62,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-fn form(req: *Request, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
+fn serveForm(req: *Request, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "Change the session secret", "");
     try b.appendSlice(alloc,

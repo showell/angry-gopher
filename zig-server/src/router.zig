@@ -158,7 +158,7 @@ pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
 /// **BETWEEN REQUESTS**: a slice of the operator's background script
 /// (admin_script.zig, metal-vmm QUEUE 222), while it has more.
 fn runBetweenRequests(io: Io, unix_s: i64) bool {
-    return @import("admin_script.zig").between(io, unix_s);
+    return @import("admin_script.zig").runSlice(io, unix_s);
 }
 
 fn familyOf(path: []const u8) Family {

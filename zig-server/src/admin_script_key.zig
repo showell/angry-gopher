@@ -25,13 +25,13 @@ const throttle = @import("login_throttle.zig");
 const Request = std.http.Server.Request;
 
 pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
-    if (req.head.method != .POST) return form(req, io, alloc, "", .ok);
-    if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, io, alloc, b.text(), .too_many_requests);
+    if (req.head.method != .POST) return serveForm(req, io, alloc, "", .ok);
+    if (throttle.check(io, client, ui.admin_uid)) |b| return serveForm(req, io, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
-        return form(req, io, alloc, "That is not the password.", .forbidden);
+        return serveForm(req, io, alloc, "That is not the password.", .forbidden);
     }
     throttle.clearAddress(client);
     const key = std.mem.trim(u8, (try chat.formField(alloc, sent, "public_key")) orelse "", " \t\r\n");
@@ -40,14 +40,14 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const key_hex = if (std.mem.startsWith(u8, key, prefix)) key[prefix.len..] else key;
     const text = try std.fmt.allocPrint(alloc, "public_key = {s}\ntarget = {s}\n", .{ key_hex, target });
     _ = script_route.parseConfig(text) catch
-        return form(req, io, alloc, "The key is 64 hex digits (shale-sign pubkey prints it), and the target a host name (a-z 0-9 . -).", .bad_request);
+        return serveForm(req, io, alloc, "The key is 64 hex digits (shale-sign pubkey prints it), and the target a host name (a-z 0-9 . -).", .bad_request);
     const paths = try script_route.Paths.under(alloc, webbox.store.auth_base orelse users.auth_root);
     // The sequence rises to the clock's seconds with the key: nothing
     // signed before now runs after, even if the old sequence was lost.
     const floor: u64 = @intCast(@max(0, @divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s)));
     script_route.installKey(io, alloc, paths, text, floor) catch |e| {
         if (e == error.ReadOnlyFileSystem) return e;
-        return form(req, io, alloc, try std.fmt.allocPrint(alloc, "The key was not set: {s}.", .{@errorName(e)}), .internal_server_error);
+        return serveForm(req, io, alloc, try std.fmt.allocPrint(alloc, "The key was not set: {s}.", .{@errorName(e)}), .internal_server_error);
     };
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "The script key is set", "");
@@ -56,7 +56,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-fn form(req: *Request, io: Io, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
+fn serveForm(req: *Request, io: Io, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "The script key", "");
     const paths = try script_route.Paths.under(alloc, webbox.store.auth_base orelse users.auth_root);
