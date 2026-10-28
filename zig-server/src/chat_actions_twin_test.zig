@@ -5297,6 +5297,157 @@ test "who may use the chat (the pure-Roc plan's item 5): a member by session or 
     try freezeRun("identityRun", try identityRun(a, io), "ba12f27fe0035a39e37b744f93a3b0ba8b3b8519756bddc17e4ffb0ff7ccfc24");
 }
 
+// ── what a search walks (the pure-Roc plan's item 8) ─────────────────────────
+
+/// One who asks in the scope's tree: a name for the answer, the uid the
+/// host verifies (none when signed out or refused), and the header lines.
+const ScopeAsker = struct { name: []const u8, uid: []const u8, head: []const u8 };
+
+/// **THE TREE A SEARCH'S SCOPE IS JUDGED OVER**: members 1, 2, 7 and 9, the
+/// agent (3, by its key), a guest (5); DMs between members, with the agent,
+/// with the guest, with oneself (`1_1`) and with an account retired (`1_6`,
+/// its transcript left, its account gone); channels a member is in and not
+/// (`ops`, `team`, `all`, `Zed`, which sorts first), one malformed (`bad`),
+/// one whose name is no channel's (`9lives`), and one with a transcript and
+/// no member file (`ghost`). Every conversation's one message holds
+/// `lantern` and a word of its own beginning `lx`, so the words say which
+/// were walked and the messages in what order.
+fn scopeTree(a: Alloc, io: Io) ![]const ScopeAsker {
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const una = try harness.memberSession(a, io, "7", "Una");
+    const nina = try harness.memberSession(a, io, "9", "Nina");
+    try users.setUserName(io, a, "3", "Claude");
+    try users.setUserName(io, a, "5", "Gus");
+    const key3 = "3-ffeeddccbbaa99887766554433221100";
+    try disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "3", "api-key" }), key3, .{ .private = true });
+    const convs = [_][2][]const u8{
+        .{ "1_2", "lxdmonetwo" },
+        .{ "1_3", "lxdmagent" },
+        .{ "2_3", "lxdmtwothree" },
+        .{ "1_5", "lxdmguest" },
+        .{ "1_1", "lxdmself" },
+        .{ "1_6", "lxdmretired" },
+        .{ "1_7", "lxdmuna" },
+        .{ "2_9", "lxdmnina" },
+        .{ "channels/ops", "lxops" },
+        .{ "channels/team", "lxteam" },
+        .{ "channels/all", "lxall" },
+        .{ "channels/Zed", "lxzed" },
+        .{ "channels/bad", "lxbad" },
+        .{ "channels/9lives", "lxninelives" },
+        .{ "channels/ghost", "lxghost" },
+    };
+    for (convs) |c| try harness.writeTranscript(a, io, c[0], "Lamps", &.{try std.fmt.allocPrint(a, "lantern {s}", .{c[1]})});
+    const rosters = [_][2][]const u8{
+        .{ "ops", "1\n3\n" },
+        .{ "team", "2\n7\n" },
+        .{ "all", "1\n2\n3\n5\n7\n9\n" },
+        .{ "Zed", "# us\n1\n" },
+        .{ "bad", "1\nnot a uid\n" },
+        .{ "9lives", "1\n" },
+    };
+    for (rosters) |r| try disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", try std.fmt.allocPrint(a, "{s}.channel", .{r[0]}) }), r[1], .{});
+    const head = struct {
+        fn cookie(x: Alloc, c: []const u8) ![]const u8 {
+            return std.fmt.allocPrint(x, "Cookie: {s}\r\n", .{c});
+        }
+    };
+    return a.dupe(ScopeAsker, &.{
+        .{ .name = "Steve", .uid = "1", .head = try head.cookie(a, steve) },
+        .{ .name = "Debbie", .uid = "2", .head = try head.cookie(a, debbie) },
+        .{ .name = "Una", .uid = "7", .head = try head.cookie(a, una) },
+        .{ .name = "Nina", .uid = "9", .head = try head.cookie(a, nina) },
+        .{ .name = "the agent by key", .uid = "3", .head = "Authorization: Bearer " ++ key3 ++ "\r\n" },
+        .{ .name = "the guest", .uid = "", .head = try head.cookie(a, try harness.signedUid(a, "5")) },
+        .{ .name = "signed out", .uid = "", .head = "" },
+    });
+}
+
+/// The scope tree's phases: whole; a member's name that will not read (a
+/// folder); a member's password that will not stat (a link to itself); a
+/// channel's member file that will not read (a folder); mended.
+const ScopePhase = enum { whole, name_unreadable, password_unreadable, roster_unreadable, mended };
+
+fn scopePhase(a: Alloc, io: Io, phase: ScopePhase) !void {
+    const name9 = try std.fs.path.join(a, &.{ users.auth_root, "9", "name" });
+    const pw7 = try std.fs.path.join(a, &.{ users.auth_root, "7", "password" });
+    const ops = try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" });
+    const cwd = std.Io.Dir.cwd();
+    switch (phase) {
+        .whole => {},
+        .name_unreadable => {
+            try cwd.deleteFile(io, name9);
+            try cwd.createDirPath(io, name9);
+        },
+        .password_unreadable => {
+            try cwd.deleteTree(io, name9);
+            try disk.write(io, a, name9, "Nina", .{});
+            try cwd.deleteFile(io, pw7);
+            try cwd.symLink(io, "password", pw7, .{});
+        },
+        .roster_unreadable => {
+            try cwd.deleteFile(io, pw7);
+            try disk.write(io, a, pw7, "x", .{ .private = true });
+            try cwd.deleteFile(io, ops);
+            try cwd.createDirPath(io, ops);
+        },
+        .mended => {
+            try cwd.deleteTree(io, ops);
+            try disk.write(io, a, ops, "1\n3\n", .{});
+        },
+    }
+}
+
+/// **WHAT A SEARCH WALKS, FROZEN ON THE OLD ZIG** (the pure-Roc plan's item
+/// 8, chat_paths.visibleConvs): in the scope tree, each asker's words
+/// beginning `lx` (a word a conversation's own), an empty prefix, the
+/// messages holding `lantern` (every conversation's, in the walk's order)
+/// and a word too short to search, in each phase. Each answer whole.
+fn scopeRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const askers = try scopeTree(a, io);
+    const targets = [_][]const u8{
+        "/chat/search/words?prefix=lx",
+        "/chat/search/words?prefix=",
+        "/chat/search/messages?word=lantern",
+        "/chat/search/messages?word=l",
+    };
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    chat_router.test_now = Now.at(1_767_400_000);
+    defer chat_router.test_now = null;
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (std.enums.values(ScopePhase)) |phase| {
+        try scopePhase(a, io, phase);
+        for (askers) |who| for (targets) |t| {
+            chat_search.forgetAll();
+            const raw = try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\n{s}\r\n", .{ t, who.head });
+            const r = try serveOn(a, io, &hub, raw);
+            try answers.append(a, try std.fmt.allocPrint(a, "{t}: {s} {s}: {?t}\n{s}", .{ phase, who.name, t, r.err, r.out }));
+        };
+    }
+    return .{ .answers = answers.items };
+}
+
+test "what a search walks (the pure-Roc plan's item 8): each member's, the agent's, a guest's and the signed out's words and messages over DMs and channels they are in and not, a self DM, a retired partner's, a malformed, misnamed and memberless channel, and an account or roster that will not read, as the old Zig's visibleConvs walked them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("scopeRun", try scopeRun(a, io), "69f60119cd147df08c83a1dde44d80df9ecd9da551965116e749767c55965c91");
+}
+
 /// **THE DOCS' READ PAGES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 289):
 /// the landing (the doc touched last, or the editor with none), a doc's
 /// editor, its raw markdown, the list, the live preview, as the owner, as
