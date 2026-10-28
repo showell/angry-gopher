@@ -297,7 +297,9 @@ pub const Call = struct {
             .me = me,
             .now = now_,
             .render = render,
-            .store_message = storeMessage,
+            .append_message = appendMessage,
+            .index_message = indexMessage,
+            .write_cache = writeCache,
             .append_entry = appendEntry,
             .report_fanout_failure = fanoutFailed,
             .read_header = header,
@@ -1067,32 +1069,57 @@ pub const Call = struct {
         };
     }
 
-    /// **A MESSAGE STORED** (Host.store_message!): chat_store.storeMessage,
-    /// the block the Roc made appended to the topic's transcript, then the
-    /// count cache and the search index told. An append that failed fails
-    /// the request, nothing stored.
-    fn storeMessage(
+    /// **A MESSAGE'S BLOCK APPENDED** (Host.append_message!, metal-vmm QUEUE
+    /// 287): the transcript's size after, or the request's failure.
+    fn appendMessage(
         ctx: *anyopaque,
         conv_: roc_chat.Conv,
         sid: []const u8,
         block: []const u8,
-        index: u64,
-        m: roc_chat.Message,
-    ) roc_chat.Done {
+    ) roc_chat.AppendedAt {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const t = c.address(conv_, sid) catch |e| return c.no(e);
-        const msg = c.chatMessage(m) catch |e| return c.no(e);
+        const t = c.address(conv_, sid) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        store.storeMessage(
-            c.io,
-            c.alloc,
-            t,
-            block,
-            index,
-            msg,
-        ) catch |e| return c.no(e);
-        return .ok;
+        const size = store.appendBlock(c.io, c.alloc, t, block) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        return .{ .appended = size };
+    }
+
+    /// **THE SEARCH INDEX TOLD** (Host.index_message!): as it lands. It cannot
+    /// fail: an index that cannot take it drops itself, to be rebuilt.
+    fn indexMessage(
+        ctx: *anyopaque,
+        conv_: roc_chat.Conv,
+        sid: []const u8,
+        m: roc_chat.Message,
+    ) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        // absent-ok: the index is a cache of the transcripts: a message it cannot be told of is the next build's.
+        const t = c.address(conv_, sid) catch return;
+        // absent-ok: the same: memory for the message's copy, the index's to miss.
+        const msg = c.chatMessage(m) catch return;
+        search_index.noteAppend(c.io, t.dir, t.sid, msg);
+    }
+
+    /// **A CACHE WRITTEN** (Host.write_cache!): a write that failed is said
+    /// in the log and is the next read's miss, never the request's failure.
+    fn writeCache(ctx: *anyopaque, path: []const u8, bytes: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| {
+            std.log.warn("chat: a cache's write failed, a miss: {s}: {t}", .{ path, e });
+            return;
+        };
+        // absent-ok: a cache: one not written is recounted from the transcript (Count.believed).
+        webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e|
+            std.log.warn("chat: a cache's write failed, a miss: {s}: {t}", .{ path, e });
     }
 
     /// **THE FAN-OUT'S PRIMITIVES NEVER FAIL THE REQUEST** (metal-vmm QUEUE

@@ -119,47 +119,27 @@ pub fn openStream(
     return .{ .backlog = msgs, .sub = sub };
 }
 
-/// **A MESSAGE STORED, AS A PRIMITIVE** (the Roc's `Host.store_message!`;
-/// roc-webbox chat/main.roc `appended!` decides the rest of what
-/// `appendMessage` does): `stored`, message `index`'s block as
-/// chatStoredForm writes it (the Roc's Transcript.stored_form), appended to
-/// the topic's transcript, then the `.count` and the search index told of
-/// `msg`. The count cache and the search index are the store's
-/// infrastructure, so they go with the append. An append that failed is
-/// the error, nothing stored; past it nothing fails.
-pub fn storeMessage(
+/// **A MESSAGE'S BLOCK APPENDED, AS A PRIMITIVE** (the Roc's
+/// `Host.append_message!`, metal-vmm QUEUE 287): `block` appended to the
+/// topic's transcript, and its size after. What follows, the `.count` and
+/// the search index, is the Roc's to do (roc-webbox chat/main.roc
+/// `store_block!`). An append that failed is the error, nothing stored.
+pub fn appendBlock(
     io: Io,
     alloc: Alloc,
     topic: TopicAddress,
-    stored: []const u8,
-    index: usize,
-    msg: ChatMessage,
-) !void {
+    block: []const u8,
+) !u64 {
     const path = try transcriptPath(
         alloc,
         topic.dir,
         topic.sid,
     );
-    const new_size = try store.append(
+    return store.append(
         io,
         alloc,
         path,
-        stored,
-    );
-    // A crash between the append and this leaves a count whose size is not the
-    // transcript's — in either order — so messageCount refuses it and recounts.
-    // The size check is the protection, not the ordering.
-    writeCount(io, alloc, topic.dir, topic.sid, index + 1, new_size, .{
-        .offset = new_size - stored.len,
-        .uid = msg.uid,
-    });
-    // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
-    // takes the message, or drops itself whole if it cannot.
-    search_index.noteAppend(
-        io,
-        topic.dir,
-        topic.sid,
-        msg,
+        block,
     );
 }
 

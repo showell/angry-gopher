@@ -22,7 +22,6 @@ const chat_paths = @import("chat_paths.zig");
 const ChatMessage = chat_store.ChatMessage;
 const TopicAddress = chat_store.TopicAddress;
 const Author = chat_store.Author;
-const storeMessage = chat_store.storeMessage;
 const sep = chat_store.sep;
 const dashes = chat_store.dashes;
 const transcriptPath = chat_paths.transcriptPath;
@@ -155,9 +154,9 @@ pub fn messageCount(
     ));
 }
 
-/// A message stored as the Roc's send stores it (`Host.store_message!`,
-/// roc-webbox chat/main.roc `append_message!`): numbered by the count,
-/// stamped `now`, its block appended by `storeMessage`. For the tests that
+/// A message stored as the Roc's send stores it (roc-webbox chat/main.roc
+/// `append_message!` and `store_block!`): numbered by the count, stamped
+/// `now`, its block appended, its count written, the index told. For the tests that
 /// need messages on disk; a send's frame and fan-out are the Roc's.
 pub fn storeForTest(
     io: Io,
@@ -186,18 +185,24 @@ pub fn storeForTest(
         .markdown = markdown,
         .uid = from.id,
     };
-    try storeMessage(
-        io,
+    // As the Roc stores it (roc-webbox chat/main.roc `store_block!`, metal-vmm
+    // QUEUE 287): the append, then the count, then the index.
+    const block = try chatStoredForm(
         alloc,
-        topic,
-        try chatStoredForm(
-            alloc,
-            index,
-            msg,
-        ),
         index,
         msg,
     );
+    const size = try chat_store.appendBlock(
+        io,
+        alloc,
+        topic,
+        block,
+    );
+    chat_count.writeCount(io, alloc, topic.dir, topic.sid, index + 1, size, .{
+        .offset = size - block.len,
+        .uid = msg.uid,
+    });
+    @import("search_index.zig").noteAppend(io, topic.dir, topic.sid, msg);
     return msg;
 }
 

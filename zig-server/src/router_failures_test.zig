@@ -1341,3 +1341,40 @@ test "a doc posted to chat that is not UTF-8 text fails the request with NotUtf8
     try testing.expectError(error.NotUtf8, harness.postAs(a, io, "/chat/docs/post", steve, "slug=notes"));
     try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2" })));
 }
+
+test "the .count a send writes is the backfill's for the same transcript, byte for byte, and a count a crash left stale is a miss: the next send is numbered by the transcript (metal-vmm QUEUE 287)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_count = @import("chat_count.zig");
+    const chat_store = @import("chat_store.zig");
+    const disk = harness.UidSite.disk;
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2" });
+    const count = try chat_count.countPath(a, dir, "Plans");
+    for ([_][]const u8{ "markdown=one", "markdown=two%0A-------------%0Athree" }) |body| {
+        try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, body)));
+        // The Roc's count, then the backfill's for the same transcript.
+        const roc = try disk.read(io, a, count, .unlimited);
+        try disk.remove(io, a, count);
+        try testing.expectEqual(@as(usize, 1), chat_count.backfillSidecars(io, a, &.{dir}));
+        try testing.expectEqualStrings(try disk.read(io, a, count, .unlimited), roc);
+    }
+    // A crash after the third's append, before its count: the count the
+    // second left, which no longer speaks for the transcript's size.
+    const stale = try disk.read(io, a, count, .unlimited);
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=three")));
+    try disk.write(io, a, count, stale, .{});
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=four")));
+    const transcript = (try chat_paths.readTranscript(io, a, dir, "Plans")).?;
+    try testing.expect(std.mem.indexOf(u8, transcript, "MSG_Plans_4\n") != null);
+    try testing.expect(std.mem.startsWith(u8, try disk.read(io, a, count, .unlimited), "4 "));
+}
