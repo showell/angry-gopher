@@ -93,6 +93,11 @@ pub const Stream = struct {
     sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
 };
 
+/// **TESTS ONLY: THE STREAM'S WINDOW**, called between the backlog's read
+/// and the subscribe (chat_stream_turn_test.zig). Read only under
+/// `builtin.is_test`.
+pub var test_window: ?*const fn (Io) void = null;
+
 /// openStream: inside one handler's turn, decode the topic backlog at `path`
 /// AND register a live subscriber on `key`, the topic's bus key the Roc
 /// named (`<conv_key>/<sid>`, roc-webbox chat/BusKey.roc) — atomically, so no
@@ -115,6 +120,7 @@ pub fn openStream(
         .unlimited,
     );
     const msgs = try decodeChatFile(alloc, raw);
+    if (@import("builtin").is_test) if (test_window) |w| w(io);
     const sub = try bus.open(key);
     return .{ .backlog = msgs, .sub = sub };
 }

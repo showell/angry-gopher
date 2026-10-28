@@ -179,6 +179,8 @@ pub fn build(b: *std.Build) void {
     const webbox_store_source = webbox_dep.path("src/store.zig");
     router_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     router_tests.root_module.addImport("webbox", webbox);
+    // Only a test reaches it (chat_stream_turn_test.zig: the real host).
+    router_tests.root_module.addImport("webbox_linux", webbox_linux);
     router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("codex_chat", codex_chat);
     router_tests.root_module.addImport("uo_town", uo_town);

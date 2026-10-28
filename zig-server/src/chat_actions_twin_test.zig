@@ -10,6 +10,7 @@ const chat_router = @import("chat_router.zig");
 const store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
+const chat_codec = @import("chat_codec.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const chat_search = @import("chat_search.zig");
 const search_index = @import("search_index.zig");
@@ -5110,6 +5111,171 @@ test "every chat stream (metal-vmm QUEUE 286): a DM's topic, a channel's, the fe
         "streamsRun",
         try streamsRun(a, io),
         "33fca94b316553c2bf57411f3d212171474778117eeb774687420dade1a7318b",
+    );
+}
+
+/// **A TOPIC'S BACKLOG, REPLAYED** (the pure-Roc chat plan, item 1): every
+/// block a transcript can hold, in one topic: a message by a member, a
+/// refused block (no id, no date) mid-transcript, one from before `uid:`
+/// was written with an escaped separator in its body, one whose author and
+/// body are not UTF-8 and whose `uid:` is no canonical uid, one with another
+/// topic's id, a blank piece, one with control bytes and `</script>`, and
+/// one numbered 0. Ordered after it: an empty transcript, one of blanks,
+/// one of only a refused block, a transcript missing (a link to nothing),
+/// one that will not read (a link to itself), a plain topic and a
+/// channel's.
+const backlog_mixed = "MSG_Mixed_1\nfrom: Steve\ndate: 2026-10-10T00:01:00Z\nuid: 1\n\n**bold** <b>x</b> \"q\" \\ back" ++ store.sep ++
+    "from: Nobody\n\nno id and no date: refused" ++ store.sep ++
+    "MSG_Mixed_3\nfrom: Old\ndate: 2026-10-10T00:03:00Z\nnote: passed over\n\nlegacy, no uid\n\\-------------\nafter an escaped separator" ++ store.sep ++
+    "MSG_Mixed_4\nfrom: B\xffad\ndate: 2026-10-10T00:04:00Z\nuid: 07\n\nnot \xfe utf-8 \xc3" ++ store.sep ++
+    "MSG_Other_9\nfrom: Stray\ndate: 2026-10-10T00:05:00Z\nuid: \n\nanother topic's id" ++ store.sep ++
+    " \t\r\n" ++ store.sep ++
+    "MSG_Mixed_7\nfrom: Steve\ndate: 2026-10-10T00:07:00Z\nuid: 1\n\ncontrol \x01 tab\t emoji \u{1F44D} </script> \u{2028}" ++ store.sep ++
+    "MSG_Mixed_0\nfrom: Zero\ndate: 2026-10-10T00:08:00Z\n\nnumbered zero";
+
+/// One topic stream asked for: its target and any header lines.
+const BacklogAsk = struct {
+    method: []const u8 = "GET",
+    target: []const u8,
+    extra: []const u8 = "",
+};
+
+/// Each topic stream answered (its head, preamble and backlog), then, for
+/// one kept, a blob published on its key and the frame it makes; the
+/// refused blocks each request met (chat_codec.refused_blocks), and the
+/// operator's line for them at the end.
+fn backlogRun(a: Alloc, io: Io) !struct { answers: [][]const u8, refused: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const sessions = try std.fs.path.join(a, &.{ store.chat_root, "1_2", "sessions" });
+    const files = [_]struct { sid: []const u8, bytes: []const u8 }{
+        .{ .sid = "Mixed", .bytes = backlog_mixed },
+        .{ .sid = "Empty", .bytes = "" },
+        .{ .sid = "Blank", .bytes = " \n" ++ store.sep ++ "\t" },
+        .{ .sid = "Refused", .bytes = "from: Nobody\n\nonly a refused block" },
+    };
+    for (files) |f| try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ sessions, try std.fmt.allocPrint(a, "{s}.md", .{f.sid}) }), f.bytes, .{});
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two", "three" });
+    // A topic listed whose transcript is missing (a link to nothing), and
+    // one whose transcript will not read (a link to itself).
+    try std.Io.Dir.cwd().symLink(io, "nowhere.md", try std.fs.path.join(a, &.{ sessions, "Gone.md" }), .{});
+    try std.Io.Dir.cwd().symLink(io, "Loop.md", try std.fs.path.join(a, &.{ sessions, "Loop.md" }), .{});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{ "hi", "there" });
+    @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    const mixed = "/chat/c/1_2/Mixed/stream";
+    const asks = [_]BacklogAsk{
+        .{ .target = mixed },
+        .{ .target = mixed ++ "?since=0" },
+        .{ .target = mixed ++ "?since=1" },
+        .{ .target = mixed ++ "?since=2" },
+        .{ .target = mixed ++ "?since=3" },
+        .{ .target = mixed ++ "?since=4" },
+        .{ .target = mixed ++ "?since=6" },
+        .{ .target = mixed ++ "?since=7" },
+        .{ .target = mixed ++ "?since=99" },
+        .{ .target = mixed ++ "?since=+3" },
+        .{ .target = mixed ++ "?since=-0" },
+        .{ .target = mixed ++ "?since=-1" },
+        .{ .target = mixed ++ "?since=0_3" },
+        .{ .target = mixed ++ "?since=_3" },
+        .{ .target = mixed ++ "?since=3_" },
+        .{ .target = mixed ++ "?since=1__0" },
+        .{ .target = mixed ++ "?since=x" },
+        .{ .target = mixed ++ "?since=" },
+        .{ .target = mixed ++ "?since=%33" },
+        .{ .target = mixed ++ "?since=18446744073709551615" },
+        .{ .target = mixed ++ "?since=18446744073709551616" },
+        .{ .target = mixed ++ "?a=1&since=6&since=1" },
+        .{ .target = mixed ++ "?since=0", .extra = "Last-Event-ID: 2\r\n" },
+        .{ .target = mixed ++ "?since=3", .extra = "Last-Event-ID: junk\r\n" },
+        .{ .target = mixed ++ "?since=4", .extra = "Last-Event-ID: 18446744073709551616\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: 18446744073709551615\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: 18446744073709551614\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID:  1 \t\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: -0\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: +0\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: 0_5\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: -1\r\n" },
+        .{ .target = mixed ++ "?since=6", .extra = "Last-Event-ID:\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: 1.5\r\n" },
+        .{ .target = mixed, .extra = "Last-Event-ID: 3\r\nLast-Event-ID: 0\r\n" },
+        .{ .target = mixed, .extra = "last-event-id: 5\r\n" },
+        .{ .target = "/chat/c/1_2/Plans/stream" },
+        .{ .target = "/chat/c/1_2/Plans/stream?since=2" },
+        .{ .target = "/chat/c/1_2/Empty/stream" },
+        .{ .target = "/chat/c/1_2/Empty/stream?since=3" },
+        .{ .target = "/chat/c/1_2/Blank/stream" },
+        .{ .target = "/chat/c/1_2/Refused/stream" },
+        .{ .target = "/chat/c/1_2/Gone/stream" },
+        .{ .target = "/chat/c/1_2/Loop/stream" },
+        .{ .target = "/channel/ops/Standup/stream" },
+        .{ .target = "/channel/ops/Standup/stream", .extra = "Last-Event-ID: 0\r\n" },
+        .{ .method = "POST", .target = mixed },
+        .{ .method = "HEAD", .target = mixed },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const raw = try std.fmt.allocPrint(
+            a,
+            "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n{s}\r\n",
+            .{ q.method, q.target, steve, q.extra },
+        );
+        var reader: std.Io.Reader = .fixed(raw);
+        var out: std.Io.Writer.Allocating = .init(a);
+        var server = std.http.Server.init(&reader, &out.writer);
+        var req = try server.receiveHead();
+        req.head.keep_alive = false;
+        var b = webbox.bus.Bus.of(&hub);
+        const refused_before = chat_codec.refused_blocks;
+        const got = router.route(&req, io, a, &b);
+        try out.writer.flush();
+        var line: std.ArrayList(u8) = .empty;
+        try line.print(a, "{s} {s} [{s}] refused {d}: ", .{ q.method, q.target, q.extra, chat_codec.refused_blocks - refused_before });
+        if (got) |kept| {
+            try line.appendSlice(a, out.written());
+            if (kept) |k| {
+                defer webbox.bus.drop(&hub, k);
+                try line.appendSlice(a, "== kept\n");
+                hub.publish(try topicKey(a, q.target), "id: 99\ndata: {\"live\":1}\n\n");
+                while (try webbox.bus.nextFrame(k, a)) |frame| try line.print(a, "== frame\n{s}", .{frame});
+                try line.appendSlice(a, "== no more\n");
+            } else try line.appendSlice(a, "== not kept\n");
+        } else |e| try line.print(a, "error {t}\n{s}", .{ e, out.written() });
+        try answers.append(a, line.items);
+    }
+    // The count is the binary's since it began; the last block's line is this run's.
+    const said = try chat_codec.refusedText(a);
+    const last = "; the last began: ";
+    return .{ .answers = answers.items, .refused = said[(std.mem.indexOf(u8, said, last) orelse return error.NoRefusedBlock) + last.len ..] };
+}
+
+/// The bus key of a topic stream's target: `1_2/<topic>` under /chat/c/1_2/,
+/// `ops/<topic>` under /channel/ops/.
+fn topicKey(a: Alloc, target: []const u8) ![]const u8 {
+    const path = target[0 .. std.mem.indexOfScalar(u8, target, '?') orelse target.len];
+    const conv: []const u8 = if (std.mem.startsWith(u8, path, "/chat/c/1_2/")) "1_2" else "ops";
+    var parts = std.mem.splitBackwardsScalar(u8, path, '/');
+    _ = parts.next();
+    return std.fmt.allocPrint(a, "{s}/{s}", .{ conv, parts.next().? });
+}
+
+test "a topic's backlog replayed (the pure-Roc chat plan, item 1): every block a transcript holds, from every resume point a ?since or a Last-Event-ID names, junk, signs, underscores and the largest among them; a refused block mid-transcript, an empty transcript, a missing one and one that will not read; the live frame after, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun(
+        "backlogRun",
+        try backlogRun(a, io),
+        "36c7a7341873581caadd581fbd79b56454b1d48db34cb9b7d1edd2888e3c7e31",
     );
 }
 
