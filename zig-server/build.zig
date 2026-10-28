@@ -52,6 +52,13 @@ pub fn build(b: *std.Build) void {
     const roc_webbox = b.dependency("roc_webbox", .{ .target = target, .optimize = optimize, .roc = b.option([]const u8, "roc", "the Roc compiler (default: `roc` on the PATH); the version roc-webbox's roc-version pins") orelse "roc" });
     const roc_chat = roc_webbox.module("roc_chat");
     root.addImport("roc_chat", roc_chat);
+    // The chat's markdown dialect and its browser client, each its own
+    // checkout (chat-markdown, chat-client): `chat_markdown` and
+    // `chat_client`, nothing but std.
+    const chat_markdown = b.dependency("chat_markdown", .{ .target = target, .optimize = optimize }).module("chat_markdown");
+    const chat_client = b.dependency("chat_client", .{ .target = target, .optimize = optimize }).module("chat_client");
+    root.addImport("chat_markdown", chat_markdown);
+    root.addImport("chat_client", chat_client);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -137,6 +144,7 @@ pub fn build(b: *std.Build) void {
         const tool_mod = b.createModule(.{ .root_source_file = b.path(tool.path), .target = target, .optimize = tool.optimize });
         tool_mod.addImport("webbox", webbox);
         tool_mod.addImport("host_io", host_io);
+        tool_mod.addImport("chat_markdown", chat_markdown);
         const tool_exe = b.addExecutable(.{ .name = tool.step, .root_module = tool_mod });
         const tool_run = b.addRunArtifact(tool_exe);
         tool_run.addPassthruArgs();
@@ -175,6 +183,8 @@ pub fn build(b: *std.Build) void {
     router_tests.root_module.addImport("codex_chat", codex_chat);
     router_tests.root_module.addImport("uo_town", uo_town);
     router_tests.root_module.addImport("roc_chat", roc_chat);
+    router_tests.root_module.addImport("chat_markdown", chat_markdown);
+    router_tests.root_module.addImport("chat_client", chat_client);
     router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
@@ -196,6 +206,8 @@ pub fn build(b: *std.Build) void {
     twin_tests.root_module.addImport("webbox_linux", webbox_linux);
     twin_tests.root_module.addImport("shale", shale);
     twin_tests.root_module.addImport("host_io", host_io);
+    twin_tests.root_module.addImport("chat_markdown", chat_markdown);
+    twin_tests.root_module.addImport("chat_client", chat_client);
     twin_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     // The pages' twins build the chrome, which names the bundles by their bytes.
     for (assets) |a| twin_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
@@ -213,7 +225,7 @@ pub fn build(b: *std.Build) void {
     const codec_bench_run = b.addRunArtifact(b.addExecutable(.{ .name = "codec-bench", .root_module = codec_bench_mod }));
     codec_bench_run.addPassthruArgs();
     b.step("codec-bench", "Decode a transcript in Zig and in Roc, time and peak memory (src/chat_codec_bench.zig)").dependOn(&codec_bench_run.step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/recent_feed.zig", "src/chat_upload.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,
@@ -224,6 +236,7 @@ pub fn build(b: *std.Build) void {
         unit.root_module.addImport("webbox_linux", webbox_linux);
         unit.root_module.addImport("shale", shale);
         unit.root_module.addImport("host_io", host_io);
+        unit.root_module.addImport("chat_markdown", chat_markdown);
         unit.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }
