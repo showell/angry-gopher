@@ -25,7 +25,6 @@ const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const recent_feed = @import("recent_feed.zig");
-const recent = @import("recent.zig");
 const chat_state = @import("chat_state.zig");
 const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
@@ -763,6 +762,7 @@ test "Count: a sidecar read, written, and believed or not" {
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
+    var recorded: Frozen = .{};
     var differ: Differences = .{};
     var compared: usize = 0;
     for (try sidecars(a)) |raw| {
@@ -782,10 +782,8 @@ test "Count: a sidecar read, written, and believed or not" {
             if (!sameResults(try digitsOf(a, zb), try roc(a, .believed_count, &.{ raw, sz }))) differ.add("believedCount(\"{f}\", {d})", .{ std.zig.fmtString(raw), size });
             for ([_]usize{ 0, 1, 3, 40 }) |blocks| {
                 const bl = try std.fmt.allocPrint(a, "{d}", .{blocks});
-                const zr = chat_count.recordedAuthor(z, blocks, size);
-                const zw: []const []const u8 = if (zr) |u| try a.dupe([]const u8, &.{u}) else &.{};
-                compared += 1;
-                if (!sameResults(zw, try roc(a, .recorded_author, &.{ raw, bl, sz }))) differ.add("recordedAuthor(\"{f}\", {d}, {d})", .{ std.zig.fmtString(raw), blocks, size });
+                // Frozen (metal-vmm QUEUE 277): chat_count.recordedAuthor is gone.
+                recorded.add(try roc(a, .recorded_author, &.{ raw, bl, sz }));
             }
         }
     }
@@ -798,15 +796,15 @@ test "Count: a sidecar read, written, and believed or not" {
         if (!std.mem.eql(u8, zt, rt)) differ.add("countText: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(zt), std.zig.fmtString(rt) });
     };
     try differ.none(compared);
+    try recorded.check("recordedAuthor", "74dd43ac217aa053c4c11ffff72369073e09997b807299df422740f36ed21837", 48480);
 }
 
-test "Count: the window at the record's offset, believed or read the slow way" {
+test "Count: the window at the record's offset, believed or read the slow way (frozen, metal-vmm QUEUE 277: chat_count.windowLast is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
-    var compared: usize = 0;
+    var frozen: Frozen = .{};
     var windows: std.ArrayList([]const u8) = .empty;
     try windows.appendSlice(a, try codecStrings(a, 0x3140, 500, 24));
     // Files of this topic's messages, numbered in and out of order, some
@@ -824,16 +822,10 @@ test "Count: the window at the record's offset, believed or read the slow way" {
         try windows.append(a, file.items);
     }
     for (windows.items) |w| for ([_]usize{ 0, 1, 3, 6 }) |count| for ([_]bool{ false, true }) |full| {
-        const z = try chat_count.windowLast(a, count, w, full, "t");
-        // A window the Roc reads with a corrupt author fails, said as such.
-        const corrupt = !full and corruptAuthor(try chat_codec.decodeChatFile(a, w));
-        const want: []const []const u8 = if (corrupt) &.{"CorruptUid"} else if (z) |got| &.{ try std.fmt.allocPrint(a, "{d}", .{got.number}), if (got.current) "1" else "0", got.msg.id, got.msg.from, got.msg.at, got.msg.uid, got.msg.markdown } else &.{};
         const c = try std.fmt.allocPrint(a, "{d}", .{count});
-        const got = try roc(a, .window_last, &.{ c, w, if (full) "1" else "0", "t" });
-        compared += 1;
-        if (!sameResults(want, got)) differ.add("windowLast({d}, \"{f}\", {}): zig {d} fields, roc {d}", .{ count, std.zig.fmtString(w), full, want.len, got.len });
+        frozen.add(try roc(a, .window_last, &.{ c, w, if (full) "1" else "0", "t" }));
     };
-    try differ.none(compared);
+    try frozen.check("windowLast", "e61bf497f605905f2e9a3638b6c6f4f3e86947ec154476501c4dca7c7a1e7f9e", 8000);
 }
 
 // ── Frame (chat_frame.zig) ─────────────────────────────────────────────────
@@ -1294,6 +1286,9 @@ test "Recent: a message's excerpt as recentExcerpt makes it, for every text trie
     try testing.expect(cut > 50);
 }
 
+/// One gathered row, as recent.zig's `Row` had it.
+const RecentRow = struct { doc: bool, secs: i64, uid: []const u8, name: []const u8, key: []const u8, label: []const u8, topic: []const u8, markdown: []const u8, dm: bool };
+
 test "Recent: the feed's JSON from the rows gathered, named, dated and ordered as recent.zig did, ties and all (frozen, metal-vmm QUEUE 263d)" {
     var arena = setUp();
     defer arena.deinit();
@@ -1309,7 +1304,7 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
     const names = [_][]const u8{ "", "Debbie", "Ann \"A\" </script>", "caf\xc3\xa9" };
     const labels = [_][]const u8{ "", "to Debbie", "in ops", "My \"doc\"" };
     for (0..1500) |_| {
-        var rows: std.ArrayList(recent.Row) = .empty;
+        var rows: std.ArrayList(RecentRow) = .empty;
         for (0..r.uintAtMost(usize, 9)) |_| try rows.append(a, .{
             .doc = r.uintLessThan(u8, 4) == 0,
             .secs = secs[r.uintLessThan(usize, secs.len)],

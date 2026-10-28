@@ -328,6 +328,7 @@ test {
     _ = @import("router_edges_test.zig");
     _ = @import("router_script_test.zig");
     _ = @import("router_failures_test.zig");
+    _ = @import("router_recent_test.zig");
     _ = @import("router_chat_test.zig");
     _ = @import("router_search_test.zig");
     _ = @import("router_admin_test.zig");

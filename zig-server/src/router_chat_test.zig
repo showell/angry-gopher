@@ -194,7 +194,7 @@ test "route: a send and a reaction store their author's name and uid each where 
     const dir = try chat_paths.dmConvDir(a, "1_2");
     const msgs = try chat_codec.decodeChatFile(a, (try chat_paths.readTranscript(io, a, dir, "Plans")).?);
     try testing.expectEqualStrings("Steve", msgs[msgs.len - 1].from);
-    try testing.expectEqualStrings("1", (try chat_count.lastMessage(io, a, dir, "Plans")).?.uid);
+    try testing.expectEqualStrings("1", chat_count.readCount(io, a, dir, "Plans").?.last.?.uid);
     const n = try std.fmt.allocPrint(a, "msg={d}&emoji=%F0%9F%91%8D", .{msgs.len});
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/react", steve, n)));
     const line = try chat_store.readReactions(io, a, dir, "Plans");

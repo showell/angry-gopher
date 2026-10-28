@@ -33,7 +33,6 @@ const roc_chat = @import("roc_chat");
 const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
-const recent = @import("recent.zig");
 const store = @import("chat_store.zig");
 const chat_count = @import("chat_count.zig");
 const chat_fanout = @import("chat_fanout.zig");
@@ -171,7 +170,6 @@ pub const Call = struct {
             .read_body = body,
             .serve_file = serveFile,
             .serve_rendered = serveRendered,
-            .gather_recent = recentRows,
             .publish = publish,
             .append_line = appendLine,
             .read = read,
@@ -437,26 +435,6 @@ pub const Call = struct {
     fn heldFile(c: *Call, path: []const u8) !?[]u8 {
         const p = try std.fs.path.join(c.alloc, &.{ store.chat_root, path });
         return webbox.store.readOrNull(c.io, c.alloc, p, .unlimited);
-    }
-
-    /// The member's recent feed as recent.zig gathers it.
-    fn recentRows(ctx: *anyopaque) []const roc_chat.RecentRow {
-        const c = of(ctx);
-        if (c.dead()) return &.{};
-        // absent-ok: not read as absence: a failed read is kept and returned once the call ends.
-        const rows = recent.gatherRows(c.io, c.alloc, c.uid) catch |e| return c.noRecent(e);
-        const out = c.alloc.alloc(roc_chat.RecentRow, rows.len) catch |e| return c.noRecent(e);
-        for (rows, out) |w, *o| {
-            const secs = std.fmt.allocPrint(c.alloc, "{d}", .{w.secs}) catch |e| return c.noRecent(e);
-            o.* = .{ .kind = if (w.doc) .doc else .message, .secs = secs, .uid = w.uid, .name = w.name, .key = w.key, .label = w.label, .topic = w.topic, .markdown = w.markdown, .dm = if (w.dm) .dm else .channel };
-        }
-        return out;
-    }
-
-    /// `fail`, answering the Roc no recent rows.
-    fn noRecent(c: *Call, e: anyerror) []const roc_chat.RecentRow {
-        c.fail(e);
-        return &.{};
     }
 
     /// **THE FILE PRIMITIVES** (Host.read!, Host.write!, Host.remove!,
