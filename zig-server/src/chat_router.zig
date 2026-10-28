@@ -14,8 +14,7 @@
 //! lookup of the conversation decides on (O2: every account, once, looked
 //! up by the Roc; a channel's member file and the topics' folder by the
 //! file primitives, named and parsed by the Roc), the body, who is online
-//! and the limits the server enforces (a page's sidebar and its client's
-//! caps, the rest of the page the Roc's), the
+//! (a page's sidebar; the rest of the page the Roc's), the
 //! primitives a reaction and a message are stored and sent by (a line
 //! appended, a topic's count, the markdown render, a message's block stored
 //! with its count and search, the bus) and fanned out by (a message's parts
@@ -186,7 +185,6 @@ pub const Call = struct {
             .count_dropped = droppedOf,
             .aside = asideOf,
             .check_online = online,
-            .limits = limits_,
             .srcs = srcs,
             .me = me,
             .now = now_,
@@ -611,15 +609,6 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return .offline;
         return if (presence.isOnline(id, c.now)) .online else .offline;
-    }
-
-    /// **THE LIMITS THE SERVER ENFORCES** (Host.limits!): the upload's and
-    /// the search's own constants, single-sourced here, which the
-    /// conversation page tells its client. After a failure, nothing.
-    fn limits_(ctx: *anyopaque) roc_chat.Limits {
-        const c = of(ctx);
-        if (c.dead()) return .{ .image_max = 0, .video_max = 0, .accept = "", .search_min = 0 };
-        return .{ .image_max = chat_upload.image_max, .video_max = chat_upload.video_max, .accept = chat_upload.accept, .search_min = @import("search_tokens.zig").min_len };
     }
 
     fn srcs(ctx: *anyopaque) []const roc_chat.Src {

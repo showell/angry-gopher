@@ -106,6 +106,7 @@ const Fn = enum(u8) {
     json_out = 70,
     chat_url_on_site = 71,
     route_kind = 72,
+    limits = 73,
 };
 
 /// One Roc call's results, in `a`.
@@ -405,6 +406,19 @@ test "the pre-turn hooks agree with the Roc router: an upload's path gets the up
         checked += 1;
     };
     try testing.expect(checked > 5000 and kinds > 250);
+}
+
+test "Limits: the Roc's constants the conversation page tells its client are the ones the Zig enforces (metal-vmm QUEUE 272)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    const got = try roc(a, .limits, &.{});
+    try testing.expectEqual(@as(usize, 4), got.len);
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{d}", .{chat_upload.image_max}), got[0]);
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{d}", .{chat_upload.video_max}), got[1]);
+    try testing.expectEqualStrings(chat_upload.accept, got[2]);
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{d}", .{@import("search_tokens.zig").min_len}), got[3]);
 }
 
 // ── Paths (chat_paths.zig) ─────────────────────────────────────────────────
