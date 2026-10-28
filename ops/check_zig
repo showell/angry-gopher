@@ -45,8 +45,13 @@ rm -f "$docs_out"
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
 # confined to http.zig, whose accessors return OWNED copies — so a head value can
 # never dangle past the body read that invalidates it (the empty/wrong-author bug).
-echo "==> head-access lint"
-python3 "$REPO_DIR/tools/lint_head_access.py"
+# It reads Zig's own tokens, so a string or a comment is never code and a
+# reach split over lines is one. Its plants run first. Run from the folder
+# holding the repos: it reads zig-webbox and shale beside this one.
+echo "==> head-access lint (its plants, then the tree)"
+head_budget=(--budget steps=50000000 --budget arena_bytes=536870912)
+(cd "$REPO_DIR/.." && shale "${head_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_head_access.shale" repo="$(basename "$REPO_DIR")" self_test=1)
+(cd "$REPO_DIR/.." && shale "${head_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_head_access.shale" repo="$(basename "$REPO_DIR")")
 
 # Poka-yoke lint: nothing the route table reaches may reach for the host.
 # router.zig is what this site serves, and zig-metal-unikernel calls it from a machine
