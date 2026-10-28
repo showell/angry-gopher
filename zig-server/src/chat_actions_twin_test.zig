@@ -764,7 +764,11 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
     try testing.expectEqual(@as(usize, 2), std.mem.count(u8, roc.files, "source MSG_Notes_1 in 1_1:"));
     try testing.expectEqual(@as(usize, 6), std.mem.count(u8, roc.files, "source MSG_Standup_4 in ops:"));
     try testing.expectEqual(@as(usize, 4), std.mem.count(u8, roc.files, "source MSG_Feeds_1 in 1_2:"));
-    for ([_][]const u8{ "\"url\":\"/chat/c/1_4/Ideas\",\"who\":\"You\",\"topic\":\"Ideas\"", "\"where\":\"to \",\"topic\":\"Notes\"", "\"kind\":\"topic-added\",\"conv\":\"1_1\",\"sid\":\"Notes\"", "\"images\":[\"<img src=\\\"/a.png\\\" alt=\\\"q\\\\\\\"x\\\">\",\"<IMG\\nsrc=\\\"/b.png\\\">\"]" }) |want|
+    // The live images event rebuilds each stored tag by the renderer's rule
+    // (metal-vmm QUEUE 266): `alt="q\"x"` doesn't parse (the `\"` closes it,
+    // and `x"` is no attribute), so that tag is dropped whole; the other is
+    // rebuilt, lower case, on one line. The files above keep the tags as sent.
+    for ([_][]const u8{ "\"url\":\"/chat/c/1_4/Ideas\",\"who\":\"You\",\"topic\":\"Ideas\"", "\"where\":\"to \",\"topic\":\"Notes\"", "\"kind\":\"topic-added\",\"conv\":\"1_1\",\"sid\":\"Notes\"", "\"images\":[\"<img src=\\\"/b.png\\\">\"]" }) |want|
         if (std.mem.indexOf(u8, roc.frames, want) == null) {
             std.debug.print("not in the frames: {f}\n", .{std.zig.fmtString(want)});
             return error.TestUnexpectedResult;
@@ -1082,7 +1086,8 @@ test "a conversation's page (its viewer, sidebar and limits the Roc's, over list
     // and a second ago), never at 5:00, 5:01 or never seen.
     const page = roc.answers[0];
     var at = try after(page, 0, "{\"conversations\":[");
-    at = try after(page, at, "{\"id\":\"uid:2\",\"label\":\"Deb \\\"the\\\" <b>&amp;<\\/script>\",\"url\":\"/chat/c/1_2\",\"active\":true,\"online\":true},");
+    // Every `<` of the page's JSON as `<` (html.scriptSafe, metal-vmm QUEUE 266).
+    at = try after(page, at, "{\"id\":\"uid:2\",\"label\":\"Deb \\\"the\\\" \\u003cb>&amp;\\u003c/script>\",\"url\":\"/chat/c/1_2\",\"active\":true,\"online\":true},");
     at = try after(page, at, "{\"id\":\"uid:3\",\"label\":\"Ann\",\"url\":\"/chat/c/1_3\",\"active\":false},");
     at = try after(page, at, "{\"id\":\"uid:4\",\"label\":\"Bo\",\"url\":\"/chat/c/1_4\",\"active\":false},");
     at = try after(page, at, "{\"id\":\"uid:5\",\"label\":\"Cy\",\"url\":\"/chat/c/1_5\",\"active\":false},");
@@ -1093,7 +1098,7 @@ test "a conversation's page (its viewer, sidebar and limits the Roc's, over list
     at = try after(page, at, "{\"id\":\"ch:Zed\",\"label\":\"# Zed\",\"url\":\"/channel/Zed\",\"active\":false},{\"id\":\"ch:ops\",\"label\":\"# ops\",\"url\":\"/channel/ops\",\"active\":false}],");
     // The pins that are topics, the stale one dropped; then the rest, by bytes.
     at = try after(page, at, "\"pinned_sessions\":[{\"id\":\"Plans\",\"label\":\"Plans\",\"url\":\"/chat/c/1_2/Plans\",\"active\":true},{\"id\":\"zeta\",");
-    _ = try after(page, at, "\"topics\":[{\"id\":\"Alpha\",\"label\":\"Alpha\",\"url\":\"/chat/c/1_2/Alpha\",\"active\":false},{\"id\":\"Other\",\"label\":\"Other\",\"url\":\"/chat/c/1_2/Other\",\"active\":false},{\"id\":\"a<b\",");
+    _ = try after(page, at, "\"topics\":[{\"id\":\"Alpha\",\"label\":\"Alpha\",\"url\":\"/chat/c/1_2/Alpha\",\"active\":false},{\"id\":\"Other\",\"label\":\"Other\",\"url\":\"/chat/c/1_2/Other\",\"active\":false},{\"id\":\"a\\u003cb\",");
     for (roc.answers) |r| try testing.expect(std.mem.indexOf(u8, r, "Stale") == null and std.mem.indexOf(u8, r, "ch:aaa") == null and std.mem.indexOf(u8, r, "ch:bad") == null and std.mem.indexOf(u8, r, "uid:1\",\"label\":\"Steve\",\"url\":\"/chat/c/1_1") == null);
     // **THE LIMITS ARE THE HOST'S CONSTANTS**, each in its own place.
     const chat_upload = @import("chat_upload.zig");
