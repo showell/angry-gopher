@@ -38,7 +38,11 @@ var refused_last: []const u8 = "";
 /// The refused blocks as /admin/host shows them.
 pub fn refusedText(alloc: Alloc) ![]const u8 {
     if (refused_blocks == 0) return "none";
-    return std.fmt.allocPrint(alloc, "{d}; the last began: {s}", .{ refused_blocks, refused_last });
+    return std.fmt.allocPrint(
+        alloc,
+        "{d}; the last began: {s}",
+        .{ refused_blocks, refused_last },
+    );
 }
 
 /// Whether a decoded block is a message: it has an id, an author and a date
@@ -50,7 +54,11 @@ pub fn isMessage(m: ChatMessage) bool {
 /// A block that is not a message: counted, and its first line kept to say.
 pub fn refuseBlock(piece: []const u8) void {
     refused_blocks += 1;
-    const first = piece[0 .. std.mem.indexOfScalar(u8, piece, '\n') orelse piece.len];
+    const first = piece[0 .. std.mem.indexOfScalar(
+        u8,
+        piece,
+        '\n',
+    ) orelse piece.len];
     const n = @min(first.len, refused_last_buf.len);
     @memcpy(refused_last_buf[0..n], first[0..n]);
     refused_last = refused_last_buf[0..n];
@@ -70,9 +78,17 @@ pub fn refuseBlock(piece: []const u8) void {
 ///   not only ever the last.
 pub fn decodeChatFile(alloc: Alloc, data: []const u8) ![]ChatMessage {
     var out: std.ArrayList(ChatMessage) = .empty;
-    var it = std.mem.splitSequence(u8, data, sep);
+    var it = std.mem.splitSequence(
+        u8,
+        data,
+        sep,
+    );
     while (it.next()) |piece| {
-        if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
+        if (std.mem.trim(
+            u8,
+            piece,
+            " \t\r\n",
+        ).len == 0) continue;
         const m = try decodeChatBlock(alloc, piece);
         if (!isMessage(m)) {
             refuseBlock(piece);
@@ -87,24 +103,49 @@ pub fn decodeChatFile(alloc: Alloc, data: []const u8) ![]ChatMessage {
 /// until a blank line, then the verbatim (line-unescaped) markdown body.
 fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
     var lines: std.ArrayList([]const u8) = .empty;
-    var lit = std.mem.splitScalar(u8, piece, '\n');
+    var lit = std.mem.splitScalar(
+        u8,
+        piece,
+        '\n',
+    );
     while (lit.next()) |ln| try lines.append(alloc, ln);
     const ls = lines.items;
 
-    var msg: ChatMessage = .{ .id = "", .from = "", .at = "", .markdown = "" };
+    var msg: ChatMessage = .{
+        .id = "",
+        .from = "",
+        .at = "",
+        .markdown = "",
+    };
     var i: usize = 0;
-    if (i < ls.len and std.mem.startsWith(u8, ls[i], "MSG_")) {
+    if (i < ls.len and std.mem.startsWith(
+        u8,
+        ls[i],
+        "MSG_",
+    )) {
         msg.id = ls[i]["MSG_".len..];
         i += 1;
     }
     while (i < ls.len) : (i += 1) {
         if (ls[i].len == 0) break; // blank line ends the header
         if (cutSeq(ls[i], ": ")) |kv| {
-            if (std.mem.eql(u8, kv.before, "from")) {
+            if (std.mem.eql(
+                u8,
+                kv.before,
+                "from",
+            )) {
                 msg.from = kv.after;
-            } else if (std.mem.eql(u8, kv.before, "date")) {
+            } else if (std.mem.eql(
+                u8,
+                kv.before,
+                "date",
+            )) {
                 msg.at = kv.after;
-            } else if (std.mem.eql(u8, kv.before, "uid")) {
+            } else if (std.mem.eql(
+                u8,
+                kv.before,
+                "uid",
+            )) {
                 msg.uid = kv.after;
             }
         }
@@ -129,7 +170,11 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
 pub fn unescapeBodyLine(line: []const u8) []const u8 {
     var k: usize = 0;
     while (k < line.len and line[k] == '\\') k += 1;
-    if (k >= 1 and std.mem.eql(u8, line[k..], dashes)) return line[1..];
+    if (k >= 1 and std.mem.eql(
+        u8,
+        line[k..],
+        dashes,
+    )) return line[1..];
     return line;
 }
 
@@ -141,9 +186,22 @@ test "a message's author is stored as `uid:` after its date, read back, and adds
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const with = ChatMessage{ .id = "t_1", .from = "Steve", .at = "2026-10-25T12:00:00Z", .markdown = "hi\nthere", .uid = "1" };
-    const block = try fixtures.chatStoredForm(a, 0, with);
-    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\nuid: 1\n\nhi\nthere", block);
+    const with = ChatMessage{
+        .id = "t_1",
+        .from = "Steve",
+        .at = "2026-10-25T12:00:00Z",
+        .markdown = "hi\nthere",
+        .uid = "1",
+    };
+    const block = try fixtures.chatStoredForm(
+        a,
+        0,
+        with,
+    );
+    try testing.expectEqualStrings(
+        "MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\nuid: 1\n\nhi\nthere",
+        block,
+    );
     const back = (try decodeChatFile(a, block))[0];
     try testing.expectEqualStrings("1", back.uid);
     try testing.expectEqualStrings("Steve", back.from);
@@ -151,8 +209,16 @@ test "a message's author is stored as `uid:` after its date, read back, and adds
     // No author known: no `uid:` line, the block as it always was.
     var without = with;
     without.uid = "";
-    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\n\nhi\nthere", try fixtures.chatStoredForm(a, 0, without));
-    try testing.expectEqualStrings("", (try decodeChatFile(a, try fixtures.chatStoredForm(a, 0, without)))[0].uid);
+    try testing.expectEqualStrings("MSG_t_1\nfrom: Steve\ndate: 2026-10-25T12:00:00Z\n\nhi\nthere", try fixtures.chatStoredForm(
+        a,
+        0,
+        without,
+    ));
+    try testing.expectEqualStrings("", (try decodeChatFile(a, try fixtures.chatStoredForm(
+        a,
+        0,
+        without,
+    )))[0].uid);
 }
 
 test "the decoder refuses a block with no id, author or date, counted; a blank piece is a torn append's and skipped (metal-vmm QUEUE 156(h))" {
@@ -186,13 +252,47 @@ test "a refused block keeps its number: a recount counts blocks, so no id is giv
     const a = f.arena.allocator();
     // As one written before: t_2 has no author, and the sidecar is gone.
     _ = try f.send("one");
-    const md = try transcriptPath(a, f.dir, "topic");
-    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = md, .data = try std.fmt.allocPrint(a, "{s}{s}MSG_topic_2\nfrom: \ndate: 2026-10-10T00:00:00Z\n\nnameless{s}MSG_topic_3\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nthree", .{ (try readTranscript(f.io, a, f.dir, "topic")).?, sep, sep }) });
-    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const md = try transcriptPath(
+        a,
+        f.dir,
+        "topic",
+    );
+    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = md, .data = try std.fmt.allocPrint(
+        a,
+        "{s}{s}MSG_topic_2\nfrom: \ndate: 2026-10-10T00:00:00Z\n\nnameless{s}MSG_topic_3\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nthree",
+        .{
+            (try readTranscript(
+                f.io,
+                a,
+                f.dir,
+                "topic",
+            )).?,
+            sep,
+            sep,
+        },
+    ) });
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(
+        a,
+        f.dir,
+        "topic",
+    ));
     try testing.expectEqualStrings("topic_4", (try f.send("four")).id);
-    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(
+        a,
+        f.dir,
+        "topic",
+    ));
     const dirs = [_][]const u8{f.dir};
-    _ = backfillSidecars(f.io, a, &dirs);
-    try testing.expectEqual(@as(usize, 4), readCount(f.io, a, f.dir, "topic").?.count);
+    _ = backfillSidecars(
+        f.io,
+        a,
+        &dirs,
+    );
+    try testing.expectEqual(@as(usize, 4), readCount(
+        f.io,
+        a,
+        f.dir,
+        "topic",
+    ).?.count);
     try testing.expectEqual(@as(usize, 3), indexOf("topic_4", "topic").?);
 }

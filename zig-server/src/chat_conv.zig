@@ -25,4 +25,8 @@ pub const Conv = struct {
 
 /// Topic is a Conv plus a validated topic id and its page title — the unit the
 /// per-topic tail (topicRoute and below) operates on.
-pub const Topic = struct { conv: Conv, sid: []const u8, title: []const u8 };
+pub const Topic = struct {
+    conv: Conv,
+    sid: []const u8,
+    title: []const u8,
+};

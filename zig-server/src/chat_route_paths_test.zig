@@ -18,16 +18,38 @@ const quoted = [_][]const u8{
 
 /// Each `"/chat…"` or `"/channel…"` literal in `text`, its query dropped,
 /// as the path under its area.
-fn quotedPaths(alloc: std.mem.Allocator, text: []const u8, out: *std.ArrayList([2][]const u8)) !void {
+fn quotedPaths(
+    alloc: std.mem.Allocator,
+    text: []const u8,
+    out: *std.ArrayList([2][]const u8),
+) !void {
     var i: usize = 0;
-    while (std.mem.indexOfPos(u8, text, i, "\"/")) |at| {
+    while (std.mem.indexOfPos(
+        u8,
+        text,
+        i,
+        "\"/",
+    )) |at| {
         const start = at + 1;
-        const end = std.mem.indexOfScalarPos(u8, text, start, '"') orelse break;
+        const end = std.mem.indexOfScalarPos(
+            u8,
+            text,
+            start,
+            '"',
+        ) orelse break;
         i = end + 1;
         const lit = text[start..end];
-        const path = lit[0 .. std.mem.indexOfScalar(u8, lit, '?') orelse lit.len];
+        const path = lit[0 .. std.mem.indexOfScalar(
+            u8,
+            lit,
+            '?',
+        ) orelse lit.len];
         for ([_][]const u8{ "/chat", "/channel" }) |area| {
-            if (std.mem.startsWith(u8, path, area)) {
+            if (std.mem.startsWith(
+                u8,
+                path,
+                area,
+            )) {
                 const sub = path[area.len..];
                 if (sub.len == 0 or sub[0] == '/') try out.append(alloc, .{ area, sub });
             }
@@ -41,7 +63,11 @@ pub fn corpus(alloc: std.mem.Allocator) ![][]const u8 {
     var subs: std.ArrayList([]const u8) = .empty;
     try generated(alloc, &subs);
     var lits: std.ArrayList([2][]const u8) = .empty;
-    for (quoted) |text| try quotedPaths(alloc, text, &lits);
+    for (quoted) |text| try quotedPaths(
+        alloc,
+        text,
+        &lits,
+    );
     for (lits.items) |l| try subs.append(alloc, l[1]);
     return subs.toOwnedSlice(alloc);
 }
@@ -60,18 +86,61 @@ fn generated(alloc: std.mem.Allocator, out: *std.ArrayList([]const u8)) !void {
         "/a/b.js",         "/js",             "/x.jsx",        "/c/",              "/c",
         "/nope",           "/\xff",           "/msg/\xff\xfe", "/c/1_2/\xff/raw",  "/docs/\xc3\xa9",
     }) |s| try out.append(alloc, s);
-    const keys = [_][]const u8{ "1_2", "2_1", "1_1", "ops", "a-b", "9ops", "x", "1__2", "\xff" };
-    const sids = [_][]const u8{ "general", "ChitChat", "2026-10-25", "new", "bad_id", "-x", "x-", "a--b", "a-b", &@as([80]u8, @splat('x')), &@as([81]u8, @splat('x')), "\xff" };
+    const keys = [_][]const u8{
+        "1_2",
+        "2_1",
+        "1_1",
+        "ops",
+        "a-b",
+        "9ops",
+        "x",
+        "1__2",
+        "\xff",
+    };
+    const sids = [_][]const u8{
+        "general",
+        "ChitChat",
+        "2026-10-25",
+        "new",
+        "bad_id",
+        "-x",
+        "x-",
+        "a--b",
+        "a-b",
+        &@as([80]u8, @splat('x')),
+        &@as([81]u8, @splat('x')),
+        "\xff",
+    };
     const tails = [_][]const u8{
         "",               "/",            "/stream", "/send",   "/upload", "/upload/",  "/uploads",
         "/uploads/a.png", "/uploads/a/b", "/pin",    "/unpin",  "/raw",    "/download", "/saved",
         "/reactions",     "/react",       "/nope",   "/send/x", "/raw/x",  "//raw",     "/stream/",
     };
     for (keys) |k| {
-        try out.append(alloc, try std.fmt.allocPrint(alloc, "/{s}", .{k}));
+        try out.append(alloc, try std.fmt.allocPrint(
+            alloc,
+            "/{s}",
+            .{k},
+        ));
         for (sids) |s| for (tails) |t| {
-            try out.append(alloc, try std.fmt.allocPrint(alloc, "/c/{s}/{s}{s}", .{ k, s, t }));
-            try out.append(alloc, try std.fmt.allocPrint(alloc, "/{s}/{s}{s}", .{ k, s, t }));
+            try out.append(alloc, try std.fmt.allocPrint(
+                alloc,
+                "/c/{s}/{s}{s}",
+                .{
+                    k,
+                    s,
+                    t,
+                },
+            ));
+            try out.append(alloc, try std.fmt.allocPrint(
+                alloc,
+                "/{s}/{s}{s}",
+                .{
+                    k,
+                    s,
+                    t,
+                },
+            ));
         };
     }
 }
@@ -84,29 +153,70 @@ pub fn reduced(alloc: std.mem.Allocator, out: *std.ArrayList([]const u8)) !void 
     var all: std.ArrayList([]const u8) = .empty;
     try generated(alloc, &all);
     for (all.items[0..45]) |s| try out.append(alloc, s);
-    const keys = [_][]const u8{ "1_2", "2_1", "ops", "1__2" };
-    const sids = [_][]const u8{ "general", "bad_id", &@as([81]u8, @splat('x')), "new" };
+    const keys = [_][]const u8{
+        "1_2",
+        "2_1",
+        "ops",
+        "1__2",
+    };
+    const sids = [_][]const u8{
+        "general",
+        "bad_id",
+        &@as([81]u8, @splat('x')),
+        "new",
+    };
     const tails = [_][]const u8{
         "",               "/",            "/stream", "/send",   "/upload", "/upload/",  "/uploads",
         "/uploads/a.png", "/uploads/a/b", "/pin",    "/unpin",  "/raw",    "/download", "/saved",
         "/reactions",     "/react",       "/nope",   "/send/x", "/raw/x",  "//raw",     "/stream/",
     };
     for (keys) |k| {
-        try out.append(alloc, try std.fmt.allocPrint(alloc, "/{s}", .{k}));
+        try out.append(alloc, try std.fmt.allocPrint(
+            alloc,
+            "/{s}",
+            .{k},
+        ));
         for (sids) |s| for (tails) |t| {
             // The topic past 80 bytes, under one key: the limit is the topic's.
-            if (s.len > 80 and !std.mem.eql(u8, k, "1_2")) continue;
-            try out.append(alloc, try std.fmt.allocPrint(alloc, "/c/{s}/{s}{s}", .{ k, s, t }));
-            try out.append(alloc, try std.fmt.allocPrint(alloc, "/{s}/{s}{s}", .{ k, s, t }));
+            if (s.len > 80 and !std.mem.eql(
+                u8,
+                k,
+                "1_2",
+            )) continue;
+            try out.append(alloc, try std.fmt.allocPrint(
+                alloc,
+                "/c/{s}/{s}{s}",
+                .{
+                    k,
+                    s,
+                    t,
+                },
+            ));
+            try out.append(alloc, try std.fmt.allocPrint(
+                alloc,
+                "/{s}/{s}{s}",
+                .{
+                    k,
+                    s,
+                    t,
+                },
+            ));
         };
     }
     var lits: std.ArrayList([2][]const u8) = .empty;
-    for (quoted) |text| try quotedPaths(alloc, text, &lits);
+    for (quoted) |text| try quotedPaths(
+        alloc,
+        text,
+        &lits,
+    );
     for (lits.items) |l| try out.append(alloc, l[1]);
     var seen: std.StringHashMapUnmanaged(void) = .empty;
     var w: usize = 0;
     for (out.items) |s| {
-        if (!std.unicode.utf8ValidateSlice(s) or (try seen.getOrPut(alloc, s)).found_existing) continue;
+        if (!std.unicode.utf8ValidateSlice(s) or (try seen.getOrPut(
+            alloc,
+            s,
+        )).found_existing) continue;
         out.items[w] = s;
         w += 1;
     }

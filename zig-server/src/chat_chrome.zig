@@ -60,28 +60,68 @@ pub const assets = [_]Asset{
 /// not in `assets` does not build.
 pub fn src(alloc: Alloc, comptime name: []const u8) ![]const u8 {
     const body = comptime for (assets) |a| {
-        if (std.mem.eql(u8, a.name, name)) break a.body;
+        if (std.mem.eql(
+            u8,
+            a.name,
+            name,
+        )) break a.body;
     } else @compileError("no chat asset named " ++ name);
-    return http.hashedSrc(alloc, "/chat/" ++ name, body);
+    return http.hashedSrc(
+        alloc,
+        "/chat/" ++ name,
+        body,
+    );
 }
 
 /// `<script src="..."></script>` for `name`, by `src`.
 pub fn script(alloc: Alloc, comptime name: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "<script src=\"{s}\"></script>", .{try src(alloc, name)});
+    return std.fmt.allocPrint(
+        alloc,
+        "<script src=\"{s}\"></script>",
+        .{try src(alloc, name)},
+    );
 }
 
 /// begin emits the shared chrome into `b`: the doctype/head + the platform
 /// stylesheet (its <title> = `tab_title`), colors.js (sync, palette pre-paint) +
 /// chat_theme.js (deferred), the top bar (Home + `title` + the sub-nav with
 /// `active` bolded + identity), and the open `.app-body-wrap`. Pair with end().
-fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, title: []const u8, viewer: []const u8, active: []const u8) !void {
+fn begin(
+    b: *std.ArrayList(u8),
+    alloc: Alloc,
+    tab_title: []const u8,
+    title: []const u8,
+    viewer: []const u8,
+    active: []const u8,
+) !void {
     try b.appendSlice(alloc, page_head_a);
     try b.appendSlice(alloc, tab_title);
     try b.appendSlice(alloc, page_head_b);
-    try b.print(alloc, head_scripts, .{ try src(alloc, "colors.js"), try src(alloc, "viewport.js"), try src(alloc, "chat_theme.js"), try src(alloc, "chrome_drawer.js") });
-    try b.print(alloc, chrome_top_a, .{try html.htmlEscape(alloc, title)});
-    try navLinks(b, alloc, active);
-    try b.print(alloc, chrome_top_b, .{try html.htmlEscape(alloc, viewer)});
+    try b.print(
+        alloc,
+        head_scripts,
+        .{
+            try src(alloc, "colors.js"),
+            try src(alloc, "viewport.js"),
+            try src(alloc, "chat_theme.js"),
+            try src(alloc, "chrome_drawer.js"),
+        },
+    );
+    try b.print(
+        alloc,
+        chrome_top_a,
+        .{try html.htmlEscape(alloc, title)},
+    );
+    try navLinks(
+        b,
+        alloc,
+        active,
+    );
+    try b.print(
+        alloc,
+        chrome_top_b,
+        .{try html.htmlEscape(alloc, viewer)},
+    );
     try b.appendSlice(alloc, "<div class=\"app-body-wrap\">");
 }
 
@@ -97,7 +137,11 @@ pub const Page = struct {
     body: std.ArrayList(u8),
 
     /// Closes the page and answers it, HTML, with `status`.
-    pub fn send(self: *Page, req: *std.http.Server.Request, status: std.http.Status) !void {
+    pub fn send(
+        self: *Page,
+        req: *std.http.Server.Request,
+        status: std.http.Status,
+    ) !void {
         try req.respond(try self.bytes(), .{ .status = status, .extra_headers = &.{http.html_ct} });
     }
 
@@ -109,38 +153,95 @@ pub const Page = struct {
 };
 
 /// Opens a chrome page (see `begin` for what it emits).
-pub fn page(alloc: Alloc, tab_title: []const u8, title: []const u8, viewer: []const u8, active: []const u8) !Page {
+pub fn page(
+    alloc: Alloc,
+    tab_title: []const u8,
+    title: []const u8,
+    viewer: []const u8,
+    active: []const u8,
+) !Page {
     var p: Page = .{ .alloc = alloc, .body = .empty };
-    try begin(&p.body, alloc, tab_title, title, viewer, active);
+    try begin(
+        &p.body,
+        alloc,
+        tab_title,
+        title,
+        viewer,
+        active,
+    );
     return p;
 }
 
-const NavItem = struct { href: []const u8, label: []const u8, key: []const u8 };
+const NavItem = struct {
+    href: []const u8,
+    label: []const u8,
+    key: []const u8,
+};
 
 /// nav_items is the chat-subsystem sub-nav — the content surfaces. Settings is
 /// deliberately NOT here: it's a rarely-touched utility, so it sits with Learn /
 /// Log out in the identity group (chrome_top_b), which the drawer also mirrors.
 /// The admin link is omitted (no admin flag is ported), matching active="".
 const nav_items = [_]NavItem{
-    .{ .href = "/chat", .label = "Chat", .key = "chat" },
-    .{ .href = "/chat/docs", .label = "Docs", .key = "docs" },
-    .{ .href = "/chat/recent", .label = "Recent", .key = "recent" },
-    .{ .href = "/chat/images", .label = "Images", .key = "images" },
-    .{ .href = "/chat/code", .label = "Code", .key = "code" },
-    .{ .href = "/chat/links", .label = "Links", .key = "links" },
+    .{
+        .href = "/chat",
+        .label = "Chat",
+        .key = "chat",
+    },
+    .{
+        .href = "/chat/docs",
+        .label = "Docs",
+        .key = "docs",
+    },
+    .{
+        .href = "/chat/recent",
+        .label = "Recent",
+        .key = "recent",
+    },
+    .{
+        .href = "/chat/images",
+        .label = "Images",
+        .key = "images",
+    },
+    .{
+        .href = "/chat/code",
+        .label = "Code",
+        .key = "code",
+    },
+    .{
+        .href = "/chat/links",
+        .label = "Links",
+        .key = "links",
+    },
 };
 
 /// navLinks emits the sub-nav span body, " · "-joined, with the link whose key
 /// equals `active` rendered bold-without-href.
-fn navLinks(b: *std.ArrayList(u8), alloc: Alloc, active: []const u8) !void {
+fn navLinks(
+    b: *std.ArrayList(u8),
+    alloc: Alloc,
+    active: []const u8,
+) !void {
     var first = true;
     for (nav_items) |it| {
         if (!first) try b.appendSlice(alloc, " · ");
         first = false;
-        if (std.mem.eql(u8, it.key, active)) {
-            try b.print(alloc, "<strong>{s}</strong>", .{it.label});
+        if (std.mem.eql(
+            u8,
+            it.key,
+            active,
+        )) {
+            try b.print(
+                alloc,
+                "<strong>{s}</strong>",
+                .{it.label},
+            );
         } else {
-            try b.print(alloc, "<a href=\"{s}\">{s}</a>", .{ it.href, it.label });
+            try b.print(
+                alloc,
+                "<a href=\"{s}\">{s}</a>",
+                .{ it.href, it.label },
+            );
         }
     }
 }

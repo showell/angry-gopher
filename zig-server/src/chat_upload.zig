@@ -54,32 +54,80 @@ const stream_piece = 256 << 10; // 256 KiB
 /// bytes), and returns {url, name, kind, width, height} JSON. `kind` is "image"
 /// or "video" so the client inserts the right tag; width/height are 0 (we don't
 /// decode dimensions — the client omits the attrs then, per its BROWSER_WORKAROUND).
-pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_dir: []const u8, base: []const u8, sid: []const u8) !void {
+pub fn handleUpload(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    uid: []const u8,
+    conv_dir: []const u8,
+    base: []const u8,
+    sid: []const u8,
+) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
 
     // Read the Content-Type (for the multipart boundary) BEFORE the body: reading
     // the body advances the reader past received_head (after which iterateHeaders
     // asserts, the /send gotcha) and invalidates the head strings. http.header
     // owns its result, so `ct` (and the boundary sliced from it) survive the body read.
-    const ct = (try http.header(req, alloc, "content-type")) orelse return edge.reject(req, .malformed_multipart, "no file\n");
-    const boundary = multipartBoundary(ct) orelse return edge.reject(req, .malformed_multipart, "no file\n");
+    const ct = (try http.header(
+        req,
+        alloc,
+        "content-type",
+    )) orelse return edge.reject(
+        req,
+        .malformed_multipart,
+        "no file\n",
+    );
+    const boundary = multipartBoundary(ct) orelse return edge.reject(
+        req,
+        .malformed_multipart,
+        "no file\n",
+    );
 
-    const body = (try http.readLimitedBody(req, alloc, max_any_upload)) orelse return;
+    const body = (try http.readLimitedBody(
+        req,
+        alloc,
+        max_any_upload,
+    )) orelse return;
     const part = parseMultipartFile(body, boundary) orelse
-        return edge.reject(req, .malformed_multipart, "no file\n");
+        return edge.reject(
+            req,
+            .malformed_multipart,
+            "no file\n",
+        );
 
     // Sniff the kind FIRST — it carries the per-file cap and the user-facing noun.
     const sniff = detectUpload(part.data) orelse
-        return req.respond("unsupported file type (images: png, jpeg, gif, webp; video: mp4, webm, mov)\n", .{ .status = .unsupported_media_type });
+        return req.respond(
+            "unsupported file type (images: png, jpeg, gif, webp; video: mp4, webm, mov)\n",
+            .{ .status = .unsupported_media_type },
+        );
     if (part.data.len > sniff.kind.cap()) {
-        const msg = try std.fmt.allocPrint(alloc, "{s} too large — the limit is {d} MB.\n", .{ sniff.kind.noun(), sniff.kind.cap() >> 20 });
-        return edge.reject(req, .body_too_large, msg);
+        const msg = try std.fmt.allocPrint(
+            alloc,
+            "{s} too large — the limit is {d} MB.\n",
+            .{ sniff.kind.noun(), sniff.kind.cap() >> 20 },
+        );
+        return edge.reject(
+            req,
+            .body_too_large,
+            msg,
+        );
     }
 
     // Lifetime per-user quota — atomic add-if-under-cap. Images and screencasts
     // share the one allowance.
-    if (!try users.reserveUploadBytes(io, alloc, uid, @intCast(part.data.len))) {
-        const msg = try std.fmt.allocPrint(alloc, "Upload limit reached — you've used your {d} GB upload allowance.\n", .{users.max_upload_lifetime_bytes >> 30});
+    if (!try users.reserveUploadBytes(
+        io,
+        alloc,
+        uid,
+        @intCast(part.data.len),
+    )) {
+        const msg = try std.fmt.allocPrint(
+            alloc,
+            "Upload limit reached — you've used your {d} GB upload allowance.\n",
+            .{users.max_upload_lifetime_bytes >> 30},
+        );
         return req.respond(msg, .{ .status = .forbidden });
     }
 
@@ -87,13 +135,30 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     // 172): one that cannot be stored gives its bytes back, and its error goes
     // on to the host's log (it was a 500 that said "write", unlogged, with the
     // bytes spent for good).
-    const name = storeUpload(io, alloc, conv_dir, sid, sniff.ext, part.data) catch |e| {
-        _ = try users.reserveUploadBytes(io, alloc, uid, -@as(i64, @intCast(part.data.len)));
+    const name = storeUpload(
+        io,
+        alloc,
+        conv_dir,
+        sid,
+        sniff.ext,
+        part.data,
+    ) catch |e| {
+        _ = try users.reserveUploadBytes(
+            io,
+            alloc,
+            uid,
+            -@as(i64, @intCast(part.data.len)),
+        );
         return e;
     };
 
     const out = try std.fmt.allocPrint(alloc, "{{\"url\":\"{s}/{s}/uploads/{s}\",\"name\":{f},\"kind\":\"{s}\",\"width\":0,\"height\":0}}", .{
-        base, sid, name, std.json.fmt(try displayName(alloc, part.filename), .{}), @tagName(sniff.kind),
+        base,                 sid, name,
+        std.json.fmt(
+            try displayName(alloc, part.filename),
+            .{},
+        ),
+        @tagName(sniff.kind),
     });
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
 }
@@ -119,12 +184,41 @@ fn displayName(alloc: Alloc, raw: []const u8) ![]const u8 {
 }
 
 /// The upload written under its topic, by a fresh name.
-fn storeUpload(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, ext: []const u8, data: []const u8) ![]const u8 {
+fn storeUpload(
+    io: Io,
+    alloc: Alloc,
+    conv_dir: []const u8,
+    sid: []const u8,
+    ext: []const u8,
+    data: []const u8,
+) ![]const u8 {
     const token = try randHex16(io, alloc);
-    const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, ext });
-    const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
-    try disk.makeDir(io, alloc, dir);
-    try disk.write(io, alloc, try std.fs.path.join(alloc, &.{ dir, name }), data, .{});
+    const name = try std.fmt.allocPrint(
+        alloc,
+        "{s}.{s}",
+        .{ token, ext },
+    );
+    const dir = try std.fs.path.join(alloc, &.{
+        conv_dir,
+        "sessions",
+        try std.fmt.allocPrint(
+            alloc,
+            "{s}.uploads",
+            .{sid},
+        ),
+    });
+    try disk.makeDir(
+        io,
+        alloc,
+        dir,
+    );
+    try disk.write(
+        io,
+        alloc,
+        try std.fs.path.join(alloc, &.{ dir, name }),
+        data,
+        .{},
+    );
     return name;
 }
 
@@ -138,16 +232,44 @@ fn storeUpload(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, ext:
 /// `range_window` slice, read positionally so only that slice is in RAM; a plain
 /// GET (images, direct download) gets the whole file as before. `accept-ranges`
 /// is always advertised so the player knows it may seek.
-pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, file: []const u8) !void {
+pub fn serveUpload(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    conv_dir: []const u8,
+    sid: []const u8,
+    file: []const u8,
+) !void {
     const ct = uploadContentType(file) orelse return http.notFound(req);
-    const updir = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
-    const path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir, file });
+    const updir = try std.fmt.allocPrint(
+        alloc,
+        "{s}.uploads",
+        .{sid},
+    );
+    const path = try std.fs.path.join(alloc, &.{
+        conv_dir,
+        "sessions",
+        updir,
+        file,
+    });
 
-    const size = ((try disk.statOrNull(io, alloc, path)) orelse return http.notFound(req)).size;
+    const size = ((try disk.statOrNull(
+        io,
+        alloc,
+        path,
+    )) orelse return http.notFound(req)).size;
 
-    if (try http.header(req, alloc, "range")) |range_hdr| {
+    if (try http.header(
+        req,
+        alloc,
+        "range",
+    )) |range_hdr| {
         const r = parseRange(range_hdr, size) orelse {
-            const cr = try std.fmt.allocPrint(alloc, "bytes */{d}", .{size});
+            const cr = try std.fmt.allocPrint(
+                alloc,
+                "bytes */{d}",
+                .{size},
+            );
             return req.respond("", .{ .status = .range_not_satisfiable, .extra_headers = &.{
                 .{ .name = "content-range", .value = cr },
                 .{ .name = "accept-ranges", .value = "bytes" },
@@ -155,14 +277,28 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
         };
         const len: usize = @intCast(r.end - r.start + 1);
         const buf = try alloc.alloc(u8, len);
-        const n = disk.readAt(io, alloc, path, r.start, buf) catch |e| switch (e) {
+        const n = disk.readAt(
+            io,
+            alloc,
+            path,
+            r.start,
+            buf,
+        ) catch |e| switch (e) {
             error.FileNotFound => return http.notFound(req), // gone since its stat
             else => return e,
         };
         // An upload is never rewritten, so a read shorter than its stat
         // promised is a fault, not a range to answer from.
         if (n != len) return error.UploadShorterThanItsStat;
-        const cr = try std.fmt.allocPrint(alloc, "bytes {d}-{d}/{d}", .{ r.start, r.end, size });
+        const cr = try std.fmt.allocPrint(
+            alloc,
+            "bytes {d}-{d}/{d}",
+            .{
+                r.start,
+                r.end,
+                size,
+            },
+        );
         // The Range window is already bounded to `range_window`, so it is read
         // and sent whole with a content-length (the plain GET below is the one
         // that was unbounded — item 105).
@@ -191,7 +327,13 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     // request heap before this).
     if (size <= whole_read_max) {
         const data = try alloc.alloc(u8, @intCast(size));
-        const n = disk.readAt(io, alloc, path, 0, data) catch |e| switch (e) {
+        const n = disk.readAt(
+            io,
+            alloc,
+            path,
+            0,
+            data,
+        ) catch |e| switch (e) {
             error.FileNotFound => return http.notFound(req), // gone since its stat
             else => return e,
         };
@@ -200,7 +342,14 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
         if (n != data.len) return error.UploadShorterThanItsStat;
         return req.respond(data, .{ .extra_headers = &headers });
     }
-    return streamFile(req, io, alloc, path, size, &headers);
+    return streamFile(
+        req,
+        io,
+        alloc,
+        path,
+        size,
+        &headers,
+    );
 }
 
 /// Streams `len` bytes of `path` from the start into the response, `stream_piece`
@@ -215,7 +364,14 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 /// terminator, which the client reads as the error it is, and the error goes
 /// on to the host's log. A HEAD gets the
 /// headers and no body, and reads nothing.
-fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, headers: []const std.http.Header) !void {
+fn streamFile(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    path: []const u8,
+    len: u64,
+    headers: []const std.http.Header,
+) !void {
     var hbuf: [1024]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = headers },
@@ -229,7 +385,13 @@ fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, h
             // its stat, cuts the stream with no last chunk, and its error
             // goes to the host's log (metal-vmm QUEUE 172: `end()` here wrote
             // the last chunk, a truncated file delivered as whole).
-            const n = try disk.readAt(io, alloc, path, at, buf[0..want]);
+            const n = try disk.readAt(
+                io,
+                alloc,
+                path,
+                at,
+                buf[0..want],
+            );
             if (n == 0) return error.UploadShorterThanItsStat;
             body.writer.writeAll(buf[0..n]) catch return; // the client is gone
             at += n;
@@ -247,12 +409,32 @@ const Range = struct { start: u64, end: u64 }; // inclusive byte offsets
 /// is unsupported — we serve the first range's window, which players accept.
 fn parseRange(hdr: []const u8, size: u64) ?Range {
     if (size == 0) return null;
-    const spec0 = if (std.mem.startsWith(u8, hdr, "bytes=")) hdr[6..] else return null;
+    const spec0 = if (std.mem.startsWith(
+        u8,
+        hdr,
+        "bytes=",
+    )) hdr[6..] else return null;
     // Take only the first range if a comma-list was sent.
-    const spec = if (std.mem.indexOfScalar(u8, spec0, ',')) |c| spec0[0..c] else spec0;
-    const dash = std.mem.indexOfScalar(u8, spec, '-') orelse return null;
-    const left = std.mem.trim(u8, spec[0..dash], " ");
-    const right = std.mem.trim(u8, spec[dash + 1 ..], " ");
+    const spec = if (std.mem.indexOfScalar(
+        u8,
+        spec0,
+        ',',
+    )) |c| spec0[0..c] else spec0;
+    const dash = std.mem.indexOfScalar(
+        u8,
+        spec,
+        '-',
+    ) orelse return null;
+    const left = std.mem.trim(
+        u8,
+        spec[0..dash],
+        " ",
+    );
+    const right = std.mem.trim(
+        u8,
+        spec[dash + 1 ..],
+        " ",
+    );
 
     var start: u64 = undefined;
     var end: u64 = size - 1;
@@ -278,7 +460,11 @@ fn parseRange(hdr: []const u8, size: u64) ?Range {
 /// $`) and returns its MIME, or null — doubling
 /// as the path-traversal guard for the file segment.
 fn uploadContentType(name: []const u8) ?[]const u8 {
-    const dot = std.mem.lastIndexOfScalar(u8, name, '.') orelse return null;
+    const dot = std.mem.lastIndexOfScalar(
+        u8,
+        name,
+        '.',
+    ) orelse return null;
     if (dot != 32) return null;
     for (name[0..32]) |c| {
         if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) return null;
@@ -318,15 +504,43 @@ const Sniffed = struct { ext: []const u8, kind: UploadKind };
 /// as nothing; every row's sample sniffs as that row (a test).
 fn detectUpload(data: []const u8) ?Sniffed {
     const ext = detectImageExt(data) orelse detectVideoExt(data) orelse return null;
-    for (accepted) |t| if (std.mem.eql(u8, t.ext, ext)) return .{ .ext = t.ext, .kind = t.kind };
+    for (accepted) |t| if (std.mem.eql(
+        u8,
+        t.ext,
+        ext,
+    )) return .{ .ext = t.ext, .kind = t.kind };
     return null;
 }
 
 fn detectImageExt(data: []const u8) ?[]const u8 {
-    if (data.len >= 8 and std.mem.startsWith(u8, data, "\x89PNG\r\n\x1a\n")) return "png";
-    if (data.len >= 3 and std.mem.startsWith(u8, data, "\xff\xd8\xff")) return "jpg";
-    if (data.len >= 6 and (std.mem.startsWith(u8, data, "GIF87a") or std.mem.startsWith(u8, data, "GIF89a"))) return "gif";
-    if (data.len >= 12 and std.mem.startsWith(u8, data, "RIFF") and std.mem.eql(u8, data[8..12], "WEBP")) return "webp";
+    if (data.len >= 8 and std.mem.startsWith(
+        u8,
+        data,
+        "\x89PNG\r\n\x1a\n",
+    )) return "png";
+    if (data.len >= 3 and std.mem.startsWith(
+        u8,
+        data,
+        "\xff\xd8\xff",
+    )) return "jpg";
+    if (data.len >= 6 and (std.mem.startsWith(
+        u8,
+        data,
+        "GIF87a",
+    ) or std.mem.startsWith(
+        u8,
+        data,
+        "GIF89a",
+    ))) return "gif";
+    if (data.len >= 12 and std.mem.startsWith(
+        u8,
+        data,
+        "RIFF",
+    ) and std.mem.eql(
+        u8,
+        data[8..12],
+        "WEBP",
+    )) return "webp";
     return null;
 }
 
@@ -334,9 +548,26 @@ fn detectImageExt(data: []const u8) ?[]const u8 {
 /// with the EBML magic; mp4 and mov are both ISO-BMFF with an "ftyp" box at
 /// offset 4 — the major brand at offset 8 ("qt  " = QuickTime) splits them.
 fn detectVideoExt(data: []const u8) ?[]const u8 {
-    if (data.len >= 4 and std.mem.eql(u8, data[0..4], &[_]u8{ 0x1A, 0x45, 0xDF, 0xA3 })) return "webm";
-    if (data.len >= 12 and std.mem.eql(u8, data[4..8], "ftyp")) {
-        return if (std.mem.eql(u8, data[8..12], "qt  ")) "mov" else "mp4";
+    if (data.len >= 4 and std.mem.eql(
+        u8,
+        data[0..4],
+        &[_]u8{
+            0x1A,
+            0x45,
+            0xDF,
+            0xA3,
+        },
+    )) return "webm";
+    if (data.len >= 12 and std.mem.eql(
+        u8,
+        data[4..8],
+        "ftyp",
+    )) {
+        return if (std.mem.eql(
+            u8,
+            data[8..12],
+            "qt  ",
+        )) "mov" else "mp4";
     }
     return null;
 }
@@ -347,14 +578,54 @@ fn detectVideoExt(data: []const u8) ?[]const u8 {
 /// match". The sniffers above decide what a file is; this names it.
 /// Each row also names its kind (its cap) and the least a file of it begins
 /// with, so a test holds the sniffers to the table.
-pub const accepted = [_]struct { ext: []const u8, mime: []const u8, kind: UploadKind, sample: []const u8 }{
-    .{ .ext = "png", .mime = "image/png", .kind = .image, .sample = "\x89PNG\r\n\x1a\n" },
-    .{ .ext = "jpg", .mime = "image/jpeg", .kind = .image, .sample = "\xff\xd8\xff\xe0" },
-    .{ .ext = "gif", .mime = "image/gif", .kind = .image, .sample = "GIF89a" },
-    .{ .ext = "webp", .mime = "image/webp", .kind = .image, .sample = "RIFF\x00\x00\x00\x00WEBP" },
-    .{ .ext = "mp4", .mime = "video/mp4", .kind = .video, .sample = "\x00\x00\x00\x18ftypisom" },
-    .{ .ext = "webm", .mime = "video/webm", .kind = .video, .sample = "\x1a\x45\xdf\xa3" },
-    .{ .ext = "mov", .mime = "video/quicktime", .kind = .video, .sample = "\x00\x00\x00\x14ftypqt  " },
+pub const accepted = [_]struct {
+    ext: []const u8,
+    mime: []const u8,
+    kind: UploadKind,
+    sample: []const u8,
+}{
+    .{
+        .ext = "png",
+        .mime = "image/png",
+        .kind = .image,
+        .sample = "\x89PNG\r\n\x1a\n",
+    },
+    .{
+        .ext = "jpg",
+        .mime = "image/jpeg",
+        .kind = .image,
+        .sample = "\xff\xd8\xff\xe0",
+    },
+    .{
+        .ext = "gif",
+        .mime = "image/gif",
+        .kind = .image,
+        .sample = "GIF89a",
+    },
+    .{
+        .ext = "webp",
+        .mime = "image/webp",
+        .kind = .image,
+        .sample = "RIFF\x00\x00\x00\x00WEBP",
+    },
+    .{
+        .ext = "mp4",
+        .mime = "video/mp4",
+        .kind = .video,
+        .sample = "\x00\x00\x00\x18ftypisom",
+    },
+    .{
+        .ext = "webm",
+        .mime = "video/webm",
+        .kind = .video,
+        .sample = "\x1a\x45\xdf\xa3",
+    },
+    .{
+        .ext = "mov",
+        .mime = "video/quicktime",
+        .kind = .video,
+        .sample = "\x00\x00\x00\x14ftypqt  ",
+    },
 };
 
 /// The accepted types as a file picker's `accept` attribute takes them.
@@ -369,13 +640,21 @@ pub const image_max = limits.body.upload_image;
 pub const video_max = limits.body.upload_video;
 
 fn extMime(ext: []const u8) ?[]const u8 {
-    for (accepted) |t| if (std.mem.eql(u8, t.ext, ext)) return t.mime;
+    for (accepted) |t| if (std.mem.eql(
+        u8,
+        t.ext,
+        ext,
+    )) return t.mime;
     return null;
 }
 
 /// The extension a MIME type is stored under, or null when it is not taken.
 pub fn extOf(mime: []const u8) ?[]const u8 {
-    for (accepted) |t| if (std.mem.eql(u8, t.mime, mime)) return t.ext;
+    for (accepted) |t| if (std.mem.eql(
+        u8,
+        t.mime,
+        mime,
+    )) return t.ext;
     return null;
 }
 
@@ -393,15 +672,31 @@ const Part = struct { filename: []const u8, data: []const u8 };
 /// multipartBoundary extracts the boundary token from a multipart Content-Type
 /// (`multipart/form-data; boundary=…`), handling an optional quoted value.
 fn multipartBoundary(ct: []const u8) ?[]const u8 {
-    const p = std.mem.indexOf(u8, ct, "boundary=") orelse return null;
+    const p = std.mem.indexOf(
+        u8,
+        ct,
+        "boundary=",
+    ) orelse return null;
     var v = ct[p + "boundary=".len ..];
     if (v.len > 0 and v[0] == '"') {
         v = v[1..];
-        const e = std.mem.indexOfScalar(u8, v, '"') orelse return null;
+        const e = std.mem.indexOfScalar(
+            u8,
+            v,
+            '"',
+        ) orelse return null;
         return v[0..e];
     }
-    if (std.mem.indexOfScalar(u8, v, ';')) |e| v = v[0..e];
-    return std.mem.trim(u8, v, " \t\r\n");
+    if (std.mem.indexOfScalar(
+        u8,
+        v,
+        ';',
+    )) |e| v = v[0..e];
+    return std.mem.trim(
+        u8,
+        v,
+        " \t\r\n",
+    );
 }
 
 /// parseMultipartFile returns the first part whose Content-Disposition name is
@@ -412,24 +707,48 @@ fn parseMultipartFile(body: []const u8, boundary: []const u8) ?Part {
     // QUEUE 172): a boundary is at most 70 bytes (RFC 2046 §5.1.1), and one
     // longer is no multipart we read.
     var delim_buf: [2 + 70]u8 = undefined;
-    const delim = std.fmt.bufPrint(&delim_buf, "--{s}", .{boundary}) catch return null;
-    var pos = std.mem.indexOf(u8, body, delim) orelse return null;
+    const delim = std.fmt.bufPrint(
+        &delim_buf,
+        "--{s}",
+        .{boundary},
+    ) catch return null;
+    var pos = std.mem.indexOf(
+        u8,
+        body,
+        delim,
+    ) orelse return null;
     while (true) {
         var i = pos + delim.len;
         if (i + 2 <= body.len and body[i] == '-' and body[i + 1] == '-') return null; // closing delimiter
         if (i + 2 <= body.len and body[i] == '\r' and body[i + 1] == '\n') i += 2;
 
-        const hdr_rel = std.mem.indexOf(u8, body[i..], "\r\n\r\n") orelse return null;
+        const hdr_rel = std.mem.indexOf(
+            u8,
+            body[i..],
+            "\r\n\r\n",
+        ) orelse return null;
         const headers = body[i .. i + hdr_rel];
         const data_start = i + hdr_rel + 4;
         // indexOfPos returns an ABSOLUTE index into body (not relative to data_start).
-        const next_abs = std.mem.indexOfPos(u8, body, data_start, delim) orelse return null;
+        const next_abs = std.mem.indexOfPos(
+            u8,
+            body,
+            data_start,
+            delim,
+        ) orelse return null;
         var data_end = next_abs;
         if (data_end >= data_start + 2 and body[data_end - 2] == '\r' and body[data_end - 1] == '\n') data_end -= 2;
 
         if (attrVal(headers, "name")) |nm| {
-            if (std.mem.eql(u8, nm, "file")) {
-                return .{ .filename = attrVal(headers, "filename") orelse "image", .data = body[data_start..data_end] };
+            if (std.mem.eql(
+                u8,
+                nm,
+                "file",
+            )) {
+                return .{
+                    .filename = attrVal(headers, "filename") orelse "image",
+                    .data = body[data_start..data_end],
+                };
             }
         }
         pos = next_abs; // advance to the next part's delimiter
@@ -441,12 +760,22 @@ fn parseMultipartFile(body: []const u8, boundary: []const u8) ?Part {
 /// `filename`.
 fn attrVal(headers: []const u8, attr: []const u8) ?[]const u8 {
     var i: usize = 0;
-    while (std.mem.indexOfPos(u8, headers, i, attr)) |p| {
+    while (std.mem.indexOfPos(
+        u8,
+        headers,
+        i,
+        attr,
+    )) |p| {
         i = p + attr.len;
         if (i + 1 >= headers.len or headers[i] != '=' or headers[i + 1] != '"') continue;
         if (p > 0 and isAlpha(headers[p - 1])) continue;
         const start = i + 2;
-        const end = std.mem.indexOfScalarPos(u8, headers, start, '"') orelse return null;
+        const end = std.mem.indexOfScalarPos(
+            u8,
+            headers,
+            start,
+            '"',
+        ) orelse return null;
         return headers[start..end];
     }
     return null;
@@ -459,7 +788,14 @@ fn isAlpha(c: u8) bool {
 const testing = std.testing;
 
 test "detectVideoExt splits mp4/mov by brand and finds webm" {
-    try testing.expectEqualStrings("webm", detectVideoExt(&[_]u8{ 0x1A, 0x45, 0xDF, 0xA3, 0x01, 0x02 }).?);
+    try testing.expectEqualStrings("webm", detectVideoExt(&[_]u8{
+        0x1A,
+        0x45,
+        0xDF,
+        0xA3,
+        0x01,
+        0x02,
+    }).?);
     try testing.expectEqualStrings("mov", detectVideoExt("\x00\x00\x00\x14ftypqt  ").?);
     try testing.expectEqualStrings("mp4", detectVideoExt("\x00\x00\x00\x18ftypisom").?);
     try testing.expect(detectVideoExt("\x89PNG\r\n\x1a\n") == null);
@@ -472,7 +808,10 @@ test "parseRange clamps to the file and to one window" {
     try testing.expectEqual(Range{ .start = 500, .end = 999 }, parseRange("bytes=500-999", 1000).?);
     try testing.expectEqual(Range{ .start = 800, .end = 999 }, parseRange("bytes=-200", 1000).?);
     // window cap: an open-ended range over a big file is bounded to range_window
-    try testing.expectEqual(Range{ .start = 0, .end = range_window - 1 }, parseRange("bytes=0-", 64 << 20).?);
+    try testing.expectEqual(
+        Range{ .start = 0, .end = range_window - 1 },
+        parseRange("bytes=0-", 64 << 20).?,
+    );
     // unsatisfiable / malformed
     try testing.expect(parseRange("bytes=2000-", 1000) == null);
     try testing.expect(parseRange("0-100", 1000) == null);
@@ -485,13 +824,20 @@ test "every type the table offers is one the sniffers find, of the table's kind,
         try std.testing.expectEqualStrings(t.ext, got.ext);
         try std.testing.expectEqual(t.kind, got.kind);
         try std.testing.expectEqualStrings(t.mime, extMime(got.ext).?);
-        try std.testing.expect(std.mem.startsWith(u8, t.mime, @tagName(t.kind)));
+        try std.testing.expect(std.mem.startsWith(
+            u8,
+            t.mime,
+            @tagName(t.kind),
+        ));
     }
 }
 
 test "parseRange: a first-pos of size - 1 is the last byte, one of size is unsatisfiable (RFC 9110 §14.1.2)" {
     const size: u64 = 1000;
-    try testing.expectEqual(Range{ .start = size - 1, .end = size - 1 }, parseRange("bytes=999-", size).?);
+    try testing.expectEqual(
+        Range{ .start = size - 1, .end = size - 1 },
+        parseRange("bytes=999-", size).?,
+    );
     try testing.expect(parseRange("bytes=1000-", size) == null);
     // A one-byte file: its only byte, and nothing past it.
     try testing.expectEqual(Range{ .start = 0, .end = 0 }, parseRange("bytes=0-", 1).?);
@@ -500,8 +846,14 @@ test "parseRange: a first-pos of size - 1 is the last byte, one of size is unsat
 
 test "parseRange: a last-pos of size - 1 and one of size both end at the last byte" {
     const size: u64 = 1000;
-    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=0-999", size).?);
-    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=0-1000", size).?);
+    try testing.expectEqual(
+        Range{ .start = 0, .end = size - 1 },
+        parseRange("bytes=0-999", size).?,
+    );
+    try testing.expectEqual(
+        Range{ .start = 0, .end = size - 1 },
+        parseRange("bytes=0-1000", size).?,
+    );
     // A last-pos one short of first-pos is invalid; equal to it is one byte.
     try testing.expectEqual(Range{ .start = 500, .end = 500 }, parseRange("bytes=500-500", size).?);
     try testing.expect(parseRange("bytes=500-499", size) == null);
@@ -510,20 +862,41 @@ test "parseRange: a last-pos of size - 1 and one of size both end at the last by
 test "parseRange: a suffix of size - 1 leaves the first byte, one of size or more is the whole file" {
     const size: u64 = 1000;
     try testing.expectEqual(Range{ .start = 1, .end = size - 1 }, parseRange("bytes=-999", size).?);
-    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=-1000", size).?);
-    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=-1001", size).?);
+    try testing.expectEqual(
+        Range{ .start = 0, .end = size - 1 },
+        parseRange("bytes=-1000", size).?,
+    );
+    try testing.expectEqual(
+        Range{ .start = 0, .end = size - 1 },
+        parseRange("bytes=-1001", size).?,
+    );
     // The last byte alone, and a suffix of nothing, which no file satisfies.
-    try testing.expectEqual(Range{ .start = size - 1, .end = size - 1 }, parseRange("bytes=-1", size).?);
+    try testing.expectEqual(
+        Range{ .start = size - 1, .end = size - 1 },
+        parseRange("bytes=-1", size).?,
+    );
     try testing.expect(parseRange("bytes=-0", size) == null);
 }
 
 test "parseRange: a range of exactly range_window bytes is served whole, one byte more is cut to the window" {
     const size: u64 = 64 << 20;
-    try testing.expectEqual(Range{ .start = 0, .end = range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window - 1}), size).?);
-    try testing.expectEqual(Range{ .start = 0, .end = range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window}), size).?);
+    try testing.expectEqual(
+        Range{ .start = 0, .end = range_window - 1 },
+        parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window - 1}), size).?,
+    );
+    try testing.expectEqual(
+        Range{ .start = 0, .end = range_window - 1 },
+        parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window}), size).?,
+    );
     // From a start past zero, the window is counted from the start.
-    try testing.expectEqual(Range{ .start = 5, .end = 5 + range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window - 1}), size).?);
-    try testing.expectEqual(Range{ .start = 5, .end = 5 + range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window}), size).?);
+    try testing.expectEqual(
+        Range{ .start = 5, .end = 5 + range_window - 1 },
+        parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window - 1}), size).?,
+    );
+    try testing.expectEqual(
+        Range{ .start = 5, .end = 5 + range_window - 1 },
+        parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window}), size).?,
+    );
 }
 
 test "the sniffers: data exactly a magic's length is found, one byte less is not" {
@@ -548,7 +921,10 @@ test "parseMultipartFile: a part of no bytes is empty, a part of one byte is tha
     try testing.expectEqualStrings("", parseMultipartFile(head ++ "\r\n--B--\r\n", "B").?.data);
     try testing.expectEqualStrings("Z", parseMultipartFile(head ++ "Z\r\n--B--\r\n", "B").?.data);
     // Data that is itself a CRLF keeps it: only the delimiter's CRLF is trimmed.
-    try testing.expectEqualStrings("\r\n", parseMultipartFile(head ++ "\r\n\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings(
+        "\r\n",
+        parseMultipartFile(head ++ "\r\n\r\n--B--\r\n", "B").?.data,
+    );
     // A delimiter with no CRLF before it trims nothing, at one byte or none.
     try testing.expectEqualStrings("Z", parseMultipartFile(head ++ "Z--B--", "B").?.data);
     try testing.expectEqualStrings("", parseMultipartFile(head ++ "--B--", "B").?.data);
@@ -577,7 +953,12 @@ test "a stream whose file ends before its length is cut, never ended as whole: n
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const path = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "clip.webm" });
+    const path = try std.fs.path.join(a, &.{
+        ".zig-cache",
+        "tmp",
+        &tmp.sub_path,
+        "clip.webm",
+    });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = &@as([1000]u8, @splat('x')) });
 
     var reader: std.Io.Reader = .fixed("GET /u/clip.webm HTTP/1.1\r\nHost: x\r\n\r\n");
@@ -585,9 +966,20 @@ test "a stream whose file ends before its length is cut, never ended as whole: n
     var server = std.http.Server.init(&reader, &out.writer);
     var req = try server.receiveHead();
     // Its stat said 2000 bytes; 1000 are there.
-    try std.testing.expectError(error.UploadShorterThanItsStat, streamFile(&req, io, a, path, 2000, &.{}));
+    try std.testing.expectError(error.UploadShorterThanItsStat, streamFile(
+        &req,
+        io,
+        a,
+        path,
+        2000,
+        &.{},
+    ));
     out.writer.flush() catch {};
-    try std.testing.expect(!std.mem.endsWith(u8, out.written(), "0\r\n\r\n"));
+    try std.testing.expect(!std.mem.endsWith(
+        u8,
+        out.written(),
+        "0\r\n\r\n",
+    ));
 }
 
 test "parseMultipartFile allocates nothing: memory that runs out is never 'no file', a 400 (metal-vmm QUEUE 172)" {
@@ -602,7 +994,11 @@ test "an upload's name that is not UTF-8 is answered as a JSON string, what does
     const name = try displayName(a, "caf\xe9 \xff.png");
     try std.testing.expect(std.unicode.utf8ValidateSlice(name));
     try std.testing.expectEqualStrings("caf\u{FFFD} \u{FFFD}.png", name);
-    const json = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(name, .{})});
+    const json = try std.fmt.allocPrint(
+        a,
+        "{f}",
+        .{std.json.fmt(name, .{})},
+    );
     try std.testing.expect(json[0] == '"');
     // Valid names pass as they are.
     try std.testing.expectEqualStrings("é.png", try displayName(a, "é.png"));

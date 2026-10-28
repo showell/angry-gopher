@@ -76,7 +76,15 @@ const Route = roc_chat.Route;
 /// in the order it always was: whether the viewer is in the DM and its
 /// other half exists, a channel's members, whether the topic exists, a
 /// read-only tail's method.
-pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route, now: Now) !void {
+pub fn serve(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    uid: []const u8,
+    route: Route,
+    now: Now,
+) !void {
     switch (route.family) {
         // Embedded JS assets are public (static client code): the router
         // sends them here before the gate.
@@ -86,28 +94,79 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         // across the site points here.
         // /chat, the conversations, a message's link: the Roc's (roc-webbox
         // chat/main.roc), served before Zig is reached.
-        .default, .conversations, .msg => std.debug.panic("chat.serve: {t} is the Roc's", .{route.family}),
+        .default, .conversations, .msg => std.debug.panic(
+            "chat.serve: {t} is the Roc's",
+            .{route.family},
+        ),
         // /chat/docs[/...]: the three-pane authoring surface (docs.zig).
-        .docs => return docs.handle(req, io, alloc, bus, uid, route.rest, now),
+        .docs => return docs.handle(
+            req,
+            io,
+            alloc,
+            bus,
+            uid,
+            route.rest,
+            now,
+        ),
         // /chat/recent, /images, /code [/stream]: the activity feed and the
         // per-user transcripts.
-        .recent => return recent.handle(req, alloc, bus, uid, route.rest),
-        .images => return images.handle(req, alloc, bus, uid, route.rest),
-        .code => return code.handle(req, alloc, bus, uid, route.rest),
+        .recent => return recent.handle(
+            req,
+            alloc,
+            bus,
+            uid,
+            route.rest,
+        ),
+        .images => return images.handle(
+            req,
+            alloc,
+            bus,
+            uid,
+            route.rest,
+        ),
+        .code => return code.handle(
+            req,
+            alloc,
+            bus,
+            uid,
+            route.rest,
+        ),
         // /chat/links: the Roc's (roc-webbox chat/main.roc `serve_rendered!`).
         .links => std.debug.panic("chat.serve: /chat/links is the Roc's", .{}),
         // /chat/search/words and /messages are the Roc's (metal-vmm QUEUE
         // 281, 282); nothing else under /chat/search is.
         .search => return http.notFound(req),
-        .dm => return convRoute(req, io, alloc, bus, uid, route),
-        .channel => return channelRoute(req, io, alloc, bus, uid, route),
+        .dm => return convRoute(
+            req,
+            io,
+            alloc,
+            bus,
+            uid,
+            route,
+        ),
+        .channel => return channelRoute(
+            req,
+            io,
+            alloc,
+            bus,
+            uid,
+            route,
+        ),
         // The two cross-page attention streams the prod JS opens on boot,
         // per-uid bus subscribers forwarding the published event JSON
         // verbatim (notify: status-strip pings + came-online; sidebar:
         // topic-added + user-online). Live-only: the server-rendered page is
         // the backlog.
-        .notifications => return sse.forward(req, bus, try chat_fanout.notifyBusKey(alloc, uid)),
-        .sidebar_stream => return sse.forward(req, bus, try chat_fanout.sidebarBusKey(alloc, uid)),
+        .notifications => return sse.forward(
+            req,
+            bus,
+            try chat_fanout.notifyBusKey(alloc, uid),
+        ),
+        .sidebar_stream => return sse.forward(
+            req,
+            bus,
+            try chat_fanout.sidebarBusKey(alloc, uid),
+        ),
         .not_found => return http.notFound(req),
     }
 }
@@ -120,59 +179,165 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
 /// **A FLOOR, NOT A DECISION**: the name must still be a channel's, so its
 /// folder is under the chat root; anything else is the Roc's mistake, the
 /// request's failure, never a page.
-fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route) !void {
+fn channelRoute(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    uid: []const u8,
+    route: Route,
+) !void {
     if (!chat_paths.validChannelName(route.key) or route.part != .topic) return error.NotAHandedBackTail;
     const conv = Conv{
         .meta = .{ .kind = .channel, .members = &.{} },
         .key = route.key,
-        .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{route.key}),
+        .base = try std.fmt.allocPrint(
+            alloc,
+            "/channel/{s}",
+            .{route.key},
+        ),
         .dir = try chat_paths.channelConvDir(alloc, route.key),
     };
-    return topicRoute(req, io, alloc, bus, route, uid, .{ .conv = conv, .sid = route.topic, .title = "" });
+    return topicRoute(
+        req,
+        io,
+        alloc,
+        bus,
+        route,
+        uid,
+        .{
+            .conv = conv,
+            .sid = route.topic,
+            .title = "",
+        },
+    );
 }
 
 /// convRoute serves a tail of /chat/c/<pair>/<topic> the Roc handed back,
 /// as channelRoute does: the key must still be a canonical pair, the
 /// viewer one of it.
-fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route) !void {
+fn convRoute(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    uid: []const u8,
+    route: Route,
+) !void {
     const pair = route.key;
-    if (!try chat_paths.chatKeyParticipant(alloc, pair, uid) or route.part != .topic) return error.NotAHandedBackTail;
-    const us = std.mem.indexOfScalar(u8, pair, '_').?;
+    if (!try chat_paths.chatKeyParticipant(
+        alloc,
+        pair,
+        uid,
+    ) or route.part != .topic) return error.NotAHandedBackTail;
+    const us = std.mem.indexOfScalar(
+        u8,
+        pair,
+        '_',
+    ).?;
     const conv = Conv{
-        .meta = try store.ConvMeta.dm(alloc, pair[0..us], pair[us + 1 ..]),
+        .meta = try store.ConvMeta.dm(
+            alloc,
+            pair[0..us],
+            pair[us + 1 ..],
+        ),
         .key = pair,
-        .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pair}),
+        .base = try std.fmt.allocPrint(
+            alloc,
+            "/chat/c/{s}",
+            .{pair},
+        ),
         .dir = try chat_paths.dmConvDir(alloc, pair),
     };
-    return topicRoute(req, io, alloc, bus, route, uid, .{ .conv = conv, .sid = route.topic, .title = "" });
+    return topicRoute(
+        req,
+        io,
+        alloc,
+        bus,
+        route,
+        uid,
+        .{
+            .conv = conv,
+            .sid = route.topic,
+            .title = "",
+        },
+    );
 }
 
 /// topicRoute serves the tails of a topic the Roc found the viewer's and handed
 /// back: its uploads, an upload, its stream, its download and its saved ids.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid: []const u8, topic: Topic) !void {
+fn topicRoute(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    route: Route,
+    uid: []const u8,
+    topic: Topic,
+) !void {
     const conv = topic.conv;
     switch (route.tail) {
-        .page => std.debug.panic("chat.topicRoute: the page is the Roc's, and its topic was here", .{}),
+        .page => std.debug.panic(
+            "chat.topicRoute: the page is the Roc's, and its topic was here",
+            .{},
+        ),
         // /uploads/<file>: serve a stored image.
         .uploads => {
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            return upload.serveUpload(req, io, alloc, conv.dir, topic.sid, route.rest);
+            return upload.serveUpload(
+                req,
+                io,
+                alloc,
+                conv.dir,
+                topic.sid,
+                route.rest,
+            );
         },
-        .stream => try chat_sse.streamTranscript(req, io, alloc, bus, .{ .dir = conv.dir, .key = conv.key, .sid = topic.sid }),
+        .stream => try chat_sse.streamTranscript(
+            req,
+            io,
+            alloc,
+            bus,
+            .{
+                .dir = conv.dir,
+                .key = conv.key,
+                .sid = topic.sid,
+            },
+        ),
         // A send: the Roc's (roc-webbox chat/main.roc `send!`), handed back
         // only when the conversation was not found, which was answered above.
-        .send, .invalid_send => std.debug.panic("chat.topicRoute: a send is the Roc's, and its conversation was here", .{}),
-        .upload => try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid),
+        .send, .invalid_send => std.debug.panic(
+            "chat.topicRoute: a send is the Roc's, and its conversation was here",
+            .{},
+        ),
+        .upload => try upload.handleUpload(
+            req,
+            io,
+            alloc,
+            uid,
+            conv.dir,
+            conv.base,
+            topic.sid,
+        ),
         // The Roc's (roc-webbox chat/main.roc `act!`, docs/ROC-CHAT.md C4):
         // it hands one back only when its `find!` or the topic did not, and that
         // was answered above.
-        .pin, .unpin, .reactions, .react => std.debug.panic("chat.topicRoute: {t} is the Roc's, and its topic was here", .{route.tail}),
+        .pin, .unpin, .reactions, .react => std.debug.panic(
+            "chat.topicRoute: {t} is the Roc's, and its topic was here",
+            .{route.tail},
+        ),
         // The Roc's (chat/main.roc `act!`), handed back only when the topic
         // was not found, which was answered above.
         .raw => std.debug.panic("chat.topicRoute: raw is the Roc's, and its topic was here", .{}),
         .download => {
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
-            try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
+            try download.serveBundle(
+                req,
+                io,
+                alloc,
+                conv.dir,
+                topic.sid,
+            );
         },
         // The Roc's (roc-webbox chat/main.roc `serve_saved!`).
         .saved => std.debug.panic("chat.topicRoute: saved is the Roc's", .{}),
@@ -195,8 +360,16 @@ fn isRead(req: *const Request) bool {
 /// serveAsset serves an embedded client bundle by file name (no leading slash).
 fn serveAsset(req: *Request, name: []const u8) !void {
     for (chrome.assets) |a| {
-        if (std.mem.eql(u8, a.name, name)) {
-            return http.serveEmbedded(req, a.body, http.js_ct);
+        if (std.mem.eql(
+            u8,
+            a.name,
+            name,
+        )) {
+            return http.serveEmbedded(
+                req,
+                a.body,
+                http.js_ct,
+            );
         }
     }
     return http.notFound(req);
@@ -207,8 +380,16 @@ fn serveAsset(req: *Request, name: []const u8) !void {
 /// formField pulls one application/x-www-form-urlencoded field from `body`,
 /// percent/plus-decoded, or null when absent. Field names here ("markdown",
 /// "cid") are literal, so only the value is decoded.
-pub fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
-    return http.formField(alloc, body, name);
+pub fn formField(
+    alloc: Alloc,
+    body: []const u8,
+    name: []const u8,
+) !?[]const u8 {
+    return http.formField(
+        alloc,
+        body,
+        name,
+    );
 }
 
 /// urlDecode is `http.formDecode`: one decoder for every form.

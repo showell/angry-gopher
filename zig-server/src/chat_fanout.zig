@@ -18,35 +18,67 @@ const Alloc = std.mem.Allocator;
 /// stream keys. Builder lives here (the publisher) so the stream handlers
 /// subscribe with the SAME function — no string drift.
 pub fn recentBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "rec:{s}", .{uid});
+    return std.fmt.allocPrint(
+        alloc,
+        "rec:{s}",
+        .{uid},
+    );
 }
 
 pub fn imagesBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "img:{s}", .{uid});
+    return std.fmt.allocPrint(
+        alloc,
+        "img:{s}",
+        .{uid},
+    );
 }
 
 pub fn codeBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "code:{s}", .{uid});
+    return std.fmt.allocPrint(
+        alloc,
+        "code:{s}",
+        .{uid},
+    );
 }
 
 /// notifyBusKey / sidebarBusKey are the per-uid keys for the two cross-page
 /// attention streams.
 /// Namespaced like the recent/images/code keys so nothing collides.
 pub fn notifyBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "ntf:{s}", .{uid});
+    return std.fmt.allocPrint(
+        alloc,
+        "ntf:{s}",
+        .{uid},
+    );
 }
 
 pub fn sidebarBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "sb:{s}", .{uid});
+    return std.fmt.allocPrint(
+        alloc,
+        "sb:{s}",
+        .{uid},
+    );
 }
 
 /// convKeyBaseURL returns the URL root for a conv addressed by its storage key.
 /// DM keys contain '_' (channel names exclude it), a sufficient discriminator.
 pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
-    if (std.mem.indexOfScalar(u8, conv_key, '_') != null) {
-        return std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv_key});
+    if (std.mem.indexOfScalar(
+        u8,
+        conv_key,
+        '_',
+    ) != null) {
+        return std.fmt.allocPrint(
+            alloc,
+            "/chat/c/{s}",
+            .{conv_key},
+        );
     }
-    return std.fmt.allocPrint(alloc, "/channel/{s}", .{conv_key});
+    return std.fmt.allocPrint(
+        alloc,
+        "/channel/{s}",
+        .{conv_key},
+    );
 }
 
 /// The fan-out's failures since boot: a surface that failed for one member
@@ -59,13 +91,33 @@ var fanout_last_buf: [192]u8 = undefined;
 var fanout_last: []const u8 = "";
 
 /// A fan-out step that failed, counted and said.
-pub fn fanoutFailed(surface: []const u8, who: []const u8, e: anyerror, conv_key: []const u8, sid: []const u8) void {
+pub fn fanoutFailed(
+    surface: []const u8,
+    who: []const u8,
+    e: anyerror,
+    conv_key: []const u8,
+    sid: []const u8,
+) void {
     fanout_failures += 1;
-    fanout_last = std.fmt.bufPrint(&fanout_last_buf, "{s} for member {s}, {s}, on {s}/{s}", .{ surface, who, @errorName(e), conv_key, sid }) catch surface;
+    fanout_last = std.fmt.bufPrint(
+        &fanout_last_buf,
+        "{s} for member {s}, {s}, on {s}/{s}",
+        .{
+            surface,
+            who,
+            @errorName(e),
+            conv_key,
+            sid,
+        },
+    ) catch surface;
 }
 
 /// The fan-out's failures as /admin/host shows them.
 pub fn fanoutText(alloc: Alloc) ![]const u8 {
     if (fanout_failures == 0) return "none";
-    return std.fmt.allocPrint(alloc, "{d}; the last: {s}", .{ fanout_failures, fanout_last });
+    return std.fmt.allocPrint(
+        alloc,
+        "{d}; the last: {s}",
+        .{ fanout_failures, fanout_last },
+    );
 }

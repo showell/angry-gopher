@@ -18,7 +18,11 @@ const ConvKind = chat_store.ConvKind;
 
 /// A conversation one viewer may read: its directory, its URL root, and what
 /// kind it is.
-pub const Reach = struct { dir: []const u8, base: []const u8, kind: ConvKind };
+pub const Reach = struct {
+    dir: []const u8,
+    base: []const u8,
+    kind: ConvKind,
+};
 
 /// **WHAT ONE VIEWER CAN SEE**, as the sidebar lists it: a DM with every
 /// other authorized member, and every channel they are a member of. A reader
@@ -30,17 +34,49 @@ pub const Reach = struct { dir: []const u8, base: []const u8, kind: ConvKind };
 /// is listed here, as the sidebar lists neither. A name the routes would
 /// refuse (a uid not canonical, a channel name not valid) is skipped too, so
 /// the walk is never wider than what the routes open.
-pub fn visibleConvs(io: Io, alloc: Alloc, uid: []const u8) ![]Reach {
+pub fn visibleConvs(
+    io: Io,
+    alloc: Alloc,
+    uid: []const u8,
+) ![]Reach {
     var out: std.ArrayList(Reach) = .empty;
     for (try users.listAuthorized(io, alloc)) |partner| {
-        if (std.mem.eql(u8, partner.id, uid)) continue;
+        if (std.mem.eql(
+            u8,
+            partner.id,
+            uid,
+        )) continue;
         if (!canonicalUid(partner.id)) continue;
-        const conv = try chatPairKey(alloc, uid, partner.id);
-        try out.append(alloc, .{ .dir = try dmConvDir(alloc, conv), .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}), .kind = .dm });
+        const conv = try chatPairKey(
+            alloc,
+            uid,
+            partner.id,
+        );
+        try out.append(alloc, .{
+            .dir = try dmConvDir(alloc, conv),
+            .base = try std.fmt.allocPrint(
+                alloc,
+                "/chat/c/{s}",
+                .{conv},
+            ),
+            .kind = .dm,
+        });
     }
-    for (try listUserChannels(io, alloc, uid)) |name| {
+    for (try listUserChannels(
+        io,
+        alloc,
+        uid,
+    )) |name| {
         if (!validChannelName(name)) continue;
-        try out.append(alloc, .{ .dir = try channelConvDir(alloc, name), .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name}), .kind = .channel });
+        try out.append(alloc, .{
+            .dir = try channelConvDir(alloc, name),
+            .base = try std.fmt.allocPrint(
+                alloc,
+                "/channel/{s}",
+                .{name},
+            ),
+            .kind = .channel,
+        });
     }
     return out.toOwnedSlice(alloc);
 }
@@ -50,14 +86,30 @@ pub fn visibleConvs(io: Io, alloc: Alloc, uid: []const u8) ![]Reach {
 /// where the per-viewer listings are not the question.
 pub fn listConvDirs(io: Io, alloc: Alloc) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
-    const entries = try store.list(io, alloc, chat_store.chat_root);
+    const entries = try store.list(
+        io,
+        alloc,
+        chat_store.chat_root,
+    );
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
         // Not a conversation: per-uid state (last-conv, last-sessions) lives here.
-        if (std.mem.eql(u8, entry.name, "users")) continue;
-        if (std.mem.eql(u8, entry.name, "channels")) {
+        if (std.mem.eql(
+            u8,
+            entry.name,
+            "users",
+        )) continue;
+        if (std.mem.eql(
+            u8,
+            entry.name,
+            "channels",
+        )) {
             const channels = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels" });
-            const chans = try store.list(io, alloc, channels);
+            const chans = try store.list(
+                io,
+                alloc,
+                channels,
+            );
             for (chans) |ch| {
                 if (ch.kind != .directory) continue;
                 try out.append(alloc, try std.fs.path.join(alloc, &.{ channels, ch.name }));
@@ -77,44 +129,99 @@ pub fn dmConvDir(alloc: Alloc, conv: []const u8) ![]u8 {
 
 /// channelConvDir is {chat_store.chat_root}/channels/<name>.
 pub fn channelConvDir(alloc: Alloc, name: []const u8) ![]u8 {
-    return std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels", name });
+    return std.fs.path.join(alloc, &.{
+        chat_store.chat_root,
+        "channels",
+        name,
+    });
 }
 
 /// transcriptPath is {conv_dir}/sessions/<sid>.md.
-pub fn transcriptPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
-    const file = try std.fmt.allocPrint(alloc, "{s}.md", .{sid});
-    return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
+pub fn transcriptPath(
+    alloc: Alloc,
+    conv_dir: []const u8,
+    sid: []const u8,
+) ![]u8 {
+    const file = try std.fmt.allocPrint(
+        alloc,
+        "{s}.md",
+        .{sid},
+    );
+    return std.fs.path.join(alloc, &.{
+        conv_dir,
+        "sessions",
+        file,
+    });
 }
 
 /// readTranscript reads a topic's literal on-disk transcript bytes, or null when
 /// the file is missing/unreadable.
 /// The /raw view serves
 /// these bytes verbatim.
-pub fn readTranscript(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?[]u8 {
-    const path = try transcriptPath(alloc, conv_dir, sid);
-    return store.readOrNull(io, alloc, path, .unlimited);
+pub fn readTranscript(
+    io: Io,
+    alloc: Alloc,
+    conv_dir: []const u8,
+    sid: []const u8,
+) !?[]u8 {
+    const path = try transcriptPath(
+        alloc,
+        conv_dir,
+        sid,
+    );
+    return store.readOrNull(
+        io,
+        alloc,
+        path,
+        .unlimited,
+    );
 }
 
 /// listTopics returns the topic ids (the `.md` basenames) under
 /// {conv_dir}/sessions, sorted ascending. Missing dir → empty.
-pub fn listTopics(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
+pub fn listTopics(
+    io: Io,
+    alloc: Alloc,
+    conv_dir: []const u8,
+) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions" });
-    const entries = try store.list(io, alloc, dir_path);
+    const entries = try store.list(
+        io,
+        alloc,
+        dir_path,
+    );
 
     var out: std.ArrayList([]const u8) = .empty;
     for (entries) |entry| {
         if (entry.kind == .directory) continue;
-        if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
+        if (!std.mem.endsWith(
+            u8,
+            entry.name,
+            ".md",
+        )) continue;
         const sid = entry.name[0 .. entry.name.len - ".md".len];
         try out.append(alloc, try alloc.dupe(u8, sid));
     }
     const slice = try out.toOwnedSlice(alloc);
-    std.mem.sort([]const u8, slice, {}, lessThanStr);
+    std.mem.sort(
+        []const u8,
+        slice,
+        {},
+        lessThanStr,
+    );
     return slice;
 }
 
-fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
-    return std.mem.lessThan(u8, a, b);
+fn lessThanStr(
+    _: void,
+    a: []const u8,
+    b: []const u8,
+) bool {
+    return std.mem.lessThan(
+        u8,
+        a,
+        b,
+    );
 }
 
 // ── channels ───────────────────────────────────────────
@@ -129,15 +236,40 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// that member, and a duplicate notified twice. `error.MalformedChannel`,
 /// never a guess at what the line meant: whoever wrote the file fixes it.
 /// Its own route refuses it; a listing skips and counts it.
-pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
-    const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
-    const path = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels", file });
-    const body = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
+pub fn channelMembers(
+    io: Io,
+    alloc: Alloc,
+    name: []const u8,
+) !?[][]const u8 {
+    const file = try std.fmt.allocPrint(
+        alloc,
+        "{s}.channel",
+        .{name},
+    );
+    const path = try std.fs.path.join(alloc, &.{
+        chat_store.chat_root,
+        "channels",
+        file,
+    });
+    const body = (try store.readOrNull(
+        io,
+        alloc,
+        path,
+        .unlimited,
+    )) orelse return null;
 
     var out: std.ArrayList([]const u8) = .empty;
-    var it = std.mem.splitScalar(u8, body, '\n');
+    var it = std.mem.splitScalar(
+        u8,
+        body,
+        '\n',
+    );
     while (it.next()) |raw| {
-        const line = std.mem.trim(u8, raw, " \t\r");
+        const line = std.mem.trim(
+            u8,
+            raw,
+            " \t\r",
+        );
         if (line.len == 0 or line[0] == '#') continue;
         if (!canonicalUid(line) or hasMember(out.items, line)) return error.MalformedChannel;
         try out.append(alloc, line);
@@ -148,7 +280,11 @@ pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
 /// hasMember reports whether `uid` is in `members`.
 pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
     for (members) |m| {
-        if (std.mem.eql(u8, m, uid)) return true;
+        if (std.mem.eql(
+            u8,
+            m,
+            uid,
+        )) return true;
     }
     return false;
 }
@@ -177,7 +313,11 @@ pub fn countMalformed(name: []const u8) void {
 /// The malformed channels as /admin/host shows them.
 pub fn malformedText(alloc: Alloc) ![]const u8 {
     if (malformed_channels == 0) return "none";
-    return std.fmt.allocPrint(alloc, "{d}; the last: #{s}", .{ malformed_channels, malformed_last });
+    return std.fmt.allocPrint(
+        alloc,
+        "{d}; the last: #{s}",
+        .{ malformed_channels, malformed_last },
+    );
 }
 
 /// **WHAT THE ROC CHAT DROPPED RATHER THAN FAIL A REQUEST FOR**, since boot
@@ -185,7 +325,11 @@ pub fn malformedText(alloc: Alloc) ![]const u8 {
 /// entry, row or announcement is its own, skipped and counted here, never a
 /// lasting 500 for every reader of the page. By kind, and the last one's
 /// kind and what it was about (its first 64 bytes).
-pub const Dropped = enum { announcement, feed_entry, recent_row };
+pub const Dropped = enum {
+    announcement,
+    feed_entry,
+    recent_row,
+};
 pub var dropped: std.EnumArray(Dropped, usize) = .initFill(0);
 
 var dropped_last_buf: [64]u8 = undefined;
@@ -207,13 +351,31 @@ pub fn droppedText(alloc: Alloc) ![]const u8 {
     const f = dropped.get(.feed_entry);
     const r = dropped.get(.recent_row);
     if (a + f + r == 0) return "none";
-    return std.fmt.allocPrint(alloc, "{d} damaged feeds, {d} damaged recent rows, {d} new-topic announcements; the last: {t} {f}", .{ f, r, a, dropped_last_kind, std.zig.fmtString(dropped_last) });
+    return std.fmt.allocPrint(
+        alloc,
+        "{d} damaged feeds, {d} damaged recent rows, {d} new-topic announcements; the last: {t} {f}",
+        .{
+            f,
+            r,
+            a,
+            dropped_last_kind,
+            std.zig.fmtString(dropped_last),
+        },
+    );
 }
 
 /// listUserChannels returns the names of channels `uid` is a member of, sorted:
 /// every channel's roster read (channelRosters), then memberChannels.
-pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
-    return memberChannels(alloc, try channelRosters(io, alloc), uid);
+pub fn listUserChannels(
+    io: Io,
+    alloc: Alloc,
+    uid: []const u8,
+) ![][]const u8 {
+    return memberChannels(
+        alloc,
+        try channelRosters(io, alloc),
+        uid,
+    );
 }
 
 /// A channel and its members, as channelMembers read them.
@@ -225,13 +387,25 @@ pub const Roster = struct { name: []const u8, members: [][]const u8 };
 /// since the listing skipped.
 pub fn channelRosters(io: Io, alloc: Alloc) ![]Roster {
     const dir_path = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels" });
-    const entries = try store.list(io, alloc, dir_path);
+    const entries = try store.list(
+        io,
+        alloc,
+        dir_path,
+    );
 
     var out: std.ArrayList(Roster) = .empty;
     for (entries) |entry| {
-        if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
+        if (!std.mem.endsWith(
+            u8,
+            entry.name,
+            ".channel",
+        )) continue;
         const name = entry.name[0 .. entry.name.len - ".channel".len];
-        const members = (channelMembers(io, alloc, name) catch |e| switch (e) {
+        const members = (channelMembers(
+            io,
+            alloc,
+            name,
+        ) catch |e| switch (e) {
             error.MalformedChannel => {
                 countMalformed(name);
                 continue;
@@ -247,13 +421,22 @@ pub fn channelRosters(io: Io, alloc: Alloc) ![]Roster {
 /// rosters `uid` is in, sorted by bytes. The Roc chat makes the same choice
 /// (roc-webbox chat/Paths.roc `member_channels`); chat_twin_test.zig holds
 /// it to this.
-pub fn memberChannels(alloc: Alloc, rosters: []const Roster, uid: []const u8) ![][]const u8 {
+pub fn memberChannels(
+    alloc: Alloc,
+    rosters: []const Roster,
+    uid: []const u8,
+) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
     for (rosters) |r| {
         if (hasMember(r.members, uid)) try out.append(alloc, r.name);
     }
     const slice = try out.toOwnedSlice(alloc);
-    std.mem.sort([]const u8, slice, {}, lessThanStr);
+    std.mem.sort(
+        []const u8,
+        slice,
+        {},
+        lessThanStr,
+    );
     return slice;
 }
 
@@ -270,14 +453,34 @@ pub fn memberChannels(alloc: Alloc, rosters: []const Roster, uid: []const u8) ![
 /// write one level up on Linux, and `05_5` and `5_05` would split one DM in
 /// two. Whether the other
 /// half is an account that exists is the route's to ask: this has no Io.
-pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool {
+pub fn chatKeyParticipant(
+    alloc: Alloc,
+    key: []const u8,
+    user: []const u8,
+) !bool {
     const cut = cutSeq(key, "_") orelse return false;
     const x = cut.before;
     const y = cut.after;
     if (!canonicalUid(x) or !canonicalUid(y)) return false;
-    const canon = try chatPairKey(alloc, x, y);
-    if (!std.mem.eql(u8, canon, key)) return false;
-    return std.mem.eql(u8, user, x) or std.mem.eql(u8, user, y);
+    const canon = try chatPairKey(
+        alloc,
+        x,
+        y,
+    );
+    if (!std.mem.eql(
+        u8,
+        canon,
+        key,
+    )) return false;
+    return std.mem.eql(
+        u8,
+        user,
+        x,
+    ) or std.mem.eql(
+        u8,
+        user,
+        y,
+    );
 }
 
 /// validPairKey reports whether `key` is a canonical DM key, as
@@ -287,16 +490,36 @@ pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool
 pub fn validPairKey(alloc: Alloc, key: []const u8) !bool {
     const cut = cutSeq(key, "_") orelse return false;
     if (!canonicalUid(cut.before) or !canonicalUid(cut.after)) return false;
-    return std.mem.eql(u8, try chatPairKey(alloc, cut.before, cut.after), key);
+    return std.mem.eql(
+        u8,
+        try chatPairKey(
+            alloc,
+            cut.before,
+            cut.after,
+        ),
+        key,
+    );
 }
 
 /// chatPairKey is the canonical DM key: the smaller numeric id first, joined by
 /// '_'.
-pub fn chatPairKey(alloc: Alloc, a: []const u8, b: []const u8) ![]u8 {
+pub fn chatPairKey(
+    alloc: Alloc,
+    a: []const u8,
+    b: []const u8,
+) ![]u8 {
     return if (atoiOr0(a) <= atoiOr0(b))
-        std.fmt.allocPrint(alloc, "{s}_{s}", .{ a, b })
+        std.fmt.allocPrint(
+            alloc,
+            "{s}_{s}",
+            .{ a, b },
+        )
     else
-        std.fmt.allocPrint(alloc, "{s}_{s}", .{ b, a });
+        std.fmt.allocPrint(
+            alloc,
+            "{s}_{s}",
+            .{ b, a },
+        );
 }
 
 /// A uid as allocateUser writes one: digits, the first not zero.
@@ -338,7 +561,11 @@ pub fn validTopicID(sid: []const u8) bool {
 /// shared by the /chat/msg/<id> lookup and reading_list's saved-ref parse (and a
 /// path guard for the embedded sid). One home so the two can't drift.
 pub fn validMsgRefID(id: []const u8) bool {
-    const cut = std.mem.lastIndexOfScalar(u8, id, '_') orelse return false;
+    const cut = std.mem.lastIndexOfScalar(
+        u8,
+        id,
+        '_',
+    ) orelse return false;
     const left = id[0..cut];
     const right = id[cut + 1 ..];
     if (left.len == 0 or right.len == 0) return false;
@@ -374,14 +601,50 @@ test "chatKeyParticipant: both halves are canonical uids, in order, and the user
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    try testing.expect(try chatKeyParticipant(a, "1_2", "1"));
-    try testing.expect(try chatKeyParticipant(a, "1_2", "2"));
-    try testing.expect(try chatKeyParticipant(a, "2_10", "10"));
-    try testing.expect(!try chatKeyParticipant(a, "1_2", "3"));
-    try testing.expect(!try chatKeyParticipant(a, "2_1", "1")); // not canonical
+    try testing.expect(try chatKeyParticipant(
+        a,
+        "1_2",
+        "1",
+    ));
+    try testing.expect(try chatKeyParticipant(
+        a,
+        "1_2",
+        "2",
+    ));
+    try testing.expect(try chatKeyParticipant(
+        a,
+        "2_10",
+        "10",
+    ));
+    try testing.expect(!try chatKeyParticipant(
+        a,
+        "1_2",
+        "3",
+    ));
+    try testing.expect(!try chatKeyParticipant(
+        a,
+        "2_1",
+        "1",
+    )); // not canonical
     // The other half is checked too, not taken as any text.
-    for ([_][]const u8{ ".._5", "._5", "abc_5", "05_5", "5_05", "0_5", "_5", "5_", "5_5_6", "5_6/x", "-1_5" }) |key| {
-        try testing.expect(!try chatKeyParticipant(a, key, "5"));
+    for ([_][]const u8{
+        ".._5",
+        "._5",
+        "abc_5",
+        "05_5",
+        "5_05",
+        "0_5",
+        "_5",
+        "5_",
+        "5_5_6",
+        "5_6/x",
+        "-1_5",
+    }) |key| {
+        try testing.expect(!try chatKeyParticipant(
+            a,
+            key,
+            "5",
+        ));
     }
 }
 
@@ -406,18 +669,40 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    const path = try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "team.channel" });
+    const path = try std.fs.path.join(a, &.{
+        chat_store.chat_root,
+        "channels",
+        "team.channel",
+    });
     try Io.Dir.cwd().createDirPath(f.io, std.fs.path.dirname(path).?);
     try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = "# the team\n1\n\n 2 \r\n" });
-    const ok = (try channelMembers(f.io, a, "team")).?;
+    const ok = (try channelMembers(
+        f.io,
+        a,
+        "team",
+    )).?;
     try testing.expectEqual(@as(usize, 2), ok.len);
-    for ([_][]const u8{ "1\n../../x\n", "1\n3 # Claude\n", "1\n2\n1\n", "007\n", "+7\n" }) |bad| {
+    for ([_][]const u8{
+        "1\n../../x\n",
+        "1\n3 # Claude\n",
+        "1\n2\n1\n",
+        "007\n",
+        "+7\n",
+    }) |bad| {
         try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = bad });
-        try testing.expectError(error.MalformedChannel, channelMembers(f.io, a, "team"));
+        try testing.expectError(error.MalformedChannel, channelMembers(
+            f.io,
+            a,
+            "team",
+        ));
         // A listing skips it and counts it (Steve, 2026-10-10): one bad file
         // is not every member's chat down.
         const before = malformed_channels;
-        try testing.expectEqual(@as(usize, 0), (try listUserChannels(f.io, a, "1")).len);
+        try testing.expectEqual(@as(usize, 0), (try listUserChannels(
+            f.io,
+            a,
+            "1",
+        )).len);
         try testing.expectEqual(before + 1, malformed_channels);
         try testing.expectEqualStrings("team", malformed_last);
     }
@@ -429,5 +714,16 @@ test "validPairKey: two uids, the smaller first; anything else is no DM key, nev
     defer arena.deinit();
     const x = arena.allocator();
     try std.testing.expect(try validPairKey(x, "1_2") and try validPairKey(x, "2_10"));
-    for ([_][]const u8{ "", "1", "2_1", "10_2", "01_2", "1_2_3", "../x", "1_..", "a_b", "1_" }) |bad| try std.testing.expect(!try validPairKey(x, bad));
+    for ([_][]const u8{
+        "",
+        "1",
+        "2_1",
+        "10_2",
+        "01_2",
+        "1_2_3",
+        "../x",
+        "1_..",
+        "a_b",
+        "1_",
+    }) |bad| try std.testing.expect(!try validPairKey(x, bad));
 }

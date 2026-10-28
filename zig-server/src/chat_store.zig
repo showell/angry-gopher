@@ -97,13 +97,31 @@ pub const Stream = struct {
 /// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
-pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream {
-    const path = try transcriptPath(alloc, topic.dir, topic.sid);
-    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
+pub fn openStream(
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    topic: TopicAddress,
+) !Stream {
+    const path = try transcriptPath(
+        alloc,
+        topic.dir,
+        topic.sid,
+    );
+    const key = try std.fmt.allocPrint(
+        alloc,
+        "{s}/{s}",
+        .{ topic.key, topic.sid },
+    );
 
     // A topic nobody has written to is genuinely empty; a topic that will
     // not read is not, and showing it as empty is how a transcript looks lost.
-    const raw = try store.readOrEmpty(io, alloc, path, .unlimited);
+    const raw = try store.readOrEmpty(
+        io,
+        alloc,
+        path,
+        .unlimited,
+    );
     const msgs = try decodeChatFile(alloc, raw);
     const sub = try bus.open(key);
     return .{ .backlog = msgs, .sub = sub };
@@ -117,9 +135,25 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream 
 /// `msg`. The count cache and the search index are the store's
 /// infrastructure, so they go with the append. An append that failed is
 /// the error, nothing stored; past it nothing fails.
-pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u8, index: usize, msg: ChatMessage) !void {
-    const path = try transcriptPath(alloc, topic.dir, topic.sid);
-    const new_size = try store.append(io, alloc, path, stored);
+pub fn storeMessage(
+    io: Io,
+    alloc: Alloc,
+    topic: TopicAddress,
+    stored: []const u8,
+    index: usize,
+    msg: ChatMessage,
+) !void {
+    const path = try transcriptPath(
+        alloc,
+        topic.dir,
+        topic.sid,
+    );
+    const new_size = try store.append(
+        io,
+        alloc,
+        path,
+        stored,
+    );
     // A crash between the append and this leaves a count whose size is not the
     // transcript's — in either order — so messageCount refuses it and recounts.
     // The size check is the protection, not the ordering.
@@ -129,7 +163,12 @@ pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u
     });
     // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
     // takes the message, or drops itself whole if it cannot.
-    search_index.noteAppend(io, topic.dir, topic.sid, msg);
+    search_index.noteAppend(
+        io,
+        topic.dir,
+        topic.sid,
+        msg,
+    );
 }
 
 // ── reactions sidecar ─────────────────────────────────────────────────────────
@@ -138,15 +177,41 @@ pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u
 /// reaction sidecar: one JSON event per line, append-only like the transcript
 /// it sits beside, and deliberately a SEPARATE file so the transcript never
 /// changes shape. Read whole by the client, which folds the events itself.
-pub fn reactionsPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
-    const file = try std.fmt.allocPrint(alloc, "{s}.reactions.jsonl", .{sid});
-    return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
+pub fn reactionsPath(
+    alloc: Alloc,
+    conv_dir: []const u8,
+    sid: []const u8,
+) ![]u8 {
+    const file = try std.fmt.allocPrint(
+        alloc,
+        "{s}.reactions.jsonl",
+        .{sid},
+    );
+    return std.fs.path.join(alloc, &.{
+        conv_dir,
+        "sessions",
+        file,
+    });
 }
 
 /// readReactions returns the sidecar's bytes, or "" when nobody has reacted yet.
-pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]const u8 {
-    const path = try reactionsPath(alloc, conv_dir, sid);
-    return store.readOrEmpty(io, alloc, path, .unlimited);
+pub fn readReactions(
+    io: Io,
+    alloc: Alloc,
+    conv_dir: []const u8,
+    sid: []const u8,
+) ![]const u8 {
+    const path = try reactionsPath(
+        alloc,
+        conv_dir,
+        sid,
+    );
+    return store.readOrEmpty(
+        io,
+        alloc,
+        path,
+        .unlimited,
+    );
 }
 
 /// **ONE LINE APPENDED TO AN APPEND-ONLY LINE FILE** (the Roc's
@@ -156,18 +221,54 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// newline, and the next one glued to it is one line that reads as neither:
 /// two lost where one was. So a file that does not end in a newline gets
 /// one first. Read before the store, so a read that fails stores nothing.
-pub fn appendLine(io: Io, alloc: Alloc, path: []const u8, line: []const u8) !void {
-    const lead = if (try endsMidLine(io, alloc, path)) "\n" else "";
-    _ = try store.append(io, alloc, path, try std.mem.concat(alloc, u8, &.{ lead, line, "\n" }));
+pub fn appendLine(
+    io: Io,
+    alloc: Alloc,
+    path: []const u8,
+    line: []const u8,
+) !void {
+    const lead = if (try endsMidLine(
+        io,
+        alloc,
+        path,
+    )) "\n" else "";
+    _ = try store.append(
+        io,
+        alloc,
+        path,
+        try std.mem.concat(
+            alloc,
+            u8,
+            &.{
+                lead,
+                line,
+                "\n",
+            },
+        ),
+    );
 }
 
 /// Whether the file at `path` has bytes and its last is not a newline: an
 /// append that was cut short. No file, or an empty one, is not.
-fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
-    const st = (try store.statOrNull(io, alloc, path)) orelse return false;
+fn endsMidLine(
+    io: Io,
+    alloc: Alloc,
+    path: []const u8,
+) !bool {
+    const st = (try store.statOrNull(
+        io,
+        alloc,
+        path,
+    )) orelse return false;
     if (st.size == 0) return false;
     var last: [1]u8 = undefined;
-    if (try store.readAt(io, alloc, path, st.size - 1, &last) != 1) return error.ShortRead;
+    if (try store.readAt(
+        io,
+        alloc,
+        path,
+        st.size - 1,
+        &last,
+    ) != 1) return error.ShortRead;
     return last[0] != '\n';
 }
 
@@ -176,7 +277,11 @@ fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
 /// topic's bus key `<key>/<sid>`), and its id (`sid`). Not chat_conv.Topic,
 /// the routed topic a handler holds (its conversation, id and title), from
 /// which this is made.
-pub const TopicAddress = struct { dir: []const u8, key: []const u8, sid: []const u8 };
+pub const TopicAddress = struct {
+    dir: []const u8,
+    key: []const u8,
+    sid: []const u8,
+};
 
 /// Who writes: the display name stored with the message, and the uid.
 pub const Author = struct { name: []const u8, id: []const u8 };
@@ -196,8 +301,16 @@ pub const ConvMeta = struct {
     /// yourself (`1_1`) the two are one, and listed twice they were sent
     /// every notice twice and had every image and code block written to
     /// their images.md and code.md twice.
-    pub fn dm(alloc: Alloc, a: []const u8, b: []const u8) !ConvMeta {
-        const members = try alloc.alloc([]const u8, if (std.mem.eql(u8, a, b)) 1 else 2);
+    pub fn dm(
+        alloc: Alloc,
+        a: []const u8,
+        b: []const u8,
+    ) !ConvMeta {
+        const members = try alloc.alloc([]const u8, if (std.mem.eql(
+            u8,
+            a,
+            b,
+        )) 1 else 2);
         members[0] = a;
         if (members.len == 2) members[1] = b;
         return .{ .kind = .dm, .members = members };
@@ -218,7 +331,11 @@ const Cut = struct { before: []const u8, after: []const u8 };
 /// cutSeq splits `s` at the first `needle`, returning the parts, or null when
 /// absent.
 pub fn cutSeq(s: []const u8, needle: []const u8) ?Cut {
-    const idx = std.mem.indexOf(u8, s, needle) orelse return null;
+    const idx = std.mem.indexOf(
+        u8,
+        s,
+        needle,
+    ) orelse return null;
     return .{ .before = s[0..idx], .after = s[idx + needle.len ..] };
 }
 
@@ -241,16 +358,36 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     defer tmp.cleanup();
     // Every root under the temp tree, and back after (157(c)): it set this
     // one and never put it back.
-    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{
+        ".zig-cache",
+        "tmp",
+        &tmp.sub_path,
+    }));
     defer saved.restore();
 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
     const dir = try dmConvDir(a, "1_2");
-    _ = try fixtures.storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world");
+    _ = try fixtures.storeForTest(
+        io,
+        a,
+        Now.read(io),
+        .{
+            .dir = dir,
+            .key = "1_2",
+            .sid = "topic",
+        },
+        .{ .name = "Tester", .id = "1" },
+        "hello world",
+    );
 
-    const msgs = try decodeChatFile(a, (try readTranscript(io, a, dir, "topic")).?);
+    const msgs = try decodeChatFile(a, (try readTranscript(
+        io,
+        a,
+        dir,
+        "topic",
+    )).?);
     try testing.expectEqual(@as(usize, 1), msgs.len);
     try testing.expectEqualStrings("Tester", msgs[0].from);
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
@@ -263,18 +400,55 @@ test "a line after a torn one starts its own line: the torn line is lost, the ne
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    const path = try reactionsPath(a, f.dir, "topic");
+    const path = try reactionsPath(
+        a,
+        f.dir,
+        "topic",
+    );
     // A stop cut the last append short: no newline after it.
     const torn = "{\"msg\":1,\"uid\":\"1\",\"fr";
-    _ = try store.append(f.io, a, path, torn);
+    _ = try store.append(
+        f.io,
+        a,
+        path,
+        torn,
+    );
 
     const line = "{\"msg\":1}";
-    try appendLine(f.io, a, path, line);
-    const after = try readReactions(f.io, a, f.dir, "topic");
-    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n{s}\n", .{ torn, line }), after);
+    try appendLine(
+        f.io,
+        a,
+        path,
+        line,
+    );
+    const after = try readReactions(
+        f.io,
+        a,
+        f.dir,
+        "topic",
+    );
+    try testing.expectEqualStrings(try std.fmt.allocPrint(
+        a,
+        "{s}\n{s}\n",
+        .{ torn, line },
+    ), after);
     // The next line needs no newline of its own: the file ended in one.
     const second = "{\"msg\":2}";
-    try appendLine(f.io, a, path, second);
-    const twice = try readReactions(f.io, a, f.dir, "topic");
-    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}{s}\n", .{ after, second }), twice);
+    try appendLine(
+        f.io,
+        a,
+        path,
+        second,
+    );
+    const twice = try readReactions(
+        f.io,
+        a,
+        f.dir,
+        "topic",
+    );
+    try testing.expectEqualStrings(try std.fmt.allocPrint(
+        a,
+        "{s}{s}\n",
+        .{ after, second },
+    ), twice);
 }

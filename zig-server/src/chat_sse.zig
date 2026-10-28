@@ -45,12 +45,23 @@ const Request = std.http.Server.Request;
 /// **THE BODY IS DELIMITED BY THE CONNECTION CLOSING**, not chunked: the host
 /// writes each live frame as it is, long after this handler has returned, and
 /// there is no chunk framing for it to carry on.
-pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: store.TopicAddress) !void {
+pub fn streamTranscript(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    topic: store.TopicAddress,
+) !void {
     // A stream is a GET's (metal-vmm QUEUE 176.3).
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const since = try sse.readResume(req, alloc);
 
-    const stream = try store.openStream(io, alloc, bus, topic);
+    const stream = try store.openStream(
+        io,
+        alloc,
+        bus,
+        topic,
+    );
     // This handler owns the subscriber until the host takes it.
     var held = bus.hold(stream.sub);
     defer held.release();
@@ -58,9 +69,17 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: s
     var hbuf: [4096]u8 = undefined;
     var body = sse.respond(req, &hbuf) catch return;
 
-    const rest = backlogFrom(stream.backlog, topic.sid, since);
+    const rest = backlogFrom(
+        stream.backlog,
+        topic.sid,
+        since,
+    );
     {
-        const pre = try std.fmt.allocPrint(alloc, "event: backlog-size\ndata: {d}\n\n", .{rest.len});
+        const pre = try std.fmt.allocPrint(
+            alloc,
+            "event: backlog-size\ndata: {d}\n\n",
+            .{rest.len},
+        );
         sse.push(&body, pre) catch return;
     }
 
@@ -69,7 +88,14 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: s
         // Its index from its id, as the live stream's: a refused block before
         // it keeps its number (chat_store.countBlocks).
         const index = chat_count.indexOf(m.id, topic.sid) orelse i;
-        const frame = try chat_frame.messageFrame(alloc, .{ .index = index, .from = m.from, .from_uid = m.uid, .at = m.at, .id = m.id, .markdown = m.markdown });
+        const frame = try chat_frame.messageFrame(alloc, .{
+            .index = index,
+            .from = m.from,
+            .from_uid = m.uid,
+            .at = m.at,
+            .id = m.id,
+            .markdown = m.markdown,
+        });
         sse.push(&body, frame) catch return;
     }
 
@@ -79,7 +105,11 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: s
 
 /// A topic stream's render: the published blob is the frame (chat_frame.zig),
 /// so it goes out as it is. It cannot fail, and makes nothing.
-fn verbatim(_: []const u8, _: Alloc, blob: []const u8) Alloc.Error!?[]const u8 {
+fn verbatim(
+    _: []const u8,
+    _: Alloc,
+    blob: []const u8,
+) Alloc.Error!?[]const u8 {
     return blob;
 }
 
@@ -89,7 +119,11 @@ fn verbatim(_: []const u8, _: Alloc, blob: []const u8) Alloc.Error!?[]const u8 {
 /// stream resumes). **AN INDEX, NOT A POSITION**: a frame's
 /// `id:` is its message's index, so a refused block before it leaves the
 /// backlog's positions behind the indexes after it.
-fn backlogFrom(backlog: []const store.ChatMessage, sid: []const u8, since: usize) []const store.ChatMessage {
+fn backlogFrom(
+    backlog: []const store.ChatMessage,
+    sid: []const u8,
+    since: usize,
+) []const store.ChatMessage {
     for (backlog, 0..) |m, i| {
         if ((chat_count.indexOf(m.id, sid) orelse i) >= since) return backlog[i..];
     }
@@ -105,21 +139,50 @@ test "a reconnect past a refused block misses nothing: since is an index, not a 
     // t_3 (its id: 2) reconnects with since = 3 and must get t_4.
     const m = struct {
         fn of(id: []const u8) store.ChatMessage {
-            return .{ .id = id, .from = "a", .at = "d", .markdown = "x" };
+            return .{
+                .id = id,
+                .from = "a",
+                .at = "d",
+                .markdown = "x",
+            };
         }
     };
-    const backlog = [_]store.ChatMessage{ m.of("t_1"), m.of("t_3"), m.of("t_4") };
-    const rest = backlogFrom(&backlog, "t", 3);
+    const backlog = [_]store.ChatMessage{
+        m.of("t_1"),
+        m.of("t_3"),
+        m.of("t_4"),
+    };
+    const rest = backlogFrom(
+        &backlog,
+        "t",
+        3,
+    );
     try testing.expectEqual(@as(usize, 1), rest.len);
     try testing.expectEqualStrings("t_4", rest[0].id);
-    try testing.expectEqual(@as(usize, 3), backlogFrom(&backlog, "t", 0).len);
-    try testing.expectEqual(@as(usize, 2), backlogFrom(&backlog, "t", 1).len); // t_3 is index 2
-    try testing.expectEqual(@as(usize, 0), backlogFrom(&backlog, "t", 4).len);
+    try testing.expectEqual(@as(usize, 3), backlogFrom(
+        &backlog,
+        "t",
+        0,
+    ).len);
+    try testing.expectEqual(@as(usize, 2), backlogFrom(
+        &backlog,
+        "t",
+        1,
+    ).len); // t_3 is index 2
+    try testing.expectEqual(@as(usize, 0), backlogFrom(
+        &backlog,
+        "t",
+        4,
+    ).len);
 }
 
 test "a topic stream's render sends the published frame as it is" {
     const frame = "id: 3\ndata: {\"index\":3}\n\n";
-    try testing.expectEqualStrings(frame, (try verbatim("", testing.allocator, frame)).?);
+    try testing.expectEqualStrings(frame, (try verbatim(
+        "",
+        testing.allocator,
+        frame,
+    )).?);
 }
 
 test {

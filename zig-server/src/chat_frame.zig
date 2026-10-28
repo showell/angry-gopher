@@ -38,7 +38,11 @@ pub fn messageFrame(alloc: Alloc, m: Message) ![]u8 {
     const html = try markdown.render(alloc, m.markdown);
     var out: std.Io.Writer.Allocating = .init(alloc);
     const w = &out.writer;
-    try w.print("id: {d}\ndata: {{\"index\":{d},\"from\":{f}", .{ m.index, m.index, std.json.fmt(m.from, .{}) });
+    try w.print("id: {d}\ndata: {{\"index\":{d},\"from\":{f}", .{
+        m.index,
+        m.index,
+        std.json.fmt(m.from, .{}),
+    });
     if (m.from_uid.len > 0) try w.print(",\"from_uid\":{f}", .{std.json.fmt(m.from_uid, .{})});
     try w.print(",\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f}", .{
         std.json.fmt(m.at, .{}),       std.json.fmt(html, .{}),
@@ -54,7 +58,11 @@ pub fn messageFrame(alloc: Alloc, m: Message) ![]u8 {
 /// a reaction is not a message, and the client's resume cursor stays on
 /// messages.
 pub fn reactionFrame(alloc: Alloc, line: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "event: reaction\ndata: {s}\n\n", .{line});
+    return std.fmt.allocPrint(
+        alloc,
+        "event: reaction\ndata: {s}\n\n",
+        .{line},
+    );
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────
@@ -75,9 +83,22 @@ const Data = struct {
 
 fn parseData(a: Alloc, frame: []const u8) !std.json.Parsed(Data) {
     const pfx = "data: ";
-    const start = (std.mem.indexOf(u8, frame, pfx) orelse return error.NoData) + pfx.len;
-    const end = (std.mem.indexOf(u8, frame[start..], "\n\n") orelse return error.NoEnd) + start;
-    return std.json.parseFromSlice(Data, a, frame[start..end], .{});
+    const start = (std.mem.indexOf(
+        u8,
+        frame,
+        pfx,
+    ) orelse return error.NoData) + pfx.len;
+    const end = (std.mem.indexOf(
+        u8,
+        frame[start..],
+        "\n\n",
+    ) orelse return error.NoEnd) + start;
+    return std.json.parseFromSlice(
+        Data,
+        a,
+        frame[start..end],
+        .{},
+    );
 }
 
 test "messageFrame: id is the index, fields JSON-escaped, html rendered, no mine, empty cid omitted" {
@@ -85,14 +106,44 @@ test "messageFrame: id is the index, fields JSON-escaped, html rendered, no mine
     defer arena.deinit();
     const a = arena.allocator();
 
-    const frame = try messageFrame(a, .{ .index = 7, .from = "A\"B", .at = "2026-10-25T12:00:00Z", .id = "t_8", .markdown = "**hi**" });
-    try testing.expect(std.mem.startsWith(u8, frame, "id: 7\ndata: {"));
-    try testing.expect(std.mem.endsWith(u8, frame, "}\n\n"));
+    const frame = try messageFrame(a, .{
+        .index = 7,
+        .from = "A\"B",
+        .at = "2026-10-25T12:00:00Z",
+        .id = "t_8",
+        .markdown = "**hi**",
+    });
+    try testing.expect(std.mem.startsWith(
+        u8,
+        frame,
+        "id: 7\ndata: {",
+    ));
+    try testing.expect(std.mem.endsWith(
+        u8,
+        frame,
+        "}\n\n",
+    ));
     // One data line: the JSON escapes every newline it carries.
-    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, frame, "\n"));
-    try testing.expect(std.mem.indexOf(u8, frame, "\"mine\"") == null);
-    try testing.expect(std.mem.indexOf(u8, frame, "\"cid\"") == null);
-    try testing.expect(std.mem.indexOf(u8, frame, "\"from_uid\"") == null);
+    try testing.expectEqual(@as(usize, 3), std.mem.count(
+        u8,
+        frame,
+        "\n",
+    ));
+    try testing.expect(std.mem.indexOf(
+        u8,
+        frame,
+        "\"mine\"",
+    ) == null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        frame,
+        "\"cid\"",
+    ) == null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        frame,
+        "\"from_uid\"",
+    ) == null);
 
     const p = try parseData(a, frame);
     try testing.expectEqual(@as(usize, 7), p.value.index);
@@ -107,9 +158,24 @@ test "messageFrame: a cid rides last, and a multi-line message is still one data
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const frame = try messageFrame(a, .{ .index = 0, .from = "Steve", .at = "d", .id = "t_1", .markdown = "one\n\ntwo\n```\ncode\n```", .cid = "c-9" });
-    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, frame, "\n"));
-    try testing.expect(std.mem.endsWith(u8, frame, ",\"cid\":\"c-9\"}\n\n"));
+    const frame = try messageFrame(a, .{
+        .index = 0,
+        .from = "Steve",
+        .at = "d",
+        .id = "t_1",
+        .markdown = "one\n\ntwo\n```\ncode\n```",
+        .cid = "c-9",
+    });
+    try testing.expectEqual(@as(usize, 3), std.mem.count(
+        u8,
+        frame,
+        "\n",
+    ));
+    try testing.expect(std.mem.endsWith(
+        u8,
+        frame,
+        ",\"cid\":\"c-9\"}\n\n",
+    ));
     try testing.expectEqualStrings("c-9", (try parseData(a, frame)).value.cid.?);
 }
 
@@ -124,9 +190,25 @@ test "messageFrame: a known author's uid rides after their name" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const frame = try messageFrame(a, .{ .index = 2, .from = "Steve", .from_uid = "1", .at = "d", .id = "t_3", .markdown = "hi", .cid = "c-1" });
-    try testing.expect(std.mem.startsWith(u8, frame, "id: 2\ndata: {\"index\":2,\"from\":\"Steve\",\"from_uid\":\"1\",\"at\":"));
-    try testing.expect(std.mem.endsWith(u8, frame, ",\"cid\":\"c-1\"}\n\n"));
+    const frame = try messageFrame(a, .{
+        .index = 2,
+        .from = "Steve",
+        .from_uid = "1",
+        .at = "d",
+        .id = "t_3",
+        .markdown = "hi",
+        .cid = "c-1",
+    });
+    try testing.expect(std.mem.startsWith(
+        u8,
+        frame,
+        "id: 2\ndata: {\"index\":2,\"from\":\"Steve\",\"from_uid\":\"1\",\"at\":",
+    ));
+    try testing.expect(std.mem.endsWith(
+        u8,
+        frame,
+        ",\"cid\":\"c-1\"}\n\n",
+    ));
     const p = try parseData(a, frame);
     try testing.expectEqualStrings("1", p.value.from_uid.?);
     try testing.expectEqualStrings("c-1", p.value.cid.?);

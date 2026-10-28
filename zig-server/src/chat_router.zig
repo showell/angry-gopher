@@ -62,11 +62,24 @@ fn requestTime(io: Io) Now {
 
 /// handle answers `sub`, the path under /chat, or under /channel when
 /// `channel`.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, channel: bool) !void {
+pub fn handle(
+    req: *Request,
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    sub: []const u8,
+    channel: bool,
+) !void {
     // The request's time, read once: everything it stamps carries it
     // (request_time.zig).
     const now = requestTime(io);
-    var call: Call = .{ .req = req, .io = io, .alloc = alloc, .bus = bus, .now = now };
+    var call: Call = .{
+        .req = req,
+        .io = io,
+        .alloc = alloc,
+        .bus = bus,
+        .now = now,
+    };
     // **THE ROC'S MEMORY IS THE REQUEST'S**: it allocates on this request's
     // allocator itself (freed whole with the request: the kernel's request
     // heap, webbox's arena per request on Linux), with no arena over it, so
@@ -74,7 +87,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     roc_chat.useRequest(alloc);
     // A crash after a kept failure is that failure's: every hosted function
     // answers empty once one has failed, which the Roc may not survive.
-    const decision = roc_chat.decide(alloc, sub, channel, req.head.method, call.host()) catch |e| return call.failed orelse e;
+    const decision = roc_chat.decide(
+        alloc,
+        sub,
+        channel,
+        req.head.method,
+        call.host(),
+    ) catch |e| return call.failed orelse e;
     // A failure the Roc could not be told (the store, reading who it is)
     // fails the request, as it did before the router.
     if (call.failed) |e| return e;
@@ -83,7 +102,10 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     // again is its bug, said and never sent. `.answered` with neither a
     // host answer nor a failure behind it is the router's 500, not silence.
     if (call.answered) {
-        if (decision != .answered) std.log.err("chat: the Roc answered {f} after the host had answered", .{decision});
+        if (decision != .answered) std.log.err(
+            "chat: the Roc answered {f} after the host had answered",
+            .{decision},
+        );
         return;
     }
     if (decision == .answered) return error.AnsweredWithoutAnswer;
@@ -95,16 +117,44 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
         // Built by the Roc from a conversation's base and a topic, which the
         // store's names keep on the site: one off it is a bug, the router's
         // 500, never a redirect somewhere else.
-        .redirect => |location| return http.redirect(req, try http.Target.format(alloc, "{s}", .{location})),
-        .to_login => |next| return toLogin(req, alloc, next),
+        .redirect => |location| return http.redirect(req, try http.Target.format(
+            alloc,
+            "{s}",
+            .{location},
+        )),
+        .to_login => |next| return toLogin(
+            req,
+            alloc,
+            next,
+        ),
         .serve => |s| {
-            if (s.presence) presence.markActiveAndBroadcast(io, alloc, bus, call.uid, now);
-            return chat.serve(req, io, alloc, bus, call.uid, s.route, now);
+            if (s.presence) presence.markActiveAndBroadcast(
+                io,
+                alloc,
+                bus,
+                call.uid,
+                now,
+            );
+            return chat.serve(
+                req,
+                io,
+                alloc,
+                bus,
+                call.uid,
+                s.route,
+                now,
+            );
         },
         .respond => |r| {
-            const headers = [_]std.http.Header{ .{ .name = "content-type", .value = r.content_type }, .{ .name = "x-content-type-options", .value = "nosniff" } };
+            const headers = [_]std.http.Header{
+                .{ .name = "content-type", .value = r.content_type },
+                .{ .name = "x-content-type-options", .value = "nosniff" },
+            };
             const n: usize = if (r.content_type.len == 0) 0 else if (r.nosniff) 2 else 1;
-            return req.respond(r.body, .{ .status = @fromBackingInt(@intCast(r.status)), .extra_headers = headers[0..n] });
+            return req.respond(
+                r.body,
+                .{ .status = @fromBackingInt(@intCast(r.status)), .extra_headers = headers[0..n] },
+            );
         },
         .not_allowed => |m| return http.methodNotAllowed(req, m),
         // The host answered inside the call (a body too big): nothing more.
@@ -112,14 +162,36 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
         // The site's 400 for every malformed form (webbox site.zig).
         .malformed_form => return error.MalformedForm,
         .not_found => return http.notFound(req),
-        .found => |location| return http.redirectWith(req, try http.Target.format(alloc, "{s}", .{location}), .{ .status = .found }),
+        .found => |location| return http.redirectWith(
+            req,
+            try http.Target.format(
+                alloc,
+                "{s}",
+                .{location},
+            ),
+            .{ .status = .found },
+        ),
         // The host's bytes between the Roc's: a transcript (nothing around
         // it, so it goes out as read) or a page around rendered links.
         .held => |h| {
-            const headers = [_]std.http.Header{ .{ .name = "content-type", .value = h.content_type }, .{ .name = "x-content-type-options", .value = "nosniff" } };
+            const headers = [_]std.http.Header{
+                .{ .name = "content-type", .value = h.content_type },
+                .{ .name = "x-content-type-options", .value = "nosniff" },
+            };
             const n: usize = if (h.content_type.len == 0) 0 else if (h.nosniff) 2 else 1;
-            const body = if (h.before.len == 0 and h.after.len == 0) call.held else try std.mem.concat(alloc, u8, &.{ h.before, call.held, h.after });
-            return req.respond(body, .{ .status = @fromBackingInt(@intCast(h.status)), .extra_headers = headers[0..n] });
+            const body = if (h.before.len == 0 and h.after.len == 0) call.held else try std.mem.concat(
+                alloc,
+                u8,
+                &.{
+                    h.before,
+                    call.held,
+                    h.after,
+                },
+            );
+            return req.respond(
+                body,
+                .{ .status = @fromBackingInt(@intCast(h.status)), .extra_headers = headers[0..n] },
+            );
         },
     }
 }
@@ -128,9 +200,20 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
 /// chat/main.roc `dispatch!`): **the request's own path, so one that is no
 /// path on this site is its 400** (metal-vmm QUEUE 250), never a redirect
 /// to the root or anywhere else.
-pub fn toLogin(req: *Request, alloc: Alloc, next: []const u8) !void {
-    const back = http.Target.format(alloc, "/login/full?next={s}", .{next}) catch |e| switch (e) {
-        error.NotOnSite => return req.respond("not a path on this site\n", .{ .status = .bad_request }),
+pub fn toLogin(
+    req: *Request,
+    alloc: Alloc,
+    next: []const u8,
+) !void {
+    const back = http.Target.format(
+        alloc,
+        "/login/full?next={s}",
+        .{next},
+    ) catch |e| switch (e) {
+        error.NotOnSite => return req.respond(
+            "not a path on this site\n",
+            .{ .status = .bad_request },
+        ),
         else => return e,
     };
     return http.redirect(req, back);
@@ -251,7 +334,11 @@ pub const Call = struct {
 
     /// Something the Roc dropped rather than fail the request for, counted
     /// for /admin/host (chat_paths.countDropped).
-    fn droppedOf(ctx: *anyopaque, what: roc_chat.Dropped, whose: []const u8) void {
+    fn droppedOf(
+        ctx: *anyopaque,
+        what: roc_chat.Dropped,
+        whose: []const u8,
+    ) void {
         const c = of(ctx);
         if (c.dead()) return;
         chat_paths.countDropped(switch (what) {
@@ -265,7 +352,11 @@ pub const Call = struct {
         const c = of(ctx);
         c.asked = true;
         // absent-ok: not read as absence: `fail` keeps the error, and handle returns it once the Roc call ends (a C call cannot carry it).
-        c.uid = users.currentUserID(c.io, c.alloc, c.req) catch |e| {
+        c.uid = users.currentUserID(
+            c.io,
+            c.alloc,
+            c.req,
+        ) catch |e| {
             c.fail(e);
             return .outsider;
         };
@@ -275,7 +366,11 @@ pub const Call = struct {
         // returned here: guests may play the game, but chat requires
         // membership.
         // absent-ok: the same: the error is kept and returned, never read as "not a member".
-        const authorized = users.principalAuthorized(c.io, c.alloc, c.uid) catch |e| {
+        const authorized = users.principalAuthorized(
+            c.io,
+            c.alloc,
+            c.uid,
+        ) catch |e| {
             c.fail(e);
             return .outsider;
         };
@@ -285,7 +380,13 @@ pub const Call = struct {
     fn presence_(ctx: *anyopaque) void {
         const c = of(ctx);
         if (c.dead()) return;
-        presence.markActiveAndBroadcast(c.io, c.alloc, c.bus, c.uid, c.now);
+        presence.markActiveAndBroadcast(
+            c.io,
+            c.alloc,
+            c.bus,
+            c.uid,
+            c.now,
+        );
     }
 
     /// **EVERY ACCOUNT, THE ROC'S ONE IDENTITY READ** (Host.list_accounts!):
@@ -339,11 +440,19 @@ pub const Call = struct {
     /// lookup returned. An account not listed, or whose read did not fail,
     /// is the Roc's bug, and fails the request as error.AccountNotUnreadable,
     /// never served.
-    fn failAccount(ctx: *anyopaque, which: roc_chat.AccountRead, id: []const u8) void {
+    fn failAccount(
+        ctx: *anyopaque,
+        which: roc_chat.AccountRead,
+        id: []const u8,
+    ) void {
         const c = of(ctx);
         if (c.dead()) return;
         for (c.listed) |u| {
-            if (!std.mem.eql(u8, u.id, id)) continue;
+            if (!std.mem.eql(
+                u8,
+                u.id,
+                id,
+            )) continue;
             switch (which) {
                 .kind => if (u.kind == .unreadable) return c.fail(u.kind.unreadable),
                 .name => if (u.name == .unreadable) return c.fail(u.name.unreadable),
@@ -376,14 +485,27 @@ pub const Call = struct {
             },
             else => return error.NotAConversationFamily,
         };
-        return .{ .meta = .{ .kind = kind, .members = who }, .key = key, .base = try c.alloc.dupe(u8, conv.base), .dir = dir };
+        return .{
+            .meta = .{ .kind = kind, .members = who },
+            .key = key,
+            .base = try c.alloc.dupe(u8, conv.base),
+            .dir = dir,
+        };
     }
 
     /// Topic `sid_` of `conv`, as the store addresses it.
-    fn address(c: *Call, conv: roc_chat.Conv, sid_: []const u8) !store.TopicAddress {
+    fn address(
+        c: *Call,
+        conv: roc_chat.Conv,
+        sid_: []const u8,
+    ) !store.TopicAddress {
         const r = try c.resolved(conv);
         if (!chat_paths.validTopicID(sid_)) return error.NotATopicId;
-        return .{ .dir = r.dir, .key = r.key, .sid = try c.alloc.dupe(u8, sid_) };
+        return .{
+            .dir = r.dir,
+            .key = r.key,
+            .sid = try c.alloc.dupe(u8, sid_),
+        };
     }
 
     /// `fail`, answering the Roc "not done".
@@ -408,7 +530,11 @@ pub const Call = struct {
         };
         // Null when it answered 413 (or 400) itself: the call is answered.
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const got = http.readLimitedBody(c.req, c.alloc, limit) catch |e| {
+        const got = http.readLimitedBody(
+            c.req,
+            c.alloc,
+            limit,
+        ) catch |e| {
             c.fail(e);
             return null;
         };
@@ -444,7 +570,12 @@ pub const Call = struct {
     /// The file at `path` under the chat root, or null when it is not there.
     fn heldFile(c: *Call, path: []const u8) !?[]u8 {
         const p = try std.fs.path.join(c.alloc, &.{ store.chat_root, path });
-        return webbox.store.readOrNull(c.io, c.alloc, p, .unlimited);
+        return webbox.store.readOrNull(
+            c.io,
+            c.alloc,
+            p,
+            .unlimited,
+        );
     }
 
     /// **THE FILE PRIMITIVES** (Host.read!, Host.write!, Host.remove!,
@@ -459,9 +590,17 @@ pub const Call = struct {
     fn read(ctx: *anyopaque, path: []const u8) roc_chat.Read {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unread(e);
+        const p = std.fs.path.join(
+            c.alloc,
+            &.{ store.chat_root, path },
+        ) catch |e| return c.unread(e);
         // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is missing.
-        const data = (webbox.store.readOrNull(c.io, c.alloc, p, .unlimited) catch |e| return c.unread(e)) orelse return .missing;
+        const data = (webbox.store.readOrNull(
+            c.io,
+            c.alloc,
+            p,
+            .unlimited,
+        ) catch |e| return c.unread(e)) orelse return .missing;
         return .{ .found = data };
     }
 
@@ -471,11 +610,21 @@ pub const Call = struct {
     pub fn stat(ctx: *anyopaque, path: []const u8) roc_chat.Stat {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unstat(e);
+        const p = std.fs.path.join(
+            c.alloc,
+            &.{ store.chat_root, path },
+        ) catch |e| return c.unstat(e);
         // absent-ok: not read as absence: a failed stat is kept and returned once the call ends; only "no file" is missing.
-        const st = (webbox.store.statOrNull(c.io, c.alloc, p) catch |e| return c.unstat(e)) orelse return .missing;
+        const st = (webbox.store.statOrNull(
+            c.io,
+            c.alloc,
+            p,
+        ) catch |e| return c.unstat(e)) orelse return .missing;
         if (st.kind != .file) return c.unstat(error.IsDir);
-        return .{ .found = .{ .size = st.size, .mtime = @intCast(@divFloor(st.mtime, std.time.ns_per_s)) } };
+        return .{ .found = .{
+            .size = st.size,
+            .mtime = @intCast(@divFloor(st.mtime, std.time.ns_per_s)),
+        } };
     }
 
     fn unstat(c: *Call, e: anyerror) roc_chat.Stat {
@@ -485,18 +634,39 @@ pub const Call = struct {
 
     /// **AT MOST `max` BYTES FROM `offset`** (Host.read_at!, a cache's read:
     /// `missed` for one that failed): fewer where the file ends first.
-    pub fn readAt(ctx: *anyopaque, path: []const u8, offset: u64, max: u64) roc_chat.Read {
+    pub fn readAt(
+        ctx: *anyopaque,
+        path: []const u8,
+        offset: u64,
+        max: u64,
+    ) roc_chat.Read {
         const c = of(ctx);
         if (c.dead()) return .failed;
         if (test_cache_fails) return missed(path, error.InputOutput);
-        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return missed(path, e);
+        const p = std.fs.path.join(
+            c.alloc,
+            &.{ store.chat_root, path },
+        ) catch |e| return missed(path, e);
         // absent-ok: a cache's read: a failed stat is a miss (logged), and the Roc reads the truth.
-        const st = (webbox.store.statOrNull(c.io, c.alloc, p) catch |e| return missed(path, e)) orelse return .missing;
+        const st = (webbox.store.statOrNull(
+            c.io,
+            c.alloc,
+            p,
+        ) catch |e| return missed(path, e)) orelse return .missing;
         if (st.kind != .file) return missed(path, error.IsDir);
-        const buf = c.alloc.alloc(u8, @intCast(@min(max, st.size -| offset))) catch |e| return missed(path, e);
+        const buf = c.alloc.alloc(
+            u8,
+            @intCast(@min(max, st.size -| offset)),
+        ) catch |e| return missed(path, e);
         if (buf.len == 0) return .{ .found = buf };
         // absent-ok: a cache's read: a failed read is a miss (logged), and the Roc reads the truth.
-        const n = webbox.store.readAt(c.io, c.alloc, p, offset, buf) catch |e| return missed(path, e);
+        const n = webbox.store.readAt(
+            c.io,
+            c.alloc,
+            p,
+            offset,
+            buf,
+        ) catch |e| return missed(path, e);
         return .{ .found = buf[0..n] };
     }
 
@@ -514,12 +684,22 @@ pub const Call = struct {
         return .failed;
     }
 
-    fn write(ctx: *anyopaque, path: []const u8, bytes: []const u8) roc_chat.Done {
+    fn write(
+        ctx: *anyopaque,
+        path: []const u8,
+        bytes: []const u8,
+    ) roc_chat.Done {
         const c = of(ctx);
         if (c.dead()) return .failed;
         const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e| return c.no(e);
+        webbox.store.write(
+            c.io,
+            c.alloc,
+            p,
+            bytes,
+            .{},
+        ) catch |e| return c.no(e);
         return .ok;
     }
 
@@ -528,7 +708,11 @@ pub const Call = struct {
         if (c.dead()) return .failed;
         const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends; a file not there is gone already.
-        webbox.store.remove(c.io, c.alloc, p) catch |e| return c.no(e);
+        webbox.store.remove(
+            c.io,
+            c.alloc,
+            p,
+        ) catch |e| return c.no(e);
         return .ok;
     }
 
@@ -541,11 +725,22 @@ pub const Call = struct {
     fn list(ctx: *anyopaque, path: []const u8) roc_chat.Listing {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unlisted(e);
+        const p = std.fs.path.join(
+            c.alloc,
+            &.{ store.chat_root, path },
+        ) catch |e| return c.unlisted(e);
         // absent-ok: not read as absence: a failed listing is kept and returned once the call ends; only "no folder" is missing.
-        const entries = webbox.store.list(c.io, c.alloc, p) catch |e| return c.unlisted(e);
+        const entries = webbox.store.list(
+            c.io,
+            c.alloc,
+            p,
+        ) catch |e| return c.unlisted(e);
         // absent-ok: the same.
-        if (entries.len == 0 and !(webbox.store.has(c.io, c.alloc, p) catch |e| return c.unlisted(e))) return .missing;
+        if (entries.len == 0 and !(webbox.store.has(
+            c.io,
+            c.alloc,
+            p,
+        ) catch |e| return c.unlisted(e))) return .missing;
         const out = c.alloc.alloc(roc_chat.Entry, entries.len) catch |e| return c.unlisted(e);
         for (entries, out) |e, *o| o.* = .{ .name = e.name, .kind = switch (e.kind) {
             .directory => .dir,
@@ -592,7 +787,11 @@ pub const Call = struct {
     /// **THE BUS, AS A PRIMITIVE** (Host.publish!): webbox's bus.publish,
     /// which copies the bytes to each subscriber, so the Roc's go with the
     /// call. It cannot fail; after a failure it sends nothing.
-    fn publish(ctx: *anyopaque, key: []const u8, bytes: []const u8) void {
+    fn publish(
+        ctx: *anyopaque,
+        key: []const u8,
+        bytes: []const u8,
+    ) void {
         const c = of(ctx);
         if (c.dead()) return;
         c.bus.publish(key, bytes);
@@ -601,12 +800,21 @@ pub const Call = struct {
     /// **ONE LINE APPENDED** (Host.append_line!): chat_store.appendLine,
     /// under the chat root (the seam has refused a path that would leave
     /// it), its torn-line rule the store's.
-    fn appendLine(ctx: *anyopaque, path: []const u8, line: []const u8) roc_chat.Done {
+    fn appendLine(
+        ctx: *anyopaque,
+        path: []const u8,
+        line: []const u8,
+    ) roc_chat.Done {
         const c = of(ctx);
         if (c.dead()) return .failed;
         const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        store.appendLine(c.io, c.alloc, p, line) catch |e| return c.no(e);
+        store.appendLine(
+            c.io,
+            c.alloc,
+            p,
+            line,
+        ) catch |e| return c.no(e);
         return .ok;
     }
 
@@ -637,7 +845,11 @@ pub const Call = struct {
             return .failed;
         };
         // absent-ok: not read as absence: the error is kept and returned once the call ends (the aside's, on /chat).
-        const pending = users.welcomePending(c.io, c.alloc, id) catch |e| {
+        const pending = users.welcomePending(
+            c.io,
+            c.alloc,
+            id,
+        ) catch |e| {
             c.fail(e);
             return .failed;
         };
@@ -649,7 +861,11 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return .failed;
         const id = users.Uid.of(c.uid) orelse return c.no(error.NotAUid);
-        users.clearWelcomePending(c.io, c.alloc, id) catch |e| return c.no(e);
+        users.clearWelcomePending(
+            c.io,
+            c.alloc,
+            id,
+        ) catch |e| return c.no(e);
         return .ok;
     }
 
@@ -674,18 +890,31 @@ pub const Call = struct {
     /// **SEARCH'S INDEX, ASKED** (Host.search_words!): what the member can
     /// see (visibleConvs, every request), then the index's words beginning
     /// `key`, at most `most`, and its unreadable count; null with no index.
-    fn searchWords(ctx: *anyopaque, key: []const u8, most: u64) ?roc_chat.Words {
+    fn searchWords(
+        ctx: *anyopaque,
+        key: []const u8,
+        most: u64,
+    ) ?roc_chat.Words {
         const c = of(ctx);
         const none_found: roc_chat.Words = .{ .words = &.{}, .unreadable = 0 };
         if (c.dead()) return none_found;
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const reach = chat_paths.visibleConvs(c.io, c.alloc, c.uid) catch |e| {
+        const reach = chat_paths.visibleConvs(
+            c.io,
+            c.alloc,
+            c.uid,
+        ) catch |e| {
             c.fail(e);
             return none_found;
         };
         const idx = search_index.indexOrBuild(c.io, c.alloc) orelse return null;
         // absent-ok: the same.
-        const got = if (most == 0) &[_]search_index.WordCount{} else idx.wordsFor(c.alloc, reach, key, @intCast(most)) catch |e| {
+        const got = if (most == 0) &[_]search_index.WordCount{} else idx.wordsFor(
+            c.alloc,
+            reach,
+            key,
+            @intCast(most),
+        ) catch |e| {
             c.fail(e);
             return none_found;
         };
@@ -703,18 +932,39 @@ pub const Call = struct {
     /// `most` and within chat_search's byte cap (charged by excerptCost),
     /// each as its excerpt's window (chat_search.excerptWindow); null with
     /// no index.
-    fn searchMessages(ctx: *anyopaque, key: []const u8, most: u64) ?roc_chat.Messages {
+    fn searchMessages(
+        ctx: *anyopaque,
+        key: []const u8,
+        most: u64,
+    ) ?roc_chat.Messages {
         const c = of(ctx);
-        const none_found: roc_chat.Messages = .{ .hits = &.{}, .matched = 0, .unreadable = 0 };
+        const none_found: roc_chat.Messages = .{
+            .hits = &.{},
+            .matched = 0,
+            .unreadable = 0,
+        };
         if (c.dead()) return none_found;
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const reach = chat_paths.visibleConvs(c.io, c.alloc, c.uid) catch |e| {
+        const reach = chat_paths.visibleConvs(
+            c.io,
+            c.alloc,
+            c.uid,
+        ) catch |e| {
             c.fail(e);
             return none_found;
         };
         const idx = search_index.indexOrBuild(c.io, c.alloc) orelse return null;
         // absent-ok: the same.
-        const f = if (most == 0) search_index.Found{ .hits = &.{}, .matched = 0 } else idx.messagesFor(c.alloc, reach, key, @intCast(most), .{ .bytes = chat_search.most_bytes, .cost = chat_search.excerptCost }) catch |e| {
+        const f = if (most == 0) search_index.Found{
+            .hits = &.{},
+            .matched = 0,
+        } else idx.messagesFor(
+            c.alloc,
+            reach,
+            key,
+            @intCast(most),
+            .{ .bytes = chat_search.most_bytes, .cost = chat_search.excerptCost },
+        ) catch |e| {
             c.fail(e);
             return none_found;
         };
@@ -725,9 +975,25 @@ pub const Call = struct {
         };
         for (f.hits, out) |h, *o| {
             const w = chat_search.excerptWindow(h.msg.markdown, key);
-            o.* = .{ .base = h.conv.base, .kind = if (h.conv.kind == .dm) .dm else .channel, .sid = h.msg.sid, .id = h.msg.id, .from = h.msg.from, .date = h.msg.at, .window = w.bytes, .start = w.start, .length = h.msg.markdown.len, .at = w.at orelse 0, .found = if (w.at != null) .found else .missing };
+            o.* = .{
+                .base = h.conv.base,
+                .kind = if (h.conv.kind == .dm) .dm else .channel,
+                .sid = h.msg.sid,
+                .id = h.msg.id,
+                .from = h.msg.from,
+                .date = h.msg.at,
+                .window = w.bytes,
+                .start = w.start,
+                .length = h.msg.markdown.len,
+                .at = w.at orelse 0,
+                .found = if (w.at != null) .found else .missing,
+            };
         }
-        return .{ .hits = out, .matched = f.matched, .unreadable = idx.unreadableFor(reach) };
+        return .{
+            .hits = out,
+            .matched = f.matched,
+            .unreadable = idx.unreadableFor(reach),
+        };
     }
 
     fn srcs(ctx: *anyopaque) []const roc_chat.Src {
@@ -735,7 +1001,10 @@ pub const Call = struct {
         if (c.dead()) return &.{};
         const out = c.alloc.alloc(roc_chat.Src, chrome.assets.len) catch |e| return c.noSrcs(e);
         inline for (chrome.assets, 0..) |a, k| {
-            out[k] = .{ .name = a.name, .src = chrome.src(c.alloc, a.name) catch |e| return c.noSrcs(e) };
+            out[k] = .{
+                .name = a.name,
+                .src = chrome.src(c.alloc, a.name) catch |e| return c.noSrcs(e),
+            };
         }
         return out;
     }
@@ -785,13 +1054,27 @@ pub const Call = struct {
     /// the block the Roc made appended to the topic's transcript, then the
     /// count cache and the search index told. An append that failed fails
     /// the request, nothing stored.
-    fn storeMessage(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8, block: []const u8, index: u64, m: roc_chat.Message) roc_chat.Done {
+    fn storeMessage(
+        ctx: *anyopaque,
+        conv_: roc_chat.Conv,
+        sid: []const u8,
+        block: []const u8,
+        index: u64,
+        m: roc_chat.Message,
+    ) roc_chat.Done {
         const c = of(ctx);
         if (c.dead()) return .failed;
         const t = c.address(conv_, sid) catch |e| return c.no(e);
         const msg = c.chatMessage(m) catch |e| return c.no(e);
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        store.storeMessage(c.io, c.alloc, t, block, index, msg) catch |e| return c.no(e);
+        store.storeMessage(
+            c.io,
+            c.alloc,
+            t,
+            block,
+            index,
+            msg,
+        ) catch |e| return c.no(e);
         return .ok;
     }
 
@@ -806,39 +1089,88 @@ pub const Call = struct {
     /// the entry's bytes the Roc's. The file is read only to decide whether
     /// the separator goes first; a read that fails is the append's failure,
     /// as it was theirs. The seam has refused a path outside the chat root.
-    fn appendEntry(ctx: *anyopaque, path: []const u8, separator: []const u8, entry: []const u8) roc_chat.Appended {
+    fn appendEntry(
+        ctx: *anyopaque,
+        path: []const u8,
+        separator: []const u8,
+        entry: []const u8,
+    ) roc_chat.Appended {
         const c = of(ctx);
         if (c.failed) |e| return .{ .failed = e };
-        c.appendedEntry(path, separator, entry) catch |e| return .{ .failed = e };
+        c.appendedEntry(
+            path,
+            separator,
+            entry,
+        ) catch |e| return .{ .failed = e };
         return .appended;
     }
 
-    fn appendedEntry(c: *Call, path: []const u8, separator: []const u8, entry: []const u8) !void {
+    fn appendedEntry(
+        c: *Call,
+        path: []const u8,
+        separator: []const u8,
+        entry: []const u8,
+    ) !void {
         const p = try std.fs.path.join(c.alloc, &.{ store.chat_root, path });
-        const existing = try webbox.store.readOrEmpty(c.io, c.alloc, p, .unlimited);
-        const bytes = if (existing.len > 0) try std.mem.concat(c.alloc, u8, &.{ separator, entry }) else entry;
-        _ = try webbox.store.append(c.io, c.alloc, p, bytes);
+        const existing = try webbox.store.readOrEmpty(
+            c.io,
+            c.alloc,
+            p,
+            .unlimited,
+        );
+        const bytes = if (existing.len > 0) try std.mem.concat(
+            c.alloc,
+            u8,
+            &.{ separator, entry },
+        ) else entry;
+        _ = try webbox.store.append(
+            c.io,
+            c.alloc,
+            p,
+            bytes,
+        );
     }
 
     /// **A SURFACE THAT FAILED FOR ONE MEMBER, COUNTED AND SAID**
     /// (Host.report_fanout_failure!): chat_fanout.fanoutFailed, the operator's count
     /// and last failure on /admin/host, in its words: "<surface> for member
     /// <uid>, <error>, on <key>/<sid>".
-    fn fanoutFailed(ctx: *anyopaque, surface: roc_chat.Surface, member_: []const u8, key: []const u8, sid: []const u8, e: anyerror) void {
+    fn fanoutFailed(
+        ctx: *anyopaque,
+        surface: roc_chat.Surface,
+        member_: []const u8,
+        key: []const u8,
+        sid: []const u8,
+        e: anyerror,
+    ) void {
         const c = of(ctx);
         if (c.dead()) return;
-        chat_fanout.fanoutFailed(@tagName(surface), member_, e, key, sid);
+        chat_fanout.fanoutFailed(
+            @tagName(surface),
+            member_,
+            e,
+            key,
+            sid,
+        );
     }
 
     fn header(ctx: *anyopaque, name: []const u8) []const []const u8 {
         const c = of(ctx);
         if (c.dead()) return &.{};
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const v = (http.header(c.req, c.alloc, name) catch |e| return c.none(e)) orelse return &.{};
+        const v = (http.header(
+            c.req,
+            c.alloc,
+            name,
+        ) catch |e| return c.none(e)) orelse return &.{};
         return c.alloc.dupe([]const u8, &.{v}) catch |e| c.none(e);
     }
 
-    fn hostile(ctx: *anyopaque, md: []const u8, refusal: []const u8) roc_chat.Hostility {
+    fn hostile(
+        ctx: *anyopaque,
+        md: []const u8,
+        refusal: []const u8,
+    ) roc_chat.Hostility {
         const c = of(ctx);
         if (c.dead()) return .failed;
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
@@ -848,7 +1180,11 @@ pub const Call = struct {
         };
         if (reason == null) return .fine;
         // absent-ok: the same: a refusal that will not send is the request's failure.
-        edge.reject(c.req, .malformed_markdown, refusal) catch |e| c.fail(e);
+        edge.reject(
+            c.req,
+            .malformed_markdown,
+            refusal,
+        ) catch |e| c.fail(e);
         c.answered = true;
         return .refused;
     }

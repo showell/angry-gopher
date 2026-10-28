@@ -34,15 +34,27 @@ pub const most_bytes = 2 << 20;
 /// excerpt_pad` and the one past. The Roc cuts them on a character's edge
 /// and marks the cuts (roc-webbox chat/Search.roc `excerpt`), so a
 /// message of a megabyte never crosses whole.
-pub const ExcerptWindow = struct { bytes: []const u8, start: usize, at: ?usize };
+pub const ExcerptWindow = struct {
+    bytes: []const u8,
+    start: usize,
+    at: ?usize,
+};
 
 pub fn excerptWindow(md: []const u8, key: []const u8) ExcerptWindow {
     if (search_index.wordAt(md, key)) |at| {
         const lo = at -| excerpt_pad;
         const hi = @min(md.len, at + key.len + excerpt_pad);
-        return .{ .bytes = md[lo..@min(md.len, hi + 1)], .start = lo, .at = at };
+        return .{
+            .bytes = md[lo..@min(md.len, hi + 1)],
+            .start = lo,
+            .at = at,
+        };
     }
-    return .{ .bytes = md[0..@min(md.len, 2 * excerpt_pad + 1)], .start = 0, .at = null };
+    return .{
+        .bytes = md[0..@min(md.len, 2 * excerpt_pad + 1)],
+        .start = 0,
+        .at = null,
+    };
 }
 
 /// What a message's excerpt costs as JSON, at most: the window `excerptOf`
