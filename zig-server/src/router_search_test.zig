@@ -23,7 +23,7 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     const io = threaded.io();
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const me = try harness.adminSession(a, io);
+    const me = try harness.loginAdmin(a, io);
     const chat_store = @import("chat_store.zig");
     const disk = @import("webbox").store;
     // Two more members; the admin is in channel "general", not in "quiet".
@@ -85,8 +85,8 @@ test "route: Recent's Who cell names the last author where the .count is behind 
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try harness.memberSession(a, io, "1", "Steve");
-    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const steve = try harness.loginMember(a, io, "1", "Steve");
+    const debbie = try harness.loginMember(a, io, "2", "Debbie");
     const first = "MSG_ChitChat_1\nfrom: Debbie\ndate: 2026-10-10T00:00:00Z\n\nhello";
     try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{}); // the folder
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
@@ -118,9 +118,9 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     defer forgot.end();
     const chat_store = @import("chat_store.zig");
 
-    const me = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
-    _ = try harness.memberSession(a, io, "3", "Apoorva");
+    const me = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
+    _ = try harness.loginMember(a, io, "3", "Apoorva");
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
     try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{ "the page LAYOUT is off", "\u{201C}Layover\u{201D} in Denver?" });
@@ -154,7 +154,7 @@ test "route: search suggests and finds only in what the viewer can see; a word o
         try testing.expect(std.mem.indexOf(u8, got, "\"count\"") == null);
     }
     // And one who can see them finds them.
-    const deb = try harness.memberSession(a, io, "2", "Debbie");
+    const deb = try harness.loginMember(a, io, "2", "Debbie");
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=secretly", deb), "\"matched\":2") != null);
 
     // **A MESSAGE THAT LANDS IS FOUND**, without a build from the disk.
@@ -315,8 +315,8 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     defer emptied.end();
     const forgot = chat_search.forgetForTest();
     defer forgot.end();
-    const me = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const me = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     // The word inside curly quotes and a comma, after a word that holds it
     // ("layouts"): the mark is the word the tokenizer reads, which the
     // client's regex once had to guess.
@@ -350,8 +350,8 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     defer emptied.end();
     const forgot = chat_search.forgetForTest();
     defer forgot.end();
-    const me = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const me = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     // Thirty messages of 100 KB, each holding the word: 3 MB whole, past the
     // 2 MiB budget; their excerpts are a few KB.
     const big = "zeppelin " ++ &@as([100 << 10]u8, @splat('x'));
@@ -376,8 +376,8 @@ test "route: Recent marks a DM's row a DM and a channel's not" {
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_store = @import("chat_store.zig");
-    const steve = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const steve = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=in+a+dm&cid=x")));
     try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/channel/general/Plans/send", steve, "markdown=in+a+channel&cid=y")));

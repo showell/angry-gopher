@@ -81,7 +81,7 @@ fn noSuchPlayer(req: *Request, alloc: Alloc, id: []const u8) !void {
 /// we know, never a path someone typed.
 fn exists(io: Io, alloc: Alloc, id: []const u8) !bool {
     if (id.len == 0) return false;
-    return (try player.nameOf(io, alloc, id)).len != 0;
+    return (try player.readName(io, alloc, id)).len != 0;
 }
 
 // ── the roster ───────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ fn writeRow(b: *std.ArrayList(u8), alloc: Alloc, st: PlayerStats, cls: []const u
 /// renderDeleteConfirm is the "are you sure" page — it spells out exactly what
 /// will be removed before the POST that does it.
 fn renderDeleteConfirm(req: *Request, io: Io, alloc: Alloc, id: []const u8) !void {
-    const st = gatherStats(io, alloc, .{ .id = id, .name = try player.nameOf(io, alloc, id) });
+    const st = gatherStats(io, alloc, .{ .id = id, .name = try player.readName(io, alloc, id) });
     const page = try std.fmt.allocPrint(alloc, delete_confirm_template, .{
         try html.htmlEscape(alloc, st.name),
         st.game_sessions,

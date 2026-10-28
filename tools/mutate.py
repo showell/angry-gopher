@@ -55,7 +55,7 @@ MUTANTS = [
     ("uid_cookie", "id-over-20-digits", "validId takes 21 digits",
      "if (digits.len == 0 or digits.len > 20 or digits[0] == '0') return false;", "if (digits.len == 0 or digits[0] == '0') return false;"),
     ("uid_cookie", "member-re-signed", "a member's unsigned cookie is re-signed",
-     "if (users.principalAuthorized(io, alloc, id) catch true) return false;", ""),
+     "if (users.isPrincipalAuthorized(io, alloc, id) catch true) return false;", ""),
     ("uid_cookie", "marker-ignored", "an id already signed is re-signed again",
      "if (isMarked(io, alloc, id)) return false;", ""),
     ("uid_cookie", "no-grace", "a lost re-sign answer cannot be asked again",
@@ -63,7 +63,7 @@ MUTANTS = [
     ("uid_cookie", "window-never-shuts", "unsigned cookies honoured for ever",
      "return now < ends;", "_ = now < ends;\n    return true;"),
     ("uid_cookie", "unknown-id-re-signed", "an id no one has is re-signed",
-     "if (!(store.has(io, alloc, row) catch return false) and !(users.principalExists(io, alloc, id) catch return false)) return false;", "_ = row;"),
+     "if (!(store.has(io, alloc, row) catch return false) and !(users.hasPrincipal(io, alloc, id) catch return false)) return false;", "_ = row;"),
     ("signed_cookie", "previous-secret-refused", "after a change of secret, players are lost",
      "|prev| if (signed.verify(c.kind, prev, value, now)) |id| {", "|prev| if (signed.verify(c.kind, prev[0..0], value, now)) |id| {"),
     ("uid_cookie", "post-re-signed", "a POST is re-signed",
@@ -170,9 +170,9 @@ MUTANTS = [
     ("users", "session-extra-parts", "a session with a fourth part",
      "if (it.next() != null) return null; // exactly 3 parts", ""),
     ("users", "non-member-session", "a session for an id that is not a member",
-     "if (!try userIsMember(io, alloc, id)) return null;", ""),
+     "if (!try hasPassword(io, alloc, id)) return null;", ""),
     ("users", "uid-names-a-member", "a gopher_uid acts as a full member",
-     "!try userIsAuthorized(io, alloc, uid)) {", "true) {"),
+     "!try isAuthorized(io, alloc, uid)) {", "true) {"),
 ]
 
 

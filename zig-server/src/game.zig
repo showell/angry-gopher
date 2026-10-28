@@ -49,7 +49,7 @@ const max_append_bytes = limits.body.game_append;
 /// `client` is the caller's address as the router read it, for the bound on
 /// what one address may write (game_limits.zig); null when the host gave none.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
-    const user_id = player.Id.of((try player.current(io, alloc, req)).id) orelse {
+    const user_id = player.Id.of((try player.loadCurrent(io, alloc, req)).id) orelse {
         try http.redirect(req, .literal("/play?next=/game"));
         return;
     };
@@ -244,7 +244,7 @@ fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: player.Id, session_id:
         try std.fmt.allocPrint(alloc, "{d}", .{session_id})
     else
         "null";
-    const name = try player.nameOf(io, alloc, user_id.text());
+    const name = try player.readName(io, alloc, user_id.text());
     const name_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(name, .{})});
 
     // The two spaces in the format are the literal spaces after `=` and after

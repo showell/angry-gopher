@@ -88,12 +88,12 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // The request's time, read once: everything it stamps carries it
     // (request_time.zig).
     const now = Now.read(io);
-    const uid = try users.currentUserID(io, alloc, req);
+    const uid = try users.loadCurrentUserID(io, alloc, req);
     // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images, code,
     // the conversations API) is members + agents only. A guest (name-only, no
     // password) or a stranger is sent to set a password and returned here —
     // guests may play the game, but chat requires membership.
-    if (!try users.principalAuthorized(io, alloc, uid)) {
+    if (!try users.isPrincipalAuthorized(io, alloc, uid)) {
         return toLogin(req, alloc, "/chat", sub);
     }
 
@@ -175,9 +175,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 /// handleChannel dispatches /channel/* — `sub` is the path after "/channel".
 pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const now = Now.read(io);
-    const uid = try users.currentUserID(io, alloc, req);
+    const uid = try users.loadCurrentUserID(io, alloc, req);
     // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
-    if (!try users.principalAuthorized(io, alloc, uid)) {
+    if (!try users.isPrincipalAuthorized(io, alloc, uid)) {
         return toLogin(req, alloc, "/channel", sub);
     }
     if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid, now);
@@ -236,7 +236,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
     // The other half must be an account: a DM is between two people, and its
     // folder and the fan-out's writes are named after both.
     const other = if (std.mem.eql(u8, pair[0..us], uid)) pair[us + 1 ..] else pair[0..us];
-    if (!try users.principalExists(io, alloc, other)) return http.notFound(req);
+    if (!try users.hasPrincipal(io, alloc, other)) return http.notFound(req);
     const conv = Conv{
         .meta = try store.ConvMeta.dm(alloc, pair[0..us], pair[us + 1 ..]),
         .key = pair,

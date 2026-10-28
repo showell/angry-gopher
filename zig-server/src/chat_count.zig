@@ -121,7 +121,7 @@ fn authorOf(io: Io, alloc: Alloc, msg: ChatMessage) []const u8 {
 fn lookupAuthor(io: Io, alloc: Alloc, msg: ChatMessage) ![]const u8 {
     if (msg.uid.len > 0) return msg.uid;
     if (msg.from.len == 0) return "";
-    return (try users.onlyMemberNamed(io, alloc, msg.from)) orelse "";
+    return (try users.findOnlyMemberNamed(io, alloc, msg.from)) orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this

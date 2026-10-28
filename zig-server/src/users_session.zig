@@ -20,12 +20,12 @@ const users = @import("users.zig");
 const setUserPassword = users.setUserPassword;
 const readAuthFile = users.readAuthFile;
 const allocateUser = users.allocateUser;
-const userIsAuthorized = users.userIsAuthorized;
-const userIsMember = users.userIsMember;
-const userExists = users.userExists;
+const isAuthorized = users.isAuthorized;
+const hasPassword = users.hasPassword;
+const hasAccount = users.hasAccount;
 const tmpRoots = users.tmpRoots;
 const getUserName = users.getUserName;
-const nowUnix = users.nowUnix;
+const nowUnix = users.readNowUnix;
 const allDigits = users.allDigits;
 
 const session_max_age_secs: i64 = 365 * 24 * 60 * 60;
@@ -37,13 +37,13 @@ pub const clock_skew_secs: i64 = 5 * 60;
 
 // ── the resolver ────────────────────────────────────────────────────────────
 
-/// currentUserID resolves the id a request acts as, or "" when there's no valid
+/// loadCurrentUserID resolves the id a request acts as, or "" when there's no valid
 /// identity.
-pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]const u8 {
+pub fn loadCurrentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]const u8 {
     // 1. member session cookie (authoritative).
-    if (try sessionUserID(io, alloc, req)) |id| return id;
+    if (try loadSessionUserID(io, alloc, req)) |id| return id;
     // 2. API key.
-    if (try apiKeyUserID(io, alloc, req)) |id| return id;
+    if (try loadApiKeyUserID(io, alloc, req)) |id| return id;
     // 3. guest gopher_uid — only a non-authorized principal that exists, and
     // only signed (an unsigned one is re-signed once by the router's GET, in
     // uid_cookie's window, and is no one here). An unsigned cookie used to be
@@ -51,7 +51,7 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     // http.cookie, so it survives a later
     // body read.
     if (try uid_cookie.resolve(io, alloc, req)) |uid| {
-        if (allDigits(uid) and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
+        if (allDigits(uid) and try hasAccount(io, alloc, uid) and !try isAuthorized(io, alloc, uid)) {
             return uid;
         }
     }
@@ -65,13 +65,13 @@ pub const session_cookie = http.host_prefix ++ "gopher_auth";
 
 pub const session_cookie_legacy = "gopher_auth";
 
-/// sessionUserID returns the member id from a valid gopher_auth cookie whose id
+/// loadSessionUserID returns the member id from a valid gopher_auth cookie whose id
 /// is still a member. Reading a cookie is what identity does and nothing else
 /// needs to: `http.cookie`'s callers are this file and uid_cookie.zig. A head
 /// value borrowed past the body read once mis-attributed an authenticated post
 /// to the wrong principal, which is why `http.cookie` returns an owned copy.
-fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    const s = (try sessionRead(io, alloc, req)) orelse return null;
+fn loadSessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    const s = (try readSession(io, alloc, req)) orelse return null;
     return s.id;
 }
 
@@ -79,7 +79,7 @@ const SessionRead = struct { id: []const u8, value: []const u8, legacy: bool };
 
 /// The session a request carries, verified, and whether under the legacy
 /// name (until `http.legacy_names_until_unix`).
-fn sessionRead(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRead {
+fn readSession(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRead {
     const now = nowUnix(io);
     var one: [1][]const u8 = undefined;
     const named = try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy, http.namesNow(now));
@@ -103,7 +103,7 @@ fn sessionRead(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRea
         verified = .{ .id = id, .value = val, .legacy = named.legacy };
     };
     const s = verified orelse return null;
-    if (!try userIsMember(io, alloc, s.id)) return null;
+    if (!try hasPassword(io, alloc, s.id)) return null;
     return s;
 }
 
@@ -134,21 +134,21 @@ fn issuedOfSession(val: []const u8) i64 {
 /// QUEUE 170.8): the signed value, to be set under `session_cookie` (the
 /// signature does not name the cookie) while the legacy one is cleared; null
 /// when there is nothing to move.
-pub fn sessionToMove(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+pub fn findSessionToMove(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     if (req.head.method != .GET) return null;
-    const s = (try sessionRead(io, alloc, req)) orelse return null;
+    const s = (try readSession(io, alloc, req)) orelse return null;
     return if (s.legacy) s.value else null;
 }
 
 /// **THE BEARER ONLY** (metal-vmm QUEUE 200): the principal an
 /// `Authorization: Bearer` key names, and never a session cookie's, for a
 /// route that a page must not be able to drive (the script route).
-pub fn bearerUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    return apiKeyUserID(io, alloc, req);
+pub fn loadBearerUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    return loadApiKeyUserID(io, alloc, req);
 }
 
-/// apiKeyUserID resolves the principal id from an Authorization: Bearer key.
-fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+/// loadApiKeyUserID resolves the principal id from an Authorization: Bearer key.
+fn loadApiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     const key = (try bearerToken(req, alloc)) orelse return null;
     return checkAPIKey(io, alloc, key);
 }
@@ -233,7 +233,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
     // and an id with `/` or `..` in it reached other folders' password and
     // api-key files.
     const uid = users.Uid.of(id) orelse return null;
-    if (!try userIsAuthorized(io, alloc, id)) return null;
+    if (!try isAuthorized(io, alloc, id)) return null;
 
     // absent-ok: fails closed: a key that cannot be read admits no one.
     const stored_opt = readAuthFile(io, alloc, uid, "api-key") catch return null;
@@ -246,14 +246,14 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 // ── registry reads (account store) ───────────────────────────────────────────
 
 /// The session secret, for the other signed cookie (uid_cookie.zig), or null.
-pub fn sessionSecret(io: Io, alloc: Alloc) !?[]const u8 {
+pub fn loadSessionSecret(io: Io, alloc: Alloc) !?[]const u8 {
     return loadSecret(io, alloc);
 }
 
 /// The member a valid gopher_auth names, or null: player.zig's way to file a
 /// member's games under their session when their gopher_uid is unsigned.
-pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    return sessionUserID(io, alloc, req);
+pub fn loadSessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    return loadSessionUserID(io, alloc, req);
 }
 
 // ── changing the secret (zig-metal-unikernel QUEUE item 66, SECRET-LEAK.md) ─────────
@@ -263,7 +263,7 @@ pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]cons
 /// The secret before the last change, while players' cookies signed with it
 /// are still taken (`previous-until`, Unix seconds); null past that, or when
 /// there is none. Members' sessions are never checked against it.
-pub fn previousSecret(io: Io, alloc: Alloc) !?[]const u8 {
+pub fn loadPreviousSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     return site_secret.previous(io, alloc, users.session_secret_dir, now);
 }
@@ -331,15 +331,15 @@ fn encodeB64(alloc: Alloc, s: []const u8) ![]const u8 {
 /// (admin/agent flags aren't needed by the login flows).
 pub const ResolvedUser = struct { id: []const u8, name: []const u8, member: bool };
 
-/// currentUser resolves the full identity a request acts as.
+/// loadCurrentUser resolves the full identity a request acts as.
 /// Zero value (id == "") when there's no identity.
-pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !ResolvedUser {
-    const id = try currentUserID(io, alloc, req);
+pub fn loadCurrentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !ResolvedUser {
+    const id = try loadCurrentUserID(io, alloc, req);
     if (id.len == 0) return .{ .id = "", .name = "", .member = false };
     return .{
         .id = id,
         .name = try getUserName(io, alloc, id),
-        .member = try userIsMember(io, alloc, id),
+        .member = try hasPassword(io, alloc, id),
     };
 }
 

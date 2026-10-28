@@ -68,10 +68,10 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "stress.zig", .func = "chatPairKey", .unreachable_because = "the stress tool, not the server" },
     .{ .file = "timefmt.zig", .func = "at", .unreachable_because = "message dates the server stamped" },
     .{ .file = "uid_cookie.zig", .func = "isMarked", .unreachable_because = "a marker file the server wrote (182: saturating)" },
-    .{ .file = "uid_cookie.zig", .func = "windowOpen", .unreachable_because = "a window file the server wrote" },
+    .{ .file = "uid_cookie.zig", .func = "isWindowOpen", .unreachable_because = "a window file the server wrote" },
     .{ .file = "users.zig", .func = "lessThanByNumericID", .unreachable_because = "user ids the server allocated" },
     .{ .file = "users.zig", .func = "lessThanNumericID", .unreachable_because = "user ids the server allocated" },
-    .{ .file = "users.zig", .func = "userUploadBytes", .unreachable_because = "an allowance file the server wrote" },
+    .{ .file = "users.zig", .func = "readUploadBytes", .unreachable_because = "an allowance file the server wrote" },
 };
 
 /// The requests, `{N}` an edge number, `{C}` the member's cookies.
@@ -176,8 +176,8 @@ test "request edges: every number a request carries, at its type's edges, as a m
     // A member, a player, a topic with a message, and an upload in it.
     var uid_site = try harness.UidSite.init(a, io);
     defer uid_site.deinit();
-    const steve = try harness.memberSession(a, io, "1", "Steve");
-    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const steve = try harness.loginMember(a, io, "1", "Steve");
+    _ = try harness.loginMember(a, io, "2", "Debbie");
     const id = try player.allocate(io, a, .literal("Steve"));
     const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try harness.signedUid(a, id) });
     const bearer = try users.setUserAPIKey(io, a, "1");

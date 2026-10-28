@@ -106,7 +106,7 @@ pub fn between(io: Io, now: i64) bool {
 }
 
 pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
-    const uid = (try users.bearerUserID(io, alloc, req)) orelse
+    const uid = (try users.loadBearerUserID(io, alloc, req)) orelse
         return refuse(req, .unauthorized, "refused (no_bearer): the admin's API key, as Authorization: Bearer, is required\nnot run\n");
     if (!std.mem.eql(u8, uid, ui.admin_uid))
         return refuse(req, .forbidden, "refused (not_admin): that key is not the admin's\nnot run\n");

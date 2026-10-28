@@ -30,7 +30,7 @@ pub const admin_uid = "1";
 /// identity, a 404 for anyone else (an admin surface should not confirm it
 /// exists).
 pub fn requireAdmin(req: *Request, io: Io, alloc: Alloc) !bool {
-    const uid = try users.currentUserID(io, alloc, req);
+    const uid = try users.loadCurrentUserID(io, alloc, req);
     if (uid.len == 0) {
         try http.redirect(req, .literal("/login/full"));
         return false;

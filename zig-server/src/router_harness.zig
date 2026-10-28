@@ -128,7 +128,7 @@ pub fn playingAs(response: []const u8, name: []const u8) bool {
     return std.mem.indexOf(u8, response, want) != null;
 }
 
-pub fn nowSecs(io: Io) i64 {
+pub fn readNowSecs(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
@@ -137,7 +137,7 @@ pub fn nowSecs(io: Io) i64 {
 pub fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
-    return std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, nowSecs(threaded.io()) - 3600)});
+    return std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, readNowSecs(threaded.io()) - 3600)});
 }
 
 pub fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
@@ -145,7 +145,7 @@ pub fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const
 }
 
 /// An admin session for UidSite: uid 1, with a password.
-pub fn adminSession(a: std.mem.Allocator, io: Io) ![]const u8 {
+pub fn loginAdmin(a: std.mem.Allocator, io: Io) ![]const u8 {
     try users.setUserName(io, a, "1", "Steve");
     try users.setUserPassword(io, a, "1", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -153,7 +153,7 @@ pub fn adminSession(a: std.mem.Allocator, io: Io) ![]const u8 {
 }
 
 /// A member's session for UidSite.
-pub fn memberSession(a: std.mem.Allocator, io: Io, uid: []const u8, name: []const u8) ![]const u8 {
+pub fn loginMember(a: std.mem.Allocator, io: Io, uid: []const u8, name: []const u8) ![]const u8 {
     try users.setUserName(io, a, uid, name);
     try users.setUserPassword(io, a, uid, "pw");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));

@@ -145,8 +145,8 @@ const App = struct {
     pub const setup = app_start.setup;
     pub const StartReport = app_start.StartReport;
     pub const bodyLimit = routeBodyLimit;
-    pub const uploader = uploaderOf;
-    pub const between = betweenRequests;
+    pub const uploader = loadUploader;
+    pub const between = runBetweenRequests;
 };
 
 /// **WHICH PART OF THE SITE A REQUEST IS FOR** (metal-vmm QUEUE 189.5), as
@@ -157,7 +157,7 @@ pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
 
 /// **BETWEEN REQUESTS**: a slice of the operator's background script
 /// (admin_script.zig, metal-vmm QUEUE 222), while it has more.
-fn betweenRequests(io: Io, unix_s: i64) bool {
+fn runBetweenRequests(io: Io, unix_s: i64) bool {
     return @import("admin_script.zig").between(io, unix_s);
 }
 
@@ -178,12 +178,12 @@ fn familyOf(path: []const u8) Family {
 
 /// **WHO MAY HOLD AN UPLOAD SLOT** (metal-vmm QUEUE 169): whom the upload's
 /// routes take, by the same gate (chat and channels: a member or an agent,
-/// `principalAuthorized`), from the head alone, so the sign-in is checked
+/// `isPrincipalAuthorized`), from the head alone, so the sign-in is checked
 /// before a byte of the upload is read. Anyone else (a stranger, a guest)
 /// is null, never holds a slot, and the route refuses them unread.
-fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !?[]const u8 {
-    const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len == 0 or !try users.principalAuthorized(io, alloc, uid)) return null;
+fn loadUploader(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !?[]const u8 {
+    const uid = try users.loadCurrentUserID(io, alloc, req);
+    if (uid.len == 0 or !try users.isPrincipalAuthorized(io, alloc, uid)) return null;
     return uid;
 }
 
@@ -247,7 +247,7 @@ fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus
     };
     // **A SESSION UNDER ITS LEGACY NAME MOVES ON ITS NEXT GET** (metal-vmm
     // QUEUE 170.8), back to the same page, the legacy one cleared.
-    if (try users.sessionToMove(io, alloc, req)) |value| return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = &.{
+    if (try users.findSessionToMove(io, alloc, req)) |value| return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = &.{
         .{ .name = "set-cookie", .value = try login.authCookie(alloc, value) },
         .{ .name = "set-cookie", .value = http.clearCookie(users.session_cookie_legacy) },
     } });
@@ -261,7 +261,7 @@ fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus
         // Public + ungated like /driving: little chess toys (Knight's Tour,
         // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
         // is resolved for the index's top-bar chip, never gated.
-        try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
+        try chess.handle(req, alloc, (try loadViewer(io, alloc, req)).name, sub);
     } else if (http.pathUnder(path, "/shale")) |sub| {
         // Public + ungated: Shale's landing page and its in-browser tutorial
         // (shale_page.zig), static files from the shale checkout's build.
@@ -327,7 +327,7 @@ fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus
         // The site root: the launch pad. TOTALLY_PUBLIC, so resolve the viewer
         // for the top bar but never gate. The explicit-"/" check plus the
         // notFound fallthrough below means any non-"/" path 404s.
-        const v = try viewer(io, alloc, req);
+        const v = try loadViewer(io, alloc, req);
         try home.handleHome(req, io, alloc, v.name, v.is_admin, path);
     } else {
         try http.notFound(req);
@@ -341,14 +341,14 @@ fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus
 /// is the empty name, which those pages already render as a Log in link.
 const Viewer = struct { name: []const u8, is_admin: bool };
 
-fn viewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
-    const uid = try users.currentUserID(io, alloc, req);
+fn loadViewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
+    const uid = try users.loadCurrentUserID(io, alloc, req);
     if (uid.len != 0) return .{
         .name = try users.getUserName(io, alloc, uid),
         // The host is uid "1" (see admin.zig), so this does too.
         .is_admin = std.mem.eql(u8, uid, "1"),
     };
-    return .{ .name = (try player.current(io, alloc, req)).name, .is_admin = false };
+    return .{ .name = (try player.loadCurrent(io, alloc, req)).name, .is_admin = false };
 }
 
 // ══ TESTS ════════════════════════════════════════════════════════════════════

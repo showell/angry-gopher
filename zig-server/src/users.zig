@@ -1,5 +1,5 @@
 //! users: identity resolution, issuance, and per-user gopher-private state.
-//! The resolution half (currentUser → WHO a request acts as) came first; the
+//! The resolution half (loadCurrentUser → WHO a request acts as) came first; the
 //! issuance half (account creation, password set/verify, session signing, name
 //! validation) landed with the front-door login port (login.zig).
 //!
@@ -34,19 +34,19 @@ const users_session = @import("users_session.zig");
 const names = @import("names.zig");
 const apiKeyMatches = users_session.apiKeyMatches;
 pub const clock_skew_secs = users_session.clock_skew_secs;
-pub const currentUserID = users_session.currentUserID;
-pub const bearerUserID = users_session.bearerUserID;
+pub const loadCurrentUserID = users_session.loadCurrentUserID;
+pub const loadBearerUserID = users_session.loadBearerUserID;
 pub const session_cookie = users_session.session_cookie;
 pub const session_cookie_legacy = users_session.session_cookie_legacy;
-pub const sessionToMove = users_session.sessionToMove;
+pub const findSessionToMove = users_session.findSessionToMove;
 pub const verifySessionWithSecret = users_session.verifySessionWithSecret;
 pub const signSession = users_session.signSession;
-pub const sessionSecret = users_session.sessionSecret;
-pub const sessionUser = users_session.sessionUser;
-pub const previousSecret = users_session.previousSecret;
+pub const loadSessionSecret = users_session.loadSessionSecret;
+pub const loadSessionUser = users_session.loadSessionUser;
+pub const loadPreviousSecret = users_session.loadPreviousSecret;
 pub const rotateSecret = users_session.rotateSecret;
 pub const ResolvedUser = users_session.ResolvedUser;
-pub const currentUser = users_session.currentUser;
+pub const loadCurrentUser = users_session.loadCurrentUser;
 pub const signSessionNow = users_session.signSessionNow;
 
 const std = @import("std");
@@ -77,17 +77,17 @@ pub var session_secret_dir: []const u8 = "../games/lynrummy/data/chat"; // holds
 
 const claude_agent_id = "3";
 
-/// userExists reports whether id has an account dir under auth_root.
-pub fn userExists(io: Io, alloc: Alloc, id: []const u8) !bool {
+/// hasAccount reports whether id has an account dir under auth_root.
+pub fn hasAccount(io: Io, alloc: Alloc, id: []const u8) !bool {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return false;
     const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
     const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
 }
 
-/// userIsMember reports whether id has a password file.
-pub fn userIsMember(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return authFileExists(io, alloc, Uid.of(id) orelse return false, "password");
+/// hasPassword reports whether id has a password file.
+pub fn hasPassword(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return hasAuthFile(io, alloc, Uid.of(id) orelse return false, "password");
 }
 
 /// isAgent — today exactly one agent (Claude, uid 3).
@@ -95,9 +95,9 @@ fn isAgent(id: []const u8) bool {
     return std.mem.eql(u8, id, claude_agent_id);
 }
 
-/// userIsAuthorized = member OR agent.
-pub fn userIsAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return (try userIsMember(io, alloc, id)) or isAgent(id);
+/// isAuthorized = member OR agent.
+pub fn isAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return (try hasPassword(io, alloc, id)) or isAgent(id);
 }
 
 /// AuthorizedUser is one entry of the account roster (id + display name).
@@ -116,7 +116,7 @@ pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
         // numeric id only (the account dirs); skips next-id.txt etc.
         if (!allDigits(entry.name)) continue; // canonical only (156(i)): a 007 or +7 folder is no account
         const id = try alloc.dupe(u8, entry.name);
-        if (!try userIsAuthorized(io, alloc, id)) continue;
+        if (!try isAuthorized(io, alloc, id)) continue;
         const name = try getUserName(io, alloc, id);
         try out.append(alloc, .{ .id = id, .name = name });
     }
@@ -138,7 +138,7 @@ fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
 /// before the password (134(e), 138(f)), and that member must still log in
 /// by cookie to release again. What must not take "" as a name refuses it:
 /// retire's plan refuses a nameless account (the box's A2), and
-/// `onlyMemberNamed` never matches "".
+/// `findOnlyMemberNamed` never matches "".
 pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     const b = (try readAuthFile(io, alloc, Uid.of(id) orelse return "", "name")) orelse return "";
     return std.mem.trimEnd(u8, b, "\r\n");
@@ -148,11 +148,11 @@ pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 /// a runaway/abuse backstop, not a tight quota.
 pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
 
-/// userUploadBytes returns the cumulative bytes a user has ever uploaded
+/// readUploadBytes returns the cumulative bytes a user has ever uploaded
 /// ({users_root}/{id}/upload-bytes), 0 when there is no such file. A file
 /// that cannot be read, or does not hold a number, is an error: counting it
 /// as 0 would give the user their whole allowance again.
-pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) !i64 {
+pub fn readUploadBytes(io: Io, alloc: Alloc, id: []const u8) !i64 {
     const path = try std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" });
     const b = store.read(io, alloc, path, .unlimited) catch |e| switch (e) {
         error.FileNotFound => return 0,
@@ -169,7 +169,7 @@ pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) !i64 {
 /// refused with it: neither may let an upload past the cap uncounted.
 pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
     if (!allDigits(id)) return false;
-    const total = (try userUploadBytes(io, alloc, id)) + n;
+    const total = (try readUploadBytes(io, alloc, id)) + n;
     if (total > max_upload_lifetime_bytes) return false;
     const dir = try std.fs.path.join(alloc, &.{ users_root, id });
     try store.makeDir(io, alloc, dir);
@@ -181,10 +181,10 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
 
 // ── API-key management ───────
 
-/// userHasAPIKey reports whether the principal has an API-key file.
-pub fn userHasAPIKey(io: Io, alloc: Alloc, id: []const u8) bool {
+/// hasAPIKey reports whether the principal has an API-key file.
+pub fn hasAPIKey(io: Io, alloc: Alloc, id: []const u8) bool {
     // absent-ok: display only: a key that cannot be looked at shows as none, and Generate replaces it as Regenerate would.
-    return authFileExists(io, alloc, Uid.of(id) orelse return false, "api-key") catch false;
+    return hasAuthFile(io, alloc, Uid.of(id) orelse return false, "api-key") catch false;
 }
 
 /// getUserAPIKey returns the stored key for display, or null when absent OR a
@@ -226,18 +226,18 @@ pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !void {
 /// answered "no" it freed a member's name for a stranger's account
 /// (findMemberByName). The caller says what "could not tell" means there.
 pub fn isMember(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return userIsMember(io, alloc, id);
+    return hasPassword(io, alloc, id);
 }
 
-/// principalExists / principalAuthorized / principalIsAgent are the public
+/// hasPrincipal / isPrincipalAuthorized / principalIsAgent are the public
 /// admin-facing wrappers over the account-store predicates; an error is the
 /// caller's.
-pub fn principalExists(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return userExists(io, alloc, id);
+pub fn hasPrincipal(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return hasAccount(io, alloc, id);
 }
 
-pub fn principalAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
-    return userIsAuthorized(io, alloc, id);
+pub fn isPrincipalAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return isAuthorized(io, alloc, id);
 }
 
 pub fn principalIsAgent(id: []const u8) bool {
@@ -264,7 +264,7 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
     return (std.fmt.parseInt(i64, a, 10) catch 0) < (std.fmt.parseInt(i64, b, 10) catch 0);
 }
 
-fn authFileExists(io: Io, alloc: Alloc, id: Uid, name: []const u8) !bool {
+fn hasAuthFile(io: Io, alloc: Alloc, id: Uid, name: []const u8) !bool {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id.text(), name });
     return try store.has(io, alloc, path);
 }
@@ -277,7 +277,7 @@ pub fn readAuthFile(io: Io, alloc: Alloc, id: Uid, name: []const u8) !?[]u8 {
 
 /// **AN ACCOUNT ID, CHECKED** (metal-vmm QUEUE 250): what `allDigits` passed,
 /// as a type only `Uid.of` makes. A file under {auth_root}/<id>/ is read by
-/// one (`readAuthFile`, `authFileExists`), so an id with `/` or `..` in it
+/// one (`readAuthFile`, `hasAuthFile`), so an id with `/` or `..` in it
 /// never names another folder's password: the check is where the id is,
 /// and a reader cannot be handed one that skipped it. A literal without
 /// `uid_seal` does not compile, and ops/check_zig's seal lint refuses
@@ -316,7 +316,7 @@ pub fn allDigits(s: []const u8) bool {
     return true;
 }
 
-pub fn nowUnix(io: Io) i64 {
+pub fn readNowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
@@ -360,11 +360,11 @@ pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const
 /// (108's sign-up race): for naming an author, where a guess between two
 /// would be worse than nobody. The name first: most accounts are not it, and
 /// membership costs a look at the password.
-pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+pub fn findOnlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
     if (name.len == 0) return null; // "" is no name: a nameless member is no match
     var found: ?[]const u8 = null;
     for (try listUserIDs(io, alloc)) |id| {
-        if (!std.mem.eql(u8, try getUserName(io, alloc, id), name) or !(try userIsMember(io, alloc, id))) continue;
+        if (!std.mem.eql(u8, try getUserName(io, alloc, id), name) or !(try hasPassword(io, alloc, id))) continue;
         if (found != null) return null;
         found = id;
     }
@@ -377,7 +377,7 @@ pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
     if (name.len == 0) return null; // "" is no name: a nameless member is no match
     for (try listUserIDs(io, alloc)) |id| {
-        if ((try userIsMember(io, alloc, id)) and
+        if ((try hasPassword(io, alloc, id)) and
             std.mem.eql(u8, try getUserName(io, alloc, id), name)) return id;
     }
     return null;
@@ -493,21 +493,21 @@ test "fs: upload quota reserves under the cap, refuses over it without mutating"
 
     const id = "200";
     const cap = max_upload_lifetime_bytes;
-    try testing.expectEqual(@as(i64, 0), try userUploadBytes(io, a, id));
+    try testing.expectEqual(@as(i64, 0), try readUploadBytes(io, a, id));
 
     // reserve almost the whole allowance
     try testing.expect(try reserveUploadBytes(io, a, id, cap - 10));
-    try testing.expectEqual(cap - 10, try userUploadBytes(io, a, id));
+    try testing.expectEqual(cap - 10, try readUploadBytes(io, a, id));
 
     // a reservation that would exceed the cap is refused AND leaves the total put
     try testing.expect(!(try reserveUploadBytes(io, a, id, 20)));
-    try testing.expectEqual(cap - 10, try userUploadBytes(io, a, id));
+    try testing.expectEqual(cap - 10, try readUploadBytes(io, a, id));
 
     // exactly to the cap is allowed; one byte beyond is not
     try testing.expect(try reserveUploadBytes(io, a, id, 10));
-    try testing.expectEqual(cap, try userUploadBytes(io, a, id));
+    try testing.expectEqual(cap, try readUploadBytes(io, a, id));
     try testing.expect(!(try reserveUploadBytes(io, a, id, 1)));
-    try testing.expectEqual(cap, try userUploadBytes(io, a, id));
+    try testing.expectEqual(cap, try readUploadBytes(io, a, id));
 }
 
 test "fs: an upload total that cannot be read is an error, never a fresh allowance" {
@@ -525,12 +525,12 @@ test "fs: an upload total that cannot be read is an error, never a fresh allowan
     // A folder where the total should be: a read that fails, not one that
     // finds nothing.
     try store.makeDir(io, a, try std.fs.path.join(a, &.{ users_root, "201", "upload-bytes" }));
-    try testing.expect(std.meta.isError(userUploadBytes(io, a, "201")));
+    try testing.expect(std.meta.isError(readUploadBytes(io, a, "201")));
     try testing.expect(std.meta.isError(reserveUploadBytes(io, a, "201", 1)));
     // A total that is not a number is not 0 either.
     try store.makeDir(io, a, try std.fs.path.join(a, &.{ users_root, "202" }));
     try store.write(io, a, try std.fs.path.join(a, &.{ users_root, "202", "upload-bytes" }), "lots", .{});
-    try testing.expect(std.meta.isError(userUploadBytes(io, a, "202")));
+    try testing.expect(std.meta.isError(readUploadBytes(io, a, "202")));
 }
 
 test "fs: only members reserve a name; findMemberByName resolves it" {
@@ -570,23 +570,23 @@ test "fs: api key issue, read back, clear; legacy bare-hash is held but not disp
 
     const id = "300";
     try setUserName(io, a, id, "Agent"); // create the account dir
-    try testing.expect(!userHasAPIKey(io, a, id));
+    try testing.expect(!hasAPIKey(io, a, id));
 
     const key = try setUserAPIKey(io, a, id);
     try testing.expect(std.mem.startsWith(u8, key, "300-"));
-    try testing.expect(userHasAPIKey(io, a, id));
+    try testing.expect(hasAPIKey(io, a, id));
     try testing.expectEqualStrings(key, (try getUserAPIKey(io, a, id)).?); // round-trips for display
     try testing.expect(apiKeyMatches(key, key)); // and authenticates against itself
 
     try clearUserAPIKey(io, a, id);
-    try testing.expect(!userHasAPIKey(io, a, id));
+    try testing.expect(!hasAPIKey(io, a, id));
     try clearUserAPIKey(io, a, id); // absent is revoked already
     try testing.expect((try getUserAPIKey(io, a, id)) == null);
 
     // a legacy bare-hash key (no '-') is honored for auth but never echoed back
     const path = try std.fs.path.join(a, &.{ auth_root, id, "api-key" });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "abc123def" });
-    try testing.expect(userHasAPIKey(io, a, id));
+    try testing.expect(hasAPIKey(io, a, id));
     try testing.expect((try getUserAPIKey(io, a, id)) == null);
 }
 
@@ -613,7 +613,7 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     try testing.expectEqualStrings("First", try getUserName(io, a, id1));
     try testing.expectEqualStrings("Second", try getUserName(io, a, id2));
     // a freshly allocated account exists but is not yet a member (no password)
-    try testing.expect(try principalExists(io, a, id1));
+    try testing.expect(try hasPrincipal(io, a, id1));
     try testing.expect(!try isMember(io, a, id1));
 }
 
@@ -668,17 +668,17 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     // would otherwise deleteTree the whole account store. Both principals survive.
     try deleteUserRecord(io, a, "");
     try deleteUserRecord(io, a, "   ");
-    try testing.expect(try principalExists(io, a, keep));
-    try testing.expect(try principalExists(io, a, gone));
+    try testing.expect(try hasPrincipal(io, a, keep));
+    try testing.expect(try hasPrincipal(io, a, gone));
 
     // Deleting the goner removes BOTH its account dir (auth_root) and its private
     // dir (users_root); the upload total is gone with it.
     try deleteUserRecord(io, a, gone);
-    try testing.expect(!try principalExists(io, a, gone));
+    try testing.expect(!try hasPrincipal(io, a, gone));
     try deleteUserRecord(io, a, gone); // gone already: done
-    try testing.expectEqual(@as(i64, 0), try userUploadBytes(io, a, gone));
+    try testing.expectEqual(@as(i64, 0), try readUploadBytes(io, a, gone));
     // …and the unrelated principal is untouched.
-    try testing.expect(try principalExists(io, a, keep));
+    try testing.expect(try hasPrincipal(io, a, keep));
     try testing.expect(try isMember(io, a, keep));
 }
 
@@ -719,7 +719,7 @@ test "a member with no name file reads as nobody, and no name lookup finds them 
     defer saved.restore();
     try setUserPassword(io, a, "4", "pw");
     try testing.expectEqualStrings("", try getUserName(io, a, "4"));
-    try testing.expectEqual(@as(?[]const u8, null), try onlyMemberNamed(io, a, ""));
+    try testing.expectEqual(@as(?[]const u8, null), try findOnlyMemberNamed(io, a, ""));
     try testing.expectEqual(@as(?[]const u8, null), try findMemberByName(io, a, ""));
 }
 

@@ -84,7 +84,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     // Resolve header-derived state BEFORE touching the body: iterateHeaders
     // asserts on received_head, and the body read invalidates header/target
     // strings — so resolve identity and dup the query target up front.
-    const cur = try users.currentUser(io, alloc, req);
+    const cur = try users.loadCurrentUser(io, alloc, req);
     const target = try http.target(req, alloc);
     // The login throttle's address must be read from the headers BEFORE the
     // body read invalidates them (the gotcha this whole function opens with);
@@ -246,14 +246,14 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: http
 /// or a name-only player (whose Log out chip the public pages render just the
 /// same). A player has no account record to delete, only game data.
 pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
-    const user = try users.currentUser(io, alloc, req);
-    const local = if (user.id.len == 0) try player.current(io, alloc, req) else player.Player{ .id = "", .name = "" };
+    const user = try users.loadCurrentUser(io, alloc, req);
+    const local = if (user.id.len == 0) try player.loadCurrent(io, alloc, req) else player.Player{ .id = "", .name = "" };
     const id = if (user.id.len != 0) user.id else local.id;
 
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
-        const target = releaseTarget(user.id, local.id, local.id.len != 0 and try users.principalExists(io, alloc, local.id));
+        const target = releaseTarget(user.id, local.id, local.id.len != 0 and try users.hasPrincipal(io, alloc, local.id));
         // **A RELEASE THAT CAN RELEASE NOTHING SAYS SO** (metal-vmm QUEUE
         // 172): a player cookie naming an account (its session lapsed) is
         // not that account's to release, and the answer a release that
@@ -343,7 +343,7 @@ fn sendHostWelcome(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) void {
 
 fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, now: Now) !void {
     if (std.mem.eql(u8, new_uid, host_uid)) return;
-    if (!try users.principalExists(io, alloc, host_uid)) return;
+    if (!try users.hasPrincipal(io, alloc, host_uid)) return;
 
     const host_name = try users.getUserName(io, alloc, host_uid);
     const pair = try chat_paths.chatPairKey(alloc, host_uid, new_uid);

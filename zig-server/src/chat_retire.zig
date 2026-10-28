@@ -262,7 +262,7 @@ fn retireTopic(pl: *Plan, conv_dir: []const u8, key: []const u8, sid: []const u8
 const Member = struct { id: []const u8, name: []const u8 };
 
 /// Every account with a numeric dir under auth_root, by id and name. Not
-/// `userIsAuthorized`-filtered (an account without a password is still an
+/// `isAuthorized`-filtered (an account without a password is still an
 /// account to keep or remove); `next-id.txt` and other non-numeric names are
 /// skipped.
 fn allMembers(io: Io, alloc: Alloc) ![]Member {

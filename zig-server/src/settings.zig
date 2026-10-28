@@ -25,7 +25,7 @@ const Request = std.http.Server.Request;
 /// handle dispatches /settings* — `sub` is the path after "/settings" ("" or
 /// "/apikey"). Members only; presence is marked on entry.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
-    const uid = try users.currentUserID(io, alloc, req);
+    const uid = try users.loadCurrentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, .literal("/login/full"));
     if (!try users.isMember(io, alloc, uid)) return http.notFound(req); // NEED_PASSWORD
     presence.markActiveAndBroadcast(io, alloc, bus, uid, Now.read(io));
@@ -60,7 +60,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 
     try b.appendSlice(alloc, intro_html);
 
-    if (!users.userHasAPIKey(io, alloc, uid)) {
+    if (!users.hasAPIKey(io, alloc, uid)) {
         try b.appendSlice(alloc, "<p>You don't have an API key yet.</p>\n" ++
             "<form method=\"post\" action=\"/settings/apikey\" style=\"display:inline\"><button type=\"submit\">Generate key</button></form>");
         return page.send(req, .ok);
