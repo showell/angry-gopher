@@ -990,6 +990,76 @@ test "a doc posted to chat (metal-vmm QUEUE 278): the partner, the topic it resu
     try freezeRun("docsRun", try docsRun(a, io), "1946b7c80088e0fb7def4c23585284bf1ab1e1f2a50b24144c7c2893ae85f315");
 }
 
+/// Every key the welcome DM (metal-vmm QUEUE 279) publishes on in
+/// `welcomeRun`'s site: its topic, then each member's notify, sidebar,
+/// recent, images and code.
+const welcome_keys = [_][]const u8{ "1_3/general", "1_2/Plans" } ++ memberKeys("1") ++ memberKeys("2") ++ memberKeys("3");
+
+/// `bytes` with every RFC 3339 stamp (`2026-10-10T00:00:00Z`) as `<at>`:
+/// the old welcome was stamped by the clock, not the request's time.
+fn unstamped(a: Alloc, bytes: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        const t = bytes[i..];
+        if (t.len >= 20 and t[4] == '-' and t[7] == '-' and t[10] == 'T' and t[13] == ':' and t[16] == ':' and t[19] == 'Z' and std.ascii.isDigit(t[0]) and std.ascii.isDigit(t[18])) {
+            try out.appendSlice(a, "<at>");
+            i += 20;
+        } else {
+            try out.append(a, t[0]);
+            i += 1;
+        }
+    }
+    return out.items;
+}
+
+/// A member signs up (Ann, by the login form), then opens /chat twice;
+/// Debbie, who has a DM with the host, and the host himself open it too.
+/// Where the welcome DM was seeded (login's, or the first /chat visit's),
+/// what it left is the same: the transcript, the .count, the feeds, the
+/// bookmark, every frame, every answer. Stamps read as `<at>`.
+fn welcomeRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8, frames: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    // The next account made is 3.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "next-id.txt" }), "3\n", .{});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+
+    var hub = webbox.bus.Hub.init(io, a);
+    var subs: [welcome_keys.len]*webbox.bus.Subscriber = undefined;
+    for (welcome_keys, &subs) |k, *s| s.* = try hub.open(k);
+
+    var answers: std.ArrayList([]const u8) = .empty;
+    const body = "name=Ann&password=pw&action=register";
+    const signup = try serveOn(a, io, &hub, try std.fmt.allocPrint(a, "POST /login/full HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ body.len, body }));
+    try answers.append(a, harness.status(signup.out));
+    // Ann's session, as the signup's cookie signs it.
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const ann = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, harness.UidSite.secret, "3", now)});
+    for ([_][]const u8{ ann, ann, debbie, steve }) |who| {
+        const r = try serveOn(a, io, &hub, try getRaw(a, "/chat", who));
+        try answers.append(a, try unstamped(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out })));
+    }
+    return .{ .answers = answers.items, .files = try unstamped(a, try tree(a, io, site.base)), .frames = try unstamped(a, try drained(a, &hub, &welcome_keys, &subs)) };
+}
+
+test "the welcome DM (metal-vmm QUEUE 279): a new member's, made once, from the host, by name, in general, the member's bookmark at it; one who has the DM, and the host, see no change" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("welcomeRun", try welcomeRun(a, io), "fdedb2107f1f87be8a530f9a8ec778c212cb628d1dba59b0abf8924819e7cb23");
+}
+
 /// key, and every file the site holds.
 fn failedSend(a: Alloc, io: Io, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
     var site = try harness.UidSite.init(a, io);
