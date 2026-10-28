@@ -129,7 +129,7 @@ fn verbatim(
 /// stream resumes). **AN INDEX, NOT A POSITION**: a frame's
 /// `id:` is its message's index, so a refused block before it leaves the
 /// backlog's positions behind the indexes after it.
-fn backlogFrom(
+pub fn backlogFrom(
     backlog: []const store.ChatMessage,
     sid: []const u8,
     since: usize,

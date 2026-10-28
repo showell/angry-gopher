@@ -106,6 +106,11 @@ const Fn = enum(u8) {
     limits = 73,
     saved_refs = 74,
     search_excerpt = 75,
+    resume_at = 76,
+    std_parse_u64 = 77,
+    json_bytes = 78,
+    stored_frame = 79,
+    backlog_from = 80,
 };
 
 /// One Roc call's results, in `a`.
@@ -1951,6 +1956,190 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
             rr,
         )) differ.add("reactionFrame(\"{f}\")", .{std.zig.fmtString(line)});
     }
+    try differ.none(compared);
+}
+
+// ── Backlog (webbox sse.resumeAt, std's parseInt and json; chat_sse.zig) ──
+
+/// What a resume source can hold: numbers at u64's edges, signs,
+/// underscores, spaces and tabs around, junk, empty, and none sent.
+const resume_sources = [_]?[]const u8{
+    null,
+    "",
+    "0",
+    "5",
+    "  5 ",
+    "\t7\t",
+    " 5\n",
+    "+0",
+    "-0",
+    "-00",
+    "-0_0",
+    "-_0",
+    "-1",
+    "+5",
+    "+-1",
+    "--0",
+    "-",
+    "+",
+    "1_0",
+    "1__0",
+    "_1",
+    "1_",
+    "0_5",
+    "007",
+    "00000000000000000000000001",
+    "18446744073709551614",
+    "18446744073709551615",
+    "18446744073709551616",
+    "99999999999999999999",
+    "garbage",
+    "1.5",
+    "0x10",
+    "1e3",
+    "\u{0663}",
+    "5 5",
+    "\xff",
+    " ",
+};
+
+/// A source as twin.roc's `given` reads it: none is empty, one sent is a
+/// marker byte before it.
+fn givenArg(a: std.mem.Allocator, s: ?[]const u8) ![]const u8 {
+    const v = s orelse return "";
+    return std.mem.concat(a, u8, &.{ "\x01", v });
+}
+
+test "Backlog: the resume cursor is sse.resumeAt's, over every pair of sources, and its parse is std's parseInt over every string" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (resume_sources) |lei| for (resume_sources) |since| {
+        const z = @import("webbox").sse.resumeAt(lei, since);
+        const r = (try roc1(a, .resume_at, &.{ try givenArg(a, lei), try givenArg(a, since) })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, try std.fmt.allocPrint(a, "{d}", .{z}), r)) differ.add("resumeAt({?s}, {?s}): zig {d}, roc {s}", .{ lei, since, z, r });
+    };
+    var strings: std.ArrayList([]const u8) = .empty;
+    try strings.appendSlice(a, try byteStrings(a));
+    for (resume_sources) |s| if (s) |v| try strings.append(a, v);
+    var rng = std.Random.DefaultPrng.init(0x5e5e);
+    const rr = rng.random();
+    const alphabet = "0123456789_+- 9";
+    for (0..3000) |_| {
+        const s = try a.alloc(u8, rr.uintAtMost(usize, 24));
+        for (s) |*c| c.* = alphabet[rr.uintLessThan(usize, alphabet.len)];
+        try strings.append(a, s);
+    }
+    for (strings.items) |s| {
+        const z: ?u64 = std.fmt.parseInt(u64, s, 10) catch null;
+        compared += 1;
+        if (!sameResults(try digitsOf(a, z), try roc(a, .std_parse_u64, &.{s}))) differ.add("parseInt(\"{f}\"): zig {?d}", .{ std.zig.fmtString(s), z });
+    }
+    try differ.none(compared);
+}
+
+test "Backlog: bytes as std.json writes them, a string when they are UTF-8 and an array of numbers when not" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    for (try byteStrings(a)) |s| {
+        const z = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(s, .{})});
+        const r = (try roc1(a, .json_bytes, &.{s})).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, r)) differ.add("json.fmt(\"{f}\"): zig {s}, roc {s}", .{ std.zig.fmtString(s), z, r });
+    }
+    try differ.none(compared);
+}
+
+/// Transcripts for a backlog: the codec's spread, and files of messages of
+/// topic `t` (and some of `u`), numbered in and out of order, with refused
+/// blocks among them, a blank piece, and some ending torn.
+fn backlogFiles(a: std.mem.Allocator) ![]const []const u8 {
+    var files: std.ArrayList([]const u8) = .empty;
+    try files.appendSlice(a, try codecStrings(a, 0xbac1, 400, 24));
+    var rng = std.Random.DefaultPrng.init(0xbac2);
+    const r = rng.random();
+    for (0..600) |_| {
+        var file: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 6)) |index| {
+            if (index > 0) try file.appendSlice(a, chat_store.sep);
+            switch (r.uintLessThan(u8, 8)) {
+                0 => try file.appendSlice(a, "from: Nobody\n\nrefused"),
+                1 => try file.appendSlice(a, " \t"),
+                else => {
+                    var m = try codecMessage(a, r);
+                    m.id = try std.fmt.allocPrint(a, "{s}_{d}", .{ if (r.uintLessThan(u8, 5) == 0) "u" else "t", r.uintAtMost(u8, 8) });
+                    const block = try fixtures.chatStoredForm(a, 0, m);
+                    try file.appendSlice(a, block);
+                },
+            }
+        }
+        if (r.uintLessThan(u8, 4) == 0) try file.appendSlice(a, "\n\n-------------\nMSG_t_9\nfrom: x");
+        try files.append(a, file.items);
+    }
+    return files.items;
+}
+
+test "Backlog: a backlog's frames and the messages from where it resumes, as the old Zig's messageFrame and backlogFrom made them" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var rng = std.Random.DefaultPrng.init(0xf5a3e);
+    const r = rng.random();
+    const uids = [_][]const u8{ "", "1", "12", "07", "\xff", "\"", "1 2" };
+    for (0..2000) |i| {
+        const m = try codecMessage(a, r);
+        const index: usize = switch (i % 3) {
+            0 => i,
+            1 => 0,
+            else => std.math.maxInt(usize),
+        };
+        const uid = uids[r.uintLessThan(usize, uids.len)];
+        const zf = try chat_frame.messageFrame(a, .{
+            .index = index,
+            .from = m.from,
+            .from_uid = uid,
+            .at = m.at,
+            .id = m.id,
+            .markdown = m.markdown,
+        });
+        const rf = (try roc1(a, .stored_frame, &.{
+            try std.fmt.allocPrint(a, "{d}", .{index}),
+            m.id,
+            m.from,
+            m.at,
+            uid,
+            m.markdown,
+            try markdown.render(a, m.markdown),
+        })).?;
+        compared += 1;
+        if (!std.mem.eql(u8, zf, rf)) differ.add("messageFrame: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(zf), std.zig.fmtString(rf) });
+    }
+    const sse_ = @import("chat_sse.zig");
+    for (try backlogFiles(a)) |raw| for ([_][]const u8{ "t", "u", "" }) |sid| for ([_]usize{ 0, 1, 2, 3, 5, 8, std.math.maxInt(usize) }) |since| {
+        const before = chat_codec.refused_blocks;
+        const msgs = try chat_codec.decodeChatFile(a, raw);
+        var want: std.ArrayList([]const u8) = .empty;
+        try want.append(a, try std.fmt.allocPrint(a, "{d}", .{chat_codec.refused_blocks - before}));
+        const rest = sse_.backlogFrom(msgs, sid, since);
+        for (rest, msgs.len - rest.len..) |msg, at| try want.appendSlice(a, &.{
+            try std.fmt.allocPrint(a, "{d}", .{chat_count.indexOf(msg.id, sid) orelse at}),
+            msg.id,
+            msg.uid,
+        });
+        compared += 1;
+        if (!sameResults(want.items, try roc(a, .backlog_from, &.{ raw, sid, try std.fmt.allocPrint(a, "{d}", .{since}) }))) differ.add("backlogFrom(\"{f}\", {s}, {d})", .{ std.zig.fmtString(raw), sid, since });
+    };
     try differ.none(compared);
 }
 
