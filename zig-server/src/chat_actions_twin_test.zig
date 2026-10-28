@@ -285,6 +285,81 @@ const scenario = [_]Ask{
     .{ .who = .steve, .method = "POST", .target = "/chat/c/1_4/Hello/send", .body = "markdown=hi+4" },
     .{ .who = .steve, .method = "GET", .target = "/chat/c/1_4/Hello" },
     .{ .who = .steve, .method = "GET", .target = "/chat/c/1_4" },
+    // 271: every tail the Zig serves, by a member, by one who is not, and for
+    // a topic that is not there; an invalid tail; keys that name no
+    // conversation. Who answers each, and with what, is the Roc's to decide.
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/uploads/x.png" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/upload" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/download" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/nope" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/download/x" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Plans/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/uploads/x.png" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Gone/upload" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/download" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/stream" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/nope" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Gone/download/x" },
+    .{ .who = .steve, .method = "POST", .target = "/chat/c/1_2/Gone/saved" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/uploads/x.png" },
+    .{ .who = .ann, .method = "POST", .target = "/chat/c/1_2/Plans/upload" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/download" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/saved" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/stream" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/nope" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Plans/download/x" },
+    .{ .who = .ann, .method = "POST", .target = "/chat/c/1_2/Plans/saved" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Gone/uploads/x.png" },
+    .{ .who = .ann, .method = "POST", .target = "/chat/c/1_2/Gone/upload" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Gone/download" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Gone/saved" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Gone/stream" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Gone/nope" },
+    .{ .who = .ann, .method = "GET", .target = "/chat/c/1_2/Gone/download/x" },
+    .{ .who = .ann, .method = "POST", .target = "/chat/c/1_2/Gone/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup/uploads/x.png" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/Standup/upload" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup/download" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup/nope" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Standup/download/x" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/Standup/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Gone/uploads/x.png" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/Gone/upload" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Gone/download" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Gone/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Gone/stream" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Gone/nope" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/ops/Gone/download/x" },
+    .{ .who = .steve, .method = "POST", .target = "/channel/ops/Gone/saved" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/uploads/x.png" },
+    .{ .who = .debbie, .method = "POST", .target = "/channel/ops/Standup/upload" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/download" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/saved" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/stream" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/nope" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Standup/download/x" },
+    .{ .who = .debbie, .method = "POST", .target = "/channel/ops/Standup/saved" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Gone/uploads/x.png" },
+    .{ .who = .debbie, .method = "POST", .target = "/channel/ops/Gone/upload" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Gone/download" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Gone/saved" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Gone/stream" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Gone/nope" },
+    .{ .who = .debbie, .method = "GET", .target = "/channel/ops/Gone/download/x" },
+    .{ .who = .debbie, .method = "POST", .target = "/channel/ops/Gone/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/2_1/Plans/download" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_9/Plans/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/01_2/Plans/stream" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/bad_id/download" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/Bad_Name/Standup/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/nothere/Standup/download" },
+    .{ .who = .steve, .method = "GET", .target = "/channel/quiet/Nothing/saved" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/uploads/" },
+    .{ .who = .steve, .method = "GET", .target = "/chat/c/1_2/Plans/uploads/../x" },
+    .{ .who = .nobody, .method = "GET", .target = "/chat/c/1_2/Plans/download" },
 };
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
@@ -352,8 +427,26 @@ fn run(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8 } {
             .nobody => "",
         };
         got.* = try harness.serve(a, io, try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n{s}\r\n{s}", .{ s.method, s.target, cookie, s.body.len, s.extra, s.body }));
+        // A topic's bundle holds its files' times, which are this run's:
+        // its status and headers stand, its bytes are the bundle's own
+        // tests' (chat_download.zig).
+        if (std.mem.indexOf(u8, got.*, "content-type: application/gzip\r\n")) |_| got.* = try bundleShape(a, got.*);
     }
     return .{ .answers = answers, .files = try tree(a, io, site.base) };
+}
+
+/// A gzip answer as its status and headers, but its length, then `<gzip>`.
+fn bundleShape(a: Alloc, answer: []const u8) ![]const u8 {
+    const end = std.mem.indexOf(u8, answer, "\r\n\r\n") orelse return answer;
+    var out: std.ArrayList(u8) = .empty;
+    var it = std.mem.splitSequence(u8, answer[0..end], "\r\n");
+    while (it.next()) |line| {
+        if (std.ascii.startsWithIgnoreCase(line, "content-length:")) continue;
+        try out.appendSlice(a, line);
+        try out.appendSlice(a, "\r\n");
+    }
+    try out.appendSlice(a, "\r\n<gzip>");
+    return out.items;
 }
 
 /// Every file under `root` but the auth tree (each site's sessions are its
@@ -392,7 +485,7 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
     const roc = try run(a, io);
-    try freezeRun("run", roc, "8b3eaeeae00b2b57debf2d73d2d0e519d9198d21f03bd69559aae86a5d34a9a9");
+    try freezeRun("run", roc, "6d7a4e52c469f785aa2cc7d10a8d9a382b100196989fabd82e26a87b127078fe");
     // The scenario reached what it means to: stores, every refusal, the 404s.
     var seen: [9]bool = @splat(false);
     for (roc.answers) |r| for ([_][]const u8{ "204 No Content", "400 Bad Request", "404 Not Found", "405 Method Not Allowed", "413 Payload Too Large", "303 See Other", "200 OK", "302 Found", "409 Conflict" }, 0..) |want, k| {
