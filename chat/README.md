@@ -9,10 +9,10 @@ day. Log in at [lynrummy.com/chat](https://lynrummy.com/chat) and you get:
 - **Topics** — each conversation is split into named threads (a "topic" is just a
   named session), so a chat can hold many parallel threads without losing the plot.
 - **Emoji** by shortcode — type `:` and pick 🎉 from the autocomplete (a fixed,
-  client-side whitelist in `chat_emoji.js`; the server only ever sees the glyph).
+  client-side whitelist in chat-client's chat_emoji.js; the server only ever sees the glyph).
 - **Reactions** — `:` picks an emoji for the selected message, `+` is a thumbs-up,
   clicking a chip joins or retracts. Stored beside the transcript as an append-only
-  `<sid>.reactions.jsonl` the client folds (`chat_reactions.js`).
+  `<sid>.reactions.jsonl` the client folds (chat_reactions.js).
 - **Images & screencasts** you can drag in, a world-clock you get by clicking any
   timestamp, cross-message references (`MSG_…` links that jump straight to the
   quoted message), and a **keyboard-first** feel — arrows to move, `/` to search,
@@ -60,16 +60,15 @@ A few load-bearing ideas worth knowing before you dig in:
 
 ## The browser client
 
-The front end is its own repository, **chat-client** (a sibling checkout,
-`../chat-client`): hand-written JavaScript, no build step, embedded into the
+The front end is its own repository, **chat-client** (a sibling checkout): hand-written JavaScript, no build step, embedded into the
 zig binary through its `chat_client` module and served as-is. Its README
 says how it is organized. The JS is still held honest from here:
 `tools/jsparse.py` parses the (ES5-ish) dialect we write, and `tools/lint.py`
 runs rules over the AST (silent-catch, dead-code, undefined-call,
 called-once, …) on `../chat-client/js/*.js`. Both run in `ops/check_chat`.
 
-The markdown dialect is its own repository too, **chat-markdown**
-(`../chat-markdown`, module `chat_markdown`).
+The markdown dialect is its own repository too, **chat-markdown** (a sibling
+checkout, module `chat_markdown`).
 
 The **server** side lives over in `zig-server/src/` — `chat.zig` and its focused
 neighbors (`chat_page.zig`, `chat_sse.zig`, `chat_conv.zig`, `chat_chrome.zig`, `recent.zig`,
