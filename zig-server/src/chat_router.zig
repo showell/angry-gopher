@@ -189,6 +189,7 @@ pub const Call = struct {
             .admit = admitOf,
             .read_query = query,
             .search_words = searchWords,
+            .search_messages = searchMessages,
             .srcs = srcs,
             .me = me,
             .now = now_,
@@ -655,6 +656,38 @@ pub const Call = struct {
         };
         for (got, out) |w, *o| o.* = .{ .word = w.word, .count = w.count };
         return .{ .words = out, .unreadable = idx.unreadableFor(reach) };
+    }
+
+    /// **SEARCH'S INDEX, ASKED FOR MESSAGES** (Host.search_messages!): what
+    /// the member can see, then the index's messages holding `key`, at most
+    /// `most` and within chat_search's byte cap (charged by excerptCost),
+    /// each as its excerpt's window (chat_search.excerptWindow); null with
+    /// no index.
+    fn searchMessages(ctx: *anyopaque, key: []const u8, most: u64) ?roc_chat.Messages {
+        const c = of(ctx);
+        const none_found: roc_chat.Messages = .{ .hits = &.{}, .matched = 0, .unreadable = 0 };
+        if (c.dead()) return none_found;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const reach = chat_paths.visibleConvs(c.io, c.alloc, c.uid) catch |e| {
+            c.fail(e);
+            return none_found;
+        };
+        const idx = search_index.indexOrBuild(c.io, c.alloc) orelse return null;
+        // absent-ok: the same.
+        const f = if (most == 0) search_index.Found{ .hits = &.{}, .matched = 0 } else idx.messagesFor(c.alloc, reach, key, @intCast(most), .{ .bytes = chat_search.most_bytes, .cost = chat_search.excerptCost }) catch |e| {
+            c.fail(e);
+            return none_found;
+        };
+        // absent-ok: the same.
+        const out = c.alloc.alloc(roc_chat.Hit, f.hits.len) catch |e| {
+            c.fail(e);
+            return none_found;
+        };
+        for (f.hits, out) |h, *o| {
+            const w = chat_search.excerptWindow(h.msg.markdown, key);
+            o.* = .{ .base = h.conv.base, .kind = if (h.conv.kind == .dm) .dm else .channel, .sid = h.msg.sid, .id = h.msg.id, .from = h.msg.from, .date = h.msg.at, .window = w.bytes, .start = w.start, .length = h.msg.markdown.len, .at = w.at orelse 0, .found = if (w.at != null) .found else .missing };
+        }
+        return .{ .hits = out, .matched = f.matched, .unreadable = idx.unreadableFor(reach) };
     }
 
     fn srcs(ctx: *anyopaque) []const roc_chat.Src {

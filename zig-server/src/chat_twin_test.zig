@@ -26,6 +26,7 @@ const code_store = @import("code_store.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const recent_feed = @import("recent_feed.zig");
 const chat_state = @import("chat_state.zig");
+const chat_search = @import("chat_search.zig");
 const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
 const chat_store = @import("chat_store.zig");
@@ -107,6 +108,7 @@ const Fn = enum(u8) {
     route_kind = 72,
     limits = 73,
     saved_refs = 74,
+    search_excerpt = 75,
 };
 
 /// One Roc call's results, in `a`.
@@ -2365,4 +2367,32 @@ test "Fanout: recentWhere for every viewer, as the Zig reads the other member's 
 /// Roc that takes them decoded.
 fn textOr(s: []const u8, other: []const u8) []const u8 {
     return if (std.unicode.utf8ValidateSlice(s)) s else other;
+}
+
+test "Search: a message's excerpt, cut by the Roc from the window the host hands, was chat_search.excerptOf's: the word at either edge, among 2- and 4-byte characters, stray continuation bytes, and none found (frozen, metal-vmm QUEUE 282: excerptOf is gone)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var frozen: Frozen = .{};
+    const pieces = [_][]const u8{ "zeppelin", "Zeppelin", "\u{00E9}", "\u{1F44D}", "x", " ", " ", "\x80", "\xff", "\u{2026}", "\u{201C}", "ab", "zeppelins" };
+    const keys = [_][]const u8{ "zeppelin", "x", "ab", "\u{00E9}" };
+    var rng = std.Random.DefaultPrng.init(0x282);
+    const r = rng.random();
+    for (0..3000) |_| {
+        var md: std.ArrayList(u8) = .empty;
+        for (0..r.uintAtMost(usize, 120)) |_| try md.appendSlice(a, pieces[r.uintLessThan(usize, pieces.len)]);
+        const key = keys[r.uintLessThan(usize, keys.len)];
+        const w = chat_search.excerptWindow(md.items, key);
+        const got = try roc(a, .search_excerpt, &.{
+            w.bytes,
+            try std.fmt.allocPrint(a, "{d}", .{w.start}),
+            try std.fmt.allocPrint(a, "{d}", .{md.items.len}),
+            try std.fmt.allocPrint(a, "{d}", .{w.at orelse 0}),
+            if (w.at != null) "1" else "0",
+            try std.fmt.allocPrint(a, "{d}", .{key.len}),
+        });
+        frozen.add(got);
+    }
+    try frozen.check("excerpt", "044d14ccc908cdcc633fc6388e7e56034a58ae8447ef4e715ea4f6dbdf5b7285", 3000);
 }

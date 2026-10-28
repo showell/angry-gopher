@@ -103,8 +103,9 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
         .code => return code.handle(req, alloc, bus, uid, route.rest),
         // /chat/links: the Roc's (roc-webbox chat/main.roc `serve_rendered!`).
         .links => std.debug.panic("chat.serve: /chat/links is the Roc's", .{}),
-        // /chat/search/words, /chat/search/messages (chat_search.zig), JSON.
-        .search => return chat_search.handle(req, io, alloc, uid, route.rest, now),
+        // /chat/search/words and /messages are the Roc's (metal-vmm QUEUE
+        // 281, 282); nothing else under /chat/search is.
+        .search => return http.notFound(req),
         .dm => return convRoute(req, io, alloc, bus, uid, route),
         .channel => return channelRoute(req, io, alloc, bus, uid, route),
         // The two cross-page attention streams the prod JS opens on boot,

@@ -1,35 +1,18 @@
-//! chat_search: search across every conversation a person can see, the
-//! server side (metal-vmm QUEUE 155(d)). Two routes, JSON, members only (the
-//! /chat gate):
-//!
-//!   GET /chat/search/words?prefix=la    the words beginning so, each with
-//!       how many messages hold it, summed over what the viewer can see; at
-//!       most `most_words` (said as "most"), the most held first:
-//!       {"prefix":"la","most":20,"unreadable":0,"words":[{"word":"layout","count":3},...]}
-//!   GET /chat/search/messages?word=layout   the messages holding the word:
-//!       {"word":"layout","matched":N,"unreadable":0,"messages":[{"conv":"/chat/c/1_2",
-//!       "kind":"dm","sid":..,"id":..,"from":..,"date":..,"before":..,"mark":..,"after":..},...]}
-//!       at most `most_messages` listed, and at most `most_bytes` of their
-//!       text as JSON writes it, every one counted. Each message is its
-//!       excerpt, cut here (`excerptOf`): the word as the index read it,
-//!       marked, and up to `excerpt_pad` bytes either side, "…" where cut
-//!       (metal-vmm QUEUE 157(d): the client re-read the word's edges with a
-//!       regex of its own, and they had already come apart on Unicode spaces).
-//!
-//! **WHAT THE VIEWER CAN SEE, ASKED ON EVERY REQUEST** (`chat_store.
-//! visibleConvs`), never a list kept from an earlier one: a DM between two
-//! others, or a channel the viewer is not in, is neither suggested nor found.
+//! chat_search: what search keeps in Zig (metal-vmm QUEUE 155(d), 281, 282).
+//! Both routes, /chat/search/words and /chat/search/messages, are the
+//! Roc's (roc-webbox chat/main.roc `search_words!`, `search_messages!`;
+//! chat/Search.roc): the query, the key, the excerpt and the JSON. The host
+//! answers them from here and the index (chat_router.zig's `admitOf`,
+//! `searchWords`, `searchMessages`):
 //!
 //! **A CRUDE RATE LIMIT** (Steve): `per_second` searches a second per
 //! person, both routes together, which debounced typing never meets; past
-//! it, 429.
+//! it, 429 (`admit`).
 //!
-//! `unreadable` counts the transcripts of the viewer's conversations the
-//! index could not read: a search there may miss their words.
-//!
-//! The words are the server's alone (`search_tokens`): the client sends what
-//! was typed and renders what comes back. The UI is later (`chat_search.js`
-//! is untouched).
+//! **AN EXCERPT'S WINDOW, AND ITS COST** (`excerptWindow`, `excerptCost`):
+//! the bytes of a hit the Roc cuts its excerpt from, and what the index's
+//! walk charges against `most_bytes`, so a message of a megabyte never
+//! crosses whole.
 
 const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
@@ -45,10 +28,8 @@ const mem_meter = @import("webbox").mem_meter;
 
 const Request = std.http.Server.Request;
 
-pub const most_words = 20;
 /// Bytes of a message either side of the marked word in its excerpt.
 pub const excerpt_pad = 90;
-pub const most_messages = 500;
 pub const per_second = 5;
 /// The most bytes of message text one answer lists, as JSON writes it
 /// (`search_index.jsonCost`; a doc posted to chat is one message of up to
@@ -56,78 +37,22 @@ pub const per_second = 5;
 /// review of 155, and the review of its fix).
 pub const most_bytes = 2 << 20;
 
-/// `rest` is the path after "/chat/search".
-pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8, now: Now) !void {
-    // `/words` is the Roc's (roc-webbox chat/main.roc `search_words!`, metal-vmm QUEUE 281).
-    if (!std.mem.eql(u8, rest, "/messages")) return http.notFound(req);
-    if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
-    if (!admit(uid, now.awakeMs())) {
-        return req.respond("{\"error\":\"too many searches; wait a second\"}", .{ .status = .too_many_requests, .extra_headers = &.{http.json_ct} });
-    }
-    const raw = http.queryValue(try http.target(req, alloc), "word") orelse "";
-    var buf: [tokens.max_word]u8 = undefined;
-    const key = tokens.key(try chat.urlDecode(alloc, raw), &buf);
-    const reach = try chat_paths.visibleConvs(io, alloc, uid);
-    const idx = search_index.indexOrBuild(io, alloc) orelse {
-        return req.respond("{\"error\":\"search is not ready\"}", .{ .status = .service_unavailable, .extra_headers = &.{http.json_ct} });
-    };
-    var b: std.ArrayList(u8) = .empty;
-    const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, .{ .bytes = most_bytes, .cost = excerptCost });
-    try b.appendSlice(alloc, "{\"word\":");
-    try str(&b, alloc, key);
-    // **SIZED ONCE**: grown as it is written, the request's arena would
-    // keep every smaller copy of the answer besides the last.
-    var size: usize = 128;
-    for (f.hits) |h| size += 128 + excerptCost(h.msg.markdown, key) + search_index.jsonCost(h.msg.from) +
-        search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.at) + search_index.jsonCost(h.conv.base);
-    try b.ensureTotalCapacity(alloc, b.items.len + size);
-    try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
-    for (f.hits, 0..) |h, i| {
-        if (i > 0) try b.append(alloc, ',');
-        const ex = try excerptOf(alloc, h.msg.markdown, key);
-        const fields = [_][2][]const u8{
-            .{ "{\"conv\":", h.conv.base },
-            .{ ",\"kind\":", @tagName(h.conv.kind) },
-            .{ ",\"sid\":", h.msg.sid },
-            .{ ",\"id\":", h.msg.id },
-            .{ ",\"from\":", h.msg.from },
-            .{ ",\"date\":", h.msg.at },
-            .{ ",\"before\":", ex.before },
-            .{ ",\"mark\":", ex.mark },
-            .{ ",\"after\":", ex.after },
-        };
-        for (fields) |fv| {
-            try b.appendSlice(alloc, fv[0]);
-            try str(&b, alloc, fv[1]);
-        }
-        try b.append(alloc, '}');
-    }
-    try b.appendSlice(alloc, "]}");
-    try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });
-}
+/// **THE EXCERPT'S WINDOW, FOR THE ROC TO CUT** (metal-vmm QUEUE 282): where
+/// the word is (`search_index.wordAt`), and the message's bytes its excerpt
+/// can reach: `excerpt_pad` either side of the word and the one byte past
+/// (a cut looks there), or, with no word found, the first `2 *
+/// excerpt_pad` and the one past. The Roc cuts them on a character's edge
+/// and marks the cuts (roc-webbox chat/Search.roc `excerpt`), so a
+/// message of a megabyte never crosses whole.
+pub const ExcerptWindow = struct { bytes: []const u8, start: usize, at: ?usize };
 
-pub const Excerpt = struct { before: []const u8, mark: []const u8, after: []const u8 };
-
-/// A message's excerpt around `key` (folded): the word as written, where the
-/// index finds it (`search_index.wordAt`), and up to `excerpt_pad` bytes
-/// either side, cut on a character's edge, "…" where cut. A message the index
-/// matched always holds it; one that somehow does not is its first bytes,
-/// unmarked.
-pub fn excerptOf(alloc: Alloc, md: []const u8, key: []const u8) !Excerpt {
-    const at = search_index.wordAt(md, key) orelse {
-        const end = charEdgeBack(md, @min(md.len, 2 * excerpt_pad));
-        return .{ .before = "", .mark = "", .after = try cut(alloc, "", md[0..end], end < md.len) };
-    };
-    // Never across the word (the review of 157): a word may begin or end in
-    // stray continuation bytes, which the tokenizer counts as a word's, and
-    // moving to a character's edge would cross it.
-    const start = @min(charEdgeFwd(md, at -| excerpt_pad), at);
-    const end = @max(charEdgeBack(md, @min(md.len, at + key.len + excerpt_pad)), at + key.len);
-    return .{
-        .before = try cut(alloc, if (start > 0) "\u{2026}" else "", md[start..at], false),
-        .mark = md[at .. at + key.len],
-        .after = try cut(alloc, "", md[at + key.len .. end], end < md.len),
-    };
+pub fn excerptWindow(md: []const u8, key: []const u8) ExcerptWindow {
+    if (search_index.wordAt(md, key)) |at| {
+        const lo = at -| excerpt_pad;
+        const hi = @min(md.len, at + key.len + excerpt_pad);
+        return .{ .bytes = md[lo..@min(md.len, hi + 1)], .start = lo, .at = at };
+    }
+    return .{ .bytes = md[0..@min(md.len, 2 * excerpt_pad + 1)], .start = 0, .at = null };
 }
 
 /// What a message's excerpt costs as JSON, at most: the window `excerptOf`
@@ -137,45 +62,6 @@ pub fn excerptCost(md: []const u8, key: []const u8) usize {
     const lo = at -| excerpt_pad;
     const hi = @min(md.len, at + key.len + excerpt_pad);
     return search_index.jsonCost(md[@min(lo, hi)..hi]) + 2 * "\u{2026}".len + 32;
-}
-
-fn cut(alloc: Alloc, lead: []const u8, s: []const u8, trailing: bool) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "{s}{s}{s}", .{ lead, s, if (trailing) "\u{2026}" else "" });
-}
-
-/// `i`, or the next character's start after it: never inside a UTF-8 sequence.
-fn charEdgeFwd(s: []const u8, i: usize) usize {
-    var j = i;
-    while (j < s.len and s[j] & 0xC0 == 0x80) j += 1;
-    return j;
-}
-
-/// `i`, or the start of the character it falls inside.
-fn charEdgeBack(s: []const u8, i: usize) usize {
-    var j = i;
-    while (j > 0 and j < s.len and s[j] & 0xC0 == 0x80) j -= 1;
-    return j;
-}
-
-/// `s` as a JSON string. **ALWAYS A STRING** (155's review): std.json writes
-/// bytes that are not UTF-8 as an array of numbers, and nothing checks a
-/// message's bytes on the way in; each byte that does not begin a whole
-/// UTF-8 sequence is written as U+FFFD.
-fn str(b: *std.ArrayList(u8), alloc: Alloc, s: []const u8) !void {
-    if (std.unicode.utf8ValidateSlice(s)) return b.print(alloc, "{f}", .{std.json.fmt(s, .{})});
-    var clean: std.ArrayList(u8) = .empty;
-    var i: usize = 0;
-    while (i < s.len) {
-        const n = std.unicode.utf8ByteSequenceLength(s[i]) catch 0;
-        if (n > 0 and i + n <= s.len and std.unicode.utf8ValidateSlice(s[i..][0..n])) {
-            try clean.appendSlice(alloc, s[i..][0..n]);
-            i += n;
-        } else {
-            try clean.appendSlice(alloc, "\u{FFFD}");
-            i += 1;
-        }
-    }
-    return b.print(alloc, "{f}", .{std.json.fmt(clean.items, .{})});
 }
 
 // ── the rate limit ───────────────────────────────────────────────────────────
@@ -225,18 +111,6 @@ pub fn forgetAll() void {
 
 const testing = std.testing;
 
-test "a string in the answer is always a JSON string, its bytes that are not UTF-8 as U+FFFD (155's review)" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    var b: std.ArrayList(u8) = .empty;
-    try str(&b, a, "caf\u{00E9} \"q\"");
-    try testing.expectEqualStrings("\"caf\u{00E9} \\\"q\\\"\"", b.items);
-    b.clearRetainingCapacity();
-    try str(&b, a, "x\xc3 \xff\xe2\x80y");
-    try testing.expectEqualStrings("\"x\u{FFFD} \u{FFFD}\u{FFFD}\u{FFFD}y\"", b.items);
-}
-
 test "a few searches a second, then 429 until the second is over" {
     const meter = mem_meter.useForTest(testing.allocator);
     defer meter.restore();
@@ -249,35 +123,6 @@ test "a few searches a second, then 429 until the second is over" {
     try testing.expect(admit("7", 2000));
 }
 
-test "an excerpt is cut on a character's edge, never inside one, and says where it was cut (metal-vmm QUEUE 157(d))" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const e = repeated("\u{00E9}", 60); // 120 bytes, two a character
-    const ex = try excerptOf(a, e ++ " word " ++ e, "word");
-    try testing.expectEqualStrings("word", ex.mark);
-    try testing.expect(std.unicode.utf8ValidateSlice(ex.before) and std.unicode.utf8ValidateSlice(ex.after));
-    try testing.expect(std.mem.startsWith(u8, ex.before, "\u{2026}") and std.mem.endsWith(u8, ex.after, "\u{2026}"));
-    // Short: whole, nothing cut.
-    const whole = try excerptOf(a, "a Word here", "word");
-    try testing.expectEqualStrings("a ", whole.before);
-    try testing.expectEqualStrings("Word", whole.mark);
-    try testing.expectEqualStrings(" here", whole.after);
-}
-
-test "an excerpt of a word that begins with a stray continuation byte never starts past it (the review of 157)" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    // The tokenizer counts any byte >= 0x80 as a word's; nothing checks a
-    // message's bytes on the way in. The cut's start crossed the word.
-    const ex = try excerptOf(a, "\x80\x80ab rest", "\x80\x80ab");
-    try testing.expectEqualStrings("", ex.before);
-    try testing.expectEqualStrings("\x80\x80ab", ex.mark);
-    const mid = try excerptOf(a, &@as([100]u8, @splat('x')) ++ " \x80\x80ab", "\x80\x80ab");
-    try testing.expectEqualStrings("\x80\x80ab", mid.mark);
-}
-
 test "the rate limit's second: its last millisecond still refuses, the next admits" {
     const meter = mem_meter.useForTest(testing.allocator);
     defer meter.restore();
@@ -287,53 +132,4 @@ test "the rate limit's second: its last millisecond still refuses, the next admi
     try testing.expect(admit("9", 1999)); // the last of the second's share
     try testing.expect(!admit("9", 1999));
     try testing.expect(admit("9", 2000));
-}
-
-test "an excerpt: a match at offset 0 and one that ends the text are cut nowhere" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const first = try excerptOf(a, "word then", "word");
-    try testing.expectEqualStrings("", first.before);
-    try testing.expectEqualStrings("word", first.mark);
-    try testing.expectEqualStrings(" then", first.after);
-    const last = try excerptOf(a, "then word", "word");
-    try testing.expectEqualStrings("then ", last.before);
-    try testing.expectEqualStrings("word", last.mark);
-    try testing.expectEqualStrings("", last.after);
-    const only = try excerptOf(a, "word", "word");
-    try testing.expectEqualStrings("", only.before);
-    try testing.expectEqualStrings("word", only.mark);
-    try testing.expectEqualStrings("", only.after);
-}
-
-test "an excerpt: a match excerpt_pad bytes in keeps all before it, one byte further is cut" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const at = &@as([excerpt_pad - 1]u8, @splat('b')) ++ " ";
-    try testing.expectEqualStrings(at, (try excerptOf(a, at ++ "word", "word")).before);
-    const past = &@as([excerpt_pad]u8, @splat('b')) ++ " ";
-    try testing.expectEqualStrings("\u{2026}" ++ past[1..], (try excerptOf(a, past ++ "word", "word")).before);
-}
-
-test "an excerpt: excerpt_pad bytes after the match are kept whole, one byte more is cut" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const at = " " ++ &@as([excerpt_pad - 1]u8, @splat('b'));
-    try testing.expectEqualStrings(at, (try excerptOf(a, "word" ++ at, "word")).after);
-    const past = " " ++ &@as([excerpt_pad]u8, @splat('b'));
-    try testing.expectEqualStrings(past[0..excerpt_pad] ++ "\u{2026}", (try excerptOf(a, "word" ++ past, "word")).after);
-}
-
-/// `s` repeated `n` times, built at comptime (Zig 0.17 removed `s ** n`).
-fn repeated(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
-    const out = comptime blk: {
-        var a: [s.len * n]u8 = undefined;
-        @setEvalBranchQuota(1000 + n);
-        for (0..n) |i| @memcpy(a[i * s.len ..][0..s.len], s);
-        break :blk a;
-    };
-    return &out;
 }

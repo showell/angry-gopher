@@ -322,7 +322,7 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     try testing.expect(std.mem.indexOf(u8, found, "x\u{2026}\"") != null); // cut, and says so
     try testing.expect(std.mem.indexOf(u8, found, "\"markdown\":") == null); // the excerpt, not the message
     const words = try harness.UidSite.ask(a, io, "/chat/search/words?prefix=lay", me);
-    try testing.expect(std.mem.indexOf(u8, words, try std.fmt.allocPrint(a, "\"most\":{d}", .{chat_search.most_words})) != null);
+    try testing.expect(std.mem.indexOf(u8, words, "\"most\":20") != null);
     // And the page carries the shortest word a search takes.
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", me, "topic=Plans")));
     const page = try harness.UidSite.ask(a, io, "/chat/c/1_2/Plans", me);
