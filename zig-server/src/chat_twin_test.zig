@@ -137,6 +137,37 @@ const Differences = struct {
     }
 };
 
+/// **THE ROC'S ANSWERS, FROZEN** (metal-vmm QUEUE 263c): where the Zig a
+/// twin held a Roc function to is retired (no production route reached it),
+/// the Roc's own answers over the same generated inputs are pinned as one
+/// SHA-256 of them all, each answer's parts length-prefixed, taken the day
+/// the twin passed (so the hash is the old Zig's answers too). A change of
+/// one byte of one answer fails it. To see which, run the twin at the
+/// commit before 263c, which held the same inputs to the Zig.
+const Frozen = struct {
+    h: std.crypto.hash.sha2.Sha256 = .init(.{}),
+    n: usize = 0,
+    fn add(f: *Frozen, parts: []const []const u8) void {
+        f.n += 1;
+        var len: [8]u8 = undefined;
+        std.mem.writeInt(u64, &len, parts.len, .little);
+        f.h.update(&len);
+        for (parts) |p| {
+            std.mem.writeInt(u64, &len, p.len, .little);
+            f.h.update(&len);
+            f.h.update(p);
+        }
+    }
+    fn check(f: *Frozen, comptime what: []const u8, want: []const u8, answers: usize) !void {
+        var d: [32]u8 = undefined;
+        f.h.final(&d);
+        const got = std.fmt.bytesToHex(d, .lower);
+        if (f.n == answers and std.mem.eql(u8, &got, want)) return;
+        std.debug.print(what ++ ": {d} answers hash to {s}; frozen: {d} answers, {s}\n", .{ f.n, &got, answers, want });
+        return error.TestUnexpectedResult;
+    }
+};
+
 fn setUp() std.heap.ArenaAllocator {
     twin.use(testing.allocator);
     return std.heap.ArenaAllocator.init(testing.allocator);
@@ -758,29 +789,17 @@ test "Form: a field as webbox's formField reads it, for every form tried" {
     try differ.none(compared);
 }
 
-test "Reaction: the react form judged as parseReactForm judges it, and one glyph as validEmoji knows one" {
+test "Reaction: the react form judged as parseReactForm judged it, and one glyph as validEmoji knew one (frozen, metal-vmm QUEUE 263c)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
-    var compared: usize = 0;
+    var forms_judged: Frozen = .{};
+    var glyphs_known: Frozen = .{};
+    var n_forms: usize = 0;
     for (try forms(a)) |body| {
-        // A field that is not UTF-8 makes the form malformed at the Roc's
-        // door, where parseReactForm judged its bytes.
-        const not_text = for ([_][]const u8{ "msg", "emoji", "on" }) |name| {
-            if (http.formField(a, body, name) catch null) |v| if (!std.unicode.utf8ValidateSlice(v)) break true;
-        } else false;
-        const want: []const []const u8 = if (not_text) &.{"M"} else if (reactions.parseReactForm(a, body)) |f| switch (f) {
-            .reacted => |r| &.{ "R", try std.fmt.allocPrint(a, "{d}", .{r.msg}), r.emoji, if (r.on) "1" else "0" },
-            .bad => |why| &.{ "B", why },
-        } else |e| switch (e) {
-            error.MalformedForm => &.{"M"},
-            else => return e,
-        };
-        const got = try roc(a, .react_form, &.{body});
-        compared += 1;
-        if (!sameResults(want, got)) differ.add("parseReactForm(\"{s}\"): zig {d} results, roc {d}", .{ body, want.len, got.len });
+        forms_judged.add(try roc(a, .react_form, &.{body}));
+        n_forms += 1;
     }
     // Glyphs at the length edge, every byte string, and each with one byte
     // changed to an ASCII one or a torn lead.
@@ -794,13 +813,9 @@ test "Reaction: the react form judged as parseReactForm judges it, and one glyph
             try glyphs.append(a, d);
         };
     }
-    for (glyphs.items) |g| {
-        const want = reactions.validEmoji(g);
-        const got = yes((try roc1(a, .is_valid_emoji, &.{g})).?);
-        compared += 1;
-        if (want != got) differ.add("validEmoji(\"{f}\"): zig {}, roc {}", .{ std.zig.fmtString(g), want, got });
-    }
-    try differ.none(compared);
+    for (glyphs.items) |g| glyphs_known.add(&.{if (yes((try roc1(a, .is_valid_emoji, &.{g})).?)) "1" else "0"});
+    try forms_judged.check("the react form", "694e4c1f2aecc4419ebac7230f9396cecd828db053f3a903674d7618d8dd8cef", n_forms);
+    try glyphs_known.check("validEmoji", "de934d7b51d94412d43371e92321110bf70671c6e835b891263627378024e341", glyphs.items.len);
 }
 
 test "Reaction: the sidecar's line as reactionLine writes it, field order and escapes, over generated uids, names, emoji, stamps and on or off" {
@@ -808,7 +823,7 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
+    var frozen: Frozen = .{};
     const strings = try byteStrings(a);
     // The reactor's name and the emoji are text: the Roc's line takes them
     // decoded (a name at list_accounts!'s door, an emoji at the form's).
@@ -821,7 +836,6 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
         }
     }.f;
     const ts = try times(a);
-    var compared: usize = 0;
     for (0..4000) |i| {
         const msg: u64 = switch (i % 4) {
             0 => 1,
@@ -836,12 +850,10 @@ test "Reaction: the sidecar's line as reactionLine writes it, field order and es
         const from = pick(r, texts);
         const emoji = pick(r, texts);
         const on = r.boolean();
-        const z = try chat_store.reactionLine(a, msg, uid, from, emoji, on, at);
         const got = (try roc1(a, .reaction_line, &.{ try std.fmt.allocPrint(a, "{d}", .{msg}), uid, from, emoji, if (on) "1" else "0", at })).?;
-        compared += 1;
-        if (!std.mem.eql(u8, z, got)) differ.add("reactionLine: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
+        frozen.add(&.{got});
     }
-    try differ.none(compared);
+    try frozen.check("reactionLine", "1f17da2b5bdd2e60042ba831bc805e830671f6fd026733902a9340a6448cefef", 4000);
 }
 
 // ── Chrome, Pages, Html (chat_chrome.zig, chat_page.zig, webbox html.zig) ──
@@ -930,12 +942,13 @@ test "Pages: the 404 that says why, the first-topic shell, the empty /chat and t
     try differ.none(compared);
 }
 
-test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic list tried, script-safe" {
+test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic list tried, script-safe (frozen, metal-vmm QUEUE 263c)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
+    var frozen: Frozen = .{};
+    const Other = struct { id: []const u8, name: []const u8, online: bool };
     var rng = std.Random.DefaultPrng.init(0x51deba7);
     const r = rng.random();
     const names = [_][]const u8{ "Steve", "Ada \"the\" </script>", "caf\xc3\xa9", "", "\x01", "Bo" };
@@ -944,10 +957,9 @@ test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic li
     // what is active is the conversation of its kind.
     const sids = [_][]const u8{ "general", "Plans", "plans", "a</b", "x\"y", "2026-10-25", "ops" };
     const chans = [_][]const u8{ "ops", "team", "a</", "b\"c", "1_2", "2_3" };
-    var compared: usize = 0;
     for (0..800) |_| {
         const uid = ids[r.uintLessThan(usize, ids.len)];
-        var others: std.ArrayList(chat_page.Other) = .empty;
+        var others: std.ArrayList(Other) = .empty;
         for (ids) |id| if (!std.mem.eql(u8, id, uid) and r.boolean()) try others.append(a, .{ .id = id, .name = names[r.uintLessThan(usize, names.len)], .online = r.boolean() });
         var channels: std.ArrayList([]const u8) = .empty;
         for (chans) |c| if (r.boolean()) try channels.append(a, c);
@@ -961,8 +973,6 @@ test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic li
         const key = if (dm) try chat_paths.chatPairKey(a, uid, other) else chans[r.uintLessThan(usize, chans.len)];
         const base = try std.fmt.allocPrint(a, "{s}/{s}", .{ if (dm) "/chat/c" else "/channel", key });
         const sid = sids[r.uintLessThan(usize, sids.len)];
-        const sb: chat_page.Sidebar = .{ .uid = uid, .dm = dm, .key = key, .base = base, .sid = sid, .others = others.items, .channels = channels.items, .pins = pins.items, .topics = topics.items };
-        const z = try chat_page.sidebarJSON(a, sb);
         var args: std.ArrayList([]const u8) = .empty;
         try args.appendSlice(a, &.{ uid, if (dm) "1" else "0", key, base, sid, try std.fmt.allocPrint(a, "{d}", .{others.items.len}) });
         for (others.items) |o| try args.appendSlice(a, &.{ o.id, o.name, if (o.online) "1" else "0" });
@@ -970,11 +980,9 @@ test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic li
             try args.append(a, try std.fmt.allocPrint(a, "{d}", .{list.len}));
             try args.appendSlice(a, list);
         }
-        const got = (try roc1(a, .sidebar_json, args.items)).?;
-        compared += 1;
-        if (!std.mem.eql(u8, z, got)) differ.add("sidebar: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
+        frozen.add(&.{(try roc1(a, .sidebar_json, args.items)).?});
     }
-    try differ.none(compared);
+    try frozen.check("the sidebar", "d4b9885b81fee8ed297eb6e3800575d86456b3c4924d9b7002b6f2197eb9093c", 800);
 }
 
 test "Html: text escaped and a blob made script-safe, as webbox's html.zig does" {
@@ -1046,44 +1054,24 @@ test "Feeds: a member's images.md and code.md read and sent to their pages as im
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
+    // Frozen (metal-vmm QUEUE 263c): the files' readers the twin held
+    // these to (parseImagesFile, parseCodeFile) are retired.
+    var frozen: Frozen = .{};
     var rng = std.Random.DefaultPrng.init(0xfeed5);
     const r = rng.random();
-    var compared: usize = 0;
     var entries_seen: usize = 0;
     var blocks_seen: usize = 0;
     for (0..3000) |_| {
         const text = try feedFile(a, r);
-        // Images: the newest `most`, each as encodeImagesEvent writes it.
-        var images = try images_store.parseImagesFile(a, text);
-        entries_seen += images.len;
         const most = r.uintAtMost(usize, 10);
-        if (images.len > most) images = images[images.len - most ..];
-        var zi: std.ArrayList(u8) = .empty;
-        try zi.append(a, '[');
-        for (images, 0..) |e, i| {
-            if (i != 0) try zi.append(a, ',');
-            try images_store.encodeImagesEvent(&zi, a, e, try images_store.imagesSourceURL(a, try chat_fanout.convKeyBaseURL(a, e.conv), e.source_id));
-        }
-        try zi.append(a, ']');
-        // Code: every entry, as encodeCodeEvent writes it.
-        const code = try code_store.parseCodeFile(a, text);
-        var zc: std.ArrayList(u8) = .empty;
-        try zc.append(a, '[');
-        for (code, 0..) |e, i| {
-            blocks_seen += e.blocks.len;
-            if (i != 0) try zc.append(a, ',');
-            try code_store.encodeCodeEvent(&zc, a, e, try images_store.imagesSourceURL(a, try chat_fanout.convKeyBaseURL(a, e.conv), e.source_id));
-        }
-        try zc.append(a, ']');
-        compared += 2;
         const ri = (try roc1(a, .images_feed, &.{ text, try std.fmt.allocPrint(a, "{d}", .{most}) })).?;
-        if (!std.mem.eql(u8, zi.items, ri)) differ.add("images(\"{f}\", {d}):\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(text), most, std.zig.fmtString(zi.items), std.zig.fmtString(ri) });
         const rc = (try roc1(a, .code_feed, &.{text})).?;
-        if (!std.mem.eql(u8, zc.items, rc)) differ.add("code(\"{f}\"):\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(text), std.zig.fmtString(zc.items), std.zig.fmtString(rc) });
+        frozen.add(&.{ ri, rc });
+        entries_seen += std.mem.count(u8, rc, "\"source_id\"");
+        blocks_seen += std.mem.count(u8, rc, "\"lang\"");
     }
-    try differ.none(compared);
-    // The corpus reached what it means to: entries of both feeds, and blocks.
+    try frozen.check("the images and code feeds", "ddf59582cfd0c91920b732e9fd911b3498b407b251edd419470d3580858d0038", 3000);
+    // The corpus reached what it means to: entries, and their blocks.
     try testing.expect(entries_seen > 1000 and blocks_seen > 1000);
 }
 
@@ -1222,13 +1210,12 @@ test "ChatState: where a bare DM resumes, for every topic list, order and last v
     for (picks) |p| try testing.expect(p > 300);
 }
 
-test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte, or removed, whatever text the file held" {
+test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte, or removed, whatever text the file held (frozen, metal-vmm QUEUE 263c)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
-    var compared: usize = 0;
+    var frozen: Frozen = .{};
     var removed: usize = 0;
     var rng = std.Random.DefaultPrng.init(0x919);
     const r = rng.random();
@@ -1247,19 +1234,12 @@ test "ChatState: a pinned file with one topic pinned or unpinned, byte for byte,
         if (n > 0 and r.boolean()) try file.append(a, '\n');
         const sid = sids[r.uintLessThan(usize, sids.len)];
         const pin = r.boolean();
-        const z = try chat_state.nextPinned(a, file.items, sid, pin);
         const got = try roc(a, .pinned, &.{ file.items, sid, if (pin) "1" else "0" });
-        compared += 1;
-        const rz: ?[]const u8 = switch (got.len) {
-            0 => null,
-            1 => got[0],
-            else => return error.TwinGaveMore,
-        };
-        if (z == null) removed += 1;
-        const same = if (z) |zb| (rz != null and std.mem.eql(u8, zb, rz.?)) else rz == null;
-        if (!same) differ.add("pinned(\"{f}\", \"{f}\", {}): zig \"{f}\" (removed {}), roc \"{f}\" (removed {})", .{ std.zig.fmtString(file.items), std.zig.fmtString(sid), pin, std.zig.fmtString(z orelse ""), z == null, std.zig.fmtString(rz orelse ""), rz == null });
+        if (got.len > 1) return error.TwinGaveMore;
+        if (got.len == 0) removed += 1;
+        frozen.add(got);
     }
-    try differ.none(compared);
+    try frozen.check("the pinned file", "5cffb42e35b19e9a8513bf834682c57bb4cd24f1e25a115840a1d9dfecb74c1b", 5000);
     try testing.expect(removed > 100);
 }
 
@@ -1333,11 +1313,11 @@ test "ChatState: the last-conv and last-sessions files read back as lastUserConv
         for ([_][]const u8{ lc, ls }) |p| {
             if (missing) try disk.remove(io, a, p) else try disk.write(io, a, p, file, .{});
         }
-        const zc = try chat_state.lastUserConv(io, a, "1");
+        // lastUserConv, which read the last-conv file the same way, is
+        // retired (metal-vmm QUEUE 263c); lastViewedTopic still reads.
         const zv = try chat_state.lastViewedTopic(io, a, "1", "1_2");
         const got = (try roc1(a, .bookmark, if (missing) &.{ "M", "" } else &.{ "F", file })).?;
-        compared += 2;
-        if (!std.mem.eql(u8, zc, got)) differ.add("last-conv \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(file), std.zig.fmtString(zc), std.zig.fmtString(got) });
+        compared += 1;
         if (!std.mem.eql(u8, zv, got)) differ.add("last-sessions \"{f}\": zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(file), std.zig.fmtString(zv), std.zig.fmtString(got) });
     }
     try differ.none(compared);
@@ -1410,15 +1390,13 @@ test "ChatState: the member's files are where the Zig writes them: the DM last i
         const uid = uc[0];
         const conv = uc[1];
         try chat_state.setLastViewedTopic(io, a, uid, conv, "Plans");
-        try chat_state.setTopicPinned(io, a, uid, conv, "Plans", true);
         const got = try roc(a, .state_paths, &.{ uid, conv });
         try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n", .{conv}), try disk.read(io, a, try d.at(a, got[0]), .unlimited));
         try testing.expectEqualStrings("Plans\n", try disk.read(io, a, try d.at(a, got[1]), .unlimited));
+        // The pins the Roc writes (its pin route) are where the Zig reads
+        // them (pinnedTopics); setTopicPinned, the Zig's writer, is retired.
+        try disk.write(io, a, try d.at(a, got[2]), "Plans\n", .{});
         try testing.expectEqualStrings("Plans", (try chat_state.pinnedTopics(io, a, uid, conv))[0]);
-        try testing.expectEqualStrings("Plans\n", try disk.read(io, a, try d.at(a, got[2]), .unlimited));
-        // And the pins' file is the one the Zig removes when the last goes.
-        try chat_state.setTopicPinned(io, a, uid, conv, "Plans", false);
-        try testing.expect(!try disk.has(io, a, try d.at(a, got[2])));
         try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/images.md", .{uid}), got[3]);
         try testing.expectEqualStrings(try std.fmt.allocPrint(a, "users/{s}/code.md", .{uid}), got[4]);
     }
