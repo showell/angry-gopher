@@ -17,6 +17,7 @@ const chat_frame = @import("chat_frame.zig");
 const markdown = @import("markdown.zig");
 const http = @import("webbox").http;
 const webbox_html = @import("webbox").html;
+const webbox_http = @import("webbox").http;
 const chrome = @import("chat_chrome.zig");
 const chat_page = @import("chat_page.zig");
 const chat_upload = @import("chat_upload.zig");
@@ -104,6 +105,7 @@ const Fn = enum(u8) {
     code_entry = 68,
     recent_where = 69,
     json_out = 70,
+    chat_url_on_site = 71,
 };
 
 /// One Roc call's results, in `a`.
@@ -332,6 +334,30 @@ test "JsonOut: an object of a count, a string, an array of strings and a bool, a
     }
     try differ.none(compared);
     try testing.expect(compared > 300);
+}
+
+test "ChatUrl: a path is on this site exactly when webbox's Target.of keeps it, over hostile paths and the corpus with a slash before it (metal-vmm QUEUE 270)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var kept: usize = 0;
+    var paths: std.ArrayList([]const u8) = .empty;
+    try paths.appendSlice(a, &.{ "/", "", "//evil.example", "/\\evil.example", "/\t/evil.example", "/a\r\nSet-Cookie: x", "https://evil.example", "javascript:alert(1)", "/chat/c/1_2", "/channel/ops/Plans#msg-Plans_3", "/a\x7f", "/caf\xc3\xa9", "\\/evil" });
+    // Text only: a path that is not UTF-8 is refused at the Roc's door.
+    for (try utf8Only(a, try byteStrings(a))) |s| try paths.appendSlice(a, &.{ s, try std.mem.concat(a, u8, &.{ "/", s }) });
+    for (paths.items) |p| {
+        const z = std.mem.eql(u8, webbox_http.Target.of(p).path(), p);
+        const got = try roc(a, .chat_url_on_site, &.{p});
+        const r = got.len == 1 and std.mem.eql(u8, got[0], p);
+        compared += 1;
+        if (z) kept += 1;
+        if (z != r) differ.add("on_site(\"{f}\"): zig {}, roc {}", .{ std.zig.fmtString(p), z, r });
+    }
+    try differ.none(compared);
+    try testing.expect(kept > 100 and compared - kept > 100);
 }
 
 // ── Paths (chat_paths.zig) ─────────────────────────────────────────────────
