@@ -58,13 +58,13 @@ pub const most_bytes = 2 << 20;
 
 /// `rest` is the path after "/chat/search".
 pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8, now: Now) !void {
-    const words_route = std.mem.eql(u8, rest, "/words");
-    if (!words_route and !std.mem.eql(u8, rest, "/messages")) return http.notFound(req);
+    // `/words` is the Roc's (roc-webbox chat/main.roc `search_words!`, metal-vmm QUEUE 281).
+    if (!std.mem.eql(u8, rest, "/messages")) return http.notFound(req);
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     if (!admit(uid, now.awakeMs())) {
         return req.respond("{\"error\":\"too many searches; wait a second\"}", .{ .status = .too_many_requests, .extra_headers = &.{http.json_ct} });
     }
-    const raw = http.queryValue(try http.target(req, alloc), if (words_route) "prefix" else "word") orelse "";
+    const raw = http.queryValue(try http.target(req, alloc), "word") orelse "";
     var buf: [tokens.max_word]u8 = undefined;
     const key = tokens.key(try chat.urlDecode(alloc, raw), &buf);
     const reach = try chat_paths.visibleConvs(io, alloc, uid);
@@ -72,49 +72,35 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         return req.respond("{\"error\":\"search is not ready\"}", .{ .status = .service_unavailable, .extra_headers = &.{http.json_ct} });
     };
     var b: std.ArrayList(u8) = .empty;
-    if (words_route) {
-        // An empty prefix suggests nothing: every word is not a suggestion.
-        const got = if (key.len == 0) &[_]search_index.WordCount{} else try idx.wordsFor(alloc, reach, key, most_words);
-        try b.appendSlice(alloc, "{\"prefix\":");
-        try str(&b, alloc, key);
-        try b.print(alloc, ",\"most\":{d},\"unreadable\":{d},\"words\":[", .{ most_words, idx.unreadableFor(reach) });
-        for (got, 0..) |w, i| {
-            if (i > 0) try b.append(alloc, ',');
-            try b.appendSlice(alloc, "{\"word\":");
-            try str(&b, alloc, w.word);
-            try b.print(alloc, ",\"count\":{d}}}", .{w.count});
+    const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, .{ .bytes = most_bytes, .cost = excerptCost });
+    try b.appendSlice(alloc, "{\"word\":");
+    try str(&b, alloc, key);
+    // **SIZED ONCE**: grown as it is written, the request's arena would
+    // keep every smaller copy of the answer besides the last.
+    var size: usize = 128;
+    for (f.hits) |h| size += 128 + excerptCost(h.msg.markdown, key) + search_index.jsonCost(h.msg.from) +
+        search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.at) + search_index.jsonCost(h.conv.base);
+    try b.ensureTotalCapacity(alloc, b.items.len + size);
+    try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
+    for (f.hits, 0..) |h, i| {
+        if (i > 0) try b.append(alloc, ',');
+        const ex = try excerptOf(alloc, h.msg.markdown, key);
+        const fields = [_][2][]const u8{
+            .{ "{\"conv\":", h.conv.base },
+            .{ ",\"kind\":", @tagName(h.conv.kind) },
+            .{ ",\"sid\":", h.msg.sid },
+            .{ ",\"id\":", h.msg.id },
+            .{ ",\"from\":", h.msg.from },
+            .{ ",\"date\":", h.msg.at },
+            .{ ",\"before\":", ex.before },
+            .{ ",\"mark\":", ex.mark },
+            .{ ",\"after\":", ex.after },
+        };
+        for (fields) |fv| {
+            try b.appendSlice(alloc, fv[0]);
+            try str(&b, alloc, fv[1]);
         }
-    } else {
-        const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, .{ .bytes = most_bytes, .cost = excerptCost });
-        try b.appendSlice(alloc, "{\"word\":");
-        try str(&b, alloc, key);
-        // **SIZED ONCE**: grown as it is written, the request's arena would
-        // keep every smaller copy of the answer besides the last.
-        var size: usize = 128;
-        for (f.hits) |h| size += 128 + excerptCost(h.msg.markdown, key) + search_index.jsonCost(h.msg.from) +
-            search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.at) + search_index.jsonCost(h.conv.base);
-        try b.ensureTotalCapacity(alloc, b.items.len + size);
-        try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
-        for (f.hits, 0..) |h, i| {
-            if (i > 0) try b.append(alloc, ',');
-            const ex = try excerptOf(alloc, h.msg.markdown, key);
-            const fields = [_][2][]const u8{
-                .{ "{\"conv\":", h.conv.base },
-                .{ ",\"kind\":", @tagName(h.conv.kind) },
-                .{ ",\"sid\":", h.msg.sid },
-                .{ ",\"id\":", h.msg.id },
-                .{ ",\"from\":", h.msg.from },
-                .{ ",\"date\":", h.msg.at },
-                .{ ",\"before\":", ex.before },
-                .{ ",\"mark\":", ex.mark },
-                .{ ",\"after\":", ex.after },
-            };
-            for (fields) |fv| {
-                try b.appendSlice(alloc, fv[0]);
-                try str(&b, alloc, fv[1]);
-            }
-            try b.append(alloc, '}');
-        }
+        try b.append(alloc, '}');
     }
     try b.appendSlice(alloc, "]}");
     try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });

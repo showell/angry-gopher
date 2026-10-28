@@ -37,6 +37,8 @@ const store = @import("chat_store.zig");
 const chat_count = @import("chat_count.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const chat_paths = @import("chat_paths.zig");
+const chat_search = @import("chat_search.zig");
+const search_index = @import("search_index.zig");
 const chrome = @import("chat_chrome.zig");
 const chat_upload = @import("chat_upload.zig");
 const limits = @import("limits.zig");
@@ -184,6 +186,9 @@ pub const Call = struct {
             .count_dropped = droppedOf,
             .aside = asideOf,
             .check_online = online,
+            .admit = admitOf,
+            .read_query = query,
+            .search_words = searchWords,
             .srcs = srcs,
             .me = me,
             .now = now_,
@@ -605,6 +610,51 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return .offline;
         return if (presence.isOnline(id, c.now)) .online else .offline;
+    }
+
+    /// **SEARCH'S RATE LIMIT** (Host.admit!): chat_search.admit, the
+    /// member's, at the request's time.
+    fn admitOf(ctx: *anyopaque) roc_chat.Admission {
+        const c = of(ctx);
+        if (c.dead()) return .refused;
+        return if (chat_search.admit(c.uid, c.now.awakeMs())) .admitted else .refused;
+    }
+
+    /// The request's query field `name` as written, the first (Host.read_query!).
+    fn query(ctx: *anyopaque, name: []const u8) []const []const u8 {
+        const c = of(ctx);
+        if (c.dead()) return &.{};
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const target = http.target(c.req, c.alloc) catch |e| return c.none(e);
+        const v = http.queryValue(target, name) orelse return &.{};
+        return c.alloc.dupe([]const u8, &.{v}) catch |e| c.none(e);
+    }
+
+    /// **SEARCH'S INDEX, ASKED** (Host.search_words!): what the member can
+    /// see (visibleConvs, every request), then the index's words beginning
+    /// `key`, at most `most`, and its unreadable count; null with no index.
+    fn searchWords(ctx: *anyopaque, key: []const u8, most: u64) ?roc_chat.Words {
+        const c = of(ctx);
+        const none_found: roc_chat.Words = .{ .words = &.{}, .unreadable = 0 };
+        if (c.dead()) return none_found;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const reach = chat_paths.visibleConvs(c.io, c.alloc, c.uid) catch |e| {
+            c.fail(e);
+            return none_found;
+        };
+        const idx = search_index.indexOrBuild(c.io, c.alloc) orelse return null;
+        // absent-ok: the same.
+        const got = if (most == 0) &[_]search_index.WordCount{} else idx.wordsFor(c.alloc, reach, key, @intCast(most)) catch |e| {
+            c.fail(e);
+            return none_found;
+        };
+        // absent-ok: the same.
+        const out = c.alloc.alloc(roc_chat.Word, got.len) catch |e| {
+            c.fail(e);
+            return none_found;
+        };
+        for (got, out) |w, *o| o.* = .{ .word = w.word, .count = w.count };
+        return .{ .words = out, .unreadable = idx.unreadableFor(reach) };
     }
 
     fn srcs(ctx: *anyopaque) []const roc_chat.Src {

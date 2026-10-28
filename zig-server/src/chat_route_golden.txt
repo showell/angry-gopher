@@ -42,7 +42,7 @@
 /channel	"/search"	404 text/html; charset=utf-8	am
 /chat	"/searchX"	search rest="X" landing page +presence	a-
 /channel	"/searchX"	404 text/html; charset=utf-8	am
-/chat	"/search/words"	search rest="/words" landing page +presence	a-
+/chat	"/search/words"	200 application/json; charset=utf-8	am
 /channel	"/search/words"	404 text/html; charset=utf-8	am
 /chat	"/search/messages"	search rest="/messages" landing page +presence	a-
 /channel	"/search/messages"	404 text/html; charset=utf-8	am
