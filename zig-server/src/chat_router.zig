@@ -48,6 +48,7 @@ const Now = @import("request_time.zig").Now;
 const Conv = @import("chat_conv.zig").Conv;
 const upload = @import("chat_upload.zig");
 const download = @import("chat_download.zig");
+const chat_retire = @import("chat_retire.zig");
 
 const Request = std.http.Server.Request;
 const Alloc = std.mem.Allocator;
@@ -227,6 +228,58 @@ pub fn toLogin(
 /// Roc first asks, and the hosted functions the Roc's own routes call.
 /// A failure is kept (`fail`), told to the Roc as "not done", and returned
 /// by `handle` once the call has ended: a C call cannot carry a Zig error.
+/// **THE ADMIN RETIRE** (metal-vmm QUEUE 293): the Roc's plan (roc-webbox
+/// chat/Retire.roc), asked in its own area and carried out by `report`.
+/// The Roc reaches only what the plan reads (the chat root's files, the
+/// accounts as `accounts` lists them, never auth_root's bytes) and the
+/// plan's steps: every other effect is the seam's panicking default. The
+/// keep list's refusal in the Roc's words, or null when the plan was
+/// carried out (`report` holds it, the accounts removed last). Search is
+/// built again whole after any confirm the Roc began, a failed one too
+/// (metal-vmm 155(b)).
+pub fn retire(io: Io, alloc: Alloc, report: *chat_retire.Report, p: chat_retire.Params) !?[]const u8 {
+    // No request and no bus: the retire answers nothing itself (the admin
+    // page does) and publishes nothing; no effect here reaches either.
+    var call: Call = .{
+        .req = undefined,
+        .io = io,
+        .alloc = alloc,
+        .bus = undefined,
+        .now = requestTime(io),
+        .retiring = report,
+        .retire_params = p,
+    };
+    roc_chat.useRequest(alloc);
+    // Every effect but these panics: the retire's area reaches nothing else.
+    var h = roc_chat.askingOnly(&call, noMember);
+    h.list_accounts = Call.accounts;
+    h.fail_account = Call.failAccount;
+    h.list = Call.list;
+    h.read = Call.read;
+    h.fail = Call.refuse;
+    h.fail_text = Call.failText;
+    h.retire_asked = Call.retireAsked;
+    h.retire_note = Call.retireNote;
+    h.retire_remove = Call.retireRemove;
+    h.retire_replace = Call.retireReplace;
+    h.retire_user = Call.retireUser;
+    const decision = roc_chat.retire(alloc, h) catch |e| {
+        if (report.mode == .apply) search_index.rebuild(io, alloc);
+        return call.failed orelse e;
+    };
+    if (decision == .respond and decision.respond.status == 400) return decision.respond.body;
+    defer if (report.mode == .apply) search_index.rebuild(io, alloc);
+    if (call.failed) |e| return e;
+    if (decision != .respond or decision.respond.status != 200) return error.RetireNotPlanned;
+    try report.finish();
+    return null;
+}
+
+/// The admin retire asks no chat member (its area runs no prelude).
+fn noMember(_: *anyopaque) roc_chat.Membership {
+    @panic("the admin retire asked whether a member is one");
+}
+
 pub const Call = struct {
     req: *Request,
     io: Io,
@@ -253,6 +306,10 @@ pub const Call = struct {
     bundle: download.Bundle = .{},
     /// The upload's bytes Host.read_upload! read, for Host.store_upload!.
     upload_data: []const u8 = "",
+    /// The admin retire carrying out the Roc's plan, and what the admin
+    /// asked (`retire`, metal-vmm QUEUE 293).
+    retiring: ?*chat_retire.Report = null,
+    retire_params: chat_retire.Params = .{ .now = 0 },
 
     pub fn host(c: *Call) roc_chat.Host {
         return .{
@@ -621,6 +678,64 @@ pub const Call = struct {
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         c.bundle.serve(c.req, c.alloc, name) catch |e| return c.fail(e);
         c.answered = true;
+    }
+
+    /// The admin's days, the names kept (one to a line) and now
+    /// (Host.retire_asked!).
+    fn retireAsked(ctx: *anyopaque) roc_chat.RetireAsked {
+        const c = of(ctx);
+        const p = c.retire_params;
+        const keep = std.mem.join(c.alloc, "\n", p.keep) catch |e| {
+            c.fail(e);
+            return .{ .days = p.days, .keep = "", .now = p.now };
+        };
+        return .{ .days = p.days, .keep = keep, .now = p.now };
+    }
+
+    /// A step of the plan said for the report (Host.retire_note!).
+    fn retireNote(ctx: *anyopaque, kind: roc_chat.RetireKind, label: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.retiring.?.note(switch (kind) {
+            .channel_member => .channel_member,
+            .dm => .dm,
+            .ref_last_conv => .ref_last_conv,
+            .ref_last_session => .ref_last_session,
+            .ref_pinned => .ref_pinned,
+            .topic => .topic,
+            .user => .user,
+        }, label) catch |e| c.fail(e);
+    }
+
+    /// The file or folder removed on a confirm (Host.retire_remove!).
+    fn retireRemove(ctx: *anyopaque, path: []const u8, what: roc_chat.RetireRemoval) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.retiring.?.remove(path, switch (what) {
+            .file => .file,
+            .tree => .tree,
+        }) catch |e| return c.no(e);
+        return .ok;
+    }
+
+    /// The file written whole on a confirm (Host.retire_replace!).
+    fn retireReplace(ctx: *anyopaque, path: []const u8, bytes: []const u8) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.retiring.?.replace(path, bytes) catch |e| return c.no(e);
+        return .ok;
+    }
+
+    /// The member retired outside the chat on a confirm (Host.retire_user!).
+    fn retireUser(ctx: *anyopaque, uid: []const u8) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.retiring.?.retireUser(uid) catch |e| return c.no(e);
+        return .ok;
     }
 
     /// **AN UPLOAD'S FORM READ** (Host.read_upload!, metal-vmm QUEUE 292):

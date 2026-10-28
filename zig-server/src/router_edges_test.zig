@@ -57,7 +57,6 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseCount", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseLast", .unreachable_because = "a .count file the server wrote" },
-    .{ .file = "chat_retire.zig", .func = "allMembers", .unreachable_because = "folder names on the disk" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },
     .{ .file = "session_meta.zig", .func = "applyMetaScalar", .unreachable_because = "a meta file the server wrote" },
     .{ .file = "storage.zig", .func = "listSessionIDs", .unreachable_because = "folder names on the disk" },

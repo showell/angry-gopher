@@ -325,6 +325,10 @@ const testing = std.testing;
 test {
     _ = @import("chat_route_corpus_test.zig");
     _ = @import("chat_actions_twin_test.zig");
+    // The admin retire's tests run the Roc's plan (metal-vmm QUEUE 293), so
+    // they need roc_chat: here, not as roots of their own.
+    _ = @import("chat_retire.zig");
+    _ = @import("admin_retire.zig");
     _ = @import("router_edges_test.zig");
     _ = @import("router_script_test.zig");
     _ = @import("router_failures_test.zig");

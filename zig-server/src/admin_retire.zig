@@ -25,6 +25,7 @@ const html = @import("webbox").html;
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
 const retire = @import("chat_retire.zig");
+const chat_router = @import("chat_router.zig");
 
 const Request = std.http.Server.Request;
 
@@ -48,11 +49,13 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
 
     if (in.days_err) return form(req, alloc, in, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
 
-    if (try retire.keepProblem(io, alloc, in.keep)) |why| return form(req, alloc, in, why, .bad_request);
-
+    // **THE PLAN IS THE ROC'S** (roc-webbox chat/Retire.roc, metal-vmm
+    // QUEUE 293), the keep list's check with it; its steps are carried out
+    // here, behind this page's password.
     const mode: retire.Mode = if (std.mem.eql(u8, (try chat.formField(alloc, sent, "confirm")) orelse "", "1")) .apply else .dry_run;
-    var pl = try retire.plan(io, alloc, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) }, mode);
-    return result(req, alloc, in, &pl);
+    var report: retire.Report = .{ .alloc = alloc, .io = io, .mode = mode };
+    if (try chat_router.retire(io, alloc, &report, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) })) |why| return form(req, alloc, in, why, .bad_request);
+    return result(req, alloc, in, &report);
 }
 
 // ── the form (the dry run lives below it after a preview) ─────────────────────
@@ -130,13 +133,13 @@ fn form(req: *Request, alloc: Alloc, in: Input, err: []const u8, status: std.htt
 
 // ── the result (dry run → confirm, or confirmed) ──────────────────────────────
 
-fn result(req: *Request, alloc: Alloc, in: Input, pl: *retire.Plan) !void {
+fn result(req: *Request, alloc: Alloc, in: Input, pl: *const retire.Report) !void {
     const confirmed = pl.mode == .apply;
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, if (confirmed) "Retired" else "Preview — nothing removed yet", "");
 
     const verb = if (confirmed) "Removed" else "Would remove";
-    try b.print(alloc, "<p>{s} <strong>{d}</strong> thing(s) in all; <strong>{d}</strong> account(s) not kept. Topics older than {d} days.</p>\n", .{ verb, pl.total(), pl.members_removed, in.days });
+    try b.print(alloc, "<p>{s} <strong>{d}</strong> thing(s) in all; <strong>{d}</strong> account(s) not kept. Topics older than {d} days.</p>\n", .{ verb, pl.total(), pl.membersRemoved(), in.days });
 
     // Counts by kind, then the names under each. Names only, never a body.
     try b.appendSlice(alloc, "<table><tr><th>What</th><th class=\"n\">Count</th></tr>");
