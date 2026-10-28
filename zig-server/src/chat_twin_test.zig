@@ -110,6 +110,7 @@ const Fn = enum(u8) {
     json_bytes = 78,
     stored_frame = 79,
     backlog_from = 80,
+    admits = 81,
 };
 
 /// One Roc call's results, in `a`.
@@ -4706,6 +4707,117 @@ test "Accounts: whether an account exists, its name and the authorized roster, a
             ));
         }
     }
+}
+
+/// The Zig's door: users.zig's rule (`principalAuthorized`) of an id that
+/// is a uid and has an account, as admin.zig's apiKeyTarget asks it.
+/// "admitted", "refused", or the error the rule's read failed with.
+fn zigDoor(io: std.Io, a: std.mem.Allocator, id: []const u8) ![]const u8 {
+    const in = users.validUid(id) and (try users.principalExists(io, a, id)) and (users.principalAuthorized(io, a, id) catch |e|
+        return std.fmt.allocPrint(a, "kind {s} {t}", .{ id, e }));
+    return if (in) "admitted" else "refused";
+}
+
+test "who may use the chat, a rule with two homes held equal: Accounts.admits (can_use_chat) and users.zig's userIsAuthorized give one verdict for a member, the agent (bare, with a password, unreadable, retired), a guest, a retired account, a stranger, an account whose kind or name will not read, a file where an account belongs, and every id that is no canonical uid" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = try users.tmpRoots(&tmp, a);
+    defer saved.restore();
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const cwd = std.Io.Dir.cwd();
+    const Make = enum { member, guest, kind_unreadable, name_unreadable, retired, file };
+    const Fixture = struct { id: []const u8, make: Make };
+    // The agent's own account (3) is each phase's.
+    const fixtures_ = [_]Fixture{
+        .{ .id = "1", .make = .member },
+        .{ .id = "5", .make = .guest },
+        .{ .id = "6", .make = .retired },
+        .{ .id = "7", .make = .kind_unreadable },
+        .{ .id = "12", .make = .kind_unreadable },
+        .{ .id = "9", .make = .name_unreadable },
+        .{ .id = "11", .make = .guest },
+        .{ .id = "10", .make = .file },
+        .{ .id = "007", .make = .member },
+        .{ .id = "+7", .make = .member },
+        .{ .id = "0", .make = .member },
+    };
+    // Asked of both, besides every fixture: a stranger (8), the agent, and
+    // ids that are no canonical uid.
+    const asked_too = [_][]const u8{ "8", "3", "", " 1", "1 ", "01", "07", "1/..", "x", "-1", "99999999999999999999" };
+    const Agent = enum { bare, member, kind_unreadable, retired };
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    var seen = std.StringHashMap(usize).init(a);
+    for (std.enums.values(Agent)) |agent| {
+        try cwd.deleteTree(io, users.auth_root);
+        try cwd.createDirPath(io, users.auth_root);
+        for (fixtures_ ++ [_]Fixture{.{ .id = "3", .make = switch (agent) {
+            .bare => .guest,
+            .member => .member,
+            .kind_unreadable => .kind_unreadable,
+            .retired => .retired,
+        } }}) |f| {
+            const dir = try std.fs.path.join(a, &.{ users.auth_root, f.id });
+            if (f.make == .file) {
+                try cwd.writeFile(io, .{ .sub_path = dir, .data = "1" });
+                continue;
+            }
+            try cwd.createDirPath(io, dir);
+            const password = try std.fs.path.join(a, &.{ dir, "password" });
+            const name = try std.fs.path.join(a, &.{ dir, "name" });
+            switch (f.make) {
+                .member, .retired, .name_unreadable => try cwd.writeFile(io, .{ .sub_path = password, .data = "$2b$12$hash" }),
+                // A password whose stat fails: a link to itself.
+                .kind_unreadable => try cwd.symLink(io, "password", password, .{}),
+                .guest, .file => {},
+            }
+            // A name that will not read: a folder.
+            if (f.make == .name_unreadable or std.mem.eql(u8, f.id, "11"))
+                try cwd.createDirPath(io, name)
+            else
+                try cwd.writeFile(io, .{ .sub_path = name, .data = "Ann\r\n" });
+            if (f.make == .retired) try users.removeAccount(io, a, f.id);
+        }
+        const held = try users.listAccounts(io, a);
+        const accounts = try accountArgs(a, held);
+        var asked: std.ArrayList([]const u8) = .empty;
+        for (fixtures_) |f| try asked.append(a, f.id);
+        try asked.appendSlice(a, &asked_too);
+        for (asked.items) |id| {
+            const z = try zigDoor(io, a, id);
+            var args: std.ArrayList([]const u8) = .empty;
+            try args.append(a, id);
+            try args.appendSlice(a, accounts);
+            const got = try roc(a, .admits, args.items);
+            // The Roc's verdict, a failure with the error the host kept for
+            // that account's kind (what Members.admit! fails the request with).
+            const r: []const u8 = if (got.len == 1)
+                got[0]
+            else if (got.len == 2) try std.fmt.allocPrint(a, "{s} {s} {?t}", .{ got[0], got[1], keptError(held, got[0], got[1]) }) else "no answer";
+            compared += 1;
+            const verdict = if (std.mem.startsWith(u8, z, "kind ")) "failed" else z;
+            try seen.put(verdict, (seen.get(verdict) orelse 0) + 1);
+            if (!std.mem.eql(u8, z, r)) differ.add("agent {t}, id \"{f}\": zig {s}, roc {s}", .{ agent, std.zig.fmtString(id), z, r });
+            // **THE RULE ALONE ADMITS ONE MORE**: userIsAuthorized says yes
+            // to the agent's id with no account (isAgent reads no file); the
+            // door, both copies, asks it only of an account.
+            if (users.validUid(id) and !try users.principalExists(io, a, id)) {
+                const bare = try users.principalAuthorized(io, a, id);
+                if (bare != std.mem.eql(u8, id, "3")) differ.add("id \"{s}\" with no account: userIsAuthorized says {}", .{ id, bare });
+            }
+        }
+    }
+    try differ.none(compared);
+    try testing.expectEqual(@as(usize, 4 * (fixtures_.len + asked_too.len)), compared);
+    // Each verdict met: members and the agent in, the rest out, unreadable
+    // kinds (7, 12, and the agent's) failed.
+    try testing.expect(seen.get("admitted").? == 4 * 2 + 2 and seen.get("failed").? == 4 * 2 + 1);
 }
 
 // ── Fanout (chat_fanout.zig, recent_feed.zig, images_store.zig, code_store.zig)
