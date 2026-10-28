@@ -5189,6 +5189,114 @@ test "presence's came-online broadcast (metal-vmm QUEUE 288): the edge tells eve
     try freezeRun("presenceRun", try presenceRun(a, io), "94d27ba9a55990b2e5cde9fa4e4ef260d0411397ed4186da40fc1b20f31fc2e4");
 }
 
+/// **WHO MAY USE THE CHAT, FROZEN ON THE OLD ZIG** (the pure-Roc plan's
+/// item 5, users.principalAuthorized): every kind of asker on a route that
+/// reads no roster (a channel's reactions and stream), one that reads every
+/// account (/chat/conversations) and a DM's (its partner looked up): a
+/// member by session and by API key, the agent by API key, a guest by its
+/// signed cookie, strangers (a forged session, a session or a cookie naming
+/// no account, a wrong key, a non-canonical id) and the signed out, with
+/// the auth root holding a stray file and a non-canonical folder; asked
+/// with every account whole, then with a member's password planted
+/// unreadable (asked as her too), then a member's name instead, then
+/// mended. Each answer whole.
+fn identityRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const nameless = try harness.memberSession(a, io, "9", "Nina");
+    const locked = try harness.memberSession(a, io, "7", "Una");
+    try users.setUserName(io, a, "3", "Claude");
+    try users.setUserName(io, a, "5", "Gus");
+    const key2 = "2-00112233445566778899aabbccddeeff";
+    const key3 = "3-ffeeddccbbaa99887766554433221100";
+    try disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "api-key" }), key2, .{ .private = true });
+    try disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "3", "api-key" }), key3, .{ .private = true });
+    const pw7 = try std.fs.path.join(a, &.{ users.auth_root, "7", "password" });
+    const name9 = try std.fs.path.join(a, &.{ users.auth_root, "9", "name" });
+    // What the auth root holds that is no account: a file named as one, a
+    // folder named as none (a counter never writes `007`).
+    try disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "10" }), "", .{});
+    try users.setUserName(io, a, "007", "Bond");
+    try disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "007", "password" }), "x", .{ .private = true });
+    const now = harness.nowSecs(io);
+    const forged = try users.signSession(a, "not the site's secret, though just as long as it", "1", now);
+    const no_account = try users.signSession(a, harness.UidSite.secret, "6", now);
+    const bond = try users.signSession(a, harness.UidSite.secret, "007", now);
+    try disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n3\n5\n7\n9\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{"one"});
+    const Asker = struct { name: []const u8, head: []const u8 };
+    const askers = [_]Asker{
+        .{ .name = "member", .head = try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{steve}) },
+        .{ .name = "member by key", .head = "Authorization: Bearer " ++ key2 ++ "\r\n" },
+        .{ .name = "member by session", .head = try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{debbie}) },
+        .{ .name = "agent by key", .head = "Authorization: Bearer " ++ key3 ++ "\r\n" },
+        .{ .name = "guest", .head = try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{try harness.signedUid(a, "5")}) },
+        .{ .name = "forged session", .head = try std.fmt.allocPrint(a, "Cookie: __Host-gopher_auth={s}\r\n", .{forged}) },
+        .{ .name = "session of no account", .head = try std.fmt.allocPrint(a, "Cookie: __Host-gopher_auth={s}\r\n", .{no_account}) },
+        .{ .name = "session of a non-canonical id", .head = try std.fmt.allocPrint(a, "Cookie: __Host-gopher_auth={s}\r\n", .{bond}) },
+        .{ .name = "cookie of no account", .head = try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{try harness.signedUid(a, "99")}) },
+        .{ .name = "wrong key", .head = "Authorization: Bearer 3-00000000000000000000000000000000\r\n" },
+        .{ .name = "signed out", .head = "" },
+        .{ .name = "Una (her password planted)", .head = try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{locked}) },
+        .{ .name = "Nina (her name planted)", .head = try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{nameless}) },
+    };
+    const targets = [_][]const u8{
+        "/channel/ops/Standup/reactions",
+        "/channel/ops/Standup/stream",
+        "/chat/conversations",
+        "/chat/c/1_2/Plans/reactions",
+    };
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    var answers: std.ArrayList([]const u8) = .empty;
+    const Phase = enum { whole, password_unreadable, name_unreadable, mended };
+    for ([_]Phase{ .whole, .password_unreadable, .name_unreadable, .mended }) |phase| {
+        switch (phase) {
+            .whole => {},
+            // Una's password, there and unreadable: a link to itself loops.
+            .password_unreadable => {
+                try std.Io.Dir.cwd().deleteFile(io, pw7);
+                try std.Io.Dir.cwd().symLink(io, "password", pw7, .{});
+            },
+            // Una's mended; Nina's name, a folder: it will not read.
+            .name_unreadable => {
+                try std.Io.Dir.cwd().deleteFile(io, pw7);
+                try disk.write(io, a, pw7, "x", .{ .private = true });
+                try std.Io.Dir.cwd().deleteFile(io, name9);
+                try std.Io.Dir.cwd().createDirPath(io, name9);
+            },
+            .mended => {
+                try std.Io.Dir.cwd().deleteTree(io, name9);
+                try disk.write(io, a, name9, "Nina", .{});
+            },
+        }
+        for (askers) |who| for (targets) |t| {
+            const raw = try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\n{s}\r\n", .{ t, who.head });
+            const r = try serveOn(a, io, &hub, raw);
+            try answers.append(a, try std.fmt.allocPrint(a, "{t}: {s} {s}: {?t}\n{s}", .{ phase, who.name, t, r.err, r.out }));
+        };
+    }
+    return .{ .answers = answers.items };
+}
+
+test "who may use the chat (the pure-Roc plan's item 5): a member by session or key, the agent, a guest, every stranger and the signed out, an account that will not read, and what the auth root holds that is no account, as the old Zig's principalAuthorized decided" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("identityRun", try identityRun(a, io), "ba12f27fe0035a39e37b744f93a3b0ba8b3b8519756bddc17e4ffb0ff7ccfc24");
+}
+
 /// **THE DOCS' READ PAGES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 289):
 /// the landing (the doc touched last, or the editor with none), a doc's
 /// editor, its raw markdown, the list, the live preview, as the owner, as
