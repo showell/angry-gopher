@@ -20,7 +20,13 @@ const chat_count = @import("chat_count.zig");
 const chat_codec = @import("chat_codec.zig");
 const chat_paths = @import("chat_paths.zig");
 const ChatMessage = chat_store.ChatMessage;
-const TopicAddress = chat_store.TopicAddress;
+/// **WHERE A TOPIC IS**, as a test stores to it: its conversation's folder
+/// (`dir`), its conversation's key (`key`) and its id (`sid`).
+pub const TopicAddress = struct {
+    dir: []const u8,
+    key: []const u8,
+    sid: []const u8,
+};
 const Author = chat_store.Author;
 const sep = chat_store.sep;
 const dashes = chat_store.dashes;
@@ -192,10 +198,10 @@ pub fn storeForTest(
         index,
         msg,
     );
-    const size = try chat_store.appendBlock(
+    const size = try store.append(
         io,
         alloc,
-        topic,
+        try transcriptPath(alloc, topic.dir, topic.sid),
         block,
     );
     chat_count.writeCount(io, alloc, topic.dir, topic.sid, index + 1, size, .{

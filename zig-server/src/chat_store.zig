@@ -119,30 +119,6 @@ pub fn openStream(
     return .{ .backlog = msgs, .sub = sub };
 }
 
-/// **A MESSAGE'S BLOCK APPENDED, AS A PRIMITIVE** (the Roc's
-/// `Host.append_message!`, metal-vmm QUEUE 287): `block` appended to the
-/// topic's transcript, and its size after. What follows, the `.count` and
-/// the search index, is the Roc's to do (roc-webbox chat/main.roc
-/// `store_block!`). An append that failed is the error, nothing stored.
-pub fn appendBlock(
-    io: Io,
-    alloc: Alloc,
-    topic: TopicAddress,
-    block: []const u8,
-) !u64 {
-    const path = try transcriptPath(
-        alloc,
-        topic.dir,
-        topic.sid,
-    );
-    return store.append(
-        io,
-        alloc,
-        path,
-        block,
-    );
-}
-
 // ── reactions sidecar ─────────────────────────────────────────────────────────
 
 /// reactionsPath is {conv_dir}/sessions/<sid>.reactions.jsonl — the per-topic
@@ -185,75 +161,6 @@ pub fn readReactions(
         .unlimited,
     );
 }
-
-/// **ONE LINE APPENDED TO AN APPEND-ONLY LINE FILE** (the Roc's
-/// `Host.append_line!`): `line` and a newline at the end of the file at
-/// `path`, its folders made as `store.append` makes them. **A TORN LINE
-/// STAYS ITS OWN LINE**: an append a stop cut short leaves a line with no
-/// newline, and the next one glued to it is one line that reads as neither:
-/// two lost where one was. So a file that does not end in a newline gets
-/// one first. Read before the store, so a read that fails stores nothing.
-pub fn appendLine(
-    io: Io,
-    alloc: Alloc,
-    path: []const u8,
-    line: []const u8,
-) !void {
-    const lead = if (try endsMidLine(
-        io,
-        alloc,
-        path,
-    )) "\n" else "";
-    _ = try store.append(
-        io,
-        alloc,
-        path,
-        try std.mem.concat(
-            alloc,
-            u8,
-            &.{
-                lead,
-                line,
-                "\n",
-            },
-        ),
-    );
-}
-
-/// Whether the file at `path` has bytes and its last is not a newline: an
-/// append that was cut short. No file, or an empty one, is not.
-fn endsMidLine(
-    io: Io,
-    alloc: Alloc,
-    path: []const u8,
-) !bool {
-    const st = (try store.statOrNull(
-        io,
-        alloc,
-        path,
-    )) orelse return false;
-    if (st.size == 0) return false;
-    var last: [1]u8 = undefined;
-    if (try store.readAt(
-        io,
-        alloc,
-        path,
-        st.size - 1,
-        &last,
-    ) != 1) return error.ShortRead;
-    return last[0] != '\n';
-}
-
-/// **WHERE A TOPIC IS**, as the store and the bus find it: its conversation's
-/// folder (`dir`), its conversation's key (`key`, the first half of the
-/// topic's bus key `<key>/<sid>`), and its id (`sid`). Not chat_conv.Topic,
-/// the routed topic a handler holds (its conversation, id and title), from
-/// which this is made.
-pub const TopicAddress = struct {
-    dir: []const u8,
-    key: []const u8,
-    sid: []const u8,
-};
 
 /// Who writes: the display name stored with the message, and the uid.
 pub const Author = struct { name: []const u8, id: []const u8 };
@@ -363,64 +270,4 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     try testing.expectEqual(@as(usize, 1), msgs.len);
     try testing.expectEqualStrings("Tester", msgs[0].from);
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
-}
-
-test "a line after a torn one starts its own line: the torn line is lost, the next is not" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: fixtures.CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    const path = try reactionsPath(
-        a,
-        f.dir,
-        "topic",
-    );
-    // A stop cut the last append short: no newline after it.
-    const torn = "{\"msg\":1,\"uid\":\"1\",\"fr";
-    _ = try store.append(
-        f.io,
-        a,
-        path,
-        torn,
-    );
-
-    const line = "{\"msg\":1}";
-    try appendLine(
-        f.io,
-        a,
-        path,
-        line,
-    );
-    const after = try readReactions(
-        f.io,
-        a,
-        f.dir,
-        "topic",
-    );
-    try testing.expectEqualStrings(try std.fmt.allocPrint(
-        a,
-        "{s}\n{s}\n",
-        .{ torn, line },
-    ), after);
-    // The next line needs no newline of its own: the file ended in one.
-    const second = "{\"msg\":2}";
-    try appendLine(
-        f.io,
-        a,
-        path,
-        second,
-    );
-    const twice = try readReactions(
-        f.io,
-        a,
-        f.dir,
-        "topic",
-    );
-    try testing.expectEqualStrings(try std.fmt.allocPrint(
-        a,
-        "{s}{s}\n",
-        .{ after, second },
-    ), twice);
 }

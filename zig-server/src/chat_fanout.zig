@@ -4,7 +4,7 @@
 //! split from chat_store.zig by 174).
 //!
 //! **THE FAN-OUT IS THE ROC'S** (roc-webbox chat/Fanout.roc, over the host's
-//! `append_entry!` and `report_fanout_failure!`, chat_router.zig; metal-vmm
+//! `append!` in an aside and `report_fanout_failure!`, chat_router.zig; metal-vmm
 //! QUEUE 279 took the last Zig writer). What stays: the bus keys the streams
 //! subscribe on, the encoders and `recentWhere` chat_twin_test.zig holds the
 //! Roc's to, and the count of failures and the last one, the process's,

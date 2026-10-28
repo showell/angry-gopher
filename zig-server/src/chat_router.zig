@@ -16,12 +16,12 @@
 //! file primitives, named and parsed by the Roc), the body, who is online
 //! (a page's sidebar; the rest of the page the Roc's), the
 //! primitives a reaction and a message are stored and sent by (a line
-//! appended, a topic's count, the markdown render, a message's block stored
-//! with its count and search, the bus) and fanned out by (a message's parts
-//! as the one markdown reader finds them, a feed's entry appended, a
-//! surface that failed counted), and answers what to send. `handle` sends it once
+//! appended, a topic's count, the markdown render, a message's block
+//! appended, the search index told, the bus) and fanned out by (a message's
+//! parts as the one markdown reader finds them, a feed's entry appended in
+//! an aside, a surface that failed counted), and answers what to send. `handle` sends it once
 //! the call has ended. **THE HOST HOLDS NO CONVERSATION BETWEEN CALLS**:
-//! each operation on one is handed it (`roc_chat.Conv`) by the Roc.
+//! it is handed only paths under the chat root, named by the Roc.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -45,7 +45,6 @@ const limits = @import("limits.zig");
 const markdown = @import("chat_markdown");
 const edge = webbox.edge;
 const Now = @import("request_time.zig").Now;
-const Conv = @import("chat_conv.zig").Conv;
 const upload = @import("chat_upload.zig");
 const download = @import("chat_download.zig");
 const chat_retire = @import("chat_retire.zig");
@@ -299,8 +298,9 @@ pub const Call = struct {
     /// refused as hostile): from then on the call is as dead as a failed
     /// one, so nothing more is done and no second answer goes out.
     answered: bool = false,
-    /// Inside Host.aside! (`asideOf`), and the aside's first failure.
-    aside: bool = false,
+    /// How many asides are begun and not ended (Host.aside!, `asideOf`:
+    /// they nest), and the innermost one's first failure.
+    asides: u32 = 0,
     aside_failed: ?anyerror = null,
     /// The topic's bundle Host.bundle_add! builds (metal-vmm QUEUE 291).
     bundle: download.Bundle = .{},
@@ -330,7 +330,7 @@ pub const Call = struct {
             .reserve_upload = reserveUpload,
             .store_upload = storeUpload,
             .publish = publish,
-            .append_line = appendLine,
+            .append = append,
             .read = read,
             .stat = stat,
             .read_at = readAt,
@@ -354,10 +354,8 @@ pub const Call = struct {
             .now = now_,
             .render = render,
             .render_preview = renderPreview,
-            .append_message = appendMessage,
             .index_message = indexMessage,
             .write_cache = writeCache,
-            .append_entry = appendEntry,
             .report_fanout_failure = fanoutFailed,
             .read_header = header,
             .check_hostile = hostile,
@@ -369,7 +367,7 @@ pub const Call = struct {
     }
 
     fn fail(c: *Call, e: anyerror) void {
-        if (c.aside) {
+        if (c.asides > 0) {
             if (c.aside_failed == null) c.aside_failed = e;
             return;
         }
@@ -381,29 +379,39 @@ pub const Call = struct {
     /// or "failed" value, so a Roc that goes on writes nothing more. Inside
     /// an aside, after the aside's failure, the same until it ends.
     fn dead(c: *Call) bool {
-        return c.failed != null or c.answered or (c.aside and c.aside_failed != null);
+        return c.failed != null or c.answered or (c.asides > 0 and c.aside_failed != null);
     }
 
     /// **AN ASIDE** (Host.aside!, metal-vmm QUEUE 267): from `begin` to
     /// `end`, a failure is the aside's (`fail` keeps it apart), never the
     /// request's: what came before it is done (STORED IS DONE), so the
-    /// request goes on. `end` says whether anything in it failed, logs the
-    /// error and clears it.
-    fn asideOf(ctx: *anyopaque, which: roc_chat.Aside) roc_chat.AsideEnd {
+    /// request goes on. `end` answers the error anything in it failed with,
+    /// logged, and clears it. **ASIDES NEST** (a feed's entry inside the
+    /// welcome's): one begins only while nothing has failed, so the one
+    /// around it has no failure to lose, and its own ends with it. A
+    /// `begin` refused (the request, or the aside around it, has failed)
+    /// begins nothing; an `end` with none begun answers that failure.
+    fn asideOf(ctx: *anyopaque, which: roc_chat.Aside) roc_chat.AsideOutcome {
         const c = of(ctx);
         switch (which) {
             .begin => {
-                if (c.dead()) return .failed;
-                c.aside = true;
-                c.aside_failed = null;
+                if (c.dead()) {
+                    const e: anyerror = if (c.failed) |f| f else if (c.aside_failed) |f| f else error.Answered;
+                    return .{ .failed = e };
+                }
+                c.asides += 1;
                 return .done;
             },
             .end => {
-                c.aside = false;
+                if (c.asides == 0) {
+                    const e: anyerror = if (c.failed) |f| f else error.AsideNotBegun;
+                    return .{ .failed = e };
+                }
+                c.asides -= 1;
                 const e = c.aside_failed orelse return .done;
                 c.aside_failed = null;
                 std.log.warn("chat: an aside failed, the request goes on: {t}", .{e});
-                return .failed;
+                return .{ .failed = e };
             },
         }
     }
@@ -537,52 +545,6 @@ pub const Call = struct {
             break;
         }
         c.fail(error.AccountNotUnreadable);
-    }
-
-    /// **THE CONVERSATION THE ROC FOUND, AS THE STORE TAKES IT**: where it
-    /// is on disk (the one thing the host adds: a path), its kind and
-    /// members, key and base as the Roc handed them, copied out of the
-    /// Roc's memory (the store keeps some, live, past the call).
-    fn resolved(c: *Call, conv: roc_chat.Conv) !Conv {
-        const who = try c.alloc.alloc([]const u8, conv.members.len);
-        for (conv.members, who) |m, *out| out.* = try c.alloc.dupe(u8, m);
-        const key = try c.alloc.dupe(u8, conv.key);
-        // **A ROC VALUE CHECKED, NEVER TRUSTED** (metal-vmm QUEUE 268): a
-        // family that is no conversation's, or a key that is not one, is the
-        // Roc's bug and the request's failure, never a panic or a path
-        // joined from it.
-        const kind: store.ConvKind, const dir = switch (conv.family) {
-            .dm => blk: {
-                if (!try chat_paths.validPairKey(c.alloc, key)) return error.NotAConversationKey;
-                break :blk .{ .dm, try chat_paths.dmConvDir(c.alloc, key) };
-            },
-            .channel => blk: {
-                if (!chat_paths.validChannelName(key)) return error.NotAConversationKey;
-                break :blk .{ .channel, try chat_paths.channelConvDir(c.alloc, key) };
-            },
-            else => return error.NotAConversationFamily,
-        };
-        return .{
-            .meta = .{ .kind = kind, .members = who },
-            .key = key,
-            .base = try c.alloc.dupe(u8, conv.base),
-            .dir = dir,
-        };
-    }
-
-    /// Topic `sid_` of `conv`, as the store addresses it.
-    fn address(
-        c: *Call,
-        conv: roc_chat.Conv,
-        sid_: []const u8,
-    ) !store.TopicAddress {
-        const r = try c.resolved(conv);
-        if (!chat_paths.validTopicID(sid_)) return error.NotATopicId;
-        return .{
-            .dir = r.dir,
-            .key = r.key,
-            .sid = try c.alloc.dupe(u8, sid_),
-        };
     }
 
     /// `fail`, answering the Roc "not done".
@@ -1054,25 +1016,33 @@ pub const Call = struct {
         c.bus.publish(key, bytes);
     }
 
-    /// **ONE LINE APPENDED** (Host.append_line!): chat_store.appendLine,
-    /// under the chat root (the seam has refused a path that would leave
-    /// it), its torn-line rule the store's.
-    fn appendLine(
+    /// **BYTES APPENDED, AS A PRIMITIVE** (Host.append!): webbox's
+    /// store.append, under the chat root (the seam has refused a path that
+    /// would leave it), its folders made; the file's size after. What goes
+    /// before the bytes (a torn line's newline, a feed's separator) is the
+    /// Roc's (Files.roc).
+    fn append(
         ctx: *anyopaque,
         path: []const u8,
-        line: []const u8,
-    ) roc_chat.Done {
+        bytes: []const u8,
+    ) roc_chat.Appended {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        store.appendLine(
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unappended(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends (the aside's, inside one).
+        const size = webbox.store.append(
             c.io,
             c.alloc,
             p,
-            line,
-        ) catch |e| return c.no(e);
-        return .ok;
+            bytes,
+        ) catch |e| return c.unappended(e);
+        return .{ .appended = size };
+    }
+
+    /// `fail`, answering the Roc that the append failed.
+    fn unappended(c: *Call, e: anyerror) roc_chat.Appended {
+        c.fail(e);
+        return .failed;
     }
 
     /// `fail`, answering the Roc nothing.
@@ -1323,43 +1293,26 @@ pub const Call = struct {
         };
     }
 
-    /// **A MESSAGE'S BLOCK APPENDED** (Host.append_message!, metal-vmm QUEUE
-    /// 287): the transcript's size after, or the request's failure.
-    fn appendMessage(
-        ctx: *anyopaque,
-        conv_: roc_chat.Conv,
-        sid: []const u8,
-        block: []const u8,
-    ) roc_chat.AppendedAt {
-        const c = of(ctx);
-        if (c.dead()) return .failed;
-        const t = c.address(conv_, sid) catch |e| {
-            c.fail(e);
-            return .failed;
-        };
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        const size = store.appendBlock(c.io, c.alloc, t, block) catch |e| {
-            c.fail(e);
-            return .failed;
-        };
-        return .{ .appended = size };
-    }
-
-    /// **THE SEARCH INDEX TOLD** (Host.index_message!): as it lands. It cannot
-    /// fail: an index that cannot take it drops itself, to be rebuilt.
+    /// **THE SEARCH INDEX TOLD** (Host.index_message!): as it lands, topic
+    /// `sid` of the conversation whose folder is `dir` under the chat root
+    /// (the seam has checked both), as the index files it (dmConvDir,
+    /// channelConvDir). It cannot fail: an index that cannot take it drops
+    /// itself, to be rebuilt.
     fn indexMessage(
         ctx: *anyopaque,
-        conv_: roc_chat.Conv,
+        dir: []const u8,
         sid: []const u8,
         m: roc_chat.Message,
     ) void {
         const c = of(ctx);
         if (c.dead()) return;
         // absent-ok: the index is a cache of the transcripts: a message it cannot be told of is the next build's.
-        const t = c.address(conv_, sid) catch return;
-        // absent-ok: the same: memory for the message's copy, the index's to miss.
+        const conv_dir = std.fs.path.join(c.alloc, &.{ store.chat_root, dir }) catch return;
+        // absent-ok: the same: memory for the copies the index keeps, the index's to miss.
+        const topic = c.alloc.dupe(u8, sid) catch return;
+        // absent-ok: the same.
         const msg = c.chatMessage(m) catch return;
-        search_index.noteAppend(c.io, t.dir, t.sid, msg);
+        search_index.noteAppend(c.io, conv_dir, topic, msg);
     }
 
     /// **A CACHE WRITTEN** (Host.write_cache!): a write that failed is said
@@ -1374,59 +1327,6 @@ pub const Call = struct {
         // absent-ok: a cache: one not written is recounted from the transcript (Count.believed).
         webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e|
             std.log.warn("chat: a cache's write failed, a miss: {s}: {t}", .{ path, e });
-    }
-
-    /// **THE FAN-OUT'S PRIMITIVES NEVER FAIL THE REQUEST** (metal-vmm QUEUE
-    /// 172, 156(c)): the Roc fans a message out after its store, and
-    /// **STORED IS DONE**. Each failure goes back to the Roc as its error,
-    /// which the Roc counts for one member's one surface (`fanoutFailed`),
-    /// never kept by `fail`. After a failure of the request (none can follow
-    /// a store) each answers that failure, doing nothing.
-    /// **A FEED'S ENTRY APPENDED** (Host.append_entry!): as images_store
-    /// `appendImagesEntry` and code_store `appendCodeEntry` append theirs,
-    /// the entry's bytes the Roc's. The file is read only to decide whether
-    /// the separator goes first; a read that fails is the append's failure,
-    /// as it was theirs. The seam has refused a path outside the chat root.
-    fn appendEntry(
-        ctx: *anyopaque,
-        path: []const u8,
-        separator: []const u8,
-        entry: []const u8,
-    ) roc_chat.Appended {
-        const c = of(ctx);
-        if (c.failed) |e| return .{ .failed = e };
-        c.appendedEntry(
-            path,
-            separator,
-            entry,
-        ) catch |e| return .{ .failed = e };
-        return .appended;
-    }
-
-    fn appendedEntry(
-        c: *Call,
-        path: []const u8,
-        separator: []const u8,
-        entry: []const u8,
-    ) !void {
-        const p = try std.fs.path.join(c.alloc, &.{ store.chat_root, path });
-        const existing = try webbox.store.readOrEmpty(
-            c.io,
-            c.alloc,
-            p,
-            .unlimited,
-        );
-        const bytes = if (existing.len > 0) try std.mem.concat(
-            c.alloc,
-            u8,
-            &.{ separator, entry },
-        ) else entry;
-        _ = try webbox.store.append(
-            c.io,
-            c.alloc,
-            p,
-            bytes,
-        );
     }
 
     /// **A SURFACE THAT FAILED FOR ONE MEMBER, COUNTED AND SAID**

@@ -483,24 +483,6 @@ pub fn chatKeyParticipant(
     );
 }
 
-/// validPairKey reports whether `key` is a canonical DM key, as
-/// chatKeyParticipant reads one: two uids, the smaller first. The host's
-/// check of a key the Roc hands it before it joins one into a path
-/// (metal-vmm QUEUE 268).
-pub fn validPairKey(alloc: Alloc, key: []const u8) !bool {
-    const cut = cutSeq(key, "_") orelse return false;
-    if (!canonicalUid(cut.before) or !canonicalUid(cut.after)) return false;
-    return std.mem.eql(
-        u8,
-        try chatPairKey(
-            alloc,
-            cut.before,
-            cut.after,
-        ),
-        key,
-    );
-}
-
 /// chatPairKey is the canonical DM key: the smaller numeric id first, joined by
 /// '_'.
 pub fn chatPairKey(
@@ -706,24 +688,4 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
         try testing.expectEqual(before + 1, malformed_channels);
         try testing.expectEqualStrings("team", malformed_last);
     }
-}
-
-test "validPairKey: two uids, the smaller first; anything else is no DM key, never a path (metal-vmm QUEUE 268)" {
-    const a = std.testing.allocator;
-    var arena = std.heap.ArenaAllocator.init(a);
-    defer arena.deinit();
-    const x = arena.allocator();
-    try std.testing.expect(try validPairKey(x, "1_2") and try validPairKey(x, "2_10"));
-    for ([_][]const u8{
-        "",
-        "1",
-        "2_1",
-        "10_2",
-        "01_2",
-        "1_2_3",
-        "../x",
-        "1_..",
-        "a_b",
-        "1_",
-    }) |bad| try std.testing.expect(!try validPairKey(x, bad));
 }
