@@ -449,8 +449,8 @@ fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     try page.send(req, .ok);
 }
 
-/// emitImagesData ships the initial transcript as inline JSON. The `</`→`<\/`
-/// pass prevents the JSON from closing the surrounding <script>. Per-entry
+/// emitImagesData ships the initial transcript as inline JSON. The scriptSafe
+/// pass (every `<` as `\u003c`) prevents the JSON from closing the surrounding <script>. Per-entry
 /// source_url is rebuilt from the entry's conv.
 fn emitImagesData(b: *std.ArrayList(u8), alloc: Alloc, entries: []images_store.ImagesEntry) !void {
     var j: std.ArrayList(u8) = .empty;
@@ -481,7 +481,7 @@ fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     try page.send(req, .ok);
 }
 
-/// emitCodeData ships the initial transcript as inline JSON. The `</`→`<\/` pass
+/// emitCodeData ships the initial transcript as inline JSON. The scriptSafe pass (every `<` as `\u003c`)
 /// prevents the JSON from closing the surrounding <script>. Per-entry source_url
 /// is rebuilt from the entry's conv (shares images_store's helper).
 fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeEntry) !void {
@@ -585,7 +585,7 @@ pub fn recentJSON(alloc: Alloc, items: []RecentItem) ![]u8 {
 }
 
 /// emitRecentData ships the initial feed as inline JSON next to the mount slot.
-/// The `</`→`<\/` pass prevents the JSON from closing the surrounding <script>.
+/// The scriptSafe pass (every `<` as `\u003c`) prevents the JSON from closing the surrounding <script>.
 fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !void {
     const safe = try html.scriptSafe(alloc, try recentJSON(alloc, items));
     try b.appendSlice(alloc, "<script id=\"recent-data\" type=\"application/json\">");

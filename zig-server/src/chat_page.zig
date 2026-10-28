@@ -164,7 +164,7 @@ pub fn sidebarOf(io: Io, alloc: Alloc, uid: []const u8, topic: Topic, now: Now) 
 
 /// sidebarJSON is the inline left-rail payload: conversations = every other
 /// authorized user (DM) + every channel the viewer is in; pinned_sessions and
-/// topics = this conv's topics, pinned or not. The `</`→`<\/` pass is
+/// topics = this conv's topics, pinned or not. The scriptSafe pass (every `<` as `\u003c`) is
 /// script-tag safety for inline embedding. Roc's twin: chat/Pages.roc.
 pub fn sidebarJSON(alloc: Alloc, sb: Sidebar) ![]const u8 {
     var b: std.ArrayList(u8) = .empty;
