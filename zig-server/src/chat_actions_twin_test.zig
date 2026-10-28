@@ -5613,3 +5613,153 @@ test "an upload's POST (metal-vmm QUEUE 292): an image and a video stored, named
     defer meter.restore();
     try freezeRun("uploadsRun", try uploadsRun(a, io), "f05ab883040c8780e6d6128322d0cc815d4328864ce4d37bdd4ef03ed1a01f64");
 }
+
+// ── admin retire (metal-vmm QUEUE 293) ────────────────────────────────────────
+
+const retire = @import("chat_retire.zig");
+const disk = webbox.store;
+
+/// One retire as the admin page runs it: the keep list's problem, if any,
+/// else the plan, as its items (sorted: a listing's order is the machine's),
+/// the accounts not kept, or the error that ended it.
+fn retireOnce(io: Io, a: Alloc, p: retire.Params, mode: retire.Mode) ![]const u8 {
+    // absent-ok: not read as absence: the error is the run's answer.
+    if (retire.keepProblem(io, a, p.keep) catch |e| return std.fmt.allocPrint(a, "error {t}", .{e})) |why| return why;
+    // absent-ok: the same.
+    const pl = retire.plan(io, a, p, mode) catch |e| return std.fmt.allocPrint(a, "error {t}", .{e});
+    var lines: std.ArrayList([]const u8) = .empty;
+    for (pl.items.items) |it| try lines.append(a, try std.fmt.allocPrint(a, "{s}: {s}\n", .{ it.kind.label(), it.name }));
+    sortLines(lines.items);
+    var out: std.ArrayList(u8) = .empty;
+    try out.print(a, "{t}, {d} not kept\n", .{ mode, pl.members_removed });
+    for (lines.items) |l| try out.appendSlice(a, l);
+    return out.items;
+}
+
+fn sortLines(lines: [][]const u8) void {
+    std.mem.sort([]const u8, lines, {}, struct {
+        fn lt(_: void, x: []const u8, y: []const u8) bool {
+            return std.mem.lessThan(u8, x, y);
+        }
+    }.lt);
+}
+
+/// Every file and folder under `root`, each file with its bytes, sorted.
+fn treeOf(io: Io, a: Alloc, root: []const u8) ![]const u8 {
+    var lines: std.ArrayList([]const u8) = .empty;
+    try treeInto(io, a, root, "", &lines);
+    sortLines(lines.items);
+    var out: std.ArrayList(u8) = .empty;
+    for (lines.items) |l| try out.appendSlice(a, l);
+    return out.items;
+}
+
+fn treeInto(io: Io, a: Alloc, root: []const u8, rel: []const u8, lines: *std.ArrayList([]const u8)) !void {
+    const here = if (rel.len == 0) root else try std.fs.path.join(a, &.{ root, rel });
+    for (try disk.list(io, a, here)) |e| {
+        const r = if (rel.len == 0) e.name else try std.fs.path.join(a, &.{ rel, e.name });
+        if (e.kind == .directory) {
+            try lines.append(a, try std.fmt.allocPrint(a, "{s}/\n", .{r}));
+            try treeInto(io, a, root, r, lines);
+        } else {
+            const bytes = try disk.read(io, a, try std.fs.path.join(a, &.{ root, r }), .unlimited);
+            try lines.append(a, try std.fmt.allocPrint(a, "{s}: {f}\n", .{ r, std.zig.fmtString(bytes) }));
+        }
+    }
+}
+
+/// **ADMIN RETIRE, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 293): the retire
+/// tests' trees, each planned and carried out as the admin page does it: the
+/// dry run, the confirm, the tree it leaves and a second confirm; a keep
+/// name that is no account's; an account with no name; empty, undated,
+/// recent and old topics with no accounts at all; removals the store
+/// refuses, then one under the removed user's game data, then the confirm
+/// that finishes; a member whose name will not read; and days 0, everyone
+/// kept, every dated topic going.
+fn retireRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var answers: std.ArrayList([]const u8) = .empty;
+    const both = [_][]const u8{ "Steve", "apoorva" };
+    const p: retire.Params = .{ .days = 30, .keep = &both, .now = retire.fixture_now };
+    for (0..7) |scene| {
+        var tmp = testing.tmpDir(.{});
+        defer tmp.cleanup();
+        const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+        const saved = try @import("roots.zig").pointForTest(a, base);
+        defer saved.restore();
+        try answers.append(a, try std.fmt.allocPrint(a, "== scene {d}\n", .{scene}));
+        switch (scene) {
+            0 => {
+                try retire.stage(io, a);
+                try answers.append(a, try retireOnce(io, a, p, .dry_run));
+                try answers.append(a, try treeOf(io, a, base));
+                try answers.append(a, try retireOnce(io, a, p, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+                try answers.append(a, try retireOnce(io, a, p, .apply));
+            },
+            1 => {
+                try retire.stage(io, a);
+                const typo = [_][]const u8{ "Stve", "apoorva" };
+                try answers.append(a, try retireOnce(io, a, .{ .days = 30, .keep = &typo, .now = p.now }, .dry_run));
+                try answers.append(a, try retireOnce(io, a, .{ .days = 30, .keep = &typo, .now = p.now }, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+            },
+            2 => {
+                try retire.stage(io, a);
+                try disk.remove(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "name" }));
+                try answers.append(a, try retireOnce(io, a, .{ .days = 30, .keep = &.{"Steve"}, .now = p.now }, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+            },
+            3 => {
+                try retire.stageUndated(io, a);
+                try answers.append(a, try retireOnce(io, a, .{ .days = 30, .keep = &.{}, .now = p.now }, .dry_run));
+                try answers.append(a, try retireOnce(io, a, .{ .days = 30, .keep = &.{}, .now = p.now }, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+            },
+            4 => {
+                try retire.stage(io, a);
+                var vt: Io.VTable = undefined;
+                retire.refuse_under = "";
+                defer retire.refuse_under = "";
+                try answers.append(a, try retireOnce(retire.refusingRemovals(io, &vt), a, p, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+                retire.refuse_under = try std.fs.path.join(a, &.{ @import("storage.zig").data_root, "9" });
+                try answers.append(a, try retireOnce(retire.refusingRemovals(io, &vt), a, p, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+                try answers.append(a, try retireOnce(io, a, p, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+            },
+            5 => {
+                try retire.stage(io, a);
+                const name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
+                try disk.remove(io, a, name);
+                try disk.makeDir(io, a, name);
+                try answers.append(a, try retireOnce(io, a, p, .dry_run));
+                try answers.append(a, try retireOnce(io, a, p, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+            },
+            6 => {
+                try retire.stage(io, a);
+                const all = [_][]const u8{ "Steve", "apoorva", "Spammer" };
+                try answers.append(a, try retireOnce(io, a, .{ .days = 0, .keep = &all, .now = p.now }, .dry_run));
+                try answers.append(a, try retireOnce(io, a, .{ .days = 0, .keep = &all, .now = p.now }, .apply));
+                try answers.append(a, try treeOf(io, a, base));
+            },
+            else => unreachable,
+        }
+    }
+    return .{ .answers = answers.items };
+}
+
+test "admin retire (metal-vmm QUEUE 293): the retire tests' trees, planned and carried out; every keep list refused, every removal refused, an undated topic kept, as the old Zig did them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    try freezeRun("retireRun", try retireRun(a, io), "1f328c7ac27c4fb2304be24e6a1ab8d9ca60c3fe7269394c520ec61f61fa3e0a");
+}

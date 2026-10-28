@@ -795,6 +795,7 @@ fn tx(
 }
 
 const now: i64 = 1_700_000_000; // a fixed "now" for the fixture
+pub const fixture_now = now;
 const old_at: i64 = now - 100 * std.time.s_per_day; // retire
 const new_at: i64 = now - 5 * std.time.s_per_day; // keep
 
@@ -803,7 +804,7 @@ const new_at: i64 = now - 5 * std.time.s_per_day; // keep
 /// channel `general` with members 1,2,9 and an old topic; the removed user's
 /// state everywhere; and kept user 1's pointers, one into the DM that will go
 /// (last-conv, last-sessions/1_9) and one into a surviving DM (pinned 1_2).
-fn stage(io: Io, a: Alloc) !void {
+pub fn stage(io: Io, a: Alloc) !void {
     // Accounts.
     for ([_][2][]const u8{
         .{ "1", "Steve" },
@@ -1270,23 +1271,9 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expectEqual(@as(usize, 0), again.members_removed);
 }
 
-test "an empty or undated topic is kept (it may be fresh); only a datably-old topic is retired" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    var tmp = testing.tmpDir(.{});
-    defer tmp.cleanup();
-    var threaded = std.Io.Threaded.init(a, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const base = try std.fs.path.join(a, &.{
-        ".zig-cache",
-        "tmp",
-        &tmp.sub_path,
-    });
-    const saved = try roots.pointForTest(a, base);
-    defer saved.restore();
+/// Stages DM 1_2's topics with no accounts at all: one empty, one undated,
+/// one recent and one datably old.
+pub fn stageUndated(io: Io, a: Alloc) !void {
     const dm = try chat_paths.dmConvDir(a, "1_2");
     try store.write(
         io,
@@ -1340,6 +1327,26 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
         ),
         .{},
     );
+}
+
+test "an empty or undated topic is kept (it may be fresh); only a datably-old topic is retired" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const base = try std.fs.path.join(a, &.{
+        ".zig-cache",
+        "tmp",
+        &tmp.sub_path,
+    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
+    try stageUndated(io, a);
 
     var dry = try plan(
         io,
@@ -1360,8 +1367,8 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
 
 /// An Io whose file removals are refused under one path (all of them when
 /// it is ""), as a store that will not delete (metal-vmm QUEUE 129).
-var refuse_under: []const u8 = "";
-fn refusingRemovals(io: Io, vt: *Io.VTable) Io {
+pub var refuse_under: []const u8 = "";
+pub fn refusingRemovals(io: Io, vt: *Io.VTable) Io {
     const refused = struct {
         fn deleteFile(
             userdata: ?*anyopaque,
