@@ -103,6 +103,7 @@ const Fn = enum(u8) {
     images_entry = 67,
     code_entry = 68,
     recent_where = 69,
+    json_out = 70,
 };
 
 /// One Roc call's results, in `a`.
@@ -310,6 +311,27 @@ test "ZigText: a string as std.json.fmt writes it, and as the readers trim it" {
     }
     try differ.none(compared);
     try testing.expect(compared > ss.len + 300);
+}
+
+test "JsonOut: an object of a count, a string, an array of strings and a bool, as std.json writes the same struct, over the escaping corpus (metal-vmm QUEUE 269)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    var differ: Differences = .{};
+    var compared: usize = 0;
+    // JsonOut takes text: the strings that are not UTF-8 go (the door's).
+    const texts = try utf8Only(a, try byteStrings(a));
+    for (0..texts.len) |i| {
+        // One to four strings, from every part of the corpus.
+        const args = texts[i..@min(texts.len, i + 1 + i % 4)];
+        const z = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(.{ .n = args.len, .first = args[0], .all = args, .even = args.len % 2 == 0 }, .{})});
+        const r = (try roc1(a, .json_out, args)).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, r)) differ.add("json_out({d} args, first \"{f}\"):\n  zig {s}\n  roc {s}", .{ args.len, std.zig.fmtString(args[0]), z, r });
+    }
+    try differ.none(compared);
+    try testing.expect(compared > 300);
 }
 
 // ── Paths (chat_paths.zig) ─────────────────────────────────────────────────
