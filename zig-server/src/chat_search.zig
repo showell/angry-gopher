@@ -15,7 +15,6 @@
 //! crosses whole.
 
 const std = @import("std");
-const chat = @import("chat.zig");
 const search_index = @import("search_index.zig");
 const mem_meter = @import("webbox").mem_meter;
 

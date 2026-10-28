@@ -9,7 +9,6 @@ const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
-const bus_mod = @import("webbox").bus;
 const users = @import("users.zig");
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");

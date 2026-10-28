@@ -7,7 +7,6 @@ const std = @import("std");
 const fixtures = @import("chat_fixtures_test.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
-const bus_mod = @import("webbox").bus;
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");

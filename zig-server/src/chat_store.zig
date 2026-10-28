@@ -19,11 +19,8 @@
 //! this decoder parses them).
 
 const chat_codec = @import("chat_codec.zig");
-const chatStoredForm = fixtures.chatStoredForm;
-const chat_fanout = @import("chat_fanout.zig");
 const chat_count = @import("chat_count.zig");
 const writeCount = chat_count.writeCount;
-const messageCount = fixtures.messageCount;
 const chat_paths = @import("chat_paths.zig");
 const decodeChatFile = chat_codec.decodeChatFile;
 const dmConvDir = chat_paths.dmConvDir;

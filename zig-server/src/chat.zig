@@ -39,7 +39,6 @@ const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const store = @import("chat_store.zig");
-const markdown = @import("markdown.zig");
 const html = @import("webbox").html;
 // Escaping lives in html.zig, not here, so chat_chrome.zig and the non-chat
 // pages (login, game, admin, …) escape without importing the chat dispatcher.
@@ -52,7 +51,6 @@ const recent = @import("recent.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
 const upload = @import("chat_upload.zig");
-const presence = @import("presence.zig");
 const download = @import("chat_download.zig");
 const Bus = @import("webbox").bus.Bus;
 
@@ -115,47 +113,6 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
 }
 
 // ── the lookup's pure decisions (the Roc's twins: chat/Conversation.roc) ──
-
-/// The other of DM pair `key` when `uid` is one of the pair, by
-/// chatKeyParticipant's rule (a canonical pair of uids); null otherwise.
-pub fn dmOther(alloc: Alloc, key: []const u8, uid: []const u8) !?[]const u8 {
-    if (!try chat_paths.chatKeyParticipant(alloc, key, uid)) return null;
-    return partnerOf(key, uid);
-}
-
-/// The side of `key`'s first `_` that is not `me` (the second when the
-/// first is `me`, so `1_1`'s partner is `1`); the whole key when it has
-/// no `_`.
-pub fn partnerOf(key: []const u8, me: []const u8) []const u8 {
-    const us = std.mem.indexOfScalar(u8, key, '_') orelse return key;
-    return if (std.mem.eql(u8, key[0..us], me)) key[us + 1 ..] else key[0..us];
-}
-
-/// A DM's URL base.
-pub fn dmBase(alloc: Alloc, key: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "/chat/c/{s}", .{key});
-}
-
-/// A channel's URL base.
-pub fn channelBase(alloc: Alloc, name: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
-}
-
-/// A DM's title: the partner's `name`, or their id `other` when the
-/// account has none (getUserName's "").
-pub fn dmTitle(alloc: Alloc, name: []const u8, other: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "Chat w/{s}", .{if (name.len == 0) other else name});
-}
-
-/// A channel's title.
-pub fn channelTitle(alloc: Alloc, name: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "#{s}", .{name});
-}
-
-/// A topic's title: its conversation's, ": ", its id.
-pub fn topicTitle(alloc: Alloc, title: []const u8, sid: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "{s}: {s}", .{ title, sid });
-}
 
 /// channelRoute serves a tail of /channel/<name>/<topic> the Roc handed
 /// back (roc-webbox chat/main.roc `serve_conversation!`): it found the

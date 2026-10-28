@@ -9,7 +9,6 @@ const decimal = @import("decimal.zig");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
-const bus_mod = @import("webbox").bus;
 const users = @import("users.zig");
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");
@@ -112,23 +111,6 @@ pub fn listTopics(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     const slice = try out.toOwnedSlice(alloc);
     std.mem.sort([]const u8, slice, {}, lessThanStr);
     return slice;
-}
-
-/// firstTopic is the topic a conversation opens on when nobody's last view
-/// says otherwise: `firstOf` its topics, or "" for a conversation with none.
-/// resumeTopic (chat_state) is the one that knows the viewer.
-pub fn firstTopic(io: Io, alloc: Alloc, conv_dir: []const u8) ![]const u8 {
-    return firstOf(try listTopics(io, alloc, conv_dir));
-}
-
-/// firstOf picks from a conversation's topics (listTopics, sorted): "ChitChat"
-/// when present, else the alphabetically first, else "".
-pub fn firstOf(topics: []const []const u8) []const u8 {
-    for (topics) |s| {
-        if (std.mem.eql(u8, s, "ChitChat")) return s;
-    }
-    if (topics.len > 0) return topics[0];
-    return "";
 }
 
 fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
@@ -439,12 +421,6 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
         try testing.expectEqual(before + 1, malformed_channels);
         try testing.expectEqualStrings("team", malformed_last);
     }
-}
-
-test "firstOf: ChitChat wins wherever it sorts, else the first, else none" {
-    try std.testing.expectEqualStrings("ChitChat", firstOf(&.{ "2026-01-01", "ChitChat", "zebra" }));
-    try std.testing.expectEqualStrings("2026-01-01", firstOf(&.{ "2026-01-01", "zebra" }));
-    try std.testing.expectEqualStrings("", firstOf(&.{}));
 }
 
 test "validPairKey: two uids, the smaller first; anything else is no DM key, never a path (metal-vmm QUEUE 268)" {

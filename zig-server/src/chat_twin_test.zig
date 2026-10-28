@@ -1546,21 +1546,14 @@ test "Conversation: who a DM's other half is, for the member or not, over every 
     }
     for (keys.items) |key| {
         for ([_][]const u8{ "1", "2", "3", "", "01", "9223372036854775808" }) |me| {
-            const z = try chat.dmOther(a, key, me);
+            // Frozen (metal-vmm QUEUE 285): chat.dmOther is gone.
             const got = try roc(a, .dm_other, &.{ key, me });
             other_frozen.add(got);
-            compared += 1;
-            const rz: ?[]const u8 = switch (got.len) {
-                0 => null,
-                1 => got[0],
-                else => return error.TwinGaveMore,
-            };
-            if (z != null) found += 1;
-            const same = if (z) |zb| (rz != null and std.mem.eql(u8, zb, rz.?)) else rz == null;
-            if (!same) differ.add("dmOther(\"{f}\", \"{f}\"): zig \"{f}\" ({}), roc \"{f}\" ({})", .{ std.zig.fmtString(key), std.zig.fmtString(me), std.zig.fmtString(z orelse ""), z != null, std.zig.fmtString(rz orelse ""), rz != null });
+            if (got.len > 1) return error.TwinGaveMore;
             // The members the fan-out writes for, once each (ConvMeta.dm),
             // for every key the member is in.
-            if (z != null) {
+            if (got.len == 1) {
+                found += 1;
                 const us = std.mem.indexOfScalar(u8, key, '_').?;
                 const meta = try ConvMeta.dm(a, key[0..us], key[us + 1 ..]);
                 const rm = try roc(a, .dm_members, &.{key});
@@ -1585,8 +1578,6 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     defer twin.deinit();
     const a = arena.allocator();
     var has_frozen: Frozen = .{};
-    var differ: Differences = .{};
-    var compared: usize = 0;
     // Names as an account may hold them, and as it must not: markup, quotes,
     // a script's end, a newline, nothing. Text only: a name is decoded at
     // list_accounts!'s door.
@@ -1595,36 +1586,22 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
     // roc test covers it.
     const ids = [_][]const u8{ "2", "10", "9223372036854775808" };
     for (names) |n| for (ids) |id| {
-        const z = try chat.dmTitle(a, n, id);
-        const got = (try roc1(a, .dm_title, &.{ n, id })).?;
-        has_frozen.add(&.{got});
-        compared += 1;
-        if (!std.mem.eql(u8, z, got)) differ.add("dmTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(n), std.zig.fmtString(id), std.zig.fmtString(z), std.zig.fmtString(got) });
+        // Frozen (metal-vmm QUEUE 285): chat.zig's titles and bases are gone.
+        const z = (try roc1(a, .dm_title, &.{ n, id })).?;
+        has_frozen.add(&.{z});
         for (names) |sid| {
             // A topic is text in the Roc (a TopicAt's Str): one that is not
             // UTF-8 never reaches topicTitle, so it is no case.
             if (!std.unicode.utf8ValidateSlice(sid)) continue;
-            const zt = try chat.topicTitle(a, z, sid);
-            const rt = (try roc1(a, .topic_title, &.{ z, sid })).?;
-            has_frozen.add(&.{rt});
-            compared += 1;
-            if (!std.mem.eql(u8, zt, rt)) differ.add("topicTitle(\"{f}\", \"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(z), std.zig.fmtString(sid), std.zig.fmtString(zt), std.zig.fmtString(rt) });
+            has_frozen.add(&.{(try roc1(a, .topic_title, &.{ z, sid })).?});
         }
     };
     for (names ++ ids) |key| {
         // A channel's title is made for a channel's name alone (a ChannelName).
         if (chat_paths.validChannelName(key)) {
-            const zc = try chat.channelTitle(a, key);
-            const rc = (try roc1(a, .channel_title, &.{key})).?;
-            has_frozen.add(&.{rc});
-            compared += 1;
-            if (!std.mem.eql(u8, zc, rc)) differ.add("channelTitle(\"{f}\"): zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(zc), std.zig.fmtString(rc) });
+            has_frozen.add(&.{(try roc1(a, .channel_title, &.{key})).?});
         }
-        const bases = try roc(a, .conv_bases, &.{key});
-        has_frozen.add(bases);
-        compared += 2;
-        if (!std.mem.eql(u8, try chat.dmBase(a, key), bases[0])) differ.add("dmBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[0]) });
-        if (!std.mem.eql(u8, try chat.channelBase(a, key), bases[1])) differ.add("channelBase(\"{f}\"): roc \"{f}\"", .{ std.zig.fmtString(key), std.zig.fmtString(bases[1]) });
+        has_frozen.add(try roc(a, .conv_bases, &.{key}));
     }
     // A topic among topics, without case: ASCII letters in both cases, the
     // characters beside them, and a character past ASCII (which has no case
@@ -1646,7 +1623,6 @@ test "Conversation: a DM's, a channel's and a topic's titles and URL bases, over
         has_frozen.add(&.{if (got) "1" else "0"});
         if (got) hits += 1;
     }
-    try differ.none(compared);
     try has_frozen.check("the titles, the bases and hasTopic", "7ec7ce995764777492568a8bf305faf5787c6f086a85a8b0d7588388f7df8e0f", 4411);
     try testing.expect(hits > 300);
 }
