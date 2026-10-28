@@ -5154,3 +5154,92 @@ test "presence's came-online broadcast (metal-vmm QUEUE 288): the edge tells eve
     defer meter.restore();
     try freezeRun("presenceRun", try presenceRun(a, io), "94d27ba9a55990b2e5cde9fa4e4ef260d0411397ed4186da40fc1b20f31fc2e4");
 }
+
+/// **THE DOCS' READ PAGES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 289):
+/// the landing (the doc touched last, or the editor with none), a doc's
+/// editor, its raw markdown, the list, the live preview, as the owner, as
+/// another member, for a doc not there, a name no slug, a nested path, the
+/// wrong method, and a docs folder that will not list.
+fn docsReadRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Deb <b>&amp;</b>");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    const docs = try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "docs" });
+    // Each doc beside the second its file was last touched: `plans` last.
+    for ([_]struct { []const u8, []const u8, i96 }{
+        .{ "a-b.md", "x", 1_767_225_600 },
+        .{ "plans.md", "# Plans\n\nSome *text*, <b>&amp;</b> and `code`\n\n- one\n- two\n", 1_767_225_700 },
+        .{ "reading-list.md", "", 1_767_225_650 },
+        .{ "Bad.md", "not a slug", 1_767_225_900 },
+        .{ "notes.txt", "not a doc", 1_767_225_900 },
+    }) |d| {
+        const p = try std.fs.path.join(a, &.{ docs, d[0] });
+        try harness.UidSite.disk.write(io, a, p, d[1], .{});
+        var f = try std.Io.Dir.cwd().openFile(io, p, .{ .mode = .read_write });
+        defer f.close(io);
+        try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = d[2] * std.time.ns_per_s } } });
+    }
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ docs, "sub.md" }));
+    // Ann's docs folder is a file: it will not list.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "docs" }), "", .{});
+    const DocAsk = struct { who: []const u8, method: []const u8 = "GET", target: []const u8, body: []const u8 = "" };
+    const asks = [_]DocAsk{
+        .{ .who = debbie, .target = "/chat/docs" },
+        .{ .who = debbie, .target = "/chat/docs/" },
+        .{ .who = steve, .target = "/chat/docs" },
+        .{ .who = steve, .target = "/chat/docs/" },
+        .{ .who = steve, .target = "/chat/docs/plans" },
+        .{ .who = steve, .target = "/chat/docs/a-b" },
+        .{ .who = steve, .target = "/chat/docs/reading-list" },
+        .{ .who = steve, .target = "/chat/docs/missing" },
+        .{ .who = steve, .target = "/chat/docs/Bad" },
+        .{ .who = steve, .target = "/chat/docs/sub" },
+        .{ .who = steve, .target = "/chat/docs/plans%20" },
+        .{ .who = steve, .target = "/chat/docs/plans.md" },
+        .{ .who = steve, .target = "/chat/docs/reading-list.md" },
+        .{ .who = steve, .target = "/chat/docs/missing.md" },
+        .{ .who = steve, .target = "/chat/docs/Bad.md" },
+        .{ .who = steve, .target = "/chat/docs/list.md" },
+        .{ .who = steve, .target = "/chat/docs/.md" },
+        .{ .who = steve, .target = "/chat/docs/list" },
+        .{ .who = steve, .target = "/chat/docs/plans/x" },
+        .{ .who = steve, .target = "/chat/docs/a/b.md" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/list" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/plans" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/plans.md" },
+        .{ .who = steve, .target = "/chat/docs/render" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/render", .body = "body=%23+Hi%0A%0Aa+*b*+%3Cscript%3E" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/render", .body = "other=1" },
+        .{ .who = debbie, .target = "/chat/docs/list" },
+        .{ .who = debbie, .target = "/chat/docs/plans" },
+        .{ .who = debbie, .target = "/chat/docs/plans.md" },
+        .{ .who = ann, .target = "/chat/docs" },
+        .{ .who = ann, .target = "/chat/docs/list" },
+        .{ .who = ann, .target = "/chat/docs/plans" },
+        .{ .who = ann, .target = "/chat/docs/plans.md" },
+    };
+    var hub = webbox.bus.Hub.init(io, a);
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const raw = if (std.mem.eql(u8, q.method, "GET")) try getRaw(a, q.target, q.who) else try postRaw(a, q.who, q.target, q.body);
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} {s}: {?t}\n{s}", .{ q.method, q.target, r.err, r.out }));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "the docs' read pages (metal-vmm QUEUE 289): the landing, a doc's editor, its raw markdown, the list and the preview, as the owner, another member and one whose folder will not list, every 404, 303 and 405, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("docsReadRun", try docsReadRun(a, io), "9f6b8fcbb3407025b30fcd72aed467f2cf97d17ffd52035c3ac7a3950b843589");
+}
