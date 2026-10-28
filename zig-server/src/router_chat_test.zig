@@ -401,7 +401,7 @@ test "route: a chat path that is not UTF-8 is the site's 400, before the gate, n
     }
 }
 
-test "route: the welcome DM is seeded on a member's /chat, once, from the host; a member already there gets it on their next visit; with no host, none; one that will not store is never a failed /chat, and is tried again (metal-vmm QUEUE 279)" {
+test "route: the welcome DM is seeded on a new member's /chat, once, from the host; a member already there gets it on their next visit; with no host, none; one that will not store is never a failed /chat, and is tried again (metal-vmm QUEUE 279, 283)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -413,10 +413,12 @@ test "route: the welcome DM is seeded on a member's /chat, once, from the host; 
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const chat_count = @import("chat_count.zig");
-    // No host yet: Eve's /chat seeds nothing.
+    // No host yet: Eve's /chat seeds nothing, and her welcome stays pending.
     const eve = try harness.memberSession(a, io, "5", "Eve");
+    try users.markWelcomePending(io, a, "5");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat", eve)));
     try testing.expect(!try harness.UidSite.disk.has(io, a, try chat_paths.dmConvDir(a, "1_5")));
+    try testing.expect(try users.welcomePending(io, a, users.Uid.of("5").?));
     // The host arrives: Eve's next /chat seeds the welcome and lands on it;
     // the one after leaves it at one message.
     _ = try harness.memberSession(a, io, "1", "Steve");
@@ -426,15 +428,34 @@ test "route: the welcome DM is seeded on a member's /chat, once, from the host; 
         try testing.expect(std.mem.indexOf(u8, got, "location: /chat/c/1_5/general\r\n") != null);
         try testing.expectEqual(@as(usize, 1), try chat_count.messageCount(io, a, dir, "general"));
     }
+    try testing.expect(!try users.welcomePending(io, a, users.Uid.of("5").?));
     const transcript = (try chat_paths.readTranscript(io, a, dir, "general")).?;
     try testing.expect(std.mem.indexOf(u8, transcript, "from: Steve\n") != null and std.mem.indexOf(u8, transcript, "uid: 1\n") != null);
     try testing.expect(std.mem.indexOf(u8, transcript, "Hi, this is an automated message from Steve. Please say hello and Steve will get back to you soon.") != null);
+    // A crash between the welcome and the mark's removal: the mark back, as
+    // the crash left it. The next visit sees the DM's topic, so no second
+    // welcome, and the mark goes.
+    try users.markWelcomePending(io, a, "5");
+    _ = try harness.UidSite.ask(a, io, "/chat", eve);
+    try testing.expectEqual(@as(usize, 1), try chat_count.messageCount(io, a, dir, "general"));
+    try testing.expect(!try users.welcomePending(io, a, users.Uid.of("5").?));
     // A DM whose topics will not list (a file where its folder goes): no
     // welcome, and /chat is served all the same.
     const ann = try harness.memberSession(a, io, "3", "Ann");
+    try users.markWelcomePending(io, a, "3");
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_3"), "sessions" }), "", .{});
     try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat", ann)));
     // Mended, the next visit welcomes.
     try harness.UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_3"), "sessions" }));
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat", ann), "location: /chat/c/1_3/general\r\n") != null);
+    // A member made before the mark (none written): never welcomed, with no
+    // DM with the host, or with one.
+    const bob = try harness.memberSession(a, io, "6", "Bob");
+    for (0..2) |_| try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat", bob)));
+    try testing.expect(!try harness.UidSite.disk.has(io, a, try chat_paths.dmConvDir(a, "1_6")));
+    const cy = try harness.memberSession(a, io, "7", "Cy");
+    try harness.writeTranscript(a, io, "1_7", "Plans", &.{"one"});
+    _ = try harness.UidSite.ask(a, io, "/chat", cy);
+    try testing.expectEqual(@as(usize, 0), try chat_count.messageCount(io, a, try chat_paths.dmConvDir(a, "1_7"), "general"));
+    try testing.expectEqual(@as(usize, 1), try chat_count.messageCount(io, a, try chat_paths.dmConvDir(a, "1_7"), "Plans"));
 }

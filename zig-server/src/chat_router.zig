@@ -190,6 +190,8 @@ pub const Call = struct {
             .read_query = query,
             .search_words = searchWords,
             .search_messages = searchMessages,
+            .welcome_pending = welcomePending,
+            .welcome_done = welcomeDone,
             .srcs = srcs,
             .me = me,
             .now = now_,
@@ -611,6 +613,33 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return .offline;
         return if (presence.isOnline(id, c.now)) .online else .offline;
+    }
+
+    /// **THE WELCOME, PENDING** (Host.welcome_pending!, metal-vmm QUEUE 283):
+    /// the member's mark, which signup wrote in the gopher's users folder. A
+    /// look that failed fails the request (the aside, on /chat).
+    fn welcomePending(ctx: *anyopaque) roc_chat.Welcome {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const id = users.Uid.of(c.uid) orelse {
+            c.fail(error.NotAUid);
+            return .failed;
+        };
+        // absent-ok: not read as absence: the error is kept and returned once the call ends (the aside's, on /chat).
+        const pending = users.welcomePending(c.io, c.alloc, id) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        return if (pending) .pending else .none;
+    }
+
+    /// The member's welcome given (Host.welcome_done!): the mark goes.
+    fn welcomeDone(ctx: *anyopaque) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const id = users.Uid.of(c.uid) orelse return c.no(error.NotAUid);
+        users.clearWelcomePending(c.io, c.alloc, id) catch |e| return c.no(e);
+        return .ok;
     }
 
     /// **SEARCH'S RATE LIMIT** (Host.admit!): chat_search.admit, the

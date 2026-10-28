@@ -154,6 +154,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             try users.setUserPassword(io, alloc, cur.id, password);
             const id = cur.id;
             throttle.recordCreate(io, address);
+            markWelcome(io, alloc, id);
             publishUserArrived(io, alloc, bus, id, name);
             return loginAsMember(req, io, alloc, id, next);
         },
@@ -179,6 +180,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
             const id = try registerMember(io, alloc, checked, password);
             throttle.recordCreate(io, address);
+            markWelcome(io, alloc, id);
             publishUserArrived(io, alloc, bus, id, valid);
             return loginAsMember(req, io, alloc, id, next);
         },
@@ -319,7 +321,13 @@ fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_
 }
 
 // The host's welcome DM is the Roc's, on the member's first /chat
-// (roc-webbox chat/main.roc `welcome!`, metal-vmm QUEUE 279).
+// (roc-webbox chat/main.roc `welcome!`, metal-vmm QUEUE 279), for a member
+// made from now on: signup marks the welcome pending (QUEUE 283), in the
+// gopher's own users folder, never the chat's files.
+fn markWelcome(io: Io, alloc: Alloc, id: []const u8) void {
+    // absent-ok: best-effort, as the welcome always was: a marker not written means no welcome, never a broken signup.
+    users.markWelcomePending(io, alloc, id) catch {};
+}
 
 // ── cookies + response helpers ────────────────────────────────────────────────
 

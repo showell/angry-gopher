@@ -230,6 +230,35 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
     return true;
 }
 
+// ── The welcome, pending ───────
+
+/// **A MEMBER MADE FROM NOW ON IS WELCOMED** (metal-vmm QUEUE 283): signup
+/// writes {users_root}/{id}/welcome-pending, the gopher's own state and not
+/// the chat's, and the Roc's first /chat consumes it (Host.welcome_pending!,
+/// Host.welcome_done!). An account made before the marker existed has none,
+/// so it is old with no migration step; nothing is read from a DM's absence.
+pub fn markWelcomePending(io: Io, alloc: Alloc, id: []const u8) !void {
+    const dir = try std.fs.path.join(alloc, &.{ users_root, id });
+    try store.makeDir(io, alloc, dir);
+    try store.write(io, alloc, try std.fs.path.join(alloc, &.{ dir, "welcome-pending" }), "", .{});
+}
+
+/// Whether the member's welcome is pending. A marker that cannot be looked at
+/// is an error, never "not pending" or "pending".
+pub fn welcomePending(io: Io, alloc: Alloc, id: Uid) !bool {
+    const path = try std.fs.path.join(alloc, &.{ users_root, id.text(), "welcome-pending" });
+    return (try store.statOrNull(io, alloc, path)) != null;
+}
+
+/// The member's welcome given: the marker goes. One already gone is done.
+pub fn clearWelcomePending(io: Io, alloc: Alloc, id: Uid) !void {
+    const path = try std.fs.path.join(alloc, &.{ users_root, id.text(), "welcome-pending" });
+    store.remove(io, alloc, path) catch |e| switch (e) {
+        error.FileNotFound => {},
+        else => return e,
+    };
+}
+
 // ── API-key management ───────
 
 /// userHasAPIKey reports whether the principal has an API-key file.
