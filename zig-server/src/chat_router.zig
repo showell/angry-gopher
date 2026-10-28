@@ -34,6 +34,8 @@ const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
 const store = @import("chat_store.zig");
+const chat_sse = @import("chat_sse.zig");
+const sse = @import("webbox").sse;
 const chat_fanout = @import("chat_fanout.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_search = @import("chat_search.zig");
@@ -157,6 +159,21 @@ pub fn handle(
             );
         },
         .not_allowed => |m| return http.methodNotAllowed(req, m),
+        // **A STREAM THE ROC DECIDED** (metal-vmm QUEUE 286): its bus key, and
+        // for a topic's, the transcript whose backlog goes first. Holding the
+        // connection is the host's.
+        .stream => |s| {
+            if (s.transcript.len == 0) return sse.forward(
+                req,
+                bus,
+                s.key,
+            );
+            return chat_sse.streamTranscript(req, io, alloc, bus, .{
+                .path = try std.fs.path.join(alloc, &.{ store.chat_root, s.transcript }),
+                .key = s.key,
+                .sid = s.topic,
+            });
+        },
         // The host answered inside the call (a body too big): nothing more.
         .answered => {},
         // The site's 400 for every malformed form (webbox site.zig).

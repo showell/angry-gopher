@@ -93,26 +93,18 @@ pub const Stream = struct {
     sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
 };
 
-/// openStream: inside one handler's turn, decode the topic backlog
-/// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
+/// openStream: inside one handler's turn, decode the topic backlog at `path`
+/// AND register a live subscriber on `key`, the topic's bus key the Roc
+/// named (`<conv_key>/<sid>`, roc-webbox chat/BusKey.roc) — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
 pub fn openStream(
     io: Io,
     alloc: Alloc,
     bus: *Bus,
-    topic: TopicAddress,
+    path: []const u8,
+    key: []const u8,
 ) !Stream {
-    const path = try transcriptPath(
-        alloc,
-        topic.dir,
-        topic.sid,
-    );
-    const key = try std.fmt.allocPrint(
-        alloc,
-        "{s}/{s}",
-        .{ topic.key, topic.sid },
-    );
 
     // A topic nobody has written to is genuinely empty; a topic that will
     // not read is not, and showing it as empty is how a transcript looks lost.

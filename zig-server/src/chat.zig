@@ -33,7 +33,6 @@
 
 const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
-const chat_fanout = @import("chat_fanout.zig");
 const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
@@ -44,12 +43,7 @@ const html = @import("webbox").html;
 // pages (login, game, admin, …) escape without importing the chat dispatcher.
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
-const chat_sse = @import("chat_sse.zig");
-const sse = @import("webbox").sse;
 const docs = @import("docs.zig");
-const recent = @import("recent.zig");
-const images = @import("images.zig");
-const code = @import("code.zig");
 const upload = @import("chat_upload.zig");
 const download = @import("chat_download.zig");
 const Bus = @import("webbox").bus.Bus;
@@ -108,28 +102,11 @@ pub fn serve(
             route.rest,
             now,
         ),
-        // /chat/recent, /images, /code [/stream]: the activity feed and the
-        // per-user transcripts.
-        .recent => return recent.handle(
-            req,
-            alloc,
-            bus,
-            uid,
-            route.rest,
-        ),
-        .images => return images.handle(
-            req,
-            alloc,
-            bus,
-            uid,
-            route.rest,
-        ),
-        .code => return code.handle(
-            req,
-            alloc,
-            bus,
-            uid,
-            route.rest,
+        // /chat/recent, /images, /code and their streams: the Roc's
+        // (roc-webbox chat/main.roc `member_stream!`, metal-vmm QUEUE 286).
+        .recent, .images, .code => std.debug.panic(
+            "chat.serve: {t} is the Roc's",
+            .{route.family},
         ),
         // /chat/links: the Roc's (roc-webbox chat/main.roc `serve_rendered!`).
         .links => std.debug.panic("chat.serve: /chat/links is the Roc's", .{}),
@@ -140,7 +117,6 @@ pub fn serve(
             req,
             io,
             alloc,
-            bus,
             uid,
             route,
         ),
@@ -148,26 +124,15 @@ pub fn serve(
             req,
             io,
             alloc,
-            bus,
             uid,
             route,
         ),
-        // The two cross-page attention streams the prod JS opens on boot,
-        // per-uid bus subscribers forwarding the published event JSON
-        // verbatim (notify: status-strip pings + came-online; sidebar:
-        // topic-added + user-online). Live-only: the server-rendered page is
-        // the backlog.
-        .notifications => return sse.forward(
-            req,
-            bus,
-            try chat_fanout.notifyBusKey(alloc, uid),
+        // The two cross-page attention streams, and the 404 of a path that
+        // names nothing: the Roc's (metal-vmm QUEUE 286).
+        .notifications, .sidebar_stream, .not_found => std.debug.panic(
+            "chat.serve: {t} is the Roc's",
+            .{route.family},
         ),
-        .sidebar_stream => return sse.forward(
-            req,
-            bus,
-            try chat_fanout.sidebarBusKey(alloc, uid),
-        ),
-        .not_found => return http.notFound(req),
     }
 }
 
@@ -183,7 +148,6 @@ fn channelRoute(
     req: *Request,
     io: Io,
     alloc: Alloc,
-    bus: *Bus,
     uid: []const u8,
     route: Route,
 ) !void {
@@ -202,7 +166,6 @@ fn channelRoute(
         req,
         io,
         alloc,
-        bus,
         route,
         uid,
         .{
@@ -220,7 +183,6 @@ fn convRoute(
     req: *Request,
     io: Io,
     alloc: Alloc,
-    bus: *Bus,
     uid: []const u8,
     route: Route,
 ) !void {
@@ -253,7 +215,6 @@ fn convRoute(
         req,
         io,
         alloc,
-        bus,
         route,
         uid,
         .{
@@ -270,7 +231,6 @@ fn topicRoute(
     req: *Request,
     io: Io,
     alloc: Alloc,
-    bus: *Bus,
     route: Route,
     uid: []const u8,
     topic: Topic,
@@ -293,16 +253,11 @@ fn topicRoute(
                 route.rest,
             );
         },
-        .stream => try chat_sse.streamTranscript(
-            req,
-            io,
-            alloc,
-            bus,
-            .{
-                .dir = conv.dir,
-                .key = conv.key,
-                .sid = topic.sid,
-            },
+        // The topic's stream: the Roc's decision, the router's to hold
+        // (chat_router.zig `.stream`, metal-vmm QUEUE 286).
+        .stream => std.debug.panic(
+            "chat.topicRoute: a stream is the Roc's",
+            .{},
         ),
         // A send: the Roc's (roc-webbox chat/main.roc `send!`), handed back
         // only when the conversation was not found, which was answered above.

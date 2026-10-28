@@ -81,7 +81,7 @@ dialect we actually write here, and `tools/lint.py` runs rules over the AST
 The **server** side is roc-webbox's Roc chat (its pages, its routes, every
 404), over the Zig host in `zig-server/src/`: `chat_router.zig`, `chat.zig` and
 its focused neighbors (`chat_sse.zig`, `chat_conv.zig`, `chat_chrome.zig`,
-`recent.zig`, `images.zig`, `docs*.zig`, …). `chat/chat_client.py` is a small Python reference
+`docs*.zig`, …). `chat/chat_client.py` is a small Python reference
 client for the HTTP API, so other clients (and our backups) have a worked example.
 
 ## Running & testing
