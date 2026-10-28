@@ -61,7 +61,41 @@ fn freezeRun(
         want,
     )) return;
     std.debug.print(what ++ ": the Roc's run hashes to {s}; frozen: {s}\n", .{ &got, want });
+    // **SAY WHICH PART DIFFERS** (the box, 2026-10-28): each field's and
+    // each answer's own short hash, its length and its first line, so two
+    // machines' runs can be compared part by part; and the whole run in
+    // .zig-cache/<what>.got.txt to diff.
+    var all: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer all.deinit();
+    inline for (@typeInfo(@TypeOf(run_)).@"struct".field_names) |name| {
+        const v = @field(run_, name);
+        switch (@TypeOf(v)) {
+            []const u8, []u8 => partSaid(name, 0, v, &all.writer),
+            [][]const u8, []const []const u8 => for (v, 0..) |x, i| partSaid(name, i, x, &all.writer),
+            else => std.debug.print("  {s}: {any}\n", .{ name, v }),
+        }
+    }
+    std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = ".zig-cache/" ++ what ++ ".got.txt",
+        .data = all.written(),
+    }) catch {};
     return error.TestUnexpectedResult;
+}
+
+/// One part of a run said: its field, its place, its own short hash (as
+/// `stable` reads it), its length and its first line; and the part whole
+/// into `all`.
+fn partSaid(name: []const u8, i: usize, bytes: []const u8, all: *std.Io.Writer) void {
+    var h: std.crypto.hash.sha2.Sha256 = .init(.{});
+    stable(&h, bytes);
+    var d: [32]u8 = undefined;
+    h.final(&d);
+    const short = std.fmt.bytesToHex(d[0..6].*, .lower);
+    const line = bytes[0 .. std.mem.indexOfScalar(u8, bytes, '\n') orelse bytes.len];
+    std.debug.print("  {s}[{d}] {s} {d} bytes: {s}\n", .{ name, i, &short, bytes.len, line[0..@min(line.len, 100)] });
+    all.print("==== {s}[{d}] {s}\n", .{ name, i, &short }) catch {};
+    all.writeAll(bytes) catch {};
+    all.writeAll("\n") catch {};
 }
 
 /// `bytes`, length-prefixed, into `h`, every `?v=` and the hex after it
@@ -5466,5 +5500,5 @@ test "a topic's download and its uploads (metal-vmm QUEUE 291): the bundle by GE
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    try freezeRun("downloadsRun", try downloadsRun(a, io), "88d2a760d8f1e99b5a8fac0f1d4ea164038f2702c7c683c61c6a643ae8c3a611");
+    try freezeRun("downloadsRun", try downloadsRun(a, io), "41aaffad2eee14f66e78350ef9988971fa9124f6123c60c9803e2c6ade74022b");
 }
