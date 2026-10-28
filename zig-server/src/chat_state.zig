@@ -29,15 +29,6 @@ fn userChatStateDir(alloc: Alloc, uid: []const u8) ![]u8 {
 
 // ── last conv / topic (the /chat/default resume pointer) ────────────────────
 
-/// lastUserConv returns the conv-key this user was most recently looking at, or
-/// "" if they've never had one.
-pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
-    const dir = try userChatStateDir(alloc, uid);
-    const path = try std.fs.path.join(alloc, &.{ dir, "last-conv" });
-    const b = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return "";
-    return std.mem.trim(u8, b, " \t\r\n");
-}
-
 /// lastViewedTopic returns the topic id this user last viewed for `conv_key`,
 /// or "" if never.
 pub fn lastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
@@ -63,8 +54,8 @@ pub fn setLastViewedTopic(io: Io, alloc: Alloc, uid: []const u8, conv_key: []con
 
 /// `value` and a newline at `path`, unless it already holds `value`. The
 /// Roc chat reads and writes these files itself (roc-webbox
-/// chat/ChatState.roc: `bookmark` reads them as lastUserConv and
-/// lastViewedTopic do, `changed` is this decision); chat_twin_test.zig
+/// chat/ChatState.roc: `bookmark` reads them as lastViewedTopic
+/// does, `changed` is this decision); chat_twin_test.zig
 /// holds both to this, on disk.
 fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) !void {
     // absent-ok: a bookmark that cannot be read is written again; the write says whether it can be.
@@ -76,8 +67,9 @@ fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) !vo
 // ── pinned topics (the sidebar's Pinned group) ──────────────────────────────
 
 /// pinnedTopics returns the set of topic ids this user has pinned in the
-/// conversation `conv_key`, sorted (the file's content order). A missing file →
-/// empty. Stale ids are harmless — callers intersect with the live topic list.
+/// conversation `conv_key`, sorted. A missing file → empty. The Roc chat
+/// reads and writes the pins (roc-webbox chat/ChatState.roc); this reads
+/// back what it wrote, for the tests.
 pub fn pinnedTopics(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
     return parsePinned(alloc, try readPinnedFile(io, alloc, uid, conv_key));
 }
@@ -92,74 +84,6 @@ fn parsePinned(alloc: Alloc, b: []const u8) ![][]const u8 {
     const slice = try out.toOwnedSlice(alloc);
     std.mem.sort([]const u8, slice, {}, lessThanStr);
     return slice;
-}
-
-/// isPinned reports whether `sid` is in a pinned-set slice (linear; the set is
-/// tiny — a handful of topics).
-pub fn isPinned(set: [][]const u8, sid: []const u8) bool {
-    for (set) |s| {
-        if (std.mem.eql(u8, s, sid)) return true;
-    }
-    return false;
-}
-
-/// setTopicPinned adds or removes one topic from the user's pinned set for
-/// `conv_key`, persisting it sorted. Removing the last pin deletes the file.
-/// **A PIN THAT DID NOT LAND SAYS SO** (metal-vmm QUEUE 156(g)): every
-/// failure is the caller's, where it answered 204 having written nothing.
-pub fn setTopicPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
-    if (uid.len == 0 or sid.len == 0) return;
-    // **A SET THAT WILL NOT READ IS NOT AN EMPTY SET.** What is read here is
-    // rewritten below, so treating a failed read as "no pins" used to delete
-    // every pin the user had — silently, on the way to adding one. No pins is
-    // a missing file (store.zig answers ""); anything else leaves them alone.
-    const existing = try readPinnedFile(io, alloc, uid, conv_key);
-    const body = (try nextPinned(alloc, existing, sid, pinned)) orelse return removePinnedFile(io, alloc, uid, conv_key);
-    try writePinnedFile(io, alloc, uid, conv_key, body);
-}
-
-/// nextPinned is setTopicPinned's decision, pure: the pinned file `existing`
-/// with `sid` added or removed, sorted, a line each; null when no pin is
-/// left (the file goes). Only `sid` is de-duplicated: a line the file
-/// already repeats stays repeated. The Roc chat makes the same choice
-/// (roc-webbox chat/ChatState.roc `pinned`); chat_twin_test.zig holds it to
-/// this.
-pub fn nextPinned(alloc: Alloc, existing: []const u8, sid: []const u8, pinned: bool) !?[]u8 {
-    const cur = try parsePinned(alloc, existing);
-
-    // Rebuild the set with sid added/removed, kept sorted and de-duped.
-    var next: std.ArrayList([]const u8) = .empty;
-    var have = false;
-    for (cur) |s| {
-        if (std.mem.eql(u8, s, sid)) {
-            have = true;
-            if (!pinned) continue; // drop it
-        }
-        try next.append(alloc, s);
-    }
-    if (pinned and !have) try next.append(alloc, sid);
-
-    if (next.items.len == 0) return null;
-    std.mem.sort([]const u8, next.items, {}, lessThanStr);
-
-    var body: std.ArrayList(u8) = .empty;
-    for (next.items) |s| {
-        try body.appendSlice(alloc, s);
-        try body.append(alloc, '\n');
-    }
-    return body.items;
-}
-
-/// The member's pinned file for `conv_key` written as `body` (nextPinned's).
-fn writePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, body: []const u8) !void {
-    const path = try pinnedPath(alloc, uid, conv_key);
-    if (std.fs.path.dirname(path)) |d| try disk.makeDir(io, alloc, d);
-    try disk.write(io, alloc, path, body, .{});
-}
-
-/// The member's pinned file for `conv_key` removed: no pin is left.
-fn removePinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) !void {
-    return disk.remove(io, alloc, try pinnedPath(alloc, uid, conv_key));
 }
 
 fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {

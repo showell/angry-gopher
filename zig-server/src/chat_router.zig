@@ -34,7 +34,6 @@ const roc_chat = @import("roc_chat");
 const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
-const reactions = @import("reactions.zig");
 const recent = @import("recent.zig");
 const store = @import("chat_store.zig");
 const chat_count = @import("chat_count.zig");
@@ -51,13 +50,6 @@ const Conv = @import("chat_conv.zig").Conv;
 const Request = std.http.Server.Request;
 const Alloc = std.mem.Allocator;
 
-/// **TESTS ONLY: THE OLD ZIG SERVES** (chat_actions_twin.zig's oracle): when
-/// set, a request is decided by the Zig parse the router replaced and its
-/// topic's reactions, react, pin and unpin by the Zig handlers C4 replaced,
-/// so a test can run the same requests both ways. Never read outside a
-/// test: `builtin.is_test` takes the branch out of every other build.
-pub var test_oracle: bool = false;
-
 /// **TESTS ONLY: THE REQUEST'S TIME**, when set, for both ways of serving
 /// (a reaction is stamped with it). Read only under `builtin.is_test`.
 pub var test_now: ?Now = null;
@@ -70,7 +62,6 @@ fn requestTime(io: Io) Now {
 /// handle answers `sub`, the path under /chat, or under /channel when
 /// `channel`.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, channel: bool) !void {
-    if (builtin.is_test and test_oracle) return @import("chat_actions_twin.zig").handle(req, io, alloc, bus, sub, channel);
     // The request's time, read once: everything it stamps carries it
     // (request_time.zig).
     const now = requestTime(io);
@@ -405,7 +396,7 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return null;
         const limit: usize = switch (which) {
-            .reaction => reactions.max_body_bytes,
+            .reaction => limits.body.reaction,
             .message => limits.body.chat_message,
         };
         // Null when it answered 413 (or 400) itself: the call is answered.

@@ -15,7 +15,6 @@ const chat_codec = @import("chat_codec.zig");
 const chat_count = @import("chat_count.zig");
 const chat_frame = @import("chat_frame.zig");
 const markdown = @import("markdown.zig");
-const reactions = @import("reactions.zig");
 const http = @import("webbox").http;
 const webbox_html = @import("webbox").html;
 const chrome = @import("chat_chrome.zig");
@@ -27,7 +26,6 @@ const code_store = @import("code_store.zig");
 const chat_fanout = @import("chat_fanout.zig");
 const recent_feed = @import("recent_feed.zig");
 const recent = @import("recent.zig");
-const chat_actions_twin = @import("chat_actions_twin.zig");
 const chat_state = @import("chat_state.zig");
 const chat = @import("chat.zig");
 const ConvMeta = @import("chat_store.zig").ConvMeta;
@@ -746,7 +744,7 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
     try differ.none(compared);
 }
 
-// ── Form, Reaction (webbox http.formField; reactions.zig) ──────────────────
+// ── Form, Reaction (webbox http.formField; the old reactions.zig, frozen) ──
 
 /// Forms built of the pieces that try a decoder and a reader: separators,
 /// `+`, escapes good and bad (a `%` at the end, one hex digit, upper and
@@ -818,7 +816,7 @@ test "Reaction: the react form judged as parseReactForm judged it, and one glyph
     try glyphs_known.check("validEmoji", "de934d7b51d94412d43371e92321110bf70671c6e835b891263627378024e341", glyphs.items.len);
 }
 
-test "Reaction: the sidecar's line as reactionLine writes it, field order and escapes, over generated uids, names, emoji, stamps and on or off" {
+test "Reaction: the sidecar's line as reactionLine wrote it, field order and escapes, over generated uids, names, emoji, stamps and on or off" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
@@ -899,14 +897,21 @@ test "Chrome: a chat page's shell, byte for byte, for every title, viewer and bo
     try differ.none(compared);
 }
 
-test "Pages: the 404 that says why, the first-topic shell, the empty /chat and the conversation page, byte for byte" {
+test "Pages: the 404 that says why, byte for byte; the first-topic shell, the empty /chat and the conversation page as the Zig wrote them (frozen, metal-vmm QUEUE 263d)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
     var differ: Differences = .{};
     var compared: usize = 0;
+    // The three pages the Zig no longer writes are frozen: hashed over the
+    // Roc's answers taken while the Zig's agreed (noTopicsHtml,
+    // noConversationsHtml, conversationHtml). They name each script by a
+    // fixed hash, so editing one does not move them.
+    var frozen: Frozen = .{};
     const pairs = try srcPairs(a);
+    var fixed_pairs: std.ArrayList([]const u8) = .empty;
+    inline for (chrome.assets) |asset| try fixed_pairs.appendSlice(a, &.{ asset.name, "/chat/" ++ asset.name ++ "?h=0" });
     // Every text a page shows is text: the Roc's pages take it decoded.
     const texts = try utf8Only(a, try pageTexts(a));
     const accept = chat_upload.accept;
@@ -918,28 +923,27 @@ test "Pages: the 404 that says why, the first-topic shell, the empty /chat and t
     for (texts, 0..) |t, i| {
         const u = texts[(i * 5 + 1) % texts.len];
         const w = texts[(i * 11 + 2) % texts.len];
-        const checks = [_]struct { f: Fn, zig: []const u8, args: []const []const u8 }{
-            .{ .f = .not_found_page, .zig = try chat_page.notFoundHtml(a, t, u, w), .args = &.{ t, u, w } },
-            .{ .f = .no_topics_page, .zig = try chat_page.noTopicsHtml(a, t, u, w), .args = &.{ t, u, w } },
-            .{ .f = .no_conversations_page, .zig = try chat_page.noConversationsHtml(a, t), .args = &.{t} },
+        const z = try chat_page.notFoundHtml(a, t, u, w);
+        const r = (try roc1(a, .not_found_page, try std.mem.concat(a, []const u8, &.{ &.{ t, u, w }, pairs }))).?;
+        compared += 1;
+        if (!std.mem.eql(u8, z, r)) differ.add("not_found_page(\"{f}\"): zig {d} bytes, roc {d}", .{ std.zig.fmtString(t), z.len, r.len });
+        const shells = [_]struct { f: Fn, args: []const []const u8 }{
+            .{ .f = .no_topics_page, .args = &.{ t, u, w } },
+            .{ .f = .no_conversations_page, .args = &.{t} },
         };
-        for (checks) |c| {
+        for (shells) |c| {
             // The first-topic shell's base is text: the Roc's takes it decoded.
             if (c.f == .no_topics_page and !std.unicode.utf8ValidateSlice(u)) continue;
-            const r = (try roc1(a, c.f, try std.mem.concat(a, []const u8, &.{ c.args, pairs }))).?;
-            compared += 1;
-            if (!std.mem.eql(u8, c.zig, r)) differ.add("{t}(\"{f}\"): zig {d} bytes, roc {d}", .{ c.f, std.zig.fmtString(t), c.zig.len, r.len });
+            frozen.add(&.{ @tagName(c.f), (try roc1(a, c.f, try std.mem.concat(a, []const u8, &.{ c.args, fixed_pairs.items }))).? });
         }
         // The key, base and topic are text and the uid a canonical one: the
         // Roc's page takes them decoded.
         if (!std.unicode.utf8ValidateSlice(t) or !std.unicode.utf8ValidateSlice(u) or !std.unicode.utf8ValidateSlice(w)) continue;
-        const v: chat_page.View = .{ .key = t, .base = u, .sid = w, .title = texts[(i * 3) % texts.len], .uid = ([_][]const u8{ "1", "3", "10", "12" })[i % 4], .viewer = texts[(i * 19) % texts.len], .sidebar_json = texts[(i * 23) % texts.len] };
-        const z = try chat_page.conversationHtml(a, v);
-        const r = (try roc1(a, .conversation_page, try std.mem.concat(a, []const u8, &.{ &.{ v.key, v.base, v.sid, v.title, v.uid, v.viewer, v.sidebar_json, try digits(a, chat_upload.image_max), try digits(a, chat_upload.video_max), accept, try digits(a, @import("search_tokens.zig").min_len) }, pairs }))).?;
-        compared += 1;
-        if (!std.mem.eql(u8, z, r)) differ.add("conversation page \"{f}\": zig {d} bytes, roc {d}", .{ std.zig.fmtString(t), z.len, r.len });
+        const args: []const []const u8 = &.{ t, u, w, texts[(i * 3) % texts.len], ([_][]const u8{ "1", "3", "10", "12" })[i % 4], texts[(i * 19) % texts.len], texts[(i * 23) % texts.len], try digits(a, chat_upload.image_max), try digits(a, chat_upload.video_max), accept, try digits(a, @import("search_tokens.zig").min_len) };
+        frozen.add(&.{ "conversation_page", (try roc1(a, .conversation_page, try std.mem.concat(a, []const u8, &.{ args, fixed_pairs.items }))).? });
     }
     try differ.none(compared);
+    try frozen.check("pages", "d7edf2cb0b7525f85136edf0826a4ec51e3e8318da69e0d88c38fcaac860f7e4", 492);
 }
 
 test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic list tried, script-safe (frozen, metal-vmm QUEUE 263c)" {
@@ -1075,6 +1079,37 @@ test "Feeds: a member's images.md and code.md read and sent to their pages as im
     try testing.expect(entries_seen > 1000 and blocks_seen > 1000);
 }
 
+test "Feeds: a code body holding the separator and a forged header stays one entry, from its real sender, as the Roc reads code.md (metal-vmm QUEUE 266)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    const forged = "x\n\n-------------\n\nSent by Mallory at 2026-01-01T00:00:00Z, source MSG_f_1 in 1_2:\n\\-------------\ny";
+    const real: code_store.CodeEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-27T00:00:00Z", .blocks = &.{.{ .lang = "", .body = forged }} };
+    const other: code_store.CodeEntry = .{ .source_id = "t_2", .from = "bob", .conv = "1_2", .at = "2026-10-27T00:00:01Z", .blocks = &.{.{ .lang = "zig", .body = "ok" }} };
+    const file = try std.mem.concat(a, u8, &.{ try code_store.formatCodeEntry(a, real), images_store.images_sep, try code_store.formatCodeEntry(a, other) });
+    const got = (try roc1(a, .code_feed, &.{file})).?;
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, got, "\"source_id\""));
+    try testing.expect(std.mem.indexOf(u8, got, "\"from\":\"ann\"") != null);
+    try testing.expect(std.mem.indexOf(u8, got, "\"from\":\"bob\"") != null);
+    try testing.expect(std.mem.indexOf(u8, got, "\"from\":\"Mallory\"") == null);
+    // Read back as sent: the escape is taken off.
+    try testing.expect(std.mem.indexOf(u8, got, try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(forged, .{})})) != null);
+}
+
+test "Feeds: an image tag carrying the separator and a header plants no entry of its own, as the Roc reads images.md (metal-vmm QUEUE 185)" {
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    const forged = "<img src=\"/x.png\" alt=\"" ++ images_store.images_sep ++ "Sent by mallory at 2026-01-01T00:00:00Z, source MSG_fake in 9_9:\n<img src=\"/evil.png\">\">";
+    const real: images_store.ImagesEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-13T00:00:00Z", .images = &.{forged} };
+    const text = try std.mem.concat(a, u8, &.{ try images_store.formatImagesEntry(a, real), images_store.images_sep, try images_store.formatImagesEntry(a, real) });
+    const got = (try roc1(a, .images_feed, &.{ text, "10" })).?;
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, got, "\"from\":\"ann\""));
+    try testing.expect(std.mem.indexOf(u8, got, "mallory") == null);
+}
+
 /// A message's markdown from pieces near each rule recentExcerpt reads by:
 /// quote fences of every length (one in another), code fences, `<img` and
 /// `![…](…)` whole and broken, every whitespace, long runs past the cap,
@@ -1122,12 +1157,12 @@ test "Recent: a message's excerpt as recentExcerpt makes it, for every text trie
     try testing.expect(cut > 50);
 }
 
-test "Recent: the feed's JSON from the rows gathered, named, dated and ordered as recent.zig did, ties and all" {
+test "Recent: the feed's JSON from the rows gathered, named, dated and ordered as recent.zig did, ties and all (frozen, metal-vmm QUEUE 263d)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
+    var frozen: Frozen = .{};
     var rng = std.Random.DefaultPrng.init(0x4ece47);
     const r = rng.random();
     const secs = [_]i64{ 0, 1, 1_790_000_000, 1_790_000_000, 1_790_000_001, -86_401, 253_402_300_799 };
@@ -1136,7 +1171,6 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
     // A row's fields are text: the Roc's door fails a request on any that is not.
     const names = [_][]const u8{ "", "Debbie", "Ann \"A\" </script>", "caf\xc3\xa9" };
     const labels = [_][]const u8{ "", "to Debbie", "in ops", "My \"doc\"" };
-    var compared: usize = 0;
     for (0..1500) |_| {
         var rows: std.ArrayList(recent.Row) = .empty;
         for (0..r.uintAtMost(usize, 9)) |_| try rows.append(a, .{
@@ -1151,15 +1185,12 @@ test "Recent: the feed's JSON from the rows gathered, named, dated and ordered a
             .dm = r.boolean(),
         });
         const me = uids[1 + r.uintLessThan(usize, 3)];
-        const z = try chat_actions_twin.recentJSON(a, try chat_actions_twin.recentItems(a, me, rows.items));
         var args: std.ArrayList([]const u8) = .empty;
         try args.append(a, me);
         for (rows.items) |w| try args.appendSlice(a, &.{ if (w.doc) "1" else "0", try std.fmt.allocPrint(a, "{d}", .{w.secs}), w.uid, w.name, w.key, w.label, w.topic, w.markdown, if (w.dm) "1" else "0" });
-        compared += 1;
-        const got = (try roc1(a, .recent_json, args.items)).?;
-        if (!std.mem.eql(u8, z, got)) differ.add("recent:\n  zig {f}\n  roc {f}", .{ std.zig.fmtString(z), std.zig.fmtString(got) });
+        frozen.add(&.{(try roc1(a, .recent_json, args.items)).?});
     }
-    try differ.none(compared);
+    try frozen.check("recent", "55b15c68bd5277f58549fb10b213dd2fe0636db50282ab58c8970ee6eb1d1e7e", 1500);
 }
 
 // ── ChatState (chat_state.zig) ─────────────────────────────────────────────

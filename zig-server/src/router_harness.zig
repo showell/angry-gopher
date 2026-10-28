@@ -175,3 +175,39 @@ pub fn writeTranscript(a: std.mem.Allocator, io: Io, dir: []const u8, sid: []con
 pub fn postForm(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
     return serve(a, io, try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
 }
+
+/// **ANSWERS FROZEN** (metal-vmm QUEUE 263d): where a test held the Roc's
+/// answers to the old Zig's, byte for byte (chat_actions_twin.zig, retired),
+/// the Roc's answers are pinned as one SHA-256 of them all, each
+/// length-prefixed, taken the day the two agreed, so the hash is the old
+/// Zig's answers too. A script's hashed src (`?v=<hex>`) is read as `?v=*`,
+/// so an edit to a script is no change. A change of one byte fails; to see
+/// where, run the test at the commit before 263d, which held it to the Zig.
+pub const Frozen = struct {
+    h: std.crypto.hash.sha2.Sha256 = .init(.{}),
+    n: usize = 0,
+
+    pub fn add(f: *Frozen, bytes: []const u8) void {
+        f.n += 1;
+        var len: [8]u8 = undefined;
+        std.mem.writeInt(u64, &len, bytes.len, .little);
+        f.h.update(&len);
+        var i: usize = 0;
+        while (std.mem.indexOfPos(u8, bytes, i, "?v=")) |at| {
+            f.h.update(bytes[i .. at + 3]);
+            f.h.update("*");
+            i = at + 3;
+            while (i < bytes.len and std.ascii.isHex(bytes[i])) i += 1;
+        }
+        f.h.update(bytes[i..]);
+    }
+
+    pub fn check(f: *Frozen, comptime what: []const u8, want: []const u8, answers: usize) !void {
+        var d: [32]u8 = undefined;
+        f.h.final(&d);
+        const got = std.fmt.bytesToHex(d, .lower);
+        if (f.n == answers and std.mem.eql(u8, &got, want)) return;
+        std.debug.print(what ++ ": {d} answers hash to {s}; frozen: {d}, {s}\n", .{ f.n, &got, answers, want });
+        return error.TestUnexpectedResult;
+    }
+};

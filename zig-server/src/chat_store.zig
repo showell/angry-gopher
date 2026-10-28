@@ -185,8 +185,8 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
 /// `msg`. The count cache and the search index are the store's
 /// infrastructure, so they go with the append. An append that failed is
 /// the error, nothing stored; past it nothing fails.
-/// **THE TWINS' ORACLE IS `appendMessage`**, kept apart from this, so a
-/// step dropped here shows against it.
+/// `appendMessage`, the Zig's own writers' (login's welcome DM, docs' post
+/// to chat), is kept apart from this.
 pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u8, index: usize, msg: ChatMessage) !void {
     const path = try transcriptPath(alloc, topic.dir, topic.sid);
     const new_size = try store.append(io, alloc, path, stored);
@@ -219,37 +219,6 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
     return store.readOrEmpty(io, alloc, path, .unlimited);
 }
 
-/// appendReaction records one event `{msg, uid, from, emoji, on, at}` on the
-/// sidecar and fans it out live on the topic's bus key as its finished
-/// `event: reaction` frame (chat_frame.reactionFrame), the line verbatim.
-/// Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is
-/// checked against the transcript's real count. Returns the stored line.
-/// **THE TWINS' ORACLE**: the chat's reactions are the Roc's (roc-webbox
-/// chat/main.roc `reacted!`, over `appendLine`, `messageCount` and the bus);
-/// this is the Zig they are held to.
-pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAddress, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
-    const count = try messageCount(io, alloc, topic.dir, topic.sid);
-    if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
-
-    const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
-    const line = try reactionLine(alloc, msg_num, from.id, from.name, emoji, on, at);
-    // The echo made before the store, as a message's (177.1).
-    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
-    const live_blob = try chat_frame.reactionFrame(alloc, line);
-    const path = try reactionsPath(alloc, topic.dir, topic.sid);
-    // **A TORN LINE STAYS ITS OWN LINE**: an append a stop cut short leaves a
-    // line with no newline, and the next one glued to it is one line that
-    // reads as neither (the client drops a line it cannot parse): two events
-    // lost where one was. So a sidecar that does not end in a newline gets one
-    // first. Read before the store, so a read that fails stores nothing.
-    const lead = if (try endsMidLine(io, alloc, path)) "\n" else "";
-    _ = try store.append(io, alloc, path, try std.fmt.allocPrint(alloc, "{s}{s}\n", .{ lead, line }));
-
-    // Stored is done (as for a message): the live publish cannot fail.
-    bus.publish(live_key, live_blob);
-    return line;
-}
-
 /// **ONE LINE APPENDED TO AN APPEND-ONLY LINE FILE** (the Roc's
 /// `Host.append_line!`): `line` and a newline at the end of the file at
 /// `path`, its folders made as `store.append` makes them. **A TORN LINE
@@ -270,28 +239,6 @@ fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
     var last: [1]u8 = undefined;
     if (try store.readAt(io, alloc, path, st.size - 1, &last) != 1) return error.ShortRead;
     return last[0] != '\n';
-}
-
-/// reactionLine is the ONE place the sidecar's line shape is written. `on`
-/// false is a retraction: the client folds by last-event-wins per
-/// (msg, uid, emoji), so the file stays append-only. The Roc's twin:
-/// roc-webbox chat/Reaction.roc `line`.
-pub fn reactionLine(alloc: Alloc, msg_num: usize, uid: []const u8, from: []const u8, emoji: []const u8, on: bool, at: []const u8) ![]u8 {
-    return std.fmt.allocPrint(alloc, "{{\"msg\":{d},\"uid\":{f},\"from\":{f},\"emoji\":{f},\"on\":{},\"at\":{f}}}", .{
-        msg_num,                  std.json.fmt(uid, .{}), std.json.fmt(from, .{}),
-        std.json.fmt(emoji, .{}), on,                     std.json.fmt(at, .{}),
-    });
-}
-
-test "reactionLine is one JSON object with the six fields, strings escaped" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const line = try reactionLine(a, 3, "1", "Ste\"ve", "👍", false, "2026-09-10T12:00:00Z");
-    try std.testing.expectEqualStrings(
-        "{\"msg\":3,\"uid\":\"1\",\"from\":\"Ste\\\"ve\",\"emoji\":\"👍\",\"on\":false,\"at\":\"2026-09-10T12:00:00Z\"}",
-        line,
-    );
 }
 
 /// **WHERE A TOPIC IS**, as the store and the bus find it: its conversation's
@@ -512,58 +459,30 @@ fn echoed(sub: *bus_mod.Subscriber, needle: []const u8) bool {
     return found;
 }
 
-test "a reaction that answers an error stored nothing, and one that answers success is echoed (metal-vmm QUEUE 172, 177.1)" {
+test "a line after a torn one starts its own line: the torn line is lost, the next is not" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     var f: CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    _ = try f.send("something to react to");
-    const live = try f.bus.open("1_2/topic");
-    defer f.bus.close(live);
-    var fail_at: usize = 0;
-    while (fail_at < 100) : (fail_at += 1) {
-        var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
-        const before = (try readReactions(f.io, a, f.dir, "topic")).len;
-        const got = appendReaction(f.io, failing.allocator(), &f.bus, Now.read(f.io), .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
-        const after = (try readReactions(f.io, a, f.dir, "topic")).len;
-        if (got) |_| {
-            if (!echoed(live, "event: reaction\n")) {
-                std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
-                return error.TestUnexpectedResult;
-            }
-            if (!failing.has_induced_failure) break;
-        } else |_| if (after != before) {
-            std.debug.print("allocation {d} failed after the append: stored, and answered an error\n", .{fail_at});
-            return error.TestUnexpectedResult;
-        }
-    }
-}
-
-test "a reaction after a torn one starts its own line: the torn line is lost, the next is not" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    _ = try f.send("something to react to");
-    const topic: TopicAddress = .{ .dir = f.dir, .key = "1_2", .sid = "topic" };
+    const path = try reactionsPath(a, f.dir, "topic");
     // A stop cut the last append short: no newline after it.
     const torn = "{\"msg\":1,\"uid\":\"1\",\"fr";
-    _ = try store.append(f.io, a, try reactionsPath(a, f.dir, "topic"), torn);
+    _ = try store.append(f.io, a, path, torn);
 
-    const line = try appendReaction(f.io, a, &f.bus, Now.read(f.io), topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
+    const line = "{\"msg\":1}";
+    try appendLine(f.io, a, path, line);
     const after = try readReactions(f.io, a, f.dir, "topic");
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}\n{s}\n", .{ torn, line }), after);
-    // The next reaction needs no newline of its own: the file ended in one.
-    const second = try appendReaction(f.io, a, &f.bus, Now.read(f.io), topic, 1, .{ .name = "Tester", .id = "1" }, "🎉", true);
+    // The next line needs no newline of its own: the file ended in one.
+    const second = "{\"msg\":2}";
+    try appendLine(f.io, a, path, second);
     const twice = try readReactions(f.io, a, f.dir, "topic");
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}{s}\n", .{ after, second }), twice);
 }
 
-test "a message and a reaction are stamped with the request's time, not the clock's" {
+test "a message is stamped with the request's time, not the clock's" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     var f: CountFixture = undefined;
@@ -577,6 +496,4 @@ test "a message and a reaction are stamped with the request's time, not the cloc
     try testing.expectEqualStrings("2025-10-25T13:46:40Z", sent.at);
     const stored = try decodeChatFile(a, (try readTranscript(f.io, a, f.dir, "topic")).?);
     try testing.expectEqualStrings("2025-10-25T13:46:40Z", stored[0].at);
-    const line = try appendReaction(f.io, a, &f.bus, now.plus(60), topic, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
-    try testing.expect(std.mem.endsWith(u8, line, ",\"at\":\"2025-10-25T13:47:40Z\"}"));
 }

@@ -16,7 +16,6 @@ const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const disk = @import("webbox").store;
-const images_store = @import("images_store.zig");
 const fence = @import("markdown_fence.zig");
 const chat_codec = @import("chat_codec.zig");
 
@@ -102,48 +101,6 @@ pub fn formatCodeEntry(alloc: Alloc, e: CodeEntry) ![]u8 {
     return b.toOwnedSlice(alloc);
 }
 
-/// A stored body with formatCodeEntry's escape taken off each line. A file
-/// written before the escape reads as it did, but for a line of one or more
-/// backslashes then exactly 13 hyphens, which loses a backslash.
-fn unescapeBody(alloc: Alloc, body: []const u8) ![]const u8 {
-    var b: std.ArrayList(u8) = .empty;
-    var it = std.mem.splitScalar(u8, body, '\n');
-    var first = true;
-    while (it.next()) |line| {
-        if (!first) try b.append(alloc, '\n');
-        first = false;
-        try b.appendSlice(alloc, chat_codec.unescapeBodyLine(line));
-    }
-    return b.toOwnedSlice(alloc);
-}
-
-/// parseCodeFile splits a code.md into entries (chronological), skipping a block
-/// whose body yields no fences. Reuses images_store's shared header parser.
-pub fn parseCodeFile(alloc: Alloc, text: []const u8) ![]CodeEntry {
-    var out: std.ArrayList(CodeEntry) = .empty;
-    if (std.mem.trim(u8, text, " \t\r\n").len == 0) return out.toOwnedSlice(alloc);
-
-    var it = std.mem.splitSequence(u8, text, code_sep);
-    while (it.next()) |raw| {
-        const block = std.mem.trim(u8, raw, " \t\r\n");
-        if (block.len == 0) continue;
-        const nl = std.mem.indexOfScalar(u8, block, '\n') orelse continue;
-        const h = images_store.parseHeader(block[0..nl]) orelse continue;
-        const found = try extractCodeBlocks(alloc, block[nl + 1 ..]);
-        if (found.len == 0) continue;
-        const blocks = try alloc.alloc(CodeBlock, found.len);
-        for (found, blocks) |f, *o| o.* = .{ .lang = f.lang, .body = try unescapeBody(alloc, f.body) };
-        try out.append(alloc, .{
-            .source_id = h.source_id,
-            .from = h.from,
-            .conv = h.conv,
-            .at = h.at,
-            .blocks = blocks,
-        });
-    }
-    return out.toOwnedSlice(alloc);
-}
-
 /// appendCodeEntry writes one entry to a user's code.md, prefixed by the
 /// separator when the file is non-empty.
 pub fn appendCodeEntry(io: Io, alloc: Alloc, uid: []const u8, e: CodeEntry) !void {
@@ -160,32 +117,6 @@ pub fn appendCodeEntry(io: Io, alloc: Alloc, uid: []const u8, e: CodeEntry) !voi
         entry;
 
     _ = try disk.append(io, alloc, path, bytes);
-}
-
-/// readCodeForUser returns a user's code entries in chronological order. Missing
-/// file → empty.
-pub fn readCodeForUser(io: Io, alloc: Alloc, uid: []const u8) ![]CodeEntry {
-    const path = try userCodePath(alloc, uid);
-    const data = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return &.{};
-    return parseCodeFile(alloc, data);
-}
-
-test "a body holding the separator and a forged header stays one entry, from its real sender, and reads back as sent (metal-vmm QUEUE 266)" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const forged = "x\n\n-------------\n\nSent by Mallory at 2026-01-01T00:00:00Z, source MSG_f_1 in 1_2:\n\\-------------\ny";
-    const real: CodeEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-27T00:00:00Z", .blocks = &.{.{ .lang = "", .body = forged }} };
-    const other: CodeEntry = .{ .source_id = "t_2", .from = "bob", .conv = "1_2", .at = "2026-10-27T00:00:01Z", .blocks = &.{.{ .lang = "zig", .body = "ok" }} };
-    const file = try std.fmt.allocPrint(a, "{s}{s}{s}", .{ try formatCodeEntry(a, real), code_sep, try formatCodeEntry(a, other) });
-    const back = try parseCodeFile(a, file);
-    try std.testing.expectEqual(@as(usize, 2), back.len);
-    try std.testing.expectEqualStrings("ann", back[0].from);
-    try std.testing.expectEqualStrings(forged, back[0].blocks[0].body);
-    try std.testing.expectEqualStrings("bob", back[1].from);
-    // Unescaped, the same body splits in two, the second "from Mallory".
-    const raw = try std.fmt.allocPrint(a, "Sent by ann at t, source MSG_t_1 in 1_2:\n```\n{s}\n```", .{forged});
-    try std.testing.expectEqualStrings("Mallory", (try parseCodeFile(a, raw))[1].from);
 }
 
 test "extractCodeBlocks: a quote-of-a-quote captures no code" {

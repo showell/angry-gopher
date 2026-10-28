@@ -57,54 +57,6 @@ pub fn formatImagesEntry(alloc: Alloc, e: ImagesEntry) ![]u8 {
     return b.toOwnedSlice(alloc);
 }
 
-/// parseImagesFile splits an images.md into entries in on-disk (chronological)
-/// order, parsing the header line by hand
-/// at (\S+), source MSG_(\S+) in (\S+):$`). Malformed blocks skip.
-pub fn parseImagesFile(alloc: Alloc, text: []const u8) ![]ImagesEntry {
-    var out: std.ArrayList(ImagesEntry) = .empty;
-    if (std.mem.trim(u8, text, " \t\r\n").len == 0) return out.toOwnedSlice(alloc);
-
-    var it = std.mem.splitSequence(u8, text, images_sep);
-    while (it.next()) |raw| {
-        const block = std.mem.trim(u8, raw, " \t\r\n");
-        if (block.len == 0) continue;
-        const nl = std.mem.indexOfScalar(u8, block, '\n') orelse block.len;
-        const header = block[0..nl];
-        const e = parseHeader(header) orelse continue;
-        const body = if (nl < block.len) block[nl + 1 ..] else "";
-        out.append(alloc, .{
-            .source_id = e.source_id,
-            .from = e.from,
-            .conv = e.conv,
-            .at = e.at,
-            .images = try extractImageTags(alloc, body),
-        }) catch return error.OutOfMemory;
-    }
-    return out.toOwnedSlice(alloc);
-}
-
-/// Header is one transcript entry's parsed metadata line. Shared with code_store
-/// (the Images and Code feeds use the identical `Sent by … at … source MSG_… in …:`
-/// header), so parseHeader lives here as the single parser.
-pub const Header = struct { from: []const u8, at: []const u8, source_id: []const u8, conv: []const u8 };
-
-pub fn parseHeader(line: []const u8) ?Header {
-    if (!std.mem.startsWith(u8, line, "Sent by ") or !std.mem.endsWith(u8, line, ":")) return null;
-    const inner = line["Sent by ".len .. line.len - 1]; // strip prefix + trailing ':'
-    const sep = ", source MSG_";
-    const si = std.mem.indexOf(u8, inner, sep) orelse return null;
-    const left = inner[0..si]; // "<from> at <at>"
-    const right = inner[si + sep.len ..]; // "<source_id> in <conv>"
-    const at_sep = std.mem.lastIndexOf(u8, left, " at ") orelse return null;
-    const in_sep = std.mem.indexOf(u8, right, " in ") orelse return null;
-    return .{
-        .from = left[0..at_sep],
-        .at = left[at_sep + " at ".len ..],
-        .source_id = right[0..in_sep],
-        .conv = right[in_sep + " in ".len ..],
-    };
-}
-
 /// appendImagesEntry writes one entry to a user's images.md, prefixed by the
 /// separator when the file is non-empty.
 pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) !void {
@@ -121,14 +73,6 @@ pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) 
         entry;
 
     _ = try disk.append(io, alloc, path, bytes);
-}
-
-/// readImagesForUser returns a user's image entries in chronological order. A
-/// missing file → empty.
-pub fn readImagesForUser(io: Io, alloc: Alloc, uid: []const u8) ![]ImagesEntry {
-    const path = try userImagesPath(alloc, uid);
-    const data = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return &.{};
-    return parseImagesFile(alloc, data);
 }
 
 /// extractImageTags returns every `<img\s[^>]*>` span (case-insensitive, spans
@@ -210,19 +154,4 @@ test "encodeImagesEvent: a stored tag is rebuilt by the renderer's rule, a hosti
     try std.testing.expect(std.mem.find(u8, j.items, "evil.example") == null);
     try std.testing.expect(std.mem.find(u8, j.items, "/up/a.png") != null);
     try std.testing.expect(std.mem.find(u8, j.items, "width=\\\"40\\\"") != null);
-}
-
-test "images.md: a tag carrying the separator and a header plants no entry of its own (metal-vmm QUEUE 185)" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const forged = "<img src=\"/x.png\" alt=\"" ++ images_sep ++ "Sent by mallory at 2026-01-01T00:00:00Z, source MSG_fake in 9_9:\n<img src=\"/evil.png\">\">";
-    const real: ImagesEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-13T00:00:00Z", .images = &.{forged} };
-    const text = try std.mem.concat(a, u8, &.{ try formatImagesEntry(a, real), images_sep, try formatImagesEntry(a, real) });
-    const got = try parseImagesFile(a, text);
-    try std.testing.expectEqual(@as(usize, 2), got.len);
-    for (got) |e| {
-        try std.testing.expectEqualStrings("ann", e.from);
-        try std.testing.expectEqualStrings("t_1", e.source_id);
-    }
 }

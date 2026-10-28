@@ -10,7 +10,7 @@
 //! `appendMessage` (login's welcome DM, docs' post to chat), until they move
 //! (C9-C10), and as the twins' oracle: chat_twin_test.zig holds each encoder
 //! to the Roc's, chat_actions_twin_test.zig a whole send's frames, feeds and
-//! failures both ways. The count and the last failure stay here, the
+//! failures, frozen. The count and the last failure stay here, the
 //! process's, said on /admin/host by both.
 
 const std = @import("std");

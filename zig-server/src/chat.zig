@@ -121,76 +121,6 @@ pub fn serve(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
     }
 }
 
-/// **A CONVERSATION THE VIEWER MAY USE, AS THE OLD ZIG FINDS IT** (the
-/// oracle, chat_actions_twin.zig):
-/// where it is, its key and URL base, its kind and, for a channel, its
-/// members. `title` is the page's (empty until a topic's is known).
-pub const Found = struct {
-    dir: []const u8,
-    key: []const u8,
-    base: []const u8,
-    dm: bool,
-    members: []const []const u8 = &.{},
-    sid: []const u8 = "",
-    title: []const u8 = "",
-
-    pub fn address(f: Found) store.TopicAddress {
-        return .{ .dir = f.dir, .key = f.key, .sid = f.sid };
-    }
-
-    /// The routed conversation the page renderer takes.
-    pub fn topic(f: Found, alloc: Alloc) !Topic {
-        const us = std.mem.indexOfScalar(u8, f.key, '_') orelse 0;
-        const meta: store.ConvMeta = if (f.dm) try store.ConvMeta.dm(alloc, f.key[0..us], f.key[us + 1 ..]) else .{ .kind = .channel, .members = f.members };
-        return .{ .conv = .{ .meta = meta, .key = f.key, .base = f.base, .dir = f.dir }, .sid = f.sid, .title = f.title };
-    }
-};
-
-/// **THE CONVERSATION OF A DM OR CHANNEL ROUTE, IF IT IS THE VIEWER'S**:
-/// what convRoute and channelRoute look up first, in their order,
-/// answering nothing. Null for any of their 404s. The Roc chat's own
-/// lookup is roc-webbox chat/main.roc `find!`, over the pure parts below
-/// (chat/Conversation.roc, held to them by chat_twin_test.zig); this one
-/// serves the old Zig's oracle (chat_actions_twin.zig).
-pub fn findConv(io: Io, alloc: Alloc, uid: []const u8, family: roc_chat.Family, key: []const u8) !?Found {
-    switch (family) {
-        .dm => {
-            const other = (try dmOther(alloc, key, uid)) orelse return null;
-            if (!try users.principalExists(io, alloc, other)) return null;
-            return .{ .dir = try chat_paths.dmConvDir(alloc, key), .key = key, .base = try dmBase(alloc, key), .dm = true };
-        },
-        .channel => {
-            const members = (try chat_paths.channelMembers(io, alloc, key)) orelse return null;
-            if (!chat_paths.hasMember(members, uid)) return null;
-            return .{ .dir = try chat_paths.channelConvDir(alloc, key), .key = key, .base = try channelBase(alloc, key), .dm = false, .members = members };
-        },
-        else => unreachable,
-    }
-}
-
-/// A conversation's title, as its pages show it: "Chat w/<partner>" or
-/// "#<name>" (reading the partner's name).
-pub fn convTitle(io: Io, alloc: Alloc, uid: []const u8, f: Found) ![]const u8 {
-    if (f.dm) {
-        const other = partnerOf(f.key, uid);
-        return dmTitle(alloc, try users.getUserName(io, alloc, other), other);
-    }
-    return channelTitle(alloc, f.key);
-}
-
-/// **WHERE A TOPIC ROUTE'S TOPIC IS, IF IT IS ONE THE VIEWER MAY USE**:
-/// `findConv`, the topic's title (the partner's name read, as convRoute
-/// reads it), then whether topicRoute would find the topic. Null for any
-/// of their 404s.
-pub fn findTopic(io: Io, alloc: Alloc, uid: []const u8, route: Route) !?Found {
-    std.debug.assert(route.part == .topic);
-    var f = (try findConv(io, alloc, uid, route.family, route.key)) orelse return null;
-    f.sid = route.topic;
-    f.title = try topicTitle(alloc, try convTitle(io, alloc, uid, f), route.topic);
-    if (!try topicExists(io, alloc, f.dir, route.topic)) return null;
-    return f;
-}
-
 // ── the lookup's pure decisions (the Roc's twins: chat/Conversation.roc) ──
 
 /// The other of DM pair `key` when `uid` is one of the pair, by
@@ -262,7 +192,7 @@ fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8,
     };
     switch (route.part) {
         // The Roc's (roc-webbox chat/main.roc), handed back only when
-        // the Roc's `find!` (chat.zig `findConv`'s rule) did not find it, which
+        // the Roc's `find!` did not find it, which
         // was answered above.
         .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
         // A new topic: the Roc's, handed back only when the Roc's `find!` did not
@@ -296,7 +226,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, ro
     };
     switch (route.part) {
         // The Roc's (roc-webbox chat/main.roc), handed back only when
-        // the Roc's `find!` (chat.zig `findConv`'s rule) did not find it, which
+        // the Roc's `find!` did not find it, which
         // was answered above.
         .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
         // A new topic: the Roc's, handed back only when the Roc's `find!` did not

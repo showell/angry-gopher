@@ -17,7 +17,6 @@ const chat_store = @import("chat_store.zig");
 const chat_codec = @import("chat_codec.zig");
 const chat_paths = @import("chat_paths.zig");
 const channelConvDir = chat_paths.channelConvDir;
-const appendReaction = chat_store.appendReaction;
 const decodeChatFile = chat_codec.decodeChatFile;
 const tail_window = chat_store.tail_window;
 const CountFixture = chat_store.CountFixture;
@@ -483,20 +482,6 @@ test "count: a sidecar at the RIGHT size is believed — the transcript is not r
     try fixtureSetSidecar(&f, try std.fmt.allocPrint(a, "41 {d}\n", .{try fixtureTranscriptSize(&f)}));
     const m = try f.send("x");
     try testing.expectEqualStrings("topic_42", m.id);
-}
-
-test "count: a reaction is checked against the count" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    for (0..2) |_| _ = try f.send("x");
-    const io = f.io;
-    const a = f.arena.allocator();
-    _ = try appendReaction(io, a, &f.bus, Now.read(io), .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 2, .{ .name = "Tester", .id = "1" }, "+1", true);
-    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, Now.read(io), .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 3, .{ .name = "Tester", .id = "1" }, "+1", true));
-    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, Now.read(io), .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 0, .{ .name = "Tester", .id = "1" }, "+1", true));
 }
 
 test "count: an empty conversation has none, and its first message is number one" {

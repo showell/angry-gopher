@@ -1,7 +1,7 @@
 //! **THE ROC'S TOPIC ROUTES AGAINST THE ZIG THEY REPLACED** (roc-webbox
-//! docs/ROC-CHAT.md C4, C3, O1, raw, links): one scenario of requests, served the old way
-//! (chat_actions_twin.zig) on one fresh site and the Roc's on another, at
-//! one fixed time; every answer and every file left must be the same.
+//! docs/ROC-CHAT.md C4, C3, O1, raw, links): one scenario of requests, served the Roc's
+//! way at one fixed time, its answers, files, frames and searches held to
+//! a hash taken while the old way (chat_actions_twin.zig, retired) agreed.
 
 const std = @import("std");
 const Io = @import("host_io").Io;
@@ -20,6 +20,53 @@ const testing = std.testing;
 const harness = @import("router_harness.zig");
 const users = @import("users.zig");
 const mem_meter = webbox.mem_meter;
+
+/// **THE ROC'S RUN, FROZEN** (metal-vmm QUEUE 263d): each scenario below
+/// was served twice, the old Zig's way (chat_actions_twin.zig, retired) and
+/// the Roc's, and every answer, file, frame and search held equal. The
+/// Roc's run alone is now pinned as one SHA-256 of all of it, taken the day
+/// the two agreed, so the hash is the old Zig's run too. A script's hashed
+/// src (`?v=<hex>`) is read as `?v=*`, so an edit to a script is no
+/// change of the run. A change of one byte fails; to see where, run the
+/// scenario at the commit before 263d, which held it to the old Zig.
+fn freezeRun(comptime what: []const u8, run_: anytype, want: []const u8) !void {
+    var h: std.crypto.hash.sha2.Sha256 = .init(.{});
+    inline for (@typeInfo(@TypeOf(run_)).@"struct".field_names) |name| {
+        const v = @field(run_, name);
+        stable(&h, name);
+        switch (@TypeOf(v)) {
+            []const u8, []u8 => stable(&h, v),
+            [][]const u8, []const []const u8 => for (v) |x| stable(&h, x),
+            usize => {
+                var buf: [24]u8 = undefined;
+                stable(&h, std.fmt.bufPrint(&buf, "{d}", .{v}) catch unreachable);
+            },
+            else => @compileError("freezeRun: " ++ name ++ " is no run's field"),
+        }
+    }
+    var d: [32]u8 = undefined;
+    h.final(&d);
+    const got = std.fmt.bytesToHex(d, .lower);
+    if (std.mem.eql(u8, &got, want)) return;
+    std.debug.print(what ++ ": the Roc's run hashes to {s}; frozen: {s}\n", .{ &got, want });
+    return error.TestUnexpectedResult;
+}
+
+/// `bytes`, length-prefixed, into `h`, every `?v=` and the hex after it
+/// as `?v=*`.
+fn stable(h: *std.crypto.hash.sha2.Sha256, bytes: []const u8) void {
+    var len: [8]u8 = undefined;
+    std.mem.writeInt(u64, &len, bytes.len, .little);
+    h.update(&len);
+    var i: usize = 0;
+    while (std.mem.indexOfPos(u8, bytes, i, "?v=")) |at| {
+        h.update(bytes[i .. at + 3]);
+        h.update("*");
+        i = at + 3;
+        while (i < bytes.len and std.ascii.isHex(bytes[i])) i += 1;
+    }
+    h.update(bytes[i..]);
+}
 
 /// One request of the scenario: as whom, and the raw method, target, body
 /// and any extra header lines.
@@ -242,7 +289,7 @@ const scenario = [_]Ask{
 
 /// The scenario on a fresh site, served the old way or the Roc's: every
 /// answer, then every file the site holds but the members' sessions.
-fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: []const u8 } {
+fn run(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8 } {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const steve = try harness.memberSession(a, io, "1", "Steve");
@@ -294,8 +341,6 @@ fn run(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: [
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "links.md" }), "## Reading\n\n- [Zig](https://ziglang.org) & [Roc](https://www.roc-lang.org)\n- <b>bold?</b> a *point*\n", .{});
     @import("presence.zig").forgetForTest();
 
-    chat_router.test_oracle = oracle;
-    defer chat_router.test_oracle = false;
     chat_router.test_now = Now.at(1_761_400_000);
     defer chat_router.test_now = null;
     const answers = try a.alloc([]const u8, scenario.len);
@@ -346,18 +391,8 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
-    const zig = try run(a, io, true);
-    const roc = try run(a, io, false);
-    var differ: usize = 0;
-    for (scenario, zig.answers, roc.answers) |s, z, r| if (!std.mem.eql(u8, z, r)) {
-        differ += 1;
-        std.debug.print("{s} {s} {s}\n  zig: {f}\n  roc: {f}\n", .{ @tagName(s.who), s.method, s.target, std.zig.fmtString(z), std.zig.fmtString(r) });
-    };
-    if (!std.mem.eql(u8, zig.files, roc.files)) {
-        differ += 1;
-        std.debug.print("files differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(zig.files), std.zig.fmtString(roc.files) });
-    }
-    try testing.expectEqual(@as(usize, 0), differ);
+    const roc = try run(a, io);
+    try freezeRun("run", roc, "8b3eaeeae00b2b57debf2d73d2d0e519d9198d21f03bd69559aae86a5d34a9a9");
     // The scenario reached what it means to: stores, every refusal, the 404s.
     var seen: [9]bool = @splat(false);
     for (roc.answers) |r| for ([_][]const u8{ "204 No Content", "400 Bad Request", "404 Not Found", "405 Method Not Allowed", "413 Payload Too Large", "303 See Other", "200 OK", "302 Found", "409 Conflict" }, 0..) |want, k| {
@@ -408,9 +443,7 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
 
 /// One request served on `hub`, the old way or the Roc's: what it answered
 /// and the error the route returned, if any.
-fn serveOn(a: Alloc, io: Io, hub: *webbox.bus.Hub, oracle: bool, raw: []const u8) !struct { out: []const u8, err: ?anyerror } {
-    chat_router.test_oracle = oracle;
-    defer chat_router.test_oracle = false;
+fn serveOn(a: Alloc, io: Io, hub: *webbox.bus.Hub, raw: []const u8) !struct { out: []const u8, err: ?anyerror } {
     var reader: std.Io.Reader = .fixed(raw);
     var out: std.Io.Writer.Allocating = .init(a);
     var server = std.http.Server.init(&reader, &out.writer);
@@ -454,7 +487,7 @@ const hard_names = [_][]const u8{ "Q\"uote\\back\x01ctl\x1f\ttab/sl\x7f caf\u{e9
 /// `hard_names`, on sidecars that start torn (no final newline), whole, and
 /// missing, the old way or the Roc's: every answer, every file the site
 /// holds, and every frame each topic's key carried, in order.
-fn reactRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: []const u8, frames: []const u8 } {
+fn reactRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8, frames: []const u8 } {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const cookies = [_][]const u8{
@@ -496,7 +529,7 @@ fn reactRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, fil
     };
     const answers = try a.alloc([]const u8, asks.len);
     for (asks, answers) |q, *got| {
-        const r = try serveOn(a, io, &hub, oracle, try reactRaw(a, q.target, cookies[q.who], q.body));
+        const r = try serveOn(a, io, &hub, try reactRaw(a, q.target, cookies[q.who], q.body));
         got.* = try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out });
     }
     return .{ .answers = answers, .files = try tree(a, io, site.base), .frames = try drained(a, &hub, &keys, &subs) };
@@ -511,22 +544,8 @@ test "a reaction stored and sent by the Roc, over append_line!, message_count! a
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
-    const zig = try reactRun(a, io, true);
-    const roc = try reactRun(a, io, false);
-    var differ: usize = 0;
-    for (zig.answers, roc.answers, 0..) |z, r, i| if (!std.mem.eql(u8, z, r)) {
-        differ += 1;
-        std.debug.print("react {d}\n  zig: {f}\n  roc: {f}\n", .{ i, std.zig.fmtString(z), std.zig.fmtString(r) });
-    };
-    if (!std.mem.eql(u8, zig.files, roc.files)) {
-        differ += 1;
-        std.debug.print("files differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(zig.files), std.zig.fmtString(roc.files) });
-    }
-    if (!std.mem.eql(u8, zig.frames, roc.frames)) {
-        differ += 1;
-        std.debug.print("frames differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(zig.frames), std.zig.fmtString(roc.frames) });
-    }
-    try testing.expectEqual(@as(usize, 0), differ);
+    const roc = try reactRun(a, io);
+    try freezeRun("reactRun", roc, "0636673c02e13a082855770c7eef8b13068a9fb079386ebf58974436c474aa1a");
     // It reached what it means to: the torn line kept its own, each name
     // escaped (one as byte numbers), the stamp, both refusals, and a frame
     // for each of the eight stored, on the key of the topic as the request
@@ -547,7 +566,7 @@ test "a reaction stored and sent by the Roc, over append_line!, message_count! a
 /// The reaction `target` as Steve, on a site where a step of it will fail,
 /// the old way or the Roc's: its error, its status, the frames sent, and
 /// every file the site holds.
-fn failedReact(a: Alloc, io: Io, oracle: bool, target: []const u8, comptime breaks: enum { sidecar, transcript, name }) ![]const u8 {
+fn failedReact(a: Alloc, io: Io, target: []const u8, comptime breaks: enum { sidecar, transcript, name }) ![]const u8 {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const steve = try harness.memberSession(a, io, "1", "Steve");
@@ -578,7 +597,7 @@ fn failedReact(a: Alloc, io: Io, oracle: bool, target: []const u8, comptime brea
     const keys = [_][]const u8{ "1_2/Plans", "1_2/Broken", "ops/Standup" };
     var subs: [keys.len]*webbox.bus.Subscriber = undefined;
     for (keys, &subs) |k, *s| s.* = try hub.open(k);
-    const r = try serveOn(a, io, &hub, oracle, try reactRaw(a, target, steve, "msg=1&emoji=" ++ thumbs));
+    const r = try serveOn(a, io, &hub, try reactRaw(a, target, steve, "msg=1&emoji=" ++ thumbs));
     const frames = try drained(a, &hub, &keys, &subs);
     return std.fmt.allocPrint(a, "{?t} {s}\nframes: {s}\nfiles: {s}", .{ r.err, harness.status(r.out), frames, try tree(a, io, site.base) });
 }
@@ -592,19 +611,21 @@ test "a reaction whose store, count or reactor will not read fails with the old 
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
+    var outs: std.ArrayList([]const u8) = .empty;
     inline for (.{
         .{ "/chat/c/1_2/Plans/react", .sidecar, "IsDir" },
         .{ "/chat/c/1_2/Broken/react", .transcript, "IsDir" },
         .{ "/channel/ops/Standup/react", .name, "IsDir" },
         .{ "/chat/c/1_2/Plans/react", .name, "IsDir" },
     }) |c| {
-        const zig = try failedReact(a, io, true, c[0], c[1]);
-        const roc = try failedReact(a, io, false, c[0], c[1]);
-        if (!std.mem.eql(u8, zig, roc) or !std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: \n") or std.mem.indexOf(u8, roc, "\"msg\":1,\"uid\"") != null) {
-            std.debug.print("{s} ({s}):\n  zig: {f}\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(zig), std.zig.fmtString(roc) });
+        const roc = try failedReact(a, io, c[0], c[1]);
+        try outs.append(a, roc);
+        if (!std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: \n") or std.mem.indexOf(u8, roc, "\"msg\":1,\"uid\"") != null) {
+            std.debug.print("{s} ({s}):\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(roc) });
             return error.TestUnexpectedResult;
         }
     }
+    try freezeRun("failedReact", .{ .answers = outs.items }, "5875d8532497189dfba6057ec3b22bedced39ce6d3156c8eeabee1a5a6ee4a87");
 }
 
 // ── sends: the transcript, the .count, every frame and search, both ways ───
@@ -650,7 +671,7 @@ fn memberKeys(comptime uid: []const u8) [5][]const u8 {
 /// block for the feeds, names and cids JSON must escape. The search index is built before the sends, so what it finds
 /// after is what the sends told it. Every answer, every file, every frame
 /// on every key, and the searches.
-fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, files: []const u8, frames: []const u8, searches: []const u8 } {
+fn sendRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8, frames: []const u8, searches: []const u8 } {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const emptied = search_index.emptyForTest();
@@ -677,7 +698,7 @@ fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, file
     for (send_keys, &subs) |k, *s| s.* = try hub.open(k);
 
     // The index built now, from the disk, before any send.
-    _ = try serveOn(a, io, &hub, oracle, try getRaw(a, "/chat/search/words?prefix=zz", cookies[0]));
+    _ = try serveOn(a, io, &hub, try getRaw(a, "/chat/search/words?prefix=zz", cookies[0]));
 
     // Who (an index into `cookies`), where, what, its cid, and whether async.
     const sends = [_]struct { usize, []const u8, []const u8, ?[]const u8, bool }{
@@ -698,7 +719,7 @@ fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, file
     };
     const answers = try a.alloc([]const u8, sends.len + 1);
     for (sends, answers[0..sends.len]) |s, *got| {
-        const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, s[1], cookies[s[0]], s[2], s[3], if (s[4]) .async_ else .sync));
+        const r = try serveOn(a, io, &hub, try sendRaw(a, s[1], cookies[s[0]], s[2], s[3], if (s[4]) .async_ else .sync));
         got.* = try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out });
     }
     // What search finds after, for each member: words in the sends only,
@@ -706,7 +727,7 @@ fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, file
     var searches: std.ArrayList(u8) = .empty;
     for (cookies) |c| for ([_][]const u8{ "zeppelin", "quote", "after", "crlf", "four", "script" }) |word| {
         chat_search.forgetAll();
-        const r = try serveOn(a, io, &hub, oracle, try getRaw(a, try std.fmt.allocPrint(a, "/chat/search/messages?word={s}", .{word}), c));
+        const r = try serveOn(a, io, &hub, try getRaw(a, try std.fmt.allocPrint(a, "/chat/search/messages?word={s}", .{word}), c));
         try searches.print(a, "{?t} {s}\n", .{ r.err, r.out });
     };
     // **A NAME THAT WILL NOT READ LABELS NO ROW** (recentWhere's
@@ -717,7 +738,7 @@ fn sendRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, file
     const name4 = try std.fs.path.join(a, &.{ users.auth_root, "4", "name" });
     try harness.UidSite.disk.remove(io, a, name4);
     try std.Io.Dir.cwd().createDirPath(io, name4);
-    const made = try serveOn(a, io, &hub, oracle, try reactRaw(a, "/chat/c/1_4/new", cookies[0], "topic=Ideas"));
+    const made = try serveOn(a, io, &hub, try reactRaw(a, "/chat/c/1_4/new", cookies[0], "topic=Ideas"));
     answers[sends.len] = try std.fmt.allocPrint(a, "{?t} {s}", .{ made.err, made.out });
     return .{ .answers = answers, .files = try tree(a, io, site.base), .frames = try drained(a, &hub, &send_keys, &subs), .searches = searches.items };
 }
@@ -731,18 +752,8 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence and the index outlive the request
     defer meter.restore();
-    const zig = try sendRun(a, io, true);
-    const roc = try sendRun(a, io, false);
-    var differ: usize = 0;
-    for (zig.answers, roc.answers, 0..) |z, r, i| if (!std.mem.eql(u8, z, r)) {
-        differ += 1;
-        std.debug.print("send {d}\n  zig: {f}\n  roc: {f}\n", .{ i, std.zig.fmtString(z), std.zig.fmtString(r) });
-    };
-    inline for (.{ "files", "frames", "searches" }) |what| if (!std.mem.eql(u8, @field(zig, what), @field(roc, what))) {
-        differ += 1;
-        std.debug.print(what ++ " differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(@field(zig, what)), std.zig.fmtString(@field(roc, what)) });
-    };
-    try testing.expectEqual(@as(usize, 0), differ);
+    const roc = try sendRun(a, io);
+    try freezeRun("sendRun", roc, "95b2465ce07a522a65f2ebefe78a5917084bede0a1777382a0d2362824207bd0");
     // It reached what it means to: every send stored (303s and 204s); the
     // stale count recounted (Plans_3, not Plans_6); the separator lines
     // escaped; a first message's topic-added on both DM members' sidebars
@@ -809,7 +820,7 @@ test "a message stored and sent by the Roc (C8a: its author, count, id, stamp, b
 /// A send as Steve to `target`, on a site where a step of it will fail, the
 /// old way or the Roc's: its error, its status, every frame sent on every
 /// key, and every file the site holds.
-fn failedSend(a: Alloc, io: Io, oracle: bool, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
+fn failedSend(a: Alloc, io: Io, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const steve = try harness.memberSession(a, io, "1", if (breaks == .author) "" else "Steve");
@@ -841,7 +852,7 @@ fn failedSend(a: Alloc, io: Io, oracle: bool, target: []const u8, comptime break
     const keys = [_][]const u8{ "1_2/Plans", "1_2/Broken", "ops/Standup" } ++ memberKeys("1") ++ memberKeys("2");
     var subs: [keys.len]*webbox.bus.Subscriber = undefined;
     for (keys, &subs) |k, *s| s.* = try hub.open(k);
-    const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, target, steve, "hello there", "c-1", .sync));
+    const r = try serveOn(a, io, &hub, try sendRaw(a, target, steve, "hello there", "c-1", .sync));
     const frames = try drained(a, &hub, &keys, &subs);
     return std.fmt.allocPrint(a, "{?t} {s}\nframes: {s}\nfiles: {s}", .{ r.err, harness.status(r.out), frames, try tree(a, io, site.base) });
 }
@@ -855,27 +866,29 @@ test "a send whose transcript will not append, whose count fails, or whose sende
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
+    var outs: std.ArrayList([]const u8) = .empty;
     inline for (.{
         .{ "/channel/ops/Standup/send", .append, "NotDir" },
         .{ "/chat/c/1_2/Broken/send", .count, "IsDir" },
         .{ "/chat/c/1_2/Plans/send", .author, "NoAuthor" },
     }) |c| {
-        const zig = try failedSend(a, io, true, c[0], c[1]);
-        const roc = try failedSend(a, io, false, c[0], c[1]);
+        const roc = try failedSend(a, io, c[0], c[1]);
+        try outs.append(a, roc);
         // Presence's frames (the sender came online) go out before the
         // send; nothing of the message, on any key or in any file.
-        if (!std.mem.eql(u8, zig, roc) or !std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: ") or std.mem.indexOf(u8, roc, "hello") != null or std.mem.indexOf(u8, roc, "== 1_2/Plans\n") != null or std.mem.indexOf(u8, roc, "== 1_2/Broken\n") != null or std.mem.indexOf(u8, roc, "== ops/Standup\n") != null) {
-            std.debug.print("{s} ({s}):\n  zig: {f}\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(zig), std.zig.fmtString(roc) });
+        if (!std.mem.startsWith(u8, roc, c[2] ++ " 500 Internal Server Error\nframes: ") or std.mem.indexOf(u8, roc, "hello") != null or std.mem.indexOf(u8, roc, "== 1_2/Plans\n") != null or std.mem.indexOf(u8, roc, "== 1_2/Broken\n") != null or std.mem.indexOf(u8, roc, "== ops/Standup\n") != null) {
+            std.debug.print("{s} ({s}):\n  roc: {f}\n", .{ c[0], @tagName(c[1]), std.zig.fmtString(roc) });
             return error.TestUnexpectedResult;
         }
     }
+    try freezeRun("failedSend", .{ .answers = outs.items }, "99a076713c2b16eb737290168cd3fe903ad1754987f653075baff7cf85ad8009");
 }
 
 /// Sends carrying an image and code, in DM 1_2 and channel ops (1, 2, 3),
 /// on a site where member 2's images.md is a folder, the old way or the
 /// Roc's: every answer, frame and file, how many fan-out failures were
 /// counted, and the last one said, as /admin/host says it.
-fn feedFailRun(a: Alloc, io: Io, oracle: bool) !struct { answers: []const u8, frames: []const u8, files: []const u8, counted: usize, last: []const u8 } {
+fn feedFailRun(a: Alloc, io: Io) !struct { answers: []const u8, frames: []const u8, files: []const u8, counted: usize, last: []const u8 } {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const steve = try harness.memberSession(a, io, "1", "Steve");
@@ -895,7 +908,7 @@ fn feedFailRun(a: Alloc, io: Io, oracle: bool) !struct { answers: []const u8, fr
     const before = chat_fanout.fanout_failures;
     var answers: std.ArrayList(u8) = .empty;
     for ([_][]const u8{ "/chat/c/1_2/Plans/send", "/channel/ops/Standup/send" }) |target| {
-        const r = try serveOn(a, io, &hub, oracle, try sendRaw(a, target, steve, "<img src=\"/x.png\">\n\n```\ncode\n```", null, .sync));
+        const r = try serveOn(a, io, &hub, try sendRaw(a, target, steve, "<img src=\"/x.png\">\n\n```\ncode\n```", null, .sync));
         try answers.print(a, "{?t} {s}\n", .{ r.err, harness.status(r.out) });
     }
     const text = try chat_fanout.fanoutText(a);
@@ -912,18 +925,8 @@ test "a member whose images.md will not take an entry: that surface fails for th
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    const zig = try feedFailRun(a, io, true);
-    const roc = try feedFailRun(a, io, false);
-    var differ: usize = 0;
-    inline for (.{ "answers", "frames", "files", "last" }) |what| if (!std.mem.eql(u8, @field(zig, what), @field(roc, what))) {
-        differ += 1;
-        std.debug.print(what ++ " differ\n  zig: {f}\n  roc: {f}\n", .{ std.zig.fmtString(@field(zig, what)), std.zig.fmtString(@field(roc, what)) });
-    };
-    if (zig.counted != roc.counted) {
-        differ += 1;
-        std.debug.print("fan-out failures counted: zig {d}, roc {d}\n", .{ zig.counted, roc.counted });
-    }
-    try testing.expectEqual(@as(usize, 0), differ);
+    const roc = try feedFailRun(a, io);
+    try freezeRun("feedFailRun", roc, "2f09f8284d0a7db3b5b52362faf823024a39d7a5f0af5895b9cd038c597b2bed");
     // It reached what it means to: both sends done, one failure each, the
     // last said in fanoutFailed's words; member 2's code and every other
     // member's images arrived, member 2's images never sent.
@@ -941,14 +944,12 @@ test "a member whose images.md will not take an entry: that surface fails for th
 /// The most one request's memory held, served the old way or the Roc's: the
 /// bytes its allocator was asked for at once (the response is written
 /// elsewhere, as the kernel sends it).
-fn requestPeak(a: Alloc, io: Io, oracle: bool, raw: []const u8) !struct { peak: usize, answer: []const u8 } {
+fn requestPeak(a: Alloc, io: Io, raw: []const u8) !struct { peak: usize, answer: []const u8 } {
     // The bytes the request asks for, counted above an arena (below it,
     // the arena's slack would hide a copy that fits in a node it grew).
     var pages = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer pages.deinit();
     var request: @import("peak_alloc.zig").Peak = .{ .child = pages.allocator() };
-    chat_router.test_oracle = oracle;
-    defer chat_router.test_oracle = false;
     // As harness.serve, but what is written out is the connection's (the
     // kernel sends it as it goes), not the request heap's.
     var reader: std.Io.Reader = .fixed(raw);
@@ -982,13 +983,13 @@ test "a large topic's raw transcript costs one request what the old Zig's did, n
     try harness.writeTranscript(a, io, "1_2", "Big", msgs);
     @import("presence.zig").forgetForTest();
     const raw = try std.fmt.allocPrint(a, "GET /chat/c/1_2/Big/raw HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{steve});
-    const old = try requestPeak(a, io, true, raw);
-    const roc = try requestPeak(a, io, false, raw);
-    try testing.expectEqualStrings(old.answer, roc.answer);
-    try testing.expect(old.answer.len > 8_000_000);
-    std.log.info("raw of {d} bytes: the old Zig held {d}, the Roc's {d}", .{ old.answer.len, old.peak, roc.peak });
-    // The same, but for the Roc call's own small change.
-    try testing.expect(roc.peak <= old.peak + 256 * 1024);
+    const roc = try requestPeak(a, io, raw);
+    try testing.expect(roc.answer.len > 8_000_000);
+    // Frozen (metal-vmm QUEUE 263d): the day the old Zig retired, it held
+    // 12,023,880 bytes for this 8,014,703-byte transcript, the Roc 12,025,551:
+    // one and a half times the answer. Its bound, and the Roc call's small
+    // change beside it.
+    try testing.expect(roc.peak <= roc.answer.len + roc.answer.len / 2 + 256 * 1024);
 }
 
 // ── a conversation's page and its sidebar, both ways ─────────────────────
@@ -1009,7 +1010,7 @@ const page_asks = [_]struct { cookie: usize, target: []const u8 }{
 
 /// The pages on a fresh site, served the old way or the Roc's: each
 /// answer, and how many channels were counted malformed while they were.
-fn pageRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, malformed: usize } {
+fn pageRun(a: Alloc, io: Io) !struct { answers: [][]const u8, malformed: usize } {
     var site = try harness.UidSite.init(a, io);
     defer site.deinit();
     const presence = @import("presence.zig");
@@ -1039,8 +1040,6 @@ fn pageRun(a: Alloc, io: Io, oracle: bool) !struct { answers: [][]const u8, malf
     const t = Now.at(page_now);
     for ([_]struct { []const u8, i64 }{ .{ "2", -299 }, .{ "3", -300 }, .{ "4", -301 }, .{ "6", -1 } }) |seen| _ = presence.markActive(seen[0], t.plus(seen[1]));
 
-    chat_router.test_oracle = oracle;
-    defer chat_router.test_oracle = false;
     chat_router.test_now = t;
     defer chat_router.test_now = null;
     const before = chat_paths.malformed_channels;
@@ -1067,17 +1066,10 @@ test "a conversation's page (its viewer, sidebar and limits the Roc's, over list
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
     defer meter.restore();
-    const zig = try pageRun(a, io, true);
-    const roc = try pageRun(a, io, false);
-    for (page_asks, zig.answers, roc.answers) |p, z, r| {
-        try testing.expectEqualStrings("200 OK", harness.status(r));
-        if (!std.mem.eql(u8, z, r)) {
-            std.debug.print("{s}\n  zig: {f}\n  roc: {f}\n", .{ p.target, std.zig.fmtString(z), std.zig.fmtString(r) });
-            return error.TestUnexpectedResult;
-        }
-    }
-    // Each listing met the malformed channel and counted it, both ways.
-    try testing.expectEqual(zig.malformed, roc.malformed);
+    const roc = try pageRun(a, io);
+    for (roc.answers) |r| try testing.expectEqualStrings("200 OK", harness.status(r));
+    try freezeRun("pageRun", roc, "9bafdf5e742ce8c7b1520e82a46342721eff3053a7e45f089212ff417c052269");
+    // Each listing met the malformed channel and counted it.
     try testing.expectEqual(page_asks.len, roc.malformed);
 
     // **WHAT THE PAGE SAYS, NOT ONLY THAT IT AGREES** (a change to the
