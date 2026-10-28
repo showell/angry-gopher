@@ -4426,6 +4426,96 @@ test "a member whose images.md will not take an entry: that surface fails for th
     ));
 }
 
+/// **EVERY APPEND'S RULE, ON THE FILES IT LEAVES**: reactions on a sidecar
+/// a stop cut short (no last newline), an empty one, a whole one and none;
+/// sends with an image and code to feeds that end mid-line, are empty, are
+/// whole and are not there, in a DM, a channel, a new topic and the DM with
+/// yourself; then each answer's status and every file the site holds.
+fn appendsRun(a: Alloc, io: Io) !struct { statuses: []const u8, files: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const cookies = [_][]const u8{
+        try harness.memberSession(a, io, "1", "Steve"),
+        try harness.memberSession(a, io, "2", "Debbie"),
+        try harness.memberSession(a, io, "3", "Ann"),
+    };
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "one", "two" });
+    try harness.writeTranscript(a, io, "1_2", "Other", &.{"three"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n2\n3\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{"four"});
+    const dm = try chat_paths.dmConvDir(a, "1_2");
+    const ops = try chat_paths.channelConvDir(a, "ops");
+    const users_dir = try std.fs.path.join(a, &.{ store.chat_root, "users" });
+    for ([_]struct { []const u8, []const u8 }{
+        // A sidecar a stop cut short, an empty one and a whole one (Fresh's is none).
+        .{ try store.reactionsPath(a, dm, "Plans"), "{\"msg\":1,\"uid\":\"9\",\"fr" },
+        .{ try store.reactionsPath(a, dm, "Other"), "" },
+        .{ try store.reactionsPath(a, ops, "Standup"), "{\"msg\":2}\n" },
+        // A feed that ends mid-line, an empty one and a whole one (member 2's are none).
+        .{ try std.fs.path.join(a, &.{ users_dir, "1", "images.md" }), "an old entry, cut" },
+        .{ try std.fs.path.join(a, &.{ users_dir, "1", "code.md" }), "" },
+        .{ try std.fs.path.join(a, &.{ users_dir, "3", "images.md" }), "an old entry\n" },
+    }) |f| try harness.UidSite.disk.write(io, a, f[0], f[1], .{});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    var hub = webbox.bus.Hub.init(io, a);
+    const both = "<img src=\"/p.png\">\n\n```zig\nconst p = 1;\n```";
+    // Who, where, and a reaction's body or a message's markdown.
+    const asks = [_]struct { usize, []const u8, enum { react, send }, []const u8 }{
+        .{ 0, "/chat/c/1_2/Plans/react", .react, "msg=1&emoji=" ++ thumbs },
+        .{ 1, "/chat/c/1_2/Plans/react", .react, "msg=2&emoji=" ++ thumbs },
+        .{ 0, "/chat/c/1_2/Other/react", .react, "msg=1&emoji=" ++ thumbs },
+        .{ 2, "/channel/ops/Standup/react", .react, "msg=1&emoji=" ++ thumbs ++ "&on=0" },
+        .{ 0, "/chat/c/1_2/Plans/send", .send, both },
+        .{ 1, "/channel/ops/Standup/send", .send, both },
+        .{ 0, "/chat/c/1_2/Fresh/send", .send, "first" },
+        .{ 0, "/chat/c/1_2/Fresh/react", .react, "msg=1&emoji=" ++ thumbs },
+        .{ 0, "/chat/c/1_1/Notes/send", .send, both },
+        .{ 2, "/channel/ops/Standup/send", .send, "<img src=\"/q.png\">" },
+    };
+    var statuses: std.ArrayList(u8) = .empty;
+    for (asks) |q| {
+        const raw = switch (q[2]) {
+            .react => try reactRaw(a, q[1], cookies[q[0]], q[3]),
+            .send => try sendRaw(a, q[1], cookies[q[0]], q[3], null, .sync),
+        };
+        const r = try serveOn(a, io, &hub, raw);
+        try statuses.print(a, "{s} {?t} {s}\n", .{ q[1], r.err, harness.status(r.out) });
+    }
+    return .{ .statuses = statuses.items, .files = try tree(a, io, site.base) };
+}
+
+test "every append leaves the old Zig's bytes: a torn sidecar's line kept its own, an empty or missing one none, a feed's separator only after an entry, transcripts and their .count (item 3 of the pure-Roc plan, frozen before the appends moved to the Roc)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const roc = try appendsRun(a, io);
+    try freezeRun("appendsRun", roc, "a5798ebc2ea4b577177d5215dd3a87a098c59f318eed0b4f583674ae77f7f464");
+    // It reached what it means to: every ask stored, the torn line its own,
+    // the empty feed with no separator, the cut one with it.
+    try testing.expectEqual(@as(usize, 5), std.mem.count(u8, roc.statuses, "204 No Content"));
+    try testing.expectEqual(@as(usize, 5), std.mem.count(u8, roc.statuses, "303 See Other"));
+    for ([_][]const u8{
+        "\"fr\n{\"msg\":1,\"uid\":\"1\"",
+        "== data/chat/1_2/sessions/Other.reactions.jsonl\n{\"msg\":1,",
+        "an old entry, cut\n\n-------------\n\nSent by Steve",
+        "== data/chat/users/1/code.md\nSent by Steve",
+        "== data/chat/users/2/images.md\nSent by Steve",
+        "an old entry\n\n\n-------------\n\nSent by Debbie",
+    }) |want| if (std.mem.indexOf(u8, roc.files, want) == null) {
+        std.debug.print("not in the files: {f}\n", .{std.zig.fmtString(want)});
+        return error.TestUnexpectedResult;
+    };
+}
+
 /// The most one request's memory held, served the old way or the Roc's: the
 /// bytes its allocator was asked for at once (the response is written
 /// elsewhere, as the kernel sends it).
