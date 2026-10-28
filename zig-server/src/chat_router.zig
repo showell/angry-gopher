@@ -132,13 +132,7 @@ pub fn handle(
             next,
         ),
         .serve => |s| {
-            return chat.serve(
-                req,
-                io,
-                alloc,
-                call.uid,
-                s.route,
-            );
+            return chat.serve(req, s.route);
         },
         .respond => |r| {
             const headers = [_]std.http.Header{
@@ -257,6 +251,8 @@ pub const Call = struct {
     aside_failed: ?anyerror = null,
     /// The topic's bundle Host.bundle_add! builds (metal-vmm QUEUE 291).
     bundle: download.Bundle = .{},
+    /// The upload's bytes Host.read_upload! read, for Host.store_upload!.
+    upload_data: []const u8 = "",
 
     pub fn host(c: *Call) roc_chat.Host {
         return .{
@@ -272,6 +268,10 @@ pub const Call = struct {
             .serve_upload = serveUpload,
             .bundle_add = bundleAdd,
             .serve_bundle = serveBundle,
+            .read_upload = readUpload,
+            .refuse_upload = refuseUpload,
+            .reserve_upload = reserveUpload,
+            .store_upload = storeUpload,
             .publish = publish,
             .append_line = appendLine,
             .read = read,
@@ -621,6 +621,83 @@ pub const Call = struct {
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         c.bundle.serve(c.req, c.alloc, name) catch |e| return c.fail(e);
         c.answered = true;
+    }
+
+    /// **AN UPLOAD'S FORM READ** (Host.read_upload!, metal-vmm QUEUE 292):
+    /// its file's bytes held for `storeUpload`, its size, extension and name
+    /// handed to the Roc, which decides the rest.
+    fn readUpload(ctx: *anyopaque) roc_chat.UploadRead {
+        const c = of(ctx);
+        if (c.dead()) return .answered;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends; null is a body too big, answered.
+        const form = (upload.readForm(c.req, c.alloc) catch |e| {
+            c.fail(e);
+            return .answered;
+        }) orelse {
+            c.answered = true;
+            return .answered;
+        };
+        return switch (form) {
+            .no_file => .no_file,
+            .unsupported => .unsupported,
+            .read => |f| blk: {
+                c.upload_data = f.data;
+                break :blk .{ .read = .{ .size = f.data.len, .ext = f.ext, .filename = f.filename } };
+            },
+        };
+    }
+
+    /// The upload refused on the edge counter `why`, answered `message`
+    /// (Host.refuse_upload!).
+    fn refuseUpload(ctx: *anyopaque, why: roc_chat.UploadRefusal, message: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        const reason: webbox.edge.RejectKind = switch (why) {
+            .malformed => .malformed_multipart,
+            .too_large => .body_too_large,
+        };
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        webbox.edge.reject(c.req, reason, message) catch |e| return c.fail(e);
+        c.answered = true;
+    }
+
+    /// The member's upload allowance spent by `size`, if it holds it
+    /// (Host.reserve_upload!).
+    fn reserveUpload(ctx: *anyopaque, size: u64) roc_chat.Reservation {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const held = users.reserveUploadBytes(c.io, c.alloc, c.uid, @intCast(size)) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        return if (held) .reserved else .refused;
+    }
+
+    /// **THE ALLOWANCE IS SPENT ON A FILE THAT IS THERE** (metal-vmm QUEUE
+    /// 172): the held upload stored in `folder` under a fresh name
+    /// (Host.store_upload!); one that cannot be stored gives its bytes back,
+    /// and its error goes on to the host's log.
+    fn storeUpload(ctx: *anyopaque, folder: []const u8, ext: []const u8) roc_chat.Stored {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const stored = blk: {
+            const dir = std.fs.path.join(c.alloc, &.{ store.chat_root, folder }) catch |e| break :blk e;
+            break :blk upload.storeIn(c.io, c.alloc, dir, ext, c.upload_data);
+        };
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const name = stored catch |e| {
+            c.fail(e);
+            // absent-ok: not read as absence: the store's error is the call's; a refund that fails too is logged.
+            _ = users.reserveUploadBytes(
+                c.io,
+                c.alloc,
+                c.uid,
+                -@as(i64, @intCast(c.upload_data.len)),
+            ) catch |refund| std.log.err("chat: an upload's bytes not given back: {t}", .{refund});
+            return .failed;
+        };
+        return .{ .stored = name };
     }
 
     fn serveRendered(ctx: *anyopaque, path: []const u8) roc_chat.Serving {

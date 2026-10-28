@@ -13,7 +13,7 @@
 //!   GET  /chat/c/<conv>/<sid>/stream   SSE: backlog replay + LIVE fan-out
 //!   POST /chat/c/<conv>/<sid>/send     post a message (fans out to live streams)
 //!   GET  /chat/c/<conv>/<sid>/raw      the literal on-disk .md bytes
-//!   .../<sid>/{upload,uploads,download,saved}   see topicRoute
+//!   .../<sid>/{upload,uploads,download,saved}   the Roc's (roc-webbox chat/main.roc)
 //!   .../<sid>/{reactions,react,pin,unpin}   the Roc's (roc-webbox chat/main.roc
 //!                                      `act!`, over chat_router.zig's hosted
 //!                                      functions)
@@ -32,29 +32,11 @@
 //! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");
-const chat_paths = @import("chat_paths.zig");
-const Now = @import("request_time.zig").Now;
-const limits = @import("limits.zig");
-const Io = @import("host_io").Io;
 const http = @import("webbox").http;
-const store = @import("chat_store.zig");
-const html = @import("webbox").html;
-// Escaping lives in html.zig, not here, so chat_chrome.zig and the non-chat
-// pages (login, game, admin, …) escape without importing the chat dispatcher.
-const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
-const upload = @import("chat_upload.zig");
-const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
-
-/// Max bytes for one posted message.
-const max_message_bytes = limits.body.chat_message;
-
-// Resolved-conversation domain types (Conv, Topic) live in chat_conv.zig.
-const Conv = @import("chat_conv.zig").Conv;
-const Topic = @import("chat_conv.zig").Topic;
 
 // ── serving a route ───────────────────────────────────────────────────────
 
@@ -64,17 +46,9 @@ const Route = roc_chat.Route;
 /// serve answers a /chat or /channel request where the Roc router sent it
 /// (chat_router.zig, which ran the prelude: the static scripts, the gate,
 /// presence). `route` is the path as the router parsed it; nothing here
-/// reads the path again. What needs the disk or the viewer is decided here,
-/// in the order it always was: whether the viewer is in the DM and its
-/// other half exists, a channel's members, whether the topic exists, a
-/// read-only tail's method.
-pub fn serve(
-    req: *Request,
-    io: Io,
-    alloc: Alloc,
-    uid: []const u8,
-    route: Route,
-) !void {
+/// reads the path again. Only the embedded assets and /chat/search's 404
+/// are left here; every other route is the Roc's.
+pub fn serve(req: *Request, route: Route) !void {
     switch (route.family) {
         // Embedded JS assets are public (static client code): the router
         // sends them here before the gate.
@@ -100,19 +74,11 @@ pub fn serve(
         // /chat/search/words and /messages are the Roc's (metal-vmm QUEUE
         // 281, 282); nothing else under /chat/search is.
         .search => return http.notFound(req),
-        .dm => return convRoute(
-            req,
-            io,
-            alloc,
-            uid,
-            route,
-        ),
-        .channel => return channelRoute(
-            req,
-            io,
-            alloc,
-            uid,
-            route,
+        // Every route of a DM or a channel, the last of them a topic's
+        // upload (roc-webbox chat/main.roc `post_upload!`, metal-vmm QUEUE 292).
+        .dm, .channel => std.debug.panic(
+            "chat.serve: {t} is the Roc's",
+            .{route.family},
         ),
         // The two cross-page attention streams, and the 404 of a path that
         // names nothing: the Roc's (metal-vmm QUEUE 286).
@@ -122,158 +88,6 @@ pub fn serve(
         ),
     }
 }
-
-// ── the lookup's pure decisions (the Roc's twins: chat/Conversation.roc) ──
-
-/// channelRoute serves a tail of /channel/<name>/<topic> the Roc handed
-/// back (roc-webbox chat/main.roc `serve_conversation!`): it found the
-/// channel the viewer's and the topic there, and answered every 404.
-/// **A FLOOR, NOT A DECISION**: the name must still be a channel's, so its
-/// folder is under the chat root; anything else is the Roc's mistake, the
-/// request's failure, never a page.
-fn channelRoute(
-    req: *Request,
-    io: Io,
-    alloc: Alloc,
-    uid: []const u8,
-    route: Route,
-) !void {
-    if (!chat_paths.validChannelName(route.key) or route.part != .topic) return error.NotAHandedBackTail;
-    const conv = Conv{
-        .meta = .{ .kind = .channel, .members = &.{} },
-        .key = route.key,
-        .base = try std.fmt.allocPrint(
-            alloc,
-            "/channel/{s}",
-            .{route.key},
-        ),
-        .dir = try chat_paths.channelConvDir(alloc, route.key),
-    };
-    return topicRoute(
-        req,
-        io,
-        alloc,
-        route,
-        uid,
-        .{
-            .conv = conv,
-            .sid = route.topic,
-            .title = "",
-        },
-    );
-}
-
-/// convRoute serves a tail of /chat/c/<pair>/<topic> the Roc handed back,
-/// as channelRoute does: the key must still be a canonical pair, the
-/// viewer one of it.
-fn convRoute(
-    req: *Request,
-    io: Io,
-    alloc: Alloc,
-    uid: []const u8,
-    route: Route,
-) !void {
-    const pair = route.key;
-    if (!try chat_paths.chatKeyParticipant(
-        alloc,
-        pair,
-        uid,
-    ) or route.part != .topic) return error.NotAHandedBackTail;
-    const us = std.mem.indexOfScalar(
-        u8,
-        pair,
-        '_',
-    ).?;
-    const conv = Conv{
-        .meta = try store.ConvMeta.dm(
-            alloc,
-            pair[0..us],
-            pair[us + 1 ..],
-        ),
-        .key = pair,
-        .base = try std.fmt.allocPrint(
-            alloc,
-            "/chat/c/{s}",
-            .{pair},
-        ),
-        .dir = try chat_paths.dmConvDir(alloc, pair),
-    };
-    return topicRoute(
-        req,
-        io,
-        alloc,
-        route,
-        uid,
-        .{
-            .conv = conv,
-            .sid = route.topic,
-            .title = "",
-        },
-    );
-}
-
-/// topicRoute serves the tails of a topic the Roc found the viewer's and handed
-/// back: its uploads, an upload, its stream, its download and its saved ids.
-fn topicRoute(
-    req: *Request,
-    io: Io,
-    alloc: Alloc,
-    route: Route,
-    uid: []const u8,
-    topic: Topic,
-) !void {
-    const conv = topic.conv;
-    switch (route.tail) {
-        .page => std.debug.panic(
-            "chat.topicRoute: the page is the Roc's, and its topic was here",
-            .{},
-        ),
-        // An upload and the bundle: the Roc's decision, the host's bytes
-        // (roc-webbox chat/main.roc `serve_upload!`, `serve_download!`,
-        // metal-vmm QUEUE 291).
-        .uploads, .download => std.debug.panic(
-            "chat.topicRoute: {t} is the Roc's, and its topic was here",
-            .{route.tail},
-        ),
-        // The topic's stream: the Roc's decision, the router's to hold
-        // (chat_router.zig `.stream`, metal-vmm QUEUE 286).
-        .stream => std.debug.panic(
-            "chat.topicRoute: a stream is the Roc's",
-            .{},
-        ),
-        // A send: the Roc's (roc-webbox chat/main.roc `send!`), handed back
-        // only when the conversation was not found, which was answered above.
-        .send, .invalid_send => std.debug.panic(
-            "chat.topicRoute: a send is the Roc's, and its conversation was here",
-            .{},
-        ),
-        .upload => try upload.handleUpload(
-            req,
-            io,
-            alloc,
-            uid,
-            conv.dir,
-            conv.base,
-            topic.sid,
-        ),
-        // The Roc's (roc-webbox chat/main.roc `act!`, docs/ROC-CHAT.md C4):
-        // it hands one back only when its `find!` or the topic did not, and that
-        // was answered above.
-        .pin, .unpin, .reactions, .react => std.debug.panic(
-            "chat.topicRoute: {t} is the Roc's, and its topic was here",
-            .{route.tail},
-        ),
-        // The Roc's (chat/main.roc `act!`), handed back only when the topic
-        // was not found, which was answered above.
-        .raw => std.debug.panic("chat.topicRoute: raw is the Roc's, and its topic was here", .{}),
-        // The Roc's (roc-webbox chat/main.roc `serve_saved!`).
-        .saved => std.debug.panic("chat.topicRoute: saved is the Roc's", .{}),
-        // No tail served here, or one with segments after it: the Roc's 404.
-        .invalid => std.debug.panic("chat.topicRoute: an invalid tail is the Roc's", .{}),
-    }
-}
-
-// ── send (write path) ────────────────────────────────────────────────────────
 
 // ── assets ───────────────────────────────────────────────────────────────────
 

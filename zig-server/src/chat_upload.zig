@@ -1,5 +1,6 @@
-//! chat_upload: chat image AND screencast uploads.
-//!   POST <conv-base>/<sid>/upload          store one image/video, return its URL
+//! chat_upload: the bytes of chat image AND screencast uploads, as the Roc
+//! decides them (roc-webbox chat/main.roc `post_upload!`, `serve_upload!`).
+//!   POST <conv-base>/<sid>/upload          the form read, its type sniffed, the file stored
 //!   GET  <conv-base>/<sid>/uploads/<file>  serve a stored image/video
 //! Uploads land in the topic's sidecar dir (sessions/<sid>.uploads/) under a
 //! random unguessable name whose extension is derived from the SNIFFED magic
@@ -42,22 +43,21 @@ const stream_piece = 256 << 10; // 256 KiB
 
 // ── write path (POST <base>/<sid>/upload) ─────────────────────────────────────
 
-/// handleUpload accepts one multipart image/video upload, stores it in the
-/// topic's uploads sidecar under a random name (extension from sniffed magic
-/// bytes), and returns {url, name, kind, width, height} JSON. `kind` is "image"
-/// or "video" so the client inserts the right tag; width/height are 0 (we don't
-/// decode dimensions — the client omits the attrs then, per its BROWSER_WORKAROUND).
-pub fn handleUpload(
-    req: *Request,
-    io: Io,
-    alloc: Alloc,
-    uid: []const u8,
-    conv_dir: []const u8,
-    base: []const u8,
-    sid: []const u8,
-) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req, .POST);
+/// An upload's form as the host reads it (Host.read_upload!, metal-vmm QUEUE
+/// 292): no multipart form or no file in it, a file of a type the chat takes
+/// not, or the file's bytes, its sniffed extension and the client's name.
+pub const Form = union(enum) {
+    no_file,
+    unsupported,
+    read: struct { data: []const u8, ext: []const u8, filename: []const u8 },
+};
 
+/// **AN UPLOAD'S FORM READ**: the request's multipart body to the largest
+/// upload's limit, its `file` part, its type sniffed from its first bytes.
+/// Null when the request was answered (a body too big). Every decision
+/// after it (the cap, the allowance, the answer) is the Roc's (roc-webbox
+/// chat/main.roc `post_upload!`).
+pub fn readForm(req: *Request, alloc: Alloc) !?Form {
     // Read the Content-Type (for the multipart boundary) BEFORE the body: reading
     // the body advances the reader past received_head (after which iterateHeaders
     // asserts, the /send gotcha) and invalidates the head strings. http.header
@@ -66,122 +66,23 @@ pub fn handleUpload(
         req,
         alloc,
         "content-type",
-    )) orelse return edge.reject(
-        req,
-        .malformed_multipart,
-        "no file\n",
-    );
-    const boundary = multipartBoundary(ct) orelse return edge.reject(
-        req,
-        .malformed_multipart,
-        "no file\n",
-    );
-
+    )) orelse return .no_file;
+    const boundary = multipartBoundary(ct) orelse return .no_file;
     const body = (try http.readLimitedBody(
         req,
         alloc,
         max_any_upload,
-    )) orelse return;
-    const part = parseMultipartFile(body, boundary) orelse
-        return edge.reject(
-            req,
-            .malformed_multipart,
-            "no file\n",
-        );
-
-    // Sniff the kind FIRST — it carries the per-file cap and the user-facing noun.
-    const sniff = detectUpload(part.data) orelse
-        return req.respond(
-            "unsupported file type (images: png, jpeg, gif, webp; video: mp4, webm, mov)\n",
-            .{ .status = .unsupported_media_type },
-        );
-    if (part.data.len > sniff.kind.cap()) {
-        const msg = try std.fmt.allocPrint(
-            alloc,
-            "{s} too large — the limit is {d} MB.\n",
-            .{ sniff.kind.noun(), sniff.kind.cap() >> 20 },
-        );
-        return edge.reject(
-            req,
-            .body_too_large,
-            msg,
-        );
-    }
-
-    // Lifetime per-user quota — atomic add-if-under-cap. Images and screencasts
-    // share the one allowance.
-    if (!try users.reserveUploadBytes(
-        io,
-        alloc,
-        uid,
-        @intCast(part.data.len),
-    )) {
-        const msg = try std.fmt.allocPrint(
-            alloc,
-            "Upload limit reached — you've used your {d} GB upload allowance.\n",
-            .{users.max_upload_lifetime_bytes >> 30},
-        );
-        return req.respond(msg, .{ .status = .forbidden });
-    }
-
-    // **THE ALLOWANCE IS SPENT ON A FILE THAT IS THERE** (metal-vmm QUEUE
-    // 172): one that cannot be stored gives its bytes back, and its error goes
-    // on to the host's log (it was a 500 that said "write", unlogged, with the
-    // bytes spent for good).
-    const name = storeUpload(
-        io,
-        alloc,
-        conv_dir,
-        sid,
-        sniff.ext,
-        part.data,
-    ) catch |e| {
-        _ = try users.reserveUploadBytes(
-            io,
-            alloc,
-            uid,
-            -@as(i64, @intCast(part.data.len)),
-        );
-        return e;
-    };
-
-    const out = try std.fmt.allocPrint(alloc, "{{\"url\":\"{s}/{s}/uploads/{s}\",\"name\":{f},\"kind\":\"{s}\",\"width\":0,\"height\":0}}", .{
-        base,                 sid, name,
-        std.json.fmt(
-            try displayName(alloc, part.filename),
-            .{},
-        ),
-        @tagName(sniff.kind),
-    });
-    try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
+    )) orelse return null;
+    const part = parseMultipartFile(body, boundary) orelse return .no_file;
+    const sniff = detectUpload(part.data) orelse return .unsupported;
+    return .{ .read = .{ .data = part.data, .ext = sniff.ext, .filename = part.filename } };
 }
 
-/// **THE CLIENT'S NAME, AS TEXT** (metal-vmm QUEUE 185): a name that is not
-/// UTF-8 came back in the JSON as an array of numbers. Each sequence that
-/// does not decode is replaced with U+FFFD.
-fn displayName(alloc: Alloc, raw: []const u8) ![]const u8 {
-    if (std.unicode.utf8ValidateSlice(raw)) return raw;
-    var out: std.ArrayList(u8) = .empty;
-    var i: usize = 0;
-    while (i < raw.len) {
-        const n = std.unicode.utf8ByteSequenceLength(raw[i]) catch 0;
-        if (n != 0 and i + n <= raw.len and std.meta.isError(std.unicode.utf8Decode(raw[i..][0..n])) == false) {
-            try out.appendSlice(alloc, raw[i..][0..n]);
-            i += n;
-        } else {
-            try out.appendSlice(alloc, "\u{FFFD}");
-            i += 1;
-        }
-    }
-    return out.toOwnedSlice(alloc);
-}
-
-/// The upload written under its topic, by a fresh name.
-fn storeUpload(
+/// The held upload written into `dir` by a fresh name, `<32 hex>.<ext>`.
+pub fn storeIn(
     io: Io,
     alloc: Alloc,
-    conv_dir: []const u8,
-    sid: []const u8,
+    dir: []const u8,
     ext: []const u8,
     data: []const u8,
 ) ![]const u8 {
@@ -191,15 +92,6 @@ fn storeUpload(
         "{s}.{s}",
         .{ token, ext },
     );
-    const dir = try std.fs.path.join(alloc, &.{
-        conv_dir,
-        "sessions",
-        try std.fmt.allocPrint(
-            alloc,
-            "{s}.uploads",
-            .{sid},
-        ),
-    });
     try disk.makeDir(
         io,
         alloc,
@@ -801,21 +693,4 @@ test "a stream whose file ends before its length is cut, never ended as whole: n
 test "parseMultipartFile allocates nothing: memory that runs out is never 'no file', a 400 (metal-vmm QUEUE 172)" {
     const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\n\r\nZ\r\n--B--\r\n";
     try std.testing.expectEqualStrings("Z", parseMultipartFile(body, "B").?.data);
-}
-
-test "an upload's name that is not UTF-8 is answered as a JSON string, what does not decode replaced (metal-vmm QUEUE 185)" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const name = try displayName(a, "caf\xe9 \xff.png");
-    try std.testing.expect(std.unicode.utf8ValidateSlice(name));
-    try std.testing.expectEqualStrings("caf\u{FFFD} \u{FFFD}.png", name);
-    const json = try std.fmt.allocPrint(
-        a,
-        "{f}",
-        .{std.json.fmt(name, .{})},
-    );
-    try std.testing.expect(json[0] == '"');
-    // Valid names pass as they are.
-    try std.testing.expectEqualStrings("é.png", try displayName(a, "é.png"));
 }
