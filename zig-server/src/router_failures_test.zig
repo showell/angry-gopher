@@ -1081,3 +1081,99 @@ test "route: /chat/msg skips a malformed channel and counts it for /admin/host; 
     try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "gone.channel" }));
     try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/msg/Standup_1", steve)));
 }
+
+// ── one bad byte is not a lasting 500 (metal-vmm QUEUE 267) ──────────────────
+//
+// The other side of this file's rule: what the request must understand and
+// cannot is its 500, but one damaged entry, row, account or file among many
+// is its own, skipped (and counted) or kept to its own lookup, never a page
+// down for everyone.
+
+fn site(a: std.mem.Allocator, io: Io) !harness.UidSite {
+    return harness.UidSite.init(a, io);
+}
+
+test "route: a torn feed entry, a torn recent row and a member file that is not UTF-8 are each skipped and counted, and the page served (metal-vmm QUEUE 267)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try site(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const before = chat_paths.dropped;
+    const head = "Sent by Debbie at 2026-10-10T00:00:00Z, source MSG_Plans_{d} in 1_2:\n";
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "images.md" }), std.fmt.comptimePrint(head, .{1}) ++ "<img src=\"/a.png\">\n\n-------------\n\n" ++ std.fmt.comptimePrint(head, .{2}) ++ "<img src=\"/\xf0\x9f.png\">", .{});
+    const images = try harness.UidSite.ask(a, io, "/chat/images", steve);
+    try testing.expectEqualStrings("200 OK", harness.status(images));
+    try testing.expect(std.mem.indexOf(u8, images, "Plans_1") != null and std.mem.indexOf(u8, images, "Plans_2") == null);
+    try testing.expectEqual(before.get(.feed_entry) + 1, chat_paths.dropped.get(.feed_entry));
+    // A row whose text is not UTF-8 (here its author's stored name, which
+    // names the row and labels the DM): that row is left out, the rest served.
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", debbie, "markdown=fine&cid=x")));
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "name" }), "Deb\xc3", .{});
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat/recent", steve)));
+    try testing.expectEqual(before.get(.recent_row) + 1, chat_paths.dropped.get(.recent_row));
+    // A channel's member file that is not UTF-8 is malformed, skipped and
+    // counted by every listing, and /chat/recent still served.
+    const malformed = chat_paths.malformed_channels;
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "bad.channel" }), "1\n\xff\n", .{});
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat/recent", steve)));
+    try testing.expect(chat_paths.malformed_channels > malformed);
+}
+
+test "route: an account whose name is not UTF-8 fails only a lookup of that name, never every member's chat (metal-vmm QUEUE 267)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try site(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ users.auth_root, "3", "name" }), "A\xffn", .{});
+    // A page that never reads Ann's name is served: the listing of every
+    // account is not failed by hers.
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.UidSite.ask(a, io, "/chat/images", steve)));
+    // His DM with Ann is titled by her name: that lookup alone fails.
+    try testing.expectEqualStrings("500 Internal Server Error", harness.status(try askFailing(a, io, "GET", "/chat/c/1_3", steve)));
+}
+
+test "route: a DM's new topic whose announcement will not store is made all the same, 200, the drop counted, never a 500 whose retry is a 409 (metal-vmm QUEUE 267)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try site(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // general2 is a topic (the list keeps all but folders) that nothing can
+    // be appended to: a link into a folder that is not there.
+    const dir = try chat_paths.dmConvDir(a, "1_2");
+    try std.Io.Dir.cwd().symLink(io, "nowhere/general2.md", try std.fs.path.join(a, &.{ dir, "sessions", "general2.md" }), .{});
+    const before = chat_paths.dropped.get(.announcement);
+    try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Ideas")));
+    try testing.expectEqual(before + 1, chat_paths.dropped.get(.announcement));
+    try testing.expect((try chat_paths.readTranscript(io, a, dir, "Ideas")) != null);
+    // The topic is there, so a second make of it is the 409 it should be.
+    try testing.expectEqualStrings("409 Conflict", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Ideas")));
+}

@@ -72,6 +72,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     try row(&b, alloc, "requests refused at the edge", try edge.countsText(alloc));
     try row(&b, alloc, "chat fan-out failures since boot", try chat_fanout.fanoutText(alloc));
     try row(&b, alloc, "listings that skipped a malformed channel", try chat_paths.malformedText(alloc));
+    try row(&b, alloc, "what the chat dropped rather than fail a page for", try chat_paths.droppedText(alloc));
     try row(&b, alloc, "reads that met a refused transcript block", try chat_codec.refusedText(alloc));
     try b.appendSlice(alloc, "</table>\n<h2>The host</h2>\n");
 

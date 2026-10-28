@@ -152,6 +152,9 @@ pub const Call = struct {
     /// The accounts as `accounts` listed them, each read that failed kept
     /// with its error, for `failAccount`.
     listed: []const users.Account = &.{},
+    /// Inside Host.aside! (`asideOf`), and the aside's first failure.
+    aside: bool = false,
+    aside_failed: ?anyerror = null,
 
     pub fn host(c: *Call) roc_chat.Host {
         return .{
@@ -174,6 +177,8 @@ pub const Call = struct {
             .fail = refuse,
             .fail_text = failText,
             .count_malformed_channel = malformedChannel,
+            .count_dropped = droppedOf,
+            .aside = asideOf,
             .check_online = online,
             .limits = limits_,
             .srcs = srcs,
@@ -193,14 +198,55 @@ pub const Call = struct {
     }
 
     fn fail(c: *Call, e: anyerror) void {
+        if (c.aside) {
+            if (c.aside_failed == null) c.aside_failed = e;
+            return;
+        }
         c.failed = e;
     }
 
     /// **AFTER A FAILURE THE HOST DOES NOTHING MORE** for the call: every
     /// hosted function but `member` asks this first, and answers its empty
-    /// or "failed" value, so a Roc that goes on writes nothing more.
+    /// or "failed" value, so a Roc that goes on writes nothing more. Inside
+    /// an aside, after the aside's failure, the same until it ends.
     fn dead(c: *Call) bool {
-        return c.failed != null;
+        return c.failed != null or (c.aside and c.aside_failed != null);
+    }
+
+    /// **AN ASIDE** (Host.aside!, metal-vmm QUEUE 267): from `begin` to
+    /// `end`, a failure is the aside's (`fail` keeps it apart), never the
+    /// request's: what came before it is done (STORED IS DONE), so the
+    /// request goes on. `end` says whether anything in it failed, logs the
+    /// error and clears it.
+    fn asideOf(ctx: *anyopaque, which: roc_chat.Aside) roc_chat.AsideEnd {
+        const c = of(ctx);
+        switch (which) {
+            .begin => {
+                if (c.dead()) return .failed;
+                c.aside = true;
+                c.aside_failed = null;
+                return .done;
+            },
+            .end => {
+                c.aside = false;
+                const e = c.aside_failed orelse return .done;
+                c.aside_failed = null;
+                std.log.warn("chat: an aside failed, the request goes on: {t}", .{e});
+                return .failed;
+            },
+        }
+    }
+
+    /// Something the Roc dropped rather than fail the request for, counted
+    /// for /admin/host (chat_paths.countDropped).
+    fn droppedOf(ctx: *anyopaque, what: roc_chat.Dropped, whose: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        chat_paths.countDropped(switch (what) {
+            .announcement => .announcement,
+            .feed_entry => .feed_entry,
+            .recent_row => .recent_row,
+        }, whose);
     }
 
     pub fn checkMember(ctx: *anyopaque) roc_chat.Membership {
@@ -263,6 +309,13 @@ pub const Call = struct {
                 .found => |n| .{ .found = n },
                 .unreadable => .unreadable,
             },
+        };
+        // **A NAME THAT IS NOT UTF-8 IS ONE ACCOUNT'S** (metal-vmm QUEUE
+        // 267): it crosses as unreadable, error.NotUtf8 kept, so only a
+        // lookup of that name fails, never every member's listing.
+        for (all, out) |*u, *o| if (u.name == .found and !std.unicode.utf8ValidateSlice(u.name.found)) {
+            u.name = .{ .unreadable = error.NotUtf8 };
+            o.name = .unreadable;
         };
         c.listed = all;
         return .{ .found = out };

@@ -198,6 +198,36 @@ pub fn malformedText(alloc: Alloc) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{d}; the last: #{s}", .{ malformed_channels, malformed_last });
 }
 
+/// **WHAT THE ROC CHAT DROPPED RATHER THAN FAIL A REQUEST FOR**, since boot
+/// (metal-vmm QUEUE 267, roc-webbox Host.count_dropped!): one damaged
+/// entry, row or announcement is its own, skipped and counted here, never a
+/// lasting 500 for every reader of the page. By kind, and the last one's
+/// kind and what it was about (its first 64 bytes).
+pub const Dropped = enum { announcement, feed_entry, recent_row };
+pub var dropped: std.EnumArray(Dropped, usize) = .initFill(0);
+
+var dropped_last_buf: [64]u8 = undefined;
+var dropped_last: []const u8 = "";
+var dropped_last_kind: Dropped = .feed_entry;
+
+/// One drop of `what`, about `whose` (a topic, a feed's path, a row's key).
+pub fn countDropped(what: Dropped, whose: []const u8) void {
+    dropped.getPtr(what).* += 1;
+    const n = @min(whose.len, dropped_last_buf.len);
+    @memcpy(dropped_last_buf[0..n], whose[0..n]);
+    dropped_last = dropped_last_buf[0..n];
+    dropped_last_kind = what;
+}
+
+/// The drops as /admin/host shows them.
+pub fn droppedText(alloc: Alloc) ![]const u8 {
+    const a = dropped.get(.announcement);
+    const f = dropped.get(.feed_entry);
+    const r = dropped.get(.recent_row);
+    if (a + f + r == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d} damaged feeds, {d} damaged recent rows, {d} new-topic announcements; the last: {t} {f}", .{ f, r, a, dropped_last_kind, std.zig.fmtString(dropped_last) });
+}
+
 /// listUserChannels returns the names of channels `uid` is a member of, sorted:
 /// every channel's roster read (channelRosters), then memberChannels.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
