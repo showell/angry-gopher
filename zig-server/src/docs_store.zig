@@ -91,19 +91,19 @@ pub fn slugifyTitle(alloc: Alloc, title: []const u8) ![]u8 {
     return alloc.dupe(u8, out);
 }
 
-/// uniqueDocSlug returns a slug not colliding with an existing file (and not a
+/// findUniqueDocSlug returns a slug not colliding with an existing file (and not a
 /// reserved name), appending "-2", "-3", … as needed.
-fn uniqueDocSlug(io: Io, alloc: Alloc, uid: []const u8, base: []const u8) ![]const u8 {
-    if (!isReservedSlug(base) and !try docFileExists(io, alloc, uid, base)) return base;
+fn findUniqueDocSlug(io: Io, alloc: Alloc, uid: []const u8, base: []const u8) ![]const u8 {
+    if (!isReservedSlug(base) and !try hasDocFile(io, alloc, uid, base)) return base;
     var n: usize = 2;
     while (n < 1000) : (n += 1) {
         const cand = try std.fmt.allocPrint(alloc, "{s}-{d}", .{ base, n });
-        if (!try docFileExists(io, alloc, uid, cand)) return cand; // suffixed → never reserved
+        if (!try hasDocFile(io, alloc, uid, cand)) return cand; // suffixed → never reserved
     }
     return base; // give up; caller overwrites
 }
 
-fn docFileExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
+fn hasDocFile(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
     const file = try std.fmt.allocPrint(alloc, "{s}.md", .{slug});
     const path = try std.fs.path.join(alloc, &.{ try userDocsDir(alloc, uid), file });
     return disk.has(io, alloc, path);
@@ -134,11 +134,11 @@ fn lessThanSlug(_: void, a: DocSummary, b: DocSummary) bool {
     return std.mem.lessThan(u8, a.slug, b.slug);
 }
 
-/// mostRecentDocSlug returns the slug of the user's most-recently-modified doc,
+/// findMostRecentDocSlug returns the slug of the user's most-recently-modified doc,
 /// or null if they have none. Lets a bare /chat/docs land straight in the doc you
 /// last touched — and since a save bumps reading-list's mtime, right after saving
 /// a message you land in your reading list.
-pub fn mostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
+pub fn findMostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
     const dir_path = try userDocsDir(alloc, uid);
     const entries = try disk.list(io, alloc, dir_path);
 
@@ -178,9 +178,9 @@ pub fn readUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) ![]c
     return disk.readOrEmpty(io, alloc, path, .unlimited);
 }
 
-/// docExists reports whether the doc's file is present (the route uses this to
+/// hasDoc reports whether the doc's file is present (the route uses this to
 /// 404 an unknown slug; readUserDoc can't tell missing from empty).
-pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
+pub fn hasDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
     const path = try docPath(alloc, uid, slug);
     return disk.has(io, alloc, path);
 }
@@ -197,7 +197,7 @@ pub fn writeUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, bod
 /// createUserDoc creates a new empty doc with a title-derived, collision-suffixed
 /// slug, and returns the chosen slug.
 pub fn createUserDoc(io: Io, alloc: Alloc, uid: []const u8, title: []const u8) ![]const u8 {
-    const slug = try uniqueDocSlug(io, alloc, uid, try slugifyTitle(alloc, title));
+    const slug = try findUniqueDocSlug(io, alloc, uid, try slugifyTitle(alloc, title));
     const path = try docPath(alloc, uid, slug);
     try disk.write(io, alloc, path, "", .{});
     return slug;

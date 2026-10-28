@@ -341,7 +341,7 @@ fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !boo
 /// caller has saved to their reading list within this topic, for the page to
 /// mark its bubbles. Served from reading_list's mtime-cached parse.
 fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {
-    const ids = try reading_list.savedIdsFor(io, alloc, uid, conv_key, sid);
+    const ids = try reading_list.loadSavedIds(io, alloc, uid, conv_key, sid);
     var out: std.ArrayList(u8) = .empty;
     try out.append(alloc, '[');
     for (ids, 0..) |id, i| {

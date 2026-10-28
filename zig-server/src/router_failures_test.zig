@@ -18,7 +18,7 @@ const router = @import("router.zig");
 test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-vmm QUEUE 114)" {
     // A 404 says "no such doc", and an API client's next save may then
     // replace one that is there (QUEUE 105's pattern, through a wrapper:
-    // docs_store.docExists).
+    // docs_store.hasDoc).
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
