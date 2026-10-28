@@ -64,8 +64,7 @@ at the bottom of that file) is zig-metal-unikernel's HOST.md, "Live streams".
 
 ## Markdown dialect regression harness
 
-The zig renderer (the chat-markdown checkout's `src/markdown.zig`, module
-`chat_markdown`) **is** the definition of lynrummy's markdown dialect. `src/markdown_regression_test.zig` is its regression harness: it renders every
+The zig renderer (the chat-markdown repository, module `chat_markdown`) **is** the definition of lynrummy's markdown dialect. `src/markdown_regression_test.zig` is its regression harness: it renders every
 frozen `{id, md, html}` case (arena reset per message) and asserts the output
 still equals the baseline. There is **no external oracle** — `html` is whatever
 our renderer produces, frozen and human-reviewed. Three corpora:
