@@ -87,6 +87,10 @@ const app_start = @import("app_start.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");
+const route_family = @import("route_family.zig");
+pub const Family = route_family.Family;
+pub const familyOf = route_family.familyOf;
+pub const routeBodyLimit = route_family.routeBodyLimit;
 /// The game store's bounds (zig-metal-unikernel QUEUE item 52), and where the game
 /// store is (`dataRoot`).
 const game_limits = @import("game_limits.zig");
@@ -150,33 +154,10 @@ const App = struct {
     pub const between = betweenRequests;
 };
 
-/// **WHICH PART OF THE SITE A REQUEST IS FOR** (metal-vmm QUEUE 189.5), as
-/// /admin/host counts them: an upload (posted or fetched), a live stream,
-/// docs, the rest of chat, the games, the admin pages, or the site around
-/// them (the home page, sign-in, assets).
-pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
-
 /// **BETWEEN REQUESTS**: a slice of the operator's background script
 /// (admin_script.zig, metal-vmm QUEUE 222), while it has more.
 fn betweenRequests(io: Io, unix_s: i64) bool {
     return @import("admin_script.zig").between(io, unix_s);
-}
-
-fn familyOf(path: []const u8) Family {
-    if (http.pathUnder(path, "/admin") != null) return .admin;
-    const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
-    if (in_chat) |sub| {
-        // As routeBodyLimit reads an upload: `.../upload/` is the upload.
-        if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload") or std.mem.indexOf(u8, sub, "/uploads/") != null) return .uploads;
-        // `.../stream/` is a topic's stream too (chat.zig's segments skip
-        // empty ones), as the router holds it (the hooks test below).
-        if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/stream") or std.mem.eql(u8, sub, "/notifications")) return .streams;
-        if (http.pathUnder(sub, "/docs") != null) return .docs;
-        return .chat;
-    }
-    for ([_][]const u8{ "/game", "/puzzles", "/driving", "/chess", "/delivery", "/play" }) |g|
-        if (http.pathUnder(path, g) != null) return .games;
-    return .site;
 }
 
 /// **WHO MAY HOLD AN UPLOAD SLOT** (metal-vmm QUEUE 169): whom the upload's
@@ -188,26 +169,6 @@ fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0 or !try users.principalAuthorized(io, alloc, uid)) return null;
     return uid;
-}
-
-/// **EACH ROUTE'S CAP ON A BODY, FROM ITS PATH** (metal-vmm QUEUE 167.2): the
-/// most any handler under the path reads, which the host reads the body by
-/// (webbox's body.zig: before the turn, or in it under its deadline). Every
-/// handler checks its own cap again (`http.readLimitedBody`), so a path's
-/// is the largest of its handlers', and the test below holds each handler's
-/// within its path's. Only the upload's is past `body_rule.before_turn_most`.
-fn routeBodyLimit(path: []const u8) u64 {
-    const caps = request_limits.body;
-    const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
-    if (in_chat) |sub| {
-        // chat.zig's segments skip empty ones: `.../upload/` is the upload.
-        if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload")) return caps.upload_any;
-        if (http.pathUnder(sub, "/docs") != null) return caps.doc;
-        return caps.chat_message;
-    }
-    if (http.pathUnder(path, "/game") != null) return caps.game_new_session;
-    if (std.mem.eql(u8, path, "/admin/script")) return caps.script;
-    return caps.largest_form;
 }
 
 /// When a request's body is read, and how long it may take (webbox's
@@ -445,48 +406,4 @@ test "route families: each request counted under its part of the site (metal-vmm
             return error.TestExpectedEqual;
         }
     }
-}
-
-test "the pre-turn hooks agree with the Roc router: an upload's path gets the upload's cap and family, a stream's the streams', a doc's the docs'" {
-    // familyOf and routeBodyLimit classify a path before the turn, in Zig
-    // (they must: no Roc runs outside a call, docs/ROC-CHAT.md R1), beside
-    // the Roc router's parse. Every path the router sends to an upload, a
-    // stream or the docs must be one they classify so.
-    const roc_chat = @import("roc_chat");
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const caps = request_limits.body;
-    var checked: usize = 0;
-    for (try @import("chat_route_corpus_test.zig").corpus(a)) |sub| for ([_][]const u8{ "/chat", "/channel" }) |area| {
-        const path = try std.mem.concat(a, u8, &.{ area, sub });
-        if ((http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel")) == null) continue;
-        roc_chat.use(a);
-        var routing: roc_chat.Routing = .{};
-        const d = try roc_chat.decide(a, sub, std.mem.eql(u8, area, "/channel"), .GET, routing.host());
-        // A route the Roc answers outright (/chat, the conversations, a
-        // message's link, a new topic) is no upload, stream or doc.
-        if (d != .serve) continue;
-        const r = d.serve.route;
-        const stream = r.tail == .stream or r.family == .notifications or r.family == .sidebar_stream or
-            ((r.family == .recent or r.family == .images or r.family == .code) and std.mem.eql(u8, r.rest, "/stream"));
-        const wrong: ?[]const u8 = if (r.tail == .upload and routeBodyLimit(path) != caps.upload_any)
-            "an upload without the upload's cap"
-        else if ((r.tail == .upload or r.tail == .uploads) and familyOf(path) != .uploads)
-            "an upload not counted as one"
-        else if (stream and familyOf(path) != .streams)
-            "a stream not counted as one"
-        else if (r.family == .docs and familyOf(path) != .docs)
-            "a doc not counted as one"
-        else if (r.family == .docs and routeBodyLimit(path) != caps.doc)
-            "a doc without the doc's cap"
-        else
-            null;
-        if (wrong) |why| {
-            std.debug.print("{s}: {s} (routed {f}; family {t}, cap {d})\n", .{ path, why, r, familyOf(path), routeBodyLimit(path) });
-            return error.TestUnexpectedResult;
-        }
-        checked += 1;
-    };
-    try testing.expect(checked > 5000);
 }

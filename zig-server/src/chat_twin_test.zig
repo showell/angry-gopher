@@ -19,7 +19,6 @@ const http = @import("webbox").http;
 const webbox_html = @import("webbox").html;
 const webbox_http = @import("webbox").http;
 const chrome = @import("chat_chrome.zig");
-const chat_page = @import("chat_page.zig");
 const chat_upload = @import("chat_upload.zig");
 const ChatMessage = @import("chat_store.zig").ChatMessage;
 const images_store = @import("images_store.zig");
@@ -106,6 +105,7 @@ const Fn = enum(u8) {
     recent_where = 69,
     json_out = 70,
     chat_url_on_site = 71,
+    route_kind = 72,
 };
 
 /// One Roc call's results, in `a`.
@@ -358,6 +358,53 @@ test "ChatUrl: a path is on this site exactly when webbox's Target.of keeps it, 
     }
     try differ.none(compared);
     try testing.expect(kept > 100 and compared - kept > 100);
+}
+
+test "the pre-turn hooks agree with the Roc router: an upload's path gets the upload's cap and family, a stream's the streams', a doc's the docs'" {
+    // router.zig's familyOf and routeBodyLimit classify a path before the
+    // turn, in Zig (they must: no Roc runs outside a call, docs/ROC-CHAT.md
+    // R1), beside the Roc router's parse. Every path the router parses as
+    // an upload, a stream or a doc must be one they classify so, whoever
+    // then answers it (the Roc decides whose a conversation is, metal-vmm
+    // QUEUE 271, so the parse is asked directly).
+    var arena = setUp();
+    defer arena.deinit();
+    defer twin.deinit();
+    const a = arena.allocator();
+    const router = @import("route_family.zig");
+    const caps = @import("limits.zig").body;
+    var checked: usize = 0;
+    var kinds: usize = 0;
+    for (try @import("chat_route_paths_test.zig").corpus(a)) |sub| for ([_][]const u8{ "/chat", "/channel" }) |area| {
+        const path = try std.mem.concat(a, u8, &.{ area, sub });
+        if ((webbox_http.pathUnder(path, "/chat") orelse webbox_http.pathUnder(path, "/channel")) == null) continue;
+        if (!std.unicode.utf8ValidateSlice(sub)) continue;
+        const kind = (try roc1(a, .route_kind, &.{ sub, if (std.mem.eql(u8, area, "/channel")) "c" else "" })).?;
+        const is = struct {
+            fn f(k: []const u8, want: []const u8) bool {
+                return std.mem.eql(u8, k, want);
+            }
+        }.f;
+        const wrong: ?[]const u8 = if (is(kind, "upload") and router.routeBodyLimit(path) != caps.upload_any)
+            "an upload without the upload's cap"
+        else if ((is(kind, "upload") or is(kind, "uploads")) and router.familyOf(path) != .uploads)
+            "an upload not counted as one"
+        else if (is(kind, "stream") and router.familyOf(path) != .streams)
+            "a stream not counted as one"
+        else if (is(kind, "docs") and router.familyOf(path) != .docs)
+            "a doc not counted as one"
+        else if (is(kind, "docs") and router.routeBodyLimit(path) != caps.doc)
+            "a doc without the doc's cap"
+        else
+            null;
+        if (wrong) |why| {
+            std.debug.print("{s}: {s} (parsed {s}; family {t}, cap {d})\n", .{ path, why, kind, router.familyOf(path), router.routeBodyLimit(path) });
+            return error.TestUnexpectedResult;
+        }
+        if (!is(kind, "other")) kinds += 1;
+        checked += 1;
+    };
+    try testing.expect(checked > 5000 and kinds > 250);
 }
 
 // ── Paths (chat_paths.zig) ─────────────────────────────────────────────────
@@ -902,7 +949,7 @@ test "Reaction: the sidecar's line as reactionLine wrote it, field order and esc
     try frozen.check("reactionLine", "1f17da2b5bdd2e60042ba831bc805e830671f6fd026733902a9340a6448cefef", 4000);
 }
 
-// ── Chrome, Pages, Html (chat_chrome.zig, chat_page.zig, webbox html.zig) ──
+// ── Chrome, Pages, Html (chat_chrome.zig, the old chat_page.zig, webbox html.zig) ──
 
 /// Every script's src as the chrome names it, as `name, src` pairs: what
 /// the host hands the Roc.
@@ -945,19 +992,16 @@ test "Chrome: a chat page's shell, byte for byte, for every title, viewer and bo
     try differ.none(compared);
 }
 
-test "Pages: the 404 that says why, byte for byte; the first-topic shell, the empty /chat and the conversation page as the Zig wrote them (frozen, metal-vmm QUEUE 263d)" {
+test "Pages: the 404 that says why, the first-topic shell, the empty /chat and the conversation page as the Zig wrote them (frozen, metal-vmm QUEUE 263d, 271)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
-    var compared: usize = 0;
-    // The three pages the Zig no longer writes are frozen: hashed over the
+    // The four pages the Zig no longer writes are frozen: hashed over the
     // Roc's answers taken while the Zig's agreed (noTopicsHtml,
-    // noConversationsHtml, conversationHtml). They name each script by a
-    // fixed hash, so editing one does not move them.
+    // noConversationsHtml, conversationHtml; notFoundHtml since 271). They
+    // name each script by a fixed hash, so editing one does not move them.
     var frozen: Frozen = .{};
-    const pairs = try srcPairs(a);
     var fixed_pairs: std.ArrayList([]const u8) = .empty;
     inline for (chrome.assets) |asset| try fixed_pairs.appendSlice(a, &.{ asset.name, "/chat/" ++ asset.name ++ "?h=0" });
     // Every text a page shows is text: the Roc's pages take it decoded.
@@ -971,10 +1015,7 @@ test "Pages: the 404 that says why, byte for byte; the first-topic shell, the em
     for (texts, 0..) |t, i| {
         const u = texts[(i * 5 + 1) % texts.len];
         const w = texts[(i * 11 + 2) % texts.len];
-        const z = try chat_page.notFoundHtml(a, t, u, w);
-        const r = (try roc1(a, .not_found_page, try std.mem.concat(a, []const u8, &.{ &.{ t, u, w }, pairs }))).?;
-        compared += 1;
-        if (!std.mem.eql(u8, z, r)) differ.add("not_found_page(\"{f}\"): zig {d} bytes, roc {d}", .{ std.zig.fmtString(t), z.len, r.len });
+        frozen.add(&.{ "not_found_page", (try roc1(a, .not_found_page, try std.mem.concat(a, []const u8, &.{ &.{ t, u, w }, fixed_pairs.items }))).? });
         const shells = [_]struct { f: Fn, args: []const []const u8 }{
             .{ .f = .no_topics_page, .args = &.{ t, u, w } },
             .{ .f = .no_conversations_page, .args = &.{t} },
@@ -990,8 +1031,7 @@ test "Pages: the 404 that says why, byte for byte; the first-topic shell, the em
         const args: []const []const u8 = &.{ t, u, w, texts[(i * 3) % texts.len], ([_][]const u8{ "1", "3", "10", "12" })[i % 4], texts[(i * 19) % texts.len], texts[(i * 23) % texts.len], try digits(a, chat_upload.image_max), try digits(a, chat_upload.video_max), accept, try digits(a, @import("search_tokens.zig").min_len) };
         frozen.add(&.{ "conversation_page", (try roc1(a, .conversation_page, try std.mem.concat(a, []const u8, &.{ args, fixed_pairs.items }))).? });
     }
-    try differ.none(compared);
-    try frozen.check("pages", "d7edf2cb0b7525f85136edf0826a4ec51e3e8318da69e0d88c38fcaac860f7e4", 492);
+    try frozen.check("pages", "d4cfea032676f61fc04aa022ba96c923e4c5bf536f1c7a3564b29dd347e1909b", 656);
 }
 
 test "Pages: the sidebar's JSON for every viewer, conversation, pin and topic list tried, script-safe (frozen, metal-vmm QUEUE 263c)" {

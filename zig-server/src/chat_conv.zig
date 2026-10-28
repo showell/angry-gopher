@@ -1,7 +1,6 @@
-//! conv: the resolved-conversation domain types shared by the chat dispatcher
-//! (chat.zig) and the page renderer (chat_page.zig). A Conv/Topic is produced
-//! once by routing — where the dm/channel distinction is concrete — then travels
-//! as data, so neither side has to re-discriminate the kind.
+//! conv: the resolved-conversation domain types the chat dispatcher
+//! (chat.zig) builds for the tails the Roc hands back, from the key, so the
+//! tails need not re-discriminate the kind.
 
 const store = @import("chat_store.zig");
 

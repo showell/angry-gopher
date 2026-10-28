@@ -47,7 +47,6 @@ const html = @import("webbox").html;
 // pages (login, game, admin, …) escape without importing the chat dispatcher.
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
-const page = @import("chat_page.zig");
 const chat_sse = @import("chat_sse.zig");
 const sse = @import("webbox").sse;
 const edge = @import("webbox").edge;
@@ -69,8 +68,7 @@ const Request = std.http.Server.Request;
 /// Max bytes for one posted message.
 const max_message_bytes = limits.body.chat_message;
 
-// Resolved-conversation domain types (Conv, Topic) live in chat_conv.zig — shared
-// with the page renderer (chat_page.zig) so neither side re-discriminates kind.
+// Resolved-conversation domain types (Conv, Topic) live in chat_conv.zig.
 const Conv = @import("chat_conv.zig").Conv;
 const Topic = @import("chat_conv.zig").Topic;
 
@@ -173,90 +171,43 @@ pub fn hasTopic(topics: []const []const u8, sid: []const u8) bool {
     return false;
 }
 
-/// channelRoute serves /channel/<name>[/<sid>[/...]]: `route.key` is a
-/// valid channel name (the router checked its shape).
+/// channelRoute serves a tail of /channel/<name>/<topic> the Roc handed
+/// back (roc-webbox chat/main.roc `serve_conversation!`): it found the
+/// channel the viewer's and the topic there, and answered every 404.
+/// **A FLOOR, NOT A DECISION**: the name must still be a channel's, so its
+/// folder is under the chat root; anything else is the Roc's mistake, the
+/// request's failure, never a page.
 fn channelRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route) !void {
-    const name = route.key;
-    // **ONE ANSWER, THAT SAYS WHY** (metal-vmm QUEUE 156(j)): a channel that
-    // is not there and one the viewer is not in (or was removed from) read
-    // alike, so the page names no channel a viewer cannot see.
-    const not_yours = try std.fmt.allocPrint(alloc, "#{s} is not a channel you are a member of.", .{name});
-    const members = (try chat_paths.channelMembers(io, alloc, name)) orelse return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
-    if (!chat_paths.hasMember(members, uid)) return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
-
+    if (!chat_paths.validChannelName(route.key) or route.part != .topic) return error.NotAHandedBackTail;
     const conv = Conv{
-        .meta = .{ .kind = .channel, .members = members },
-        .key = name,
-        .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name}),
-        .dir = try chat_paths.channelConvDir(alloc, name),
+        .meta = .{ .kind = .channel, .members = &.{} },
+        .key = route.key,
+        .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{route.key}),
+        .dir = try chat_paths.channelConvDir(alloc, route.key),
     };
-    switch (route.part) {
-        // The Roc's (roc-webbox chat/main.roc), handed back only when
-        // the Roc's `find!` did not find it, which
-        // was answered above.
-        .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
-        // A new topic: the Roc's, handed back only when the Roc's `find!` did not
-        // find the conversation, which was answered above.
-        .new => std.debug.panic("chat: a new topic is the Roc's, and its conversation was here", .{}),
-        .invalid => return http.notFound(req),
-        .topic => {
-            const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, route.topic });
-            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.topic, .title = title });
-        },
-    }
+    return topicRoute(req, io, alloc, bus, route, uid, .{ .conv = conv, .sid = route.topic, .title = "" });
 }
 
-/// convRoute serves /chat/c/<conv>[/<sid>[/...]]: `route.key` is the pair
-/// as written.
+/// convRoute serves a tail of /chat/c/<pair>/<topic> the Roc handed back,
+/// as channelRoute does: the key must still be a canonical pair, the
+/// viewer one of it.
 fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, route: Route) !void {
     const pair = route.key;
-    if (!try chat_paths.chatKeyParticipant(alloc, pair, uid)) return http.notFound(req);
-
-    // DM members are the two uids in the (already participant-checked) pair key.
+    if (!try chat_paths.chatKeyParticipant(alloc, pair, uid) or route.part != .topic) return error.NotAHandedBackTail;
     const us = std.mem.indexOfScalar(u8, pair, '_').?;
-    // The other half must be an account: a DM is between two people, and its
-    // folder and the fan-out's writes are named after both.
-    const other = if (std.mem.eql(u8, pair[0..us], uid)) pair[us + 1 ..] else pair[0..us];
-    if (!try users.principalExists(io, alloc, other)) return http.notFound(req);
     const conv = Conv{
         .meta = try store.ConvMeta.dm(alloc, pair[0..us], pair[us + 1 ..]),
         .key = pair,
         .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pair}),
         .dir = try chat_paths.dmConvDir(alloc, pair),
     };
-    switch (route.part) {
-        // The Roc's (roc-webbox chat/main.roc), handed back only when
-        // the Roc's `find!` did not find it, which
-        // was answered above.
-        .landing => std.debug.panic("chat: a conversation's landing is the Roc's, and it was here", .{}),
-        // A new topic: the Roc's, handed back only when the Roc's `find!` did not
-        // find the conversation, which was answered above.
-        .new => std.debug.panic("chat: a new topic is the Roc's, and its conversation was here", .{}),
-        .invalid => return http.notFound(req),
-        .topic => {
-            const partner = try partnerName(io, alloc, conv.key, uid);
-            const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, route.topic });
-            return topicRoute(req, io, alloc, bus, route, uid, Topic{ .conv = conv, .sid = route.topic, .title = title });
-        },
-    }
+    return topicRoute(req, io, alloc, bus, route, uid, .{ .conv = conv, .sid = route.topic, .title = "" });
 }
 
-/// topicRoute serves the per-topic tail shared by DMs and channels: the bare
-/// page, `/stream` (SSE), `/send` (POST a message), `/raw` (literal bytes),
-/// and the rest. `title` is the top-bar title.
+/// topicRoute serves the tails of a topic the Roc found the viewer's and handed
+/// back: its uploads, an upload, its stream, its download and its saved ids.
 fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid: []const u8, topic: Topic) !void {
     const conv = topic.conv;
-    // **A TOPIC THAT IS NOT THERE IS A 404 THAT SAYS SO** (metal-vmm QUEUE
-    // 156(j)), where its page was served as an empty one and became where
-    // /chat/default resumes. Every tail but `send`, which makes a topic as
-    // its first message does (the judges send to one first). Without case,
-    // as Steve's rule has it (2026-10-02, option 1: case does not tell
-    // topics apart, on FAT or on Linux).
-    const is_send = route.tail == .send or route.tail == .invalid_send;
-    if (!is_send and !try topicExists(io, alloc, conv.dir, topic.sid)) {
-        const what = try std.fmt.allocPrint(alloc, "There is no topic \u{201C}{s}\u{201D} in this conversation.", .{topic.sid});
-        return page.notFoundPage(req, io, alloc, uid, what, conv.base);
-    }
     switch (route.tail) {
         .page => std.debug.panic("chat.topicRoute: the page is the Roc's, and its topic was here", .{}),
         // /uploads/<file>: serve a stored image.
@@ -284,8 +235,8 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
             if (!isRead(req)) return http.methodNotAllowed(req, .GET);
             try savedIds(req, io, alloc, uid, conv.key, topic.sid);
         },
-        // No tail served here, or one with segments after it.
-        .invalid => try http.notFound(req),
+        // No tail served here, or one with segments after it: the Roc's 404.
+        .invalid => std.debug.panic("chat.topicRoute: an invalid tail is the Roc's", .{}),
     }
 }
 
@@ -294,10 +245,6 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, route: Route, uid:
 /// else: a POST there was served as if it were a GET.
 fn isRead(req: *const Request) bool {
     return req.head.method == .GET or req.head.method == .HEAD;
-}
-
-fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !bool {
-    return hasTopic(try chat_paths.listTopics(io, alloc, conv_dir), sid);
 }
 
 /// savedIds answers GET /<conv>/<sid>/saved → JSON array of the message ids the
@@ -330,13 +277,6 @@ fn serveAsset(req: *Request, name: []const u8) !void {
 }
 
 // ── small helpers ─────────────────────────────────────────────────────────────
-
-fn partnerName(io: Io, alloc: Alloc, conv: []const u8, me: []const u8) ![]const u8 {
-    if (std.mem.indexOfScalar(u8, conv, '_') == null) return conv;
-    const other = partnerOf(conv, me);
-    const name = try users.getUserName(io, alloc, other);
-    return if (name.len == 0) other else name;
-}
 
 /// formField pulls one application/x-www-form-urlencoded field from `body`,
 /// percent/plus-decoded, or null when absent. Field names here ("markdown",
