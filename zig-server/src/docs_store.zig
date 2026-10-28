@@ -17,9 +17,6 @@ const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const disk = @import("webbox").store;
 
-/// DocSummary is one sidebar entry: the slug + a display title derived from it.
-pub const DocSummary = struct { slug: []const u8, title: []const u8 };
-
 /// userDocsDir is one user's private docs directory ({chat_root}/users/<uid>/docs).
 pub fn userDocsDir(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ store.chat_root, "users", uid, "docs" });
@@ -109,56 +106,6 @@ fn docFileExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool 
     return disk.has(io, alloc, path);
 }
 
-/// listUserDocs enumerates a user's docs, alphabetically by slug. A missing dir
-/// means "no docs yet," not an error.
-pub fn listUserDocs(io: Io, alloc: Alloc, uid: []const u8) ![]DocSummary {
-    const dir_path = try userDocsDir(alloc, uid);
-    const entries = try disk.list(io, alloc, dir_path);
-
-    var out: std.ArrayList(DocSummary) = .empty;
-    for (entries) |entry| {
-        if (entry.kind == .directory) continue;
-        if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
-        const slug = entry.name[0 .. entry.name.len - ".md".len];
-        if (!validDocSlug(slug)) continue;
-        const owned = try alloc.dupe(u8, slug);
-        const title = try titleFromSlug(alloc, owned);
-        try out.append(alloc, .{ .slug = owned, .title = title });
-    }
-    const slice = try out.toOwnedSlice(alloc);
-    std.mem.sort(DocSummary, slice, {}, lessThanSlug);
-    return slice;
-}
-
-fn lessThanSlug(_: void, a: DocSummary, b: DocSummary) bool {
-    return std.mem.lessThan(u8, a.slug, b.slug);
-}
-
-/// mostRecentDocSlug returns the slug of the user's most-recently-modified doc,
-/// or null if they have none. Lets a bare /chat/docs land straight in the doc you
-/// last touched — and since a save bumps reading-list's mtime, right after saving
-/// a message you land in your reading list.
-pub fn mostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
-    const dir_path = try userDocsDir(alloc, uid);
-    const entries = try disk.list(io, alloc, dir_path);
-
-    var best_slug: ?[]const u8 = null;
-    var best_mtime: i96 = 0;
-    for (entries) |entry| {
-        if (entry.kind == .directory) continue;
-        if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
-        const slug = entry.name[0 .. entry.name.len - ".md".len];
-        if (!validDocSlug(slug)) continue;
-        const path = try std.fs.path.join(alloc, &.{ dir_path, entry.name });
-        const st = (try disk.statOrNull(io, alloc, path)) orelse continue;
-        if (best_slug == null or st.mtime > best_mtime) {
-            best_mtime = st.mtime;
-            best_slug = try alloc.dupe(u8, slug);
-        }
-    }
-    return best_slug;
-}
-
 /// titleFromSlug renders a slug back to a display title: hyphens to spaces,
 /// first letter upper-cased. Presentational reverse of slugifyTitle (lossy —
 /// the filename is the source of truth).
@@ -176,13 +123,6 @@ pub fn titleFromSlug(alloc: Alloc, slug: []const u8) ![]u8 {
 pub fn readUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) ![]const u8 {
     const path = try docPath(alloc, uid, slug);
     return disk.readOrEmpty(io, alloc, path, .unlimited);
-}
-
-/// docExists reports whether the doc's file is present (the route uses this to
-/// 404 an unknown slug; readUserDoc can't tell missing from empty).
-pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
-    const path = try docPath(alloc, uid, slug);
-    return disk.has(io, alloc, path);
 }
 
 /// writeUserDoc overwrites a doc's body. Refuses to CREATE a doc that doesn't

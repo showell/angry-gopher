@@ -8,15 +8,15 @@
 /channel	"/default"	404 text/html; charset=utf-8	am
 /chat	"/default/"	404	am
 /channel	"/default/"	404 text/html; charset=utf-8	am
-/chat	"/docs"	docs landing page	am
+/chat	"/docs"	200 text/html; charset=utf-8	am
 /channel	"/docs"	404 text/html; charset=utf-8	am
-/chat	"/docs/"	docs rest="/" landing page	am
+/chat	"/docs/"	200 text/html; charset=utf-8	am
 /channel	"/docs/"	404 text/html; charset=utf-8	am
 /chat	"/docs/new"	docs rest="/new" landing page	am
 /channel	"/docs/new"	404 text/html; charset=utf-8	am
 /chat	"/docsX"	404	am
 /channel	"/docsX"	404 text/html; charset=utf-8	am
-/chat	"/docs//x"	docs rest="//x" landing page	am
+/chat	"/docs//x"	404	am
 /channel	"/docs//x"	404 text/html; charset=utf-8	am
 /chat	"/recent"	200 text/html; charset=utf-8	am
 /channel	"/recent"	404 text/html; charset=utf-8	am
@@ -80,7 +80,7 @@
 /channel	"/c"	404 text/html; charset=utf-8	am
 /chat	"/nope"	404	am
 /channel	"/nope"	404 text/html; charset=utf-8	am
-/chat	"/docs/é"	docs rest="/é" landing page	am
+/chat	"/docs/é"	303 /chat/docs	am
 /channel	"/docs/é"	404 text/html; charset=utf-8	am
 /chat	"/1_2"	404	am
 /channel	"/1_2"	404	am
@@ -1234,9 +1234,9 @@
 /channel	"/\\xff"	404	am
 /chat	"/ops/\\xc3"	404	am
 /channel	"/ops/\\xc3"	404 text/html; charset=utf-8	am
-/chat	"/docs/kept.md"	docs rest="/kept.md" landing page	am
+/chat	"/docs/kept.md"	404	am
 /channel	"/docs/kept.md"	404 text/html; charset=utf-8	am
-/chat	"/docs/lost.md"	docs rest="/lost.md" landing page	am
+/chat	"/docs/lost.md"	404	am
 /channel	"/docs/lost.md"	404 text/html; charset=utf-8	am
 /chat	"/c/1_3/new"	404	am
 /channel	"/c/1_3/new"	404 text/html; charset=utf-8	am

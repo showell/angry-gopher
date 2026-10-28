@@ -47,9 +47,12 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     // The same doc, now a link to itself: it cannot be looked at.
     const lost = try docs_store.docPath(a, "2", "lost");
     try std.Io.Dir.cwd().symLink(io, "lost.md", lost, .{});
-    const resp = try harness.UidSite.ask(a, io, "/chat/docs/lost.md", member);
-    try testing.expect(std.mem.indexOf(u8, harness.status(resp), "404") == null);
-    try testing.expect(std.mem.startsWith(u8, harness.status(resp), "5"));
+    // The Roc's read fails the request with its error (metal-vmm QUEUE
+    // 289): the host's 500, never "no such file".
+    if (harness.UidSite.ask(a, io, "/chat/docs/lost.md", member)) |resp| {
+        try testing.expect(std.mem.indexOf(u8, harness.status(resp), "404") == null);
+        try testing.expect(std.mem.startsWith(u8, harness.status(resp), "5"));
+    } else |e| try testing.expect(e != error.FileNotFound);
 }
 
 /// The host's Io, but every file removal fails: a store whose delete is
