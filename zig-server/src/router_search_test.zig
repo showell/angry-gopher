@@ -158,10 +158,7 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=secretly", deb), "\"matched\":2") != null);
 
     // **A MESSAGE THAT LANDS IS FOUND**, without a build from the disk.
-    var hub = Hub.init(io, a);
-    var bus = Bus.of(&hub);
-    const meta = chat_store.ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    _ = try chat_store.appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = try chat_paths.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight", "");
+    _ = try chat_store.storeForTest(io, a, Now.read(io), .{ .dir = try chat_paths.dmConvDir(a, "1_2"), .key = "1_2", .sid = "ChitChat" }, .{ .name = "Steve", .id = "1" }, "zeppelins, tonight");
     chat_search.forgetAll();
     try testing.expect(std.mem.indexOf(u8, try harness.UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
 
@@ -233,22 +230,20 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
         while (it.next()) |w| try keys.put(a, try std.ascii.allocLowerString(a, w), {});
     }
     try testing.expect(keys.count() > 10);
-    // Built; then messages that land after it, through appendMessage, as
-    // the index takes them (and the disk, which the baseline reads).
+    // Built; then messages that land after it, through the store
+    // (storeMessage), as the index takes them (and the disk, which the
+    // baseline reads).
     _ = search_index.indexOrBuild(io, a).?;
-    var hub = Hub.init(io, a);
-    var bus = Bus.of(&hub);
     for (0..12) |n| {
         const pl = places[rand.uintLessThan(usize, places.len)];
         const channel = std.mem.startsWith(u8, pl[0], "channels/");
-        const meta = chat_store.ConvMeta{ .kind = if (channel) .channel else .dm, .members = &[_][]const u8{} };
         var body: std.ArrayList(u8) = .empty;
         for (0..rand.intRangeAtMost(usize, 1, 6)) |w| {
             if (w > 0) try body.append(a, ' ');
             try body.appendSlice(a, vocabulary[rand.uintLessThan(usize, vocabulary.len)]);
         }
         const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, pl[0] });
-        const m = try chat_store.appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = dir, .key = pl[0], .sid = pl[1] }, .{ .name = "Someone", .id = "1" }, body.items, "");
+        const m = try chat_store.storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = pl[0], .sid = pl[1] }, .{ .name = "Someone", .id = "1" }, body.items);
         const base = if (channel) try std.fmt.allocPrint(a, "/channel/{s}", .{pl[0]["channels/".len..]}) else try std.fmt.allocPrint(a, "/chat/c/{s}", .{pl[0]});
         try holds.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ base, pl[1], m.id }), body.items);
         _ = n;

@@ -117,66 +117,6 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, topic: TopicAddress) !Stream 
     return .{ .backlog = msgs, .sub = sub };
 }
 
-/// appendMessage stores one message, inside one handler's turn: read the current count → the message index, encode the on-disk block
-/// (with separator + body-line escaping), append it, record the count and the
-/// author in the `.count`, then publish the message's frame to the live subscribers — all in
-/// one turn, so no other handler's openStream can double- or zero-count it. Returns
-/// the stored message (id + server-stamped date). **THE RENDER IS HERE, ONCE**
-/// (chat_frame.zig): the published blob is the finished SSE frame, the same
-/// for every viewer, which each open stream writes as it is.
-/// **THE CHAT'S OWN SENDS ARE THE ROC'S** (roc-webbox chat/main.roc
-/// `appended!`, over `storeMessage`, the bus and `fanoutCrossPage`): this
-/// serves the Zig's other writers (login's welcome DM, docs' post to chat)
-/// and is the Zig the Roc's are held to.
-pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, topic: TopicAddress, from: Author, markdown: []const u8, cid: []const u8) !ChatMessage {
-    // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
-    // refuses such a block on every read, so it would go out live and be gone
-    // on reload. A nameless member (a release cut short) cannot post.
-    if (from.name.len == 0) return error.NoAuthor;
-    const path = try transcriptPath(alloc, topic.dir, topic.sid);
-
-    const index = try messageCount(io, alloc, topic.dir, topic.sid);
-
-    const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
-    const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
-    const msg = ChatMessage{ .id = id, .from = from.name, .at = at, .markdown = markdown, .uid = from.id };
-
-    const stored = try chatStoredForm(alloc, index, msg);
-    // **THE ECHO IS MADE BEFORE THE STORE** (metal-vmm QUEUE 177.1): the live
-    // publish's key and blob, so nothing can fail between the append and the
-    // (void) publish. A live publish that failed after the append answered
-    // success with no echo on the sender's stream, whose client then sent the
-    // message again: a duplicate.
-    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ topic.key, topic.sid });
-    const live_blob = try chat_frame.messageFrame(alloc, .{ .index = index, .from = from.name, .from_uid = from.id, .at = at, .id = id, .markdown = markdown, .cid = cid });
-    // **NO `.lastauthor`** (zig-metal-unikernel 153(1)): the `.count` carries the
-    // author, and nothing reads one an older server left.
-    const new_size = try store.append(io, alloc, path, stored);
-    // A crash between the append and this leaves a count whose size is not the
-    // transcript's — in either order — so messageCount refuses it and recounts.
-    // The size check is the protection, not the ordering.
-    writeCount(io, alloc, topic.dir, topic.sid, index + 1, new_size, .{
-        .offset = new_size - stored.len,
-        .uid = from.id,
-    });
-    // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
-    // takes the message, or drops itself whole if it cannot.
-    search_index.noteAppend(io, topic.dir, topic.sid, msg);
-
-    // **STORED IS DONE** (metal-vmm QUEUE 172): from here nothing fails the
-    // send, which a client would answer by sending the message again. The
-    // live publish cannot fail (it was made above); every surface after it
-    // is best-effort, each failure counted and said (/admin/host).
-    bus.publish(live_key, live_blob);
-
-    // Cross-page fanout: notify + recent + images + code,
-    // per member, to their per-uid bus, plus a sidebar topic-added on the
-    // topic's first message. Best-effort; inside the same handler's turn.
-    fanoutCrossPage(io, alloc, bus, meta, topic.key, topic.sid, msg, from.id, index);
-
-    return msg;
-}
-
 /// **A MESSAGE STORED, AS A PRIMITIVE** (the Roc's `Host.store_message!`;
 /// roc-webbox chat/main.roc `appended!` decides the rest of what
 /// `appendMessage` does): `stored`, message `index`'s block as
@@ -185,8 +125,6 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
 /// `msg`. The count cache and the search index are the store's
 /// infrastructure, so they go with the append. An append that failed is
 /// the error, nothing stored; past it nothing fails.
-/// `appendMessage`, the Zig's own writers' (login's welcome DM, docs' post
-/// to chat), is kept apart from this.
 pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u8, index: usize, msg: ChatMessage) !void {
     const path = try transcriptPath(alloc, topic.dir, topic.sid);
     const new_size = try store.append(io, alloc, path, stored);
@@ -200,6 +138,19 @@ pub fn storeMessage(io: Io, alloc: Alloc, topic: TopicAddress, stored: []const u
     // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
     // takes the message, or drops itself whole if it cannot.
     search_index.noteAppend(io, topic.dir, topic.sid, msg);
+}
+
+/// A message stored as the Roc's send stores it (`Host.store_message!`,
+/// roc-webbox chat/main.roc `append_message!`): numbered by the count,
+/// stamped `now`, its block appended by `storeMessage`. For the tests that
+/// need messages on disk; a send's frame and fan-out are the Roc's.
+pub fn storeForTest(io: Io, alloc: Alloc, now: Now, topic: TopicAddress, from: Author, markdown: []const u8) !ChatMessage {
+    const index = try messageCount(io, alloc, topic.dir, topic.sid);
+    const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
+    const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
+    const msg = ChatMessage{ .id = id, .from = from.name, .at = at, .markdown = markdown, .uid = from.id };
+    try storeMessage(io, alloc, topic, try chatStoredForm(alloc, index, msg), index, msg);
+    return msg;
 }
 
 // ── reactions sidecar ─────────────────────────────────────────────────────────
@@ -317,46 +268,13 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var hub = bus_mod.Hub.init(io, a);
-    var bus = Bus.of(&hub);
-
     const dir = try dmConvDir(a, "1_2");
-    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-    _ = try appendMessage(io, a, &bus, Now.read(io), meta, .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world", "");
+    _ = try storeForTest(io, a, Now.read(io), .{ .dir = dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "hello world");
 
     const msgs = try decodeChatFile(a, (try readTranscript(io, a, dir, "topic")).?);
     try testing.expectEqual(@as(usize, 1), msgs.len);
     try testing.expectEqualStrings("Tester", msgs[0].from);
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
-}
-
-test "a message's live frame is the frame a stream's backlog makes of it, the same for every viewer" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    _ = try f.send("first");
-    const ann = try f.bus.open("1_2/topic");
-    defer f.bus.close(ann);
-    const bob = try f.bus.open("1_2/topic");
-    defer f.bus.close(bob);
-
-    const sent = try f.send("**second**, with a [link](/chat)\n\n```\ncode\n```");
-
-    const live = ann.poll() orelse return error.TestUnexpectedResult;
-    defer ann.gpa.free(live);
-    const also = bob.poll() orelse return error.TestUnexpectedResult;
-    defer bob.gpa.free(also);
-    try testing.expectEqualStrings(live, also);
-
-    // The backlog's frame for the same message, from what was stored.
-    const msgs = try decodeChatFile(a, (try readTranscript(f.io, a, f.dir, "topic")).?);
-    try testing.expectEqualStrings(sent.id, msgs[1].id);
-    const replayed = try chat_frame.messageFrame(a, .{ .index = indexOf(msgs[1].id, "topic").?, .from = msgs[1].from, .from_uid = msgs[1].uid, .at = msgs[1].at, .id = msgs[1].id, .markdown = msgs[1].markdown });
-    try testing.expectEqualStrings(replayed, live);
-    try testing.expect(std.mem.startsWith(u8, live, "id: 1\ndata: "));
 }
 
 /// A store over a throwaway directory, for the count tests below. The test
@@ -392,15 +310,13 @@ pub const CountFixture = struct {
     }
 
     pub fn send(self: *CountFixture, text: []const u8) !ChatMessage {
-        const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-        return appendMessage(self.io, self.arena.allocator(), &self.bus, Now.read(self.io), meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
+        return storeForTest(self.io, self.arena.allocator(), Now.read(self.io), .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text);
     }
 
     /// A message as a server from before `uid:` stored it: its block names
     /// its author by name only, for the tests of how such a block is credited.
     pub fn sendLegacy(self: *CountFixture, text: []const u8) !ChatMessage {
-        const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-        return appendMessage(self.io, self.arena.allocator(), &self.bus, Now.read(self.io), meta, .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "" }, text, "");
+        return storeForTest(self.io, self.arena.allocator(), Now.read(self.io), .{ .dir = self.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "" }, text);
     }
 
     pub fn decoded(self: *CountFixture) !usize {
@@ -408,45 +324,6 @@ pub const CountFixture = struct {
         return (try decodeChatFile(a, (try readTranscript(self.io, a, self.dir, "topic")).?)).len;
     }
 };
-
-test "a send that answers an error stored nothing, and one that stored answers success and is echoed: memory that runs out after the append is a counted fan-out failure (metal-vmm QUEUE 172, 177.1)" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    const text = "a message with <img src=\"/x.png\"> and\n\n```\ncode\n```";
-    const live = try f.bus.open("1_2/topic");
-    defer f.bus.close(live);
-    var fail_at: usize = 0;
-    var stored_one = false;
-    while (fail_at < 400) : (fail_at += 1) {
-        var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
-        const before = try messageCount(f.io, a, f.dir, "topic");
-        const sent = appendMessage(f.io, failing.allocator(), &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
-        const after = try messageCount(f.io, a, f.dir, "topic");
-        if (sent) |m| {
-            try testing.expectEqual(before + 1, after);
-            // **A STORED MESSAGE IS ECHOED** (metal-vmm QUEUE 177.1): the
-            // sender's own stream shows it, or the client, with no echo,
-            // sends it again.
-            if (!echoed(live, m.id)) {
-                std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
-                return error.TestUnexpectedResult;
-            }
-            if (!failing.has_induced_failure) break; // every allocation passed
-            stored_one = true;
-        } else |_| {
-            if (after != before) {
-                std.debug.print("allocation {d} failed after the append: stored, and answered an error\n", .{fail_at});
-                return error.TestUnexpectedResult;
-            }
-        }
-    }
-    try testing.expect(stored_one);
-}
 
 /// Whether the subscriber has been sent a blob holding `needle` since it was
 /// last drained; drains it.
@@ -480,20 +357,4 @@ test "a line after a torn one starts its own line: the torn line is lost, the ne
     try appendLine(f.io, a, path, second);
     const twice = try readReactions(f.io, a, f.dir, "topic");
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "{s}{s}\n", .{ after, second }), twice);
-}
-
-test "a message is stamped with the request's time, not the clock's" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    const now = Now.at(1_761_400_000);
-    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-    const topic: TopicAddress = .{ .dir = f.dir, .key = "1_2", .sid = "topic" };
-    const sent = try appendMessage(f.io, a, &f.bus, now, meta, topic, .{ .name = "Tester", .id = "1" }, "hi", "");
-    try testing.expectEqualStrings("2025-10-25T13:46:40Z", sent.at);
-    const stored = try decodeChatFile(a, (try readTranscript(f.io, a, f.dir, "topic")).?);
-    try testing.expectEqualStrings("2025-10-25T13:46:40Z", stored[0].at);
 }

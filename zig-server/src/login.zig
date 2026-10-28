@@ -25,7 +25,6 @@
 const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
 const chat_fanout = @import("chat_fanout.zig");
-const Now = @import("request_time.zig").Now;
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -38,8 +37,6 @@ const client_address = @import("webbox").client_address;
 const throttle = @import("login_throttle.zig");
 const chat = @import("chat.zig");
 const html = @import("webbox").html;
-const store = @import("chat_store.zig");
-const chat_state = @import("chat_state.zig");
 const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
@@ -158,7 +155,6 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             const id = cur.id;
             throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, name);
-            sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
         },
         .stranger => {
@@ -184,7 +180,6 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             const id = try registerMember(io, alloc, checked, password);
             throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, valid);
-            sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
         },
     }
@@ -323,44 +318,8 @@ fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_
     }
 }
 
-/// host_uid is uid=1 — the site's host (Steve on prod). New members get an
-/// automated welcome DM from this account so their Chat opens on a real
-/// conversation and they know a human will reply. The display name is looked up,
-/// not hard-coded.
-const host_uid = "1";
-
-/// sendHostWelcome seeds a "general" DM topic from the host to a freshly
-/// registered member with an automated hello, and points the new member's /chat
-/// resume bookmark at it (they have none yet, so /chat would otherwise show the
-/// empty state). No-op when the new member IS the host, when there's no host
-/// account, or when the host↔member DM already has a topic — so it's idempotent
-/// across re-registration. Best-effort: a failure just means no welcome, never a
-/// broken signup.
-fn sendHostWelcome(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) void {
-    // absent-ok: a best-effort welcome: a failure means no welcome, never a broken signup.
-    sendHostWelcomeImpl(io, alloc, bus, new_uid, Now.read(io)) catch {};
-}
-
-fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, now: Now) !void {
-    if (std.mem.eql(u8, new_uid, host_uid)) return;
-    if (!try users.principalExists(io, alloc, host_uid)) return;
-
-    const host_name = try users.getUserName(io, alloc, host_uid);
-    const pair = try chat_paths.chatPairKey(alloc, host_uid, new_uid);
-    const dir = try chat_paths.dmConvDir(alloc, pair);
-
-    // Idempotent: only seed when this DM has no topics yet.
-    if ((try chat_paths.firstTopic(io, alloc, dir)).len != 0) return;
-
-    const meta = try store.ConvMeta.dm(alloc, host_uid, new_uid);
-
-    const topic = "general";
-    const msg = try std.fmt.allocPrint(alloc, "Hi, this is an automated message from {s}. Please say hello and {s} will get back to you soon.", .{ host_name, host_name });
-    _ = try store.appendMessage(io, alloc, bus, now, meta, .{ .dir = dir, .key = pair, .sid = topic }, .{ .name = host_name, .id = host_uid }, msg, "");
-
-    // The new member has no last-conv bookmark yet — land their /chat here.
-    try chat_state.setLastViewedTopic(io, alloc, new_uid, pair, topic);
-}
+// The host's welcome DM is the Roc's, on the member's first /chat
+// (roc-webbox chat/main.roc `welcome!`, metal-vmm QUEUE 279).
 
 // ── cookies + response helpers ────────────────────────────────────────────────
 

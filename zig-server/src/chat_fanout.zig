@@ -3,15 +3,12 @@
 //! recent, images, code), each failure counted (metal-vmm QUEUE 156(c), 172;
 //! split from chat_store.zig by 174).
 //!
-//! **A SECOND IMPLEMENTATION, FOR NOW** (roc-webbox docs/ROC-CHAT.md C8b): a
-//! send through the Roc router fans out by the Roc's (chat/Fanout.roc), its
-//! parts the Roc's own, over the host's `append_entry!` and `report_fanout_failure!`
-//! (chat_router.zig). `fanoutCrossPage` stays for the Zig's own writers,
-//! `appendMessage` (login's welcome DM, docs' post to chat), until they move
-//! (C9-C10), and as the twins' oracle: chat_twin_test.zig holds each encoder
-//! to the Roc's, chat_actions_twin_test.zig a whole send's frames, feeds and
-//! failures, frozen. The count and the last failure stay here, the
-//! process's, said on /admin/host by both.
+//! **THE FAN-OUT IS THE ROC'S** (roc-webbox chat/Fanout.roc, over the host's
+//! `append_entry!` and `report_fanout_failure!`, chat_router.zig; metal-vmm
+//! QUEUE 279 took the last Zig writer). What stays: the bus keys the streams
+//! subscribe on, the encoders and `recentWhere` chat_twin_test.zig holds the
+//! Roc's to, and the count of failures and the last one, the process's,
+//! said on /admin/host.
 
 const std = @import("std");
 const chat_paths = @import("chat_paths.zig");
@@ -27,7 +24,6 @@ const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
 const testing = std.testing;
 const chat_store = @import("chat_store.zig");
-const appendMessage = chat_store.appendMessage;
 const ChatMessage = chat_store.ChatMessage;
 const CountFixture = chat_store.CountFixture;
 const ConvMeta = chat_store.ConvMeta;
@@ -89,130 +85,6 @@ pub fn fanoutText(alloc: Alloc) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{d}; the last: {s}", .{ fanout_failures, fanout_last });
 }
 
-/// fanoutCrossPage publishes one new message to every cross-page attention feed
-///: notify (status strip), recent (Recent page), images /
-/// code (per-user transcripts) per member, plus a sidebar topic-added on the
-/// topic's FIRST message (index == 0). Best-effort: the message is saved
-/// before; a failure for one member's surface is counted and said, and never
-/// blocks the write or that member's other surfaces.
-pub fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
-    // What every surface shares: a failure here is counted, never a surface
-    // skipped in silence (metal-vmm QUEUE 172: images and code, durable and
-    // with no rebuild, were lost uncounted).
-    const base = convKeyBaseURL(alloc, conv_key) catch |e| return fanoutFailed("every surface", "every member", e, conv_key, sid);
-    const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch |e| return fanoutFailed("every surface", "every member", e, conv_key, sid);
-    const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown);
-    const tags = images_store.extractImageTags(alloc, msg.markdown);
-    const blocks = code_store.extractCodeBlocks(alloc, msg.markdown);
-    const src_url = images_store.imagesSourceURL(alloc, base, msg.id);
-
-    // notify text is viewer-invariant (rec_url is the per-conv topic URL, the
-    // notify-strip link).
-    const notify_text = notifyText(alloc, meta.kind, msg.from, conv_key, sid);
-    // topic-added (sidebar) — only on the topic's first message; viewer-invariant.
-    const topic_added: Alloc.Error![]const u8 = if (index == 0) topicAddedEvent(alloc, conv_key, sid, rec_url) else "";
-
-    const fan = Fan{
-        .io = io,
-        .alloc = alloc,
-        .bus = bus,
-        .meta = meta,
-        .conv_key = conv_key,
-        .sid = sid,
-        .msg = msg,
-        .from_id = from_id,
-        .rec_url = rec_url,
-        .src_url = src_url,
-        .excerpt = excerpt,
-        .tags = tags,
-        .blocks = blocks,
-        .notify_text = notify_text,
-        .topic_added = topic_added,
-    };
-    // **ONE SURFACE AT A TIME** (metal-vmm QUEUE 156(c)): a failure costs
-    // that member that surface and is said; it never skips their others (a
-    // `catch continue` on images lost their code, which is durable and has
-    // no rebuild).
-    for (meta.members) |uid| {
-        inline for (.{ "notify", "sidebar", "recent", "images", "code" }) |surface| {
-            @field(Fan, surface)(&fan, uid) catch |e| fanoutFailed(surface, uid, e, conv_key, sid);
-        }
-    }
-}
-
-/// One message's fan-out, a function per surface, each failing alone.
-const Fan = struct {
-    io: Io,
-    alloc: Alloc,
-    bus: *Bus,
-    meta: ConvMeta,
-    conv_key: []const u8,
-    sid: []const u8,
-    msg: ChatMessage,
-    from_id: []const u8,
-    rec_url: []const u8,
-    // What each surface needs, or why it could not be had: the surfaces
-    // that need it fail, counted, one member at a time.
-    src_url: Alloc.Error![]const u8,
-    excerpt: @typeInfo(@TypeOf(recent_feed.recentExcerpt)).@"fn".return_type.?,
-    tags: @typeInfo(@TypeOf(images_store.extractImageTags)).@"fn".return_type.?,
-    blocks: @typeInfo(@TypeOf(code_store.extractCodeBlocks)).@"fn".return_type.?,
-    notify_text: Alloc.Error![]const u8,
-    topic_added: Alloc.Error![]const u8,
-
-    /// Every member EXCEPT the author is pinged. The favicon dot means "a
-    /// partner did something"; you don't notify yourself about your own
-    /// message (the author already sees the self-confirm via the main feed
-    /// echo). Skipping the author here is the real invariant — the open-feed
-    /// conv+topic suppression in notify.js only covers the currently-viewed
-    /// thread, so author-skip is what keeps the dot quiet when you send to a
-    /// thread you're not actively staring at.
-    fn notify(f: *const Fan, uid: []const u8) !void {
-        if (std.mem.eql(u8, uid, f.from_id)) return;
-        f.bus.publish(try notifyBusKey(f.alloc, uid), try notifyEvent(f.alloc, f.conv_key, f.sid, try f.notify_text, f.rec_url));
-    }
-
-    /// topic-added to every member on the first message only.
-    fn sidebar(f: *const Fan, uid: []const u8) !void {
-        const topic_added = try f.topic_added;
-        if (topic_added.len == 0) return;
-        f.bus.publish(try sidebarBusKey(f.alloc, uid), topic_added);
-    }
-
-    /// Every member sees the row (sender included). `who` renders "You" for
-    /// the recipient who authored it; everyone else sees the name.
-    fn recent(f: *const Fan, uid: []const u8) !void {
-        // absent-ok: the recent feed's "where" label only; the row itself is sent.
-        const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
-        const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
-        var rj: std.ArrayList(u8) = .empty;
-        try recent_feed.encodeChatEvent(&rj, f.alloc, .{ .at = f.msg.at, .url = f.rec_url, .who = who, .where = where, .topic = f.sid, .excerpt = try f.excerpt, .dm = f.meta.kind == .dm });
-        f.bus.publish(try recentBusKey(f.alloc, uid), rj.items);
-    }
-
-    /// Only when the message carried <img> tags.
-    fn images(f: *const Fan, uid: []const u8) !void {
-        const tags = try f.tags;
-        if (tags.len == 0) return;
-        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.at, .images = tags };
-        try images_store.appendImagesEntry(f.io, f.alloc, uid, e);
-        var ij: std.ArrayList(u8) = .empty;
-        try images_store.encodeImagesEvent(&ij, f.alloc, e, try f.src_url);
-        f.bus.publish(try imagesBusKey(f.alloc, uid), ij.items);
-    }
-
-    /// Only when the message carried fenced code blocks.
-    fn code(f: *const Fan, uid: []const u8) !void {
-        const blocks = try f.blocks;
-        if (blocks.len == 0) return;
-        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.at, .blocks = blocks };
-        try code_store.appendCodeEntry(f.io, f.alloc, uid, e);
-        var cj: std.ArrayList(u8) = .empty;
-        try code_store.encodeCodeEvent(&cj, f.alloc, e, try f.src_url);
-        f.bus.publish(try codeBusKey(f.alloc, uid), cj.items);
-    }
-};
-
 /// The notify strip's line: DMs read "X sent you a message on <sid>.";
 /// channels read "X posted to <key> > <sid>.".
 pub fn notifyText(alloc: Alloc, kind: chat_store.ConvKind, from: []const u8, conv_key: []const u8, sid: []const u8) Alloc.Error![]const u8 {
@@ -248,44 +120,4 @@ pub fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, v
     }
     const name = try users.getUserName(io, alloc, other);
     return std.fmt.allocPrint(alloc, "to {s}", .{name});
-}
-
-test "the fan-out's surfaces fail one at a time, each said: a member's images that will not write still leave their code (metal-vmm QUEUE 156(c))" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    // Member 2's images.md is a folder: its write fails.
-    try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "2", "images.md" }));
-    const before = fanout_failures;
-    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
-    _ = try appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
-    try testing.expectEqual(before + 1, fanout_failures);
-    try testing.expect(std.mem.startsWith(u8, fanout_last, "images for member 2, "));
-    const code = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "2", "code.md" });
-    try testing.expect((try Io.Dir.cwd().readFileAlloc(f.io, code, a, .limited(4096))).len > 0);
-    // And member 1's surfaces are whole.
-    _ = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "images.md" }), a, .limited(4096));
-}
-
-test "the DM with yourself fans out to you once: one images.md entry, one code.md entry, per message" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var f: CountFixture = undefined;
-    try f.init(threaded.io());
-    defer f.deinit();
-    const a = f.arena.allocator();
-    const dir = try chat_paths.dmConvDir(a, "1_1");
-    const meta = try ConvMeta.dm(a, "1", "1");
-    try testing.expectEqual(@as(usize, 1), meta.members.len);
-    _ = try appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = dir, .key = "1_1", .sid = "notes" }, .{ .name = "Tester", .id = "1" }, "<img src=\"/x.png\">\n\n```\ncode\n```", "");
-    for ([_][]const u8{ "images.md", "code.md" }) |feed| {
-        const text = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", feed }), a, .limited(4096));
-        errdefer std.debug.print("{s}:\n{s}\n", .{ feed, text });
-        try testing.expectEqual(@as(usize, 1), std.mem.count(u8, text, "Sent by Tester"));
-    }
-    // Two people are two members.
-    try testing.expectEqual(@as(usize, 2), (try ConvMeta.dm(a, "1", "2")).members.len);
 }

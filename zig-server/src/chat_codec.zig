@@ -20,7 +20,6 @@ const backfillSidecars = chat_count.backfillSidecars;
 const countPath = chat_count.countPath;
 const readTranscript = chat_paths.readTranscript;
 const transcriptPath = chat_paths.transcriptPath;
-const appendMessage = chat_store.appendMessage;
 const ConvMeta = chat_store.ConvMeta;
 const cutSeq = chat_store.cutSeq;
 const CountFixture = chat_store.CountFixture;
@@ -216,15 +215,13 @@ test "the decoder refuses a block with no id, author or date, counted; a blank p
     try testing.expectEqual(before + 4, refused_blocks);
 }
 
-test "a refused block keeps its number: a recount counts blocks, so no id is given twice; and no message is written with no author (the review of 156)" {
+test "a refused block keeps its number: a recount counts blocks, so no id is given twice; and no message is written with no author (the review of 156: the Roc's append_message! refuses one)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     var f: CountFixture = undefined;
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-    try testing.expectError(error.NoAuthor, appendMessage(f.io, a, &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "", .id = "1" }, "hi", ""));
     // As one written before: t_2 has no author, and the sidecar is gone.
     _ = try f.send("one");
     const md = try transcriptPath(a, f.dir, "topic");
