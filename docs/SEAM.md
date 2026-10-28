@@ -56,7 +56,7 @@ the host-specific part is confined to the host's entry point.
 
 - **The response half of HTTP.** The *input* half is already behind the seam:
   zig-webbox's `http.zig` holds the only code allowed to touch `req.head.*`, enforced by
-  `tools/lint_head_access.py`, so a head value can never dangle past the body
+  `tools/lint_head_access.shale`, so a head value can never dangle past the body
   read. The *output* half is not: **many of the site's files call
   `req.respond(...)` on `std.http.Server.Request` directly**, with their own
   `extra_headers` (`grep -l 'respond(' zig-server/src/*.zig | wc -l` counts
@@ -88,7 +88,7 @@ the host-specific part is confined to the host's entry point.
 Pull `req.respond` behind zig-webbox's `http.zig`, the way `req.head` is: give `http.zig`
 success responses to match its error ones (`ok`, `json`, `html`, … beside
 `notFound` and `redirect`), move every handler's `req.respond(...)` to them,
-and add a lint beside `lint_head_access.py` that lets only zig-webbox's `http.zig` call
+and add a lint beside `lint_head_access.shale` that lets only zig-webbox's `http.zig` call
 `req.respond`. The application's dependency on `std.http.Server` would then be
 `http.zig`'s small surface. It moves calls, not logic, so zig-metal-unikernel's
 chat judge (`probe/judge_gopher.py`), which compares every page from metal and

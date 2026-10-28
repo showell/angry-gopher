@@ -31,10 +31,12 @@ def body_limits() -> dict:
     start = text.index("pub const body = struct {") + len("pub const body = struct {")
     vals = {}
     for m in re.finditer(r"pub const (\w+) = ([^;]+);", text[start:]):
-        name, expr = m.group(1), m.group(2).strip()
+        # zig fmt may stack an expression one argument a line, with a
+        # trailing comma: join its lines, and drop the empty last argument.
+        name, expr = m.group(1), " ".join(m.group(2).split())
         mx = re.fullmatch(r"@max\(([^)]*)\)", expr)
         if mx:
-            vals[name] = max(vals[a.strip()] for a in mx.group(1).split(","))
+            vals[name] = max(vals[a.strip()] for a in mx.group(1).split(",") if a.strip())
         else:
             vals[name] = eval(expr, {}, dict(vals))
     return vals

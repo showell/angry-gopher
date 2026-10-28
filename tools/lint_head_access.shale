@@ -1,0 +1,153 @@
+-- **POKA-YOKE LINT: RAW REQUEST-HEAD ACCESS LIVES IN http.zig ALONE.**
+-- Read with Zig's own tokenizer (`zig_tokens`): a string or a comment is never
+-- code, and a rule split over lines, with comments between its tokens, is one.
+--
+-- Reading the request BODY invalidates the std.http head strings (the
+-- zig-0.16 `received_head` gotcha). A borrowed slice of `req.head.target` or
+-- of a header value (reached through `req.iterateHeaders()`) used AFTER a
+-- body read is silently garbage, which once attributed an authenticated chat
+-- post to the wrong principal (the empty/wrong-author bug).
+--
+-- zig-webbox's http.zig is the one owning chokepoint: its `header`,
+-- `target` and `cookie` accessors return memory OWNED by the caller's
+-- allocator, so a head value held can never dangle. Every other module goes
+-- through them, and this lint refuses one that does not, so the foot-gun
+-- cannot come back:
+--   `head` `.` `target`         use http.target(req, alloc), an owned copy
+--   `iterateHeaders` `(` `)`    use http.header / http.cookie, owned copies
+--
+-- THE TREE: the `.zig` files at the top of zig-server/src, zig-webbox/src and
+-- shale/src (the application's and the libraries'), read as one folder.
+-- THE EXEMPTIONS, by name:
+--   http.zig    the chokepoint itself.
+--   stress.zig  a std.http CLIENT program: it reads a Client RESPONSE head, a
+--               different type it owns start to finish, not the server
+--               request head this rule guards.
+--
+-- From the folder that holds the repos (run by ops/check_zig):
+--   shale angry-gopher/tools/lint_head_access.shale              the tree
+--   shale angry-gopher/tools/lint_head_access.shale self_test=1  its plants
+
+const repo = arg("repo", "angry-gopher")
+
+const exempt = {["http.zig"] = true, ["stress.zig"] = true}
+
+const rules = {
+  {want = {"head", ".", "target"}, advice = "use http.target(req, alloc): it returns an owned copy"},
+  {want = {"iterateHeaders", "(", ")"}, advice = "use http.header / http.cookie: they return owned copies"},
+}
+
+-- The token each rule starts on, to its rule: a cheap filter.
+const starts = {head = 1, iterateHeaders = 2}
+
+function base(path)
+  local parts = split(path, "/")
+  return parts[#parts]
+end
+
+-- Whether rule `r`'s tokens start at `toks[i]`.
+function matches(toks, i, r)
+  for k = 1, #r.want do
+    if i + k - 1 > #toks or toks[i + k - 1].text ~= r.want[k] then return false end
+  end
+  return true
+end
+
+-- Whether `path`'s text holds every word some rule needs: a file without
+-- them cannot match, so its tokens (the arena's bulk) are never made.
+function could_hold(path)
+  local text = read(path)
+  return contains(text, "iterateHeaders") or (contains(text, "head") and contains(text, "target"))
+end
+
+-- **THE FINDINGS**, `{file, line, text, advice}`: every rule's match in the
+-- top-level `.zig` files of `dirs` but the exempt ones, file by file, in
+-- token order. A tree that is missing, or holds no `.zig`, is loud: a lint
+-- reading nothing looks exactly like a clean tree.
+function findings(dirs)
+  local found = {}
+  for d in dirs do
+    if not exists(d) then fail("head-access lint: no tree at " .. d) end
+    local files = sort(glob(d .. "/*.zig"))
+    if #files == 0 then fail("head-access lint: no .zig files in " .. d) end
+    for path in files do
+      if not has_key(exempt, base(path)) and could_hold(path) then
+        local toks = zig_tokens(path)
+        for i = 1, #toks do
+          if has_key(starts, toks[i].text) then
+            local r = rules[starts[toks[i].text]]
+            if matches(toks, i, r) then
+              push(found, {file = path, line = toks[i].line, text = join(r.want, ""), advice = r.advice})
+            end
+          end
+        end
+      end
+    end
+  end
+  return found
+end
+
+function trees()
+  return {repo .. "/zig-server/src", "zig-webbox/src", "shale/src"}
+end
+
+-- ── The plants: one tree a case, each finding (or none) as it must be. ──
+
+const plants = repo .. "/zig-out/lint_head_access_plant"
+
+function said(found)
+  local out = {}
+  for f in found do push(out, base(f.file) .. ":" .. f.line .. ":" .. f.text) end
+  return join(out, " | ")
+end
+
+function expect(what, files, want)
+  if exists(plants) then remove_tree(plants) end
+  mkdir(plants)
+  for name in keys(files) do replace(plants .. "/" .. name, files[name]) end
+  local got = said(findings({plants}))
+  if got ~= want then fail(what .. ": want [" .. want .. "], got [" .. got .. "]") end
+end
+
+function self_test()
+  local fires = {
+    {"the plain one-line form", "fn f(req: *Request) []const u8 {\n    return req.head.target;\n}\n", "a.zig:2:head.target"},
+    {"req.head, then .target on the next line", "fn f(req: *Request) []const u8 {\n    return req.head\n        .target;\n}\n", "a.zig:2:head.target"},
+    {"a comment between the tokens", "const t = req.head // the head\n    .target;\n", "a.zig:1:head.target"},
+    {"a stacked argument", "fn f(req: *Request) void {\n    log(\n        \"x\",\n        req.head.target,\n        3,\n    );\n}\n", "a.zig:4:head.target"},
+    {"a // in a string before it", "fn f(req: *Request) void {\n    log(\"http://x\", req.head.target);\n}\n", "a.zig:2:head.target"},
+    {"iterateHeaders()", "fn f(req: *Request) void {\n    var it = req.iterateHeaders();\n}\n", "a.zig:2:iterateHeaders()"},
+    {"iterateHeaders( split from )", "fn f(req: *Request) void {\n    var it = req.iterateHeaders(\n    );\n}\n", "a.zig:2:iterateHeaders()"},
+    {"in a test block too", "test \"t\" {\n    _ = req.head.target;\n}\n", "a.zig:2:head.target"},
+    {"two in a file", "const a = req.head.target;\nvar it = req.iterateHeaders();\n", "a.zig:1:head.target | a.zig:2:iterateHeaders()"},
+  }
+  for c in fires do expect(c[1], {["a.zig"] = c[2]}, c[3]) end
+  local holds = {
+    {"in a comment", {["a.zig"] = "// req.head.target and req.iterateHeaders() are http.zig's\nconst x = 1; // req.head.target\n"}},
+    {"in a doc comment", {["a.zig"] = "/// req.head.target is http.zig's\nconst x = 1;\n"}},
+    {"in a string", {["a.zig"] = "const s = \"req.head.target and iterateHeaders()\";\nconst m =\n    \\\\ req.head.target\n;\n"}},
+    {"in the allowed file", {["http.zig"] = "pub fn target(req: *Request) []const u8 {\n    var it = req.iterateHeaders();\n    return req.head.target;\n}\n"}},
+    {"in the client program", {["stress.zig"] = "var it = response.head.iterateHeaders();\n"}},
+    {"other heads and targets", {["a.zig"] = "const a = req.head.method;\nconst b = x.target;\nconst c = head;\nconst d = req.iterateHeadersFrom(x);\n"}},
+  }
+  for c in holds do expect(c[1], c[2], "") end
+  -- A tree that is not there, or holds no .zig, is no clean tree.
+  if attempt(findings, {plants .. "/gone"}).ok then fail("a missing tree was not loud") end
+  if exists(plants) then remove_tree(plants) end
+  mkdir(plants)
+  if attempt(findings, {plants}).ok then fail("an empty tree was not loud") end
+  remove_tree(plants)
+  return #fires + #holds + 2
+end
+
+if arg("self_test", "") ~= "" then
+  local n = self_test()
+  print("head-access lint: its " .. n .. " plants come out as they must (each form fires however split, a string, a comment and the exempt files do not)")
+else
+  local found = findings(trees())
+  if #found > 0 then
+    for f in found do print("  " .. f.file .. ":" .. f.line .. ": `" .. f.text .. "` — " .. f.advice) end
+    fail("head-access lint: raw request-head access outside http.zig, where a body read would clobber it (see tools/lint_head_access.shale)")
+  end
+  print("head-access lint: clean (raw head access confined to http.zig)")
+end
