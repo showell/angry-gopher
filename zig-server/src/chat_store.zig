@@ -21,12 +21,12 @@
 const chat_codec = @import("chat_codec.zig");
 const chatStoredForm = chat_codec.chatStoredForm;
 const chat_fanout = @import("chat_fanout.zig");
-const fanoutCrossPage = chat_fanout.fanoutCrossPage;
+const fanOutCrossPage = chat_fanout.fanOutCrossPage;
 const chat_frame = @import("chat_frame.zig");
 const fanoutFailed = chat_fanout.fanoutFailed;
 const chat_count = @import("chat_count.zig");
 const writeCount = chat_count.writeCount;
-const messageCount = chat_count.messageCount;
+const countMessages = chat_count.countMessages;
 const chat_paths = @import("chat_paths.zig");
 const decodeChatFile = chat_codec.decodeChatFile;
 const indexOf = chat_count.indexOf;
@@ -131,7 +131,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
     if (from.name.len == 0) return error.NoAuthor;
     const path = try transcriptPath(alloc, topic.dir, topic.sid);
 
-    const index = try messageCount(io, alloc, topic.dir, topic.sid);
+    const index = try countMessages(io, alloc, topic.dir, topic.sid);
 
     const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ topic.sid, index + 1 });
     const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
@@ -149,7 +149,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
     // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
     // A crash between the append and this leaves a count whose size is not the
-    // transcript's — in either order — so messageCount refuses it and recounts.
+    // transcript's — in either order — so countMessages refuses it and recounts.
     // The size check is the protection, not the ordering.
     writeCount(io, alloc, topic.dir, topic.sid, index + 1, new_size, .{
         .offset = new_size - stored.len,
@@ -168,7 +168,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, now: Now, meta: ConvMeta, 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
     // topic's first message. Best-effort; inside the same handler's turn.
-    fanoutCrossPage(io, alloc, bus, meta, topic.key, topic.sid, msg, from.id, index);
+    fanOutCrossPage(io, alloc, bus, meta, topic.key, topic.sid, msg, from.id, index);
 
     return msg;
 }
@@ -196,7 +196,7 @@ pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8
 /// Inside one handler's turn, so `msg_num` (1-based, the N of MSG_<sid>_N) is
 /// checked against the transcript's real count. Returns the stored line.
 pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAddress, msg_num: usize, from: Author, emoji: []const u8, on: bool) ![]const u8 {
-    const count = try messageCount(io, alloc, topic.dir, topic.sid);
+    const count = try countMessages(io, alloc, topic.dir, topic.sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
 
     const at = try timefmt.formatRFC3339UTC(alloc, now.unixSecs());
@@ -210,7 +210,7 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAdd
     // reads as neither (the client drops a line it cannot parse): two events
     // lost where one was. So a sidecar that does not end in a newline gets one
     // first. Read before the store, so a read that fails stores nothing.
-    const lead = if (try endsMidLine(io, alloc, path)) "\n" else "";
+    const lead = if (try isCutMidLine(io, alloc, path)) "\n" else "";
     _ = try store.append(io, alloc, path, try std.fmt.allocPrint(alloc, "{s}{s}\n", .{ lead, line }));
 
     // Stored is done (as for a message): the live publish cannot fail.
@@ -220,7 +220,7 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, now: Now, topic: TopicAdd
 
 /// Whether the file at `path` has bytes and its last is not a newline: an
 /// append that was cut short. No file, or an empty one, is not.
-fn endsMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
+fn isCutMidLine(io: Io, alloc: Alloc, path: []const u8) !bool {
     const st = (try store.statOrNull(io, alloc, path)) orelse return false;
     if (st.size == 0) return false;
     var last: [1]u8 = undefined;
@@ -432,15 +432,15 @@ test "a send that answers an error stored nothing, and one that stored answers s
     var stored_one = false;
     while (fail_at < 400) : (fail_at += 1) {
         var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
-        const before = try messageCount(f.io, a, f.dir, "topic");
+        const before = try countMessages(f.io, a, f.dir, "topic");
         const sent = appendMessage(f.io, failing.allocator(), &f.bus, Now.read(f.io), meta, .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, .{ .name = "Tester", .id = "1" }, text, "");
-        const after = try messageCount(f.io, a, f.dir, "topic");
+        const after = try countMessages(f.io, a, f.dir, "topic");
         if (sent) |m| {
             try testing.expectEqual(before + 1, after);
             // **A STORED MESSAGE IS ECHOED** (metal-vmm QUEUE 177.1): the
             // sender's own stream shows it, or the client, with no echo,
             // sends it again.
-            if (!echoed(live, m.id)) {
+            if (!hasEchoed(live, m.id)) {
                 std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
                 return error.TestUnexpectedResult;
             }
@@ -458,7 +458,7 @@ test "a send that answers an error stored nothing, and one that stored answers s
 
 /// Whether the subscriber has been sent a blob holding `needle` since it was
 /// last drained; drains it.
-fn echoed(sub: *bus_mod.Subscriber, needle: []const u8) bool {
+fn hasEchoed(sub: *bus_mod.Subscriber, needle: []const u8) bool {
     var found = false;
     while (sub.poll()) |blob| {
         defer sub.gpa.free(blob);
@@ -484,7 +484,7 @@ test "a reaction that answers an error stored nothing, and one that answers succ
         const got = appendReaction(f.io, failing.allocator(), &f.bus, Now.read(f.io), .{ .dir = f.dir, .key = "1_2", .sid = "topic" }, 1, .{ .name = "Tester", .id = "1" }, "👍", true);
         const after = (try readReactions(f.io, a, f.dir, "topic")).len;
         if (got) |_| {
-            if (!echoed(live, "event: reaction\n")) {
+            if (!hasEchoed(live, "event: reaction\n")) {
                 std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
                 return error.TestUnexpectedResult;
             }

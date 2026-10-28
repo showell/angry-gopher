@@ -163,15 +163,15 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
 ///
 /// **NEITHER A STAT NOR A TRANSCRIPT READ.** Both were per-topic costs that
 /// grew with the conversation: this page used to read and decode every
-/// transcript in full to take the last message of each. `chat_count.lastMessage`
+/// transcript in full to take the last message of each. `chat_count.loadLastMessage`
 /// answers from the topic's sidecar, and the date it carries is the message's
 /// own — which is also the order, so there is no mtime to stat for.
 fn gatherConvTopics(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, kind: store.ConvKind) !void {
     for (try chat_paths.listTopics(io, alloc, dir)) |sid| {
         const url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
-        const last = (try chat_count.lastMessage(io, alloc, dir, sid)) orelse {
+        const last = (try chat_count.loadLastMessage(io, alloc, dir, sid)) orelse {
             // A topic nobody has written to yet: it still belongs on the page.
-            try byFileTime(io, alloc, items, dir, sid, url, where, kind);
+            try addByFileTime(io, alloc, items, dir, sid, url, where, kind);
             continue;
         };
         const at = timefmt.unixFromRFC3339(last.at) orelse {
@@ -179,7 +179,7 @@ fn gatherConvTopics(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir
             // transcript written by something other than this server. Ordering
             // it at the epoch would bury it, and shipping its empty date to
             // the client renders as "NaNd", so it falls back to the file.
-            try byFileTime(io, alloc, items, dir, sid, url, where, kind);
+            try addByFileTime(io, alloc, items, dir, sid, url, where, kind);
             continue;
         };
         try items.append(alloc, .{
@@ -188,7 +188,7 @@ fn gatherConvTopics(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir
             // Normalized, so a date written with an offset reads as this
             // server's own do; for those it is the same text.
             .at = try timefmt.formatRFC3339UTC(alloc, at),
-            .who = try authorName(io, alloc, viewer, last.uid),
+            .who = try loadAuthorName(io, alloc, viewer, last.uid),
             .url = url,
             .where = where,
             .topic = sid,
@@ -221,10 +221,10 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
     return std.mem.lessThan(u8, ka, kb);
 }
 
-/// byFileTime appends a row ordered by the topic file's own mtime, with no
+/// addByFileTime appends a row ordered by the topic file's own mtime, with no
 /// excerpt: for a topic with no messages, and for one whose last message
 /// carries no date this server can read.
-fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, kind: store.ConvKind) !void {
+fn addByFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, kind: store.ConvKind) !void {
     const path = try chat_paths.transcriptPath(alloc, dir, sid);
     const st = (try disk.statOrNull(io, alloc, path)) orelse return;
     const secs = fileSeconds(st.mtime);
@@ -239,11 +239,11 @@ fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []co
     });
 }
 
-/// authorName renders the most-recent author's display name, "You" when that is
+/// loadAuthorName renders the most-recent author's display name, "You" when that is
 /// the viewer. `uid` is what the topic's sidecar recorded, and "" where it
 /// does not know: an empty Who cell, never an older author, which could be a
 /// "You" the viewer did not write (zig-metal-unikernel 153(1)).
-fn authorName(io: Io, alloc: Alloc, viewer: []const u8, uid: []const u8) ![]const u8 {
+fn loadAuthorName(io: Io, alloc: Alloc, viewer: []const u8, uid: []const u8) ![]const u8 {
     if (uid.len == 0) return "";
     if (std.mem.eql(u8, uid, viewer)) return "You";
     return users.getUserName(io, alloc, uid);
@@ -279,7 +279,7 @@ test "fs: a session with no messages, written at an odd second, shows the even s
     f.close(io);
 
     var items: std.ArrayList(RecentItem) = .empty;
-    try byFileTime(io, a, &items, dir, "empty", "/chat/c/1_2/empty", "to Bob", .dm);
+    try addByFileTime(io, a, &items, dir, "empty", "/chat/c/1_2/empty", "to Bob", .dm);
     try testing.expectEqual(@as(usize, 1), items.items.len);
     try testing.expectEqualStrings(try timefmt.formatRFC3339UTC(a, 1790000000), items.items[0].at);
     try testing.expectEqual(@as(i96, 1790000000) * std.time.ns_per_s, items.items[0].at_ns);

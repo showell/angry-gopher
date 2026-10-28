@@ -4,7 +4,7 @@
 //! Uploads land in the topic's sidecar dir (sessions/<sid>.uploads/) under a
 //! random unguessable name whose extension is derived from the SNIFFED magic
 //! bytes (never the client's filename). Both DMs and channels route here; the
-//! conv-base + sid + dir are supplied by the caller (chat.topicRoute), so this
+//! conv-base + sid + dir are supplied by the caller (chat.routeTopic), so this
 //! module is shape-agnostic.
 //!
 //! Limits: a per-file cap that depends on kind (10 MiB image / 100 MiB video)
@@ -120,7 +120,7 @@ fn displayName(alloc: Alloc, raw: []const u8) ![]const u8 {
 
 /// The upload written under its topic, by a fresh name.
 fn storeUpload(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, ext: []const u8, data: []const u8) ![]const u8 {
-    const token = try randHex16(io, alloc);
+    const token = try makeRandHex16(io, alloc);
     const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, ext });
     const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
     try disk.makeDir(io, alloc, dir);
@@ -379,9 +379,9 @@ pub fn extOf(mime: []const u8) ?[]const u8 {
     return null;
 }
 
-/// randHex16 returns 16 CSPRNG bytes as 32 lowercase hex chars.
+/// makeRandHex16 returns 16 CSPRNG bytes as 32 lowercase hex chars.
 /// io.random is the OS-seeded secure RNG.
-fn randHex16(io: Io, alloc: Alloc) ![]u8 {
+fn makeRandHex16(io: Io, alloc: Alloc) ![]u8 {
     var buf: [16]u8 = undefined;
     io.random(buf[0..]);
     const hex = std.fmt.bytesToHex(buf, .lower); // [32]u8

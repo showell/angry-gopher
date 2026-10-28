@@ -350,7 +350,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, now
     const dir = try chat_paths.dmConvDir(alloc, pair);
 
     // Idempotent: only seed when this DM has no topics yet.
-    if ((try chat_paths.firstTopic(io, alloc, dir)).len != 0) return;
+    if ((try chat_paths.findFirstTopic(io, alloc, dir)).len != 0) return;
 
     const meta = try store.ConvMeta.dm(alloc, host_uid, new_uid);
 

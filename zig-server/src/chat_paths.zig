@@ -31,7 +31,7 @@ pub const Reach = struct { dir: []const u8, base: []const u8, kind: ConvKind };
 /// is listed here, as the sidebar lists neither. A name the routes would
 /// refuse (a uid not canonical, a channel name not valid) is skipped too, so
 /// the walk is never wider than what the routes open.
-pub fn visibleConvs(io: Io, alloc: Alloc, uid: []const u8) ![]Reach {
+pub fn listVisibleConvs(io: Io, alloc: Alloc, uid: []const u8) ![]Reach {
     var out: std.ArrayList(Reach) = .empty;
     for (try users.listAuthorized(io, alloc)) |partner| {
         if (std.mem.eql(u8, partner.id, uid)) continue;
@@ -114,10 +114,10 @@ pub fn listTopics(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     return slice;
 }
 
-/// firstTopic is the topic a conversation opens on when nobody's last view
+/// findFirstTopic finds the topic a conversation opens on when nobody's last view
 /// says otherwise: `firstOf` its topics, or "" for a conversation with none.
 /// resumeTopic (chat_state) is the one that knows the viewer.
-pub fn firstTopic(io: Io, alloc: Alloc, conv_dir: []const u8) ![]const u8 {
+pub fn findFirstTopic(io: Io, alloc: Alloc, conv_dir: []const u8) ![]const u8 {
     return firstOf(try listTopics(io, alloc, conv_dir));
 }
 
@@ -137,7 +137,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 
 // ── channels ───────────────────────────────────────────
 
-/// channelMembers reads {chat_store.chat_root}/channels/<name>.channel: one uid per line,
+/// readChannelMembers reads {chat_store.chat_root}/channels/<name>.channel: one uid per line,
 /// blank/`#`-comment lines skipped. Missing file → null (the channel does not
 /// exist).
 ///
@@ -147,7 +147,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// that member, and a duplicate notified twice. `error.MalformedChannel`,
 /// never a guess at what the line meant: whoever wrote the file fixes it.
 /// Its own route refuses it; a listing skips and counts it.
-pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
+pub fn readChannelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels", file });
     const body = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
@@ -198,7 +198,7 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     for (entries) |entry| {
         if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
         const name = entry.name[0 .. entry.name.len - ".channel".len];
-        const members = (channelMembers(io, alloc, name) catch |e| switch (e) {
+        const members = (readChannelMembers(io, alloc, name) catch |e| switch (e) {
             error.MalformedChannel => {
                 malformed_channels += 1;
                 const n = @min(name.len, malformed_last_buf.len);
@@ -358,11 +358,11 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
     const path = try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "team.channel" });
     try Io.Dir.cwd().createDirPath(f.io, std.fs.path.dirname(path).?);
     try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = "# the team\n1\n\n 2 \r\n" });
-    const ok = (try channelMembers(f.io, a, "team")).?;
+    const ok = (try readChannelMembers(f.io, a, "team")).?;
     try testing.expectEqual(@as(usize, 2), ok.len);
     for ([_][]const u8{ "1\n../../x\n", "1\n3 # Claude\n", "1\n2\n1\n", "007\n", "+7\n" }) |bad| {
         try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = bad });
-        try testing.expectError(error.MalformedChannel, channelMembers(f.io, a, "team"));
+        try testing.expectError(error.MalformedChannel, readChannelMembers(f.io, a, "team"));
         // A listing skips it and counts it (Steve, 2026-10-10): one bad file
         // is not every member's chat down.
         const before = malformed_channels;

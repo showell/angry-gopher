@@ -39,7 +39,7 @@ pub const reading_list_slug = "reading-list";
 pub const max_reading_list_bytes: usize = 1 << 20;
 
 /// jumpURL is the unambiguous deep link to a saved message — the same shape
-/// chatMsgLookup redirects to, but built from the conv we already know instead of
+/// redirectToMsg redirects to, but built from the conv we already know instead of
 /// re-derived. DM: /chat/c/<conv>/<sid>#msg-<id>; channel: /channel/<name>/<sid>#msg-<id>.
 pub fn jumpURL(alloc: Alloc, ref: Ref) ![]u8 {
     const base = try chat_fanout.convKeyBaseURL(alloc, ref.conv);

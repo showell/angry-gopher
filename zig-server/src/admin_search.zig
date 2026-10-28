@@ -8,7 +8,7 @@
 //! answer a smarter search must agree with.
 //!
 //! **ONLY WHAT THE VIEWER CAN SEE** (Steve): the admin's own DMs and channels
-//! (`chat_store.visibleConvs`), as anyone's search will be, not every
+//! (`chat_store.listVisibleConvs`), as anyone's search will be, not every
 //! conversation on the disk.
 //!
 //! A match is the key as a substring of a message's markdown, ASCII letters
@@ -71,7 +71,7 @@ pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
     // never the whole of chat.
     var per = std.heap.ArenaAllocator.init(alloc);
     defer per.deinit();
-    for (try chat_paths.visibleConvs(io, alloc, uid)) |conv| {
+    for (try chat_paths.listVisibleConvs(io, alloc, uid)) |conv| {
         const dir = conv.dir;
         const base = conv.base;
         for (try chat_paths.listTopics(io, alloc, dir)) |sid| {

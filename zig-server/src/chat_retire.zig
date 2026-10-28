@@ -184,7 +184,7 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, mode: Mode) !Plan {
             // or hand-damaged transcript may be a fresh topic someone just
             // made, so only a topic with a datable message older than the
             // cutoff is retired.
-            const newest = newestUnix(io, alloc, dir, sid) orelse continue;
+            const newest = findNewestUnix(io, alloc, dir, sid) orelse continue;
             if (newest >= cutoff) continue; // recent enough to keep
             try retireTopic(&pl, dir, key, sid);
         }
@@ -229,7 +229,7 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, mode: Mode) !Plan {
 /// The newest `date:` across a topic's messages, in unix seconds, or null
 /// when it has no message that carries a parseable date (an empty or
 /// hand-damaged transcript) — which the caller keeps, not retires.
-fn newestUnix(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?i64 {
+fn findNewestUnix(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?i64 {
     // absent-ok: a topic that cannot be dated is kept, not retired (Steve, 2026-10-04).
     const raw = (chat_paths.readTranscript(io, alloc, conv_dir, sid) catch return null) orelse return null;
     const msgs = chat_codec.decodeChatFile(alloc, raw) catch return null;
@@ -377,14 +377,14 @@ fn sweepReferences(pl: *Plan, removed: *const UidSet, gone_dms: *const UidSet, k
         // users are swept. In a dry run the removed dirs are still on disk, so
         // skip them explicitly rather than trusting the disk.
         if (removed.has(uid)) continue;
-        if (!keptUser(pl.io, alloc, uid, keep)) continue;
+        if (!isKeptUser(pl.io, alloc, uid, keep)) continue;
         const udir = try std.fs.path.join(alloc, &.{ users_dir, uid });
 
         // last-conv: a single conv key.
         const lc = try std.fs.path.join(alloc, &.{ udir, "last-conv" });
         if (try store.readOrNull(pl.io, alloc, lc, .unlimited)) |raw| {
             const conv = std.mem.trim(u8, raw, " \t\r\n");
-            if (conv.len != 0 and convGone(pl.io, alloc, conv, gone_dms))
+            if (conv.len != 0 and isConvGone(pl.io, alloc, conv, gone_dms))
                 try pl.rmFile(.ref_last_conv, try std.fmt.allocPrint(alloc, "{s} -> {s}", .{ uid, conv }), lc);
         }
 
@@ -400,7 +400,7 @@ fn sweepDir(pl: *Plan, udir: []const u8, sub: []const u8, kind: Kind, uid: []con
     const entries = try store.list(pl.io, alloc, dir);
     for (entries) |e| {
         if (e.kind == .directory) continue;
-        if (!convGone(pl.io, alloc, e.name, gone_dms)) continue;
+        if (!isConvGone(pl.io, alloc, e.name, gone_dms)) continue;
         try pl.rmFile(kind, try std.fmt.allocPrint(alloc, "{s}/{s}/{s}", .{ uid, sub, e.name }), try std.fs.path.join(alloc, &.{ dir, e.name }));
     }
 }
@@ -408,7 +408,7 @@ fn sweepDir(pl: *Plan, udir: []const u8, sub: []const u8, kind: Kind, uid: []con
 /// Whether the conversation named by `conv` is gone — projecting the removals.
 /// A DM key in `gone_dms` is gone; otherwise the conv's directory decides (a
 /// DM under chat_root, a channel under chat_root/channels).
-fn convGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) bool {
+fn isConvGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) bool {
     if (gone_dms.has(conv)) return true;
     const is_dm = std.mem.indexOfScalar(u8, conv, '_') != null;
     const dir = if (is_dm)
@@ -424,7 +424,7 @@ fn convGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) boo
 /// Whether `uid` is an account being kept: its auth dir is present and its name
 /// is in the keep list. (A state dir can outlive its account; such an orphan is
 /// not swept here — it is nobody's live pointer.)
-fn keptUser(io: Io, alloc: Alloc, uid: []const u8, keep: []const []const u8) bool {
+fn isKeptUser(io: Io, alloc: Alloc, uid: []const u8, keep: []const []const u8) bool {
     const namef = std.fs.path.join(alloc, &.{ users.auth_root, uid, "name" }) catch return false;
     // absent-ok: not kept here is only not swept (sweepReferences): the failure does less, never more.
     const raw = store.read(io, alloc, namef, .unlimited) catch return false;
@@ -613,7 +613,7 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
 /// An Io whose file removals are refused under one path (all of them when
 /// it is ""), as a store that will not delete (metal-vmm QUEUE 129).
 var refuse_under: []const u8 = "";
-fn refusingRemovals(io: Io, vt: *Io.VTable) Io {
+fn refuseRemovals(io: Io, vt: *Io.VTable) Io {
     const refused = struct {
         fn deleteFile(userdata: ?*anyopaque, dir: Io.Dir, sub_path: []const u8) Io.Dir.DeleteFileError!void {
             if (std.mem.indexOf(u8, sub_path, refuse_under) != null) return error.AccessDenied;
@@ -649,14 +649,14 @@ test "fs: a confirm whose removals fail is an error, not a report of what went (
     var vt: Io.VTable = undefined;
     refuse_under = "";
     defer refuse_under = ""; // the test's own global, never left pointing into its arena
-    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, .apply)));
+    try testing.expect(std.meta.isError(plan(refuseRemovals(io, &vt), a, p, .apply)));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
 
     // **AUTHORITY GOES LAST**: a removal refused under the user's game data
     // leaves the account, so it is still listed, and the next confirm
     // finishes the job.
     refuse_under = try std.fs.path.join(a, &.{ storage.data_root, "9" });
-    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, .apply)));
+    try testing.expect(std.meta.isError(plan(refuseRemovals(io, &vt), a, p, .apply)));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
     _ = try plan(io, a, p, .apply);
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));

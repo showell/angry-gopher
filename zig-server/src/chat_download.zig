@@ -31,7 +31,7 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 
     var tar: std.ArrayList(u8) = .empty;
     const md_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.md", .{ sid, sid });
-    try addTarFile(&tar, alloc, md_entry, md, fileMtime(io, alloc, md_path));
+    try addTarFile(&tar, alloc, md_entry, md, readFileMtime(io, alloc, md_path));
 
     // The reaction sidecar rides along when present (absent = nobody reacted).
     // Only absence leaves it out: a sidecar that cannot be read fails the
@@ -39,7 +39,7 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     const rx_path = try store.reactionsPath(alloc, conv_dir, sid);
     if (disk.read(io, alloc, rx_path, .unlimited)) |rx| {
         const rx_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.reactions.jsonl", .{ sid, sid });
-        try addTarFile(&tar, alloc, rx_entry, rx, fileMtime(io, alloc, rx_path));
+        try addTarFile(&tar, alloc, rx_entry, rx, readFileMtime(io, alloc, rx_path));
     } else |e| if (e != error.FileNotFound) return e;
 
     // Images — append-only once written, so an unlocked read is safe. No
@@ -53,7 +53,7 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
             const p = try std.fs.path.join(alloc, &.{ updir, entry.name });
             const data = try disk.read(io, alloc, p, .unlimited);
             const nm = try std.fmt.allocPrint(alloc, "{s}/uploads/{s}", .{ sid, entry.name });
-            try addTarFile(&tar, alloc, nm, data, fileMtime(io, alloc, p));
+            try addTarFile(&tar, alloc, nm, data, readFileMtime(io, alloc, p));
         }
     } else |e| if (e != error.FileNotFound) return e;
 
@@ -68,9 +68,9 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     } });
 }
 
-/// fileMtime returns a file's mtime in whole Unix seconds, or 0 on any error
+/// readFileMtime returns a file's mtime in whole Unix seconds, or 0 on any error
 /// (the mtime is cosmetic in the archive, so 0 is harmless).
-fn fileMtime(io: Io, alloc: Alloc, path: []const u8) u64 {
+fn readFileMtime(io: Io, alloc: Alloc, path: []const u8) u64 {
     // absent-ok: cosmetic: an archive member dated 1970 is still the member.
     const st = disk.stat(io, alloc, path) catch return 0;
     const s = @divFloor(st.mtime, std.time.ns_per_s);

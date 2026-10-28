@@ -194,7 +194,7 @@ test "route: a send and a reaction store their author's name and uid each where 
     const dir = try chat_paths.dmConvDir(a, "1_2");
     const msgs = try chat_codec.decodeChatFile(a, (try chat_paths.readTranscript(io, a, dir, "Plans")).?);
     try testing.expectEqualStrings("Steve", msgs[msgs.len - 1].from);
-    try testing.expectEqualStrings("1", (try chat_count.lastMessage(io, a, dir, "Plans")).?.uid);
+    try testing.expectEqualStrings("1", (try chat_count.loadLastMessage(io, a, dir, "Plans")).?.uid);
     const n = try std.fmt.allocPrint(a, "msg={d}&emoji=%F0%9F%91%8D", .{msgs.len});
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/react", steve, n)));
     const line = try chat_store.readReactions(io, a, dir, "Plans");
@@ -307,9 +307,9 @@ test "route: pin puts a topic in the viewer's Pinned group and unpin takes it ou
     _ = try harness.loginMember(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", harness.status(try harness.postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
-    const pinned = try chat_state.pinnedTopics(io, a, "1", "1_2");
+    const pinned = try chat_state.readPinnedTopics(io, a, "1", "1_2");
     try testing.expectEqual(@as(usize, 1), pinned.len);
     try testing.expectEqualStrings("Plans", pinned[0]);
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
-    try testing.expectEqual(@as(usize, 0), (try chat_state.pinnedTopics(io, a, "1", "1_2")).len);
+    try testing.expectEqual(@as(usize, 0), (try chat_state.readPinnedTopics(io, a, "1", "1_2")).len);
 }

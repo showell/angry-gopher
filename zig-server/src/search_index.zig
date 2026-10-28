@@ -15,7 +15,7 @@
 //! maps; the messages for a word are found by reading the text of each
 //! conversation whose map holds the word. A query walks only the
 //! conversations the viewer can see, given by the caller on every request
-//! (`chat_paths.visibleConvs`), never a list kept from an earlier one.
+//! (`chat_paths.listVisibleConvs`), never a list kept from an earlier one.
 //!
 //! **FEW ALLOCATIONS, NOT FEW BYTES** (the measurements, 155(e)): Linux's
 //! base allocator is the page allocator, a page at least for each, so a list

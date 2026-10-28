@@ -261,7 +261,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     const idx = search_index.indexOrBuild(io, a).?;
     var compared: usize = 0;
     for ([_][]const u8{ "1", "2", "3" }) |who| {
-        const reach = try chat_paths.visibleConvs(io, a, who);
+        const reach = try chat_paths.listVisibleConvs(io, a, who);
         var key_it = keys.keyIterator();
         while (key_it.next()) |k| {
             const base_r = try admin_search.search(io, a, who, k.*);

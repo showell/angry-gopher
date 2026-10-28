@@ -10,7 +10,7 @@
 //! (chat/chat_emoji.js) — here we check only that a reaction has the SHAPE of
 //! one glyph.
 //!
-//! Routes (DM and channel alike, dispatched by chat.topicRoute):
+//! Routes (DM and channel alike, dispatched by chat.routeTopic):
 //!   GET  /<…>/<sid>/reactions   the sidecar bytes (ndjson; empty when none)
 //!   POST /<…>/<sid>/react       form msg=<n> emoji=<glyph> on=<1|0> → 204
 
