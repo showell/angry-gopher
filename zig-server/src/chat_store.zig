@@ -93,26 +93,18 @@ pub const Stream = struct {
     sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
 };
 
-/// openStream: inside one handler's turn, decode the topic backlog
-/// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
+/// openStream: inside one handler's turn, decode the topic backlog at `path`
+/// AND register a live subscriber on `key`, the topic's bus key the Roc
+/// named (`<conv_key>/<sid>`, roc-webbox chat/BusKey.roc) — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
 pub fn openStream(
     io: Io,
     alloc: Alloc,
     bus: *Bus,
-    topic: TopicAddress,
+    path: []const u8,
+    key: []const u8,
 ) !Stream {
-    const path = try transcriptPath(
-        alloc,
-        topic.dir,
-        topic.sid,
-    );
-    const key = try std.fmt.allocPrint(
-        alloc,
-        "{s}/{s}",
-        .{ topic.key, topic.sid },
-    );
 
     // A topic nobody has written to is genuinely empty; a topic that will
     // not read is not, and showing it as empty is how a transcript looks lost.
@@ -127,47 +119,27 @@ pub fn openStream(
     return .{ .backlog = msgs, .sub = sub };
 }
 
-/// **A MESSAGE STORED, AS A PRIMITIVE** (the Roc's `Host.store_message!`;
-/// roc-webbox chat/main.roc `appended!` decides the rest of what
-/// `appendMessage` does): `stored`, message `index`'s block as
-/// chatStoredForm writes it (the Roc's Transcript.stored_form), appended to
-/// the topic's transcript, then the `.count` and the search index told of
-/// `msg`. The count cache and the search index are the store's
-/// infrastructure, so they go with the append. An append that failed is
-/// the error, nothing stored; past it nothing fails.
-pub fn storeMessage(
+/// **A MESSAGE'S BLOCK APPENDED, AS A PRIMITIVE** (the Roc's
+/// `Host.append_message!`, metal-vmm QUEUE 287): `block` appended to the
+/// topic's transcript, and its size after. What follows, the `.count` and
+/// the search index, is the Roc's to do (roc-webbox chat/main.roc
+/// `store_block!`). An append that failed is the error, nothing stored.
+pub fn appendBlock(
     io: Io,
     alloc: Alloc,
     topic: TopicAddress,
-    stored: []const u8,
-    index: usize,
-    msg: ChatMessage,
-) !void {
+    block: []const u8,
+) !u64 {
     const path = try transcriptPath(
         alloc,
         topic.dir,
         topic.sid,
     );
-    const new_size = try store.append(
+    return store.append(
         io,
         alloc,
         path,
-        stored,
-    );
-    // A crash between the append and this leaves a count whose size is not the
-    // transcript's — in either order — so messageCount refuses it and recounts.
-    // The size check is the protection, not the ordering.
-    writeCount(io, alloc, topic.dir, topic.sid, index + 1, new_size, .{
-        .offset = new_size - stored.len,
-        .uid = msg.uid,
-    });
-    // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
-    // takes the message, or drops itself whole if it cannot.
-    search_index.noteAppend(
-        io,
-        topic.dir,
-        topic.sid,
-        msg,
+        block,
     );
 }
 

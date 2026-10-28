@@ -35,6 +35,15 @@ const Request = std.http.Server.Request;
 
 // ── per-topic stream (backlog replay + live + keepalive) ──────────────────────
 
+/// **A TOPIC'S STREAM, AS THE ROC NAMED IT** (metal-vmm QUEUE 286): the
+/// transcript to replay (a path the host joined under the chat root), the
+/// bus key to hear, and the topic its messages are numbered in.
+pub const Replay = struct {
+    path: []const u8,
+    key: []const u8,
+    sid: []const u8,
+};
+
 /// streamTranscript serves /<…>/<sid>/stream: the `backlog-size` preamble and
 /// the backlog replay from the cursor, then hands the LIVE part to the host (a
 /// message posted to this conv/sid via /send fans out to it), which also sends
@@ -50,9 +59,9 @@ pub fn streamTranscript(
     io: Io,
     alloc: Alloc,
     bus: *Bus,
-    topic: store.TopicAddress,
+    topic: Replay,
 ) !void {
-    // A stream is a GET's (metal-vmm QUEUE 176.3).
+    // A stream is a GET's (metal-vmm QUEUE 176.3); the Roc said so first.
     if (req.head.method != .GET) return http.methodNotAllowed(req, .GET);
     const since = try sse.readResume(req, alloc);
 
@@ -60,7 +69,8 @@ pub fn streamTranscript(
         io,
         alloc,
         bus,
-        topic,
+        topic.path,
+        topic.key,
     );
     // This handler owns the subscriber until the host takes it.
     var held = bus.hold(stream.sub);

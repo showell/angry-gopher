@@ -33,44 +33,6 @@ const mem_meter = @import("webbox").mem_meter;
 /// sidebar.
 pub const reading_list_slug = "reading-list";
 
-/// max_reading_list_bytes caps the doc so a client hammering the save endpoint
-/// can't grow it without bound. The bytes are the saver's own private doc, but
-/// they're still ours to host. 1 MiB is thousands of entries.
-pub const max_reading_list_bytes: usize = 1 << 20;
-
-/// jumpURL is the unambiguous deep link to a saved message — the same shape
-/// chatMsgLookup redirects to, but built from the conv we already know instead of
-/// re-derived. DM: /chat/c/<conv>/<sid>#msg-<id>; channel: /channel/<name>/<sid>#msg-<id>.
-pub fn jumpURL(alloc: Alloc, ref: Ref) ![]u8 {
-    const base = try chat_fanout.convKeyBaseURL(alloc, ref.conv);
-    return std.fmt.allocPrint(alloc, "{s}/{s}#msg-{s}", .{ base, ref.sid, ref.id });
-}
-
-/// composeEntry renders one reading-list block. Pure (no IO): the handler feeds
-/// it the snapshot-as-seen (body markdown, author, display date) + the annotation
-/// + the jump URL. The annotation is an H3 (so the doc skims like a checklist);
-/// an empty note defaults to "read later". The single-line fields are
-/// newline-stripped so a crafted POST can't break the block structure; the body
-/// is left verbatim inside the fence.
-pub fn composeEntry(alloc: Alloc, note: []const u8, from: []const u8, when: []const u8, url: []const u8, body: []const u8) ![]u8 {
-    const note_trimmed = std.mem.trim(u8, note, " \t\r\n");
-    const note_eff = if (note_trimmed.len == 0) "read later" else try oneLine(alloc, note_trimmed);
-    const fence = try quoteFence(alloc, body);
-    return std.fmt.allocPrint(
-        alloc,
-        "### {s}\n\n{s} · {s} · [↩ open in chat]({s})\n\n{s} quote\n{s}\n{s}\n\n---\n\n",
-        .{ note_eff, try oneLine(alloc, from), try oneLine(alloc, when), url, fence, body, fence },
-    );
-}
-
-/// save composes the entry and appends it to the saver's reading-list doc. The
-/// only IO step; everything testable is in composeEntry / jumpURL above.
-pub fn save(io: Io, alloc: Alloc, uid: []const u8, ref: Ref, from: []const u8, when: []const u8, body: []const u8, note: []const u8) !void {
-    const url = try jumpURL(alloc, ref);
-    const entry = try composeEntry(alloc, note, from, when, url, body);
-    try docs_store.appendToUserDoc(io, alloc, uid, reading_list_slug, entry, max_reading_list_bytes);
-}
-
 // ── read-back: parse saved locations out of a reading-list doc ────────────────
 
 /// Ref is one saved message's location, recovered from a jump-back URL. The
@@ -132,81 +94,8 @@ fn isIdChar(c: u8) bool {
         (c >= '0' and c <= '9') or c == '-' or c == '_';
 }
 
-fn oneLine(alloc: Alloc, s: []const u8) ![]u8 {
-    const out = try alloc.dupe(u8, s);
-    for (out) |*c| {
-        if (c.* == '\n' or c.* == '\r') c.* = ' ';
-    }
-    return out;
-}
-
-/// quoteFence returns a run of `~` long enough to wrap `body` safely: one longer
-/// than the longest `~~~`+ run on any line of the body (min 3). Mirrors chat.js
-/// pickQuoteFence so saved snapshots fence exactly like quote-reply.
-fn quoteFence(alloc: Alloc, body: []const u8) ![]u8 {
-    var longest: usize = 0;
-    var i: usize = 0;
-    while (i < body.len) {
-        var run: usize = 0; // count leading '~' on this line
-        while (i + run < body.len and body[i + run] == '~') : (run += 1) {}
-        if (run >= 3 and run > longest) longest = run;
-        while (i < body.len and body[i] != '\n') : (i += 1) {} // to line end
-        if (i < body.len) i += 1; // past the '\n'
-    }
-    const n = @max(@as(usize, 2), longest) + 1;
-    const buf = try alloc.alloc(u8, n);
-    @memset(buf, '~');
-    return buf;
-}
-
 const testing = std.testing;
 const roots = @import("roots.zig");
-
-// composeEntry/jumpURL allocate intermediates (the fence, one-lined fields) that
-// production frees via the per-request arena; the tests mirror that with an arena
-// rather than tracking each interior allocation.
-
-test "composeEntry: basic block, default annotation, single-line meta" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const got = try composeEntry(arena.allocator(), "read later", "apoorva", "Jun 16", "/chat/c/1_2/2026-05-28#msg-2026-05-28_5", "hello");
-    try testing.expectEqualStrings(
-        "### read later\n\napoorva · Jun 16 · [↩ open in chat](/chat/c/1_2/2026-05-28#msg-2026-05-28_5)\n\n~~~ quote\nhello\n~~~\n\n---\n\n",
-        got,
-    );
-}
-
-test "composeEntry: empty note falls back to 'read later'" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const got = try composeEntry(arena.allocator(), "   ", "Steve", "Jun 16", "u", "x");
-    try testing.expect(std.mem.startsWith(u8, got, "### read later\n"));
-}
-
-test "composeEntry: note newlines flattened so the heading can't break" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const got = try composeEntry(arena.allocator(), "line1\nline2", "Steve", "Jun 16", "u", "x");
-    try testing.expect(std.mem.startsWith(u8, got, "### line1 line2\n"));
-}
-
-test "composeEntry: fence grows past an inner ~~~ in the body" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const body = "before\n~~~\ncode\n~~~\nafter";
-    const got = try composeEntry(arena.allocator(), "n", "f", "w", "u", body);
-    // body has a 3-tilde run, so the wrapping fence must be 4 tildes
-    try testing.expect(std.mem.indexOf(u8, got, "~~~~ quote\n") != null);
-    try testing.expect(std.mem.indexOf(u8, got, "\n~~~~\n\n---\n\n") != null);
-}
-
-test "jumpURL: DM and channel shapes" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    try testing.expectEqualStrings("/chat/c/1_2/2026-05-28#msg-2026-05-28_5", try jumpURL(a, .{ .conv = "1_2", .sid = "2026-05-28", .id = "2026-05-28_5" }));
-    try testing.expectEqualStrings("/channel/General/topic1#msg-topic1_3", try jumpURL(a, .{ .conv = "General", .sid = "topic1", .id = "topic1_3" }));
-}
 
 test "parseRefs: recovers DM + channel locations from jump URLs" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -231,23 +120,6 @@ test "parseRefs: recovers DM + channel locations from jump URLs" {
     try testing.expectEqualStrings("General", refs[1].conv);
     try testing.expectEqualStrings("general1", refs[1].sid);
     try testing.expectEqualStrings("general1_3", refs[1].id);
-}
-
-test "an entry composed for a location is read back as that location, a DM's and a channel's" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    for ([_]Ref{
-        .{ .conv = "1_2", .sid = "2026-05-28", .id = "2026-05-28_5" },
-        .{ .conv = "General", .sid = "general1", .id = "general1_3" },
-    }) |want| {
-        const entry = try composeEntry(a, "a note", "Steve", "Jun 22", try jumpURL(a, want), "the body");
-        const refs = try parseRefs(a, entry);
-        try testing.expectEqual(@as(usize, 1), refs.len);
-        try testing.expectEqualStrings(want.conv, refs[0].conv);
-        try testing.expectEqualStrings(want.sid, refs[0].sid);
-        try testing.expectEqualStrings(want.id, refs[0].id);
-    }
 }
 
 test "parseRefs: lenient — skips malformed/partial URLs, empty doc → none" {

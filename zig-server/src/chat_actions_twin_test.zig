@@ -4836,3 +4836,635 @@ test "Host.check_online! is presence.isOnline at the request's time: generated l
     call.failed = error.IsDir;
     try testing.expectEqual(Presence.offline, chat_router.Call.online(&call, ids[0]));
 }
+
+/// One stream asked for: as whom, how, and the bus key the stream should
+/// hear ("" for one that should not be kept).
+const StreamAsk = struct {
+    who: enum {
+        steve,
+        ann,
+        nobody,
+    },
+    method: []const u8 = "GET",
+    target: []const u8,
+    key: []const u8 = "",
+};
+
+/// **EVERY CHAT STREAM, AND WHAT IT DELIVERS** (metal-vmm QUEUE 286): the six
+/// stream routes (a DM's topic, a channel's, the recent, images and code
+/// feeds, the notifications, the sidebar) as their owner, as one who is not
+/// theirs, with a key that names nothing, by a method no stream takes and
+/// signed out; and the 404 of a path under /chat that names nothing. Each
+/// answer, its head and backlog; then, for one kept, a blob published on
+/// the key it should hear and every frame it then makes until it makes no
+/// more: the frame once, and once only.
+fn streamsRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(
+        a,
+        io,
+        "1",
+        "Steve",
+    );
+    _ = try harness.memberSession(
+        a,
+        io,
+        "2",
+        "Debbie",
+    );
+    const ann = try harness.memberSession(
+        a,
+        io,
+        "3",
+        "Ann",
+    );
+    try harness.writeTranscript(
+        a,
+        io,
+        "1_2",
+        "Plans",
+        &.{ "one", "two" },
+    );
+    try harness.UidSite.disk.write(
+        io,
+        a,
+        try std.fs.path.join(a, &.{
+            @import("chat_store.zig").chat_root,
+            "channels",
+            "ops.channel",
+        }),
+        "1\n2\n",
+        .{},
+    );
+    try harness.writeTranscript(
+        a,
+        io,
+        "channels/ops",
+        "Standup",
+        &.{"hi"},
+    );
+    @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    const asks = [_]StreamAsk{
+        .{
+            .who = .steve,
+            .target = "/chat/c/1_2/Plans/stream",
+            .key = "1_2/Plans",
+        },
+        .{
+            .who = .steve,
+            .target = "/chat/c/1_2/Plans/stream?since=1",
+            .key = "1_2/Plans",
+        },
+        .{
+            .who = .steve,
+            .target = "/channel/ops/Standup/stream",
+            .key = "ops/Standup",
+        },
+        .{
+            .who = .steve,
+            .target = "/chat/recent/stream",
+            .key = "rec:1",
+        },
+        .{
+            .who = .steve,
+            .target = "/chat/images/stream",
+            .key = "img:1",
+        },
+        .{
+            .who = .steve,
+            .target = "/chat/code/stream",
+            .key = "code:1",
+        },
+        .{
+            .who = .steve,
+            .target = "/chat/notifications",
+            .key = "ntf:1",
+        },
+        .{
+            .who = .steve,
+            .target = "/chat/sidebar/stream",
+            .key = "sb:1",
+        },
+        .{
+            .who = .ann,
+            .target = "/chat/recent/stream",
+            .key = "rec:3",
+        },
+        .{
+            .who = .ann,
+            .target = "/chat/notifications",
+            .key = "ntf:3",
+        },
+        .{ .who = .ann, .target = "/chat/c/1_2/Plans/stream" },
+        .{ .who = .ann, .target = "/channel/ops/Standup/stream" },
+        .{ .who = .steve, .target = "/chat/c/1_2/Gone/stream" },
+        .{ .who = .steve, .target = "/chat/c/9_9/Plans/stream" },
+        .{ .who = .steve, .target = "/chat/c/x_y/Plans/stream" },
+        .{ .who = .steve, .target = "/channel/nope/Standup/stream" },
+        .{ .who = .steve, .target = "/channel/Bad!Name/Standup/stream" },
+        .{
+            .who = .steve,
+            .method = "POST",
+            .target = "/chat/c/1_2/Plans/stream",
+        },
+        .{
+            .who = .steve,
+            .method = "POST",
+            .target = "/chat/recent/stream",
+        },
+        .{
+            .who = .steve,
+            .method = "POST",
+            .target = "/chat/notifications",
+        },
+        .{
+            .who = .steve,
+            .method = "HEAD",
+            .target = "/chat/sidebar/stream",
+        },
+        .{ .who = .nobody, .target = "/chat/notifications" },
+        .{ .who = .nobody, .target = "/chat/c/1_2/Plans/stream" },
+        .{ .who = .steve, .target = "/chat/nowhere" },
+        .{ .who = .steve, .target = "/chat/recent/streamX" },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const cookie = switch (q.who) {
+            .steve => try std.fmt.allocPrint(
+                a,
+                "Cookie: {s}\r\n",
+                .{steve},
+            ),
+            .ann => try std.fmt.allocPrint(
+                a,
+                "Cookie: {s}\r\n",
+                .{ann},
+            ),
+            .nobody => "",
+        };
+        const raw = try std.fmt.allocPrint(
+            a,
+            "{s} {s} HTTP/1.1\r\nHost: x\r\n{s}\r\n",
+            .{
+                q.method,
+                q.target,
+                cookie,
+            },
+        );
+        var reader: std.Io.Reader = .fixed(raw);
+        var out: std.Io.Writer.Allocating = .init(a);
+        var server = std.http.Server.init(&reader, &out.writer);
+        var req = try server.receiveHead();
+        req.head.keep_alive = false;
+        var b = webbox.bus.Bus.of(&hub);
+        const got = router.route(
+            &req,
+            io,
+            a,
+            &b,
+        );
+        try out.writer.flush();
+        var line: std.ArrayList(u8) = .empty;
+        try line.print(
+            a,
+            "{s} {s} as {t}: ",
+            .{
+                q.method,
+                q.target,
+                q.who,
+            },
+        );
+        if (got) |kept| {
+            try line.print(
+                a,
+                "{s}",
+                .{out.written()},
+            );
+            if (kept) |k| {
+                defer webbox.bus.drop(&hub, k);
+                try line.appendSlice(a, "== kept\n");
+                if (q.key.len > 0) hub.publish(q.key, "event: message\ndata: {\"live\":1}\n\n");
+                while (try webbox.bus.nextFrame(k, a)) |frame| try line.print(
+                    a,
+                    "== frame\n{s}",
+                    .{frame},
+                );
+                try line.appendSlice(a, "== no more\n");
+            } else try line.appendSlice(a, "== not kept\n");
+        } else |e| try line.print(
+            a,
+            "error {t}\n{s}",
+            .{ e, out.written() },
+        );
+        try answers.append(a, try unstamped(a, line.items));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "every chat stream (metal-vmm QUEUE 286): a DM's topic, a channel's, the feeds', the notifications and the sidebar, as their owner, as one they are not, by a key naming nothing, by a method no stream takes and signed out, and a frame published once delivered once, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun(
+        "streamsRun",
+        try streamsRun(a, io),
+        "33fca94b316553c2bf57411f3d212171474778117eeb774687420dade1a7318b",
+    );
+}
+
+/// Every key presence's broadcast lands on, for members 1 to 4: each
+/// one's sidebar and notifications.
+const presence_keys = [_][]const u8{ "sb:1", "ntf:1", "sb:2", "ntf:2", "sb:3", "ntf:3", "sb:4", "ntf:4" };
+
+/// **PRESENCE'S CAME-ONLINE BROADCAST** (metal-vmm QUEUE 288), each request
+/// at its own time: a member's first request (the edge: every other
+/// authorized member's sidebar and notifications told), a second inside
+/// the window (nothing), another member's edge, one after the window (the
+/// edge again), a route the Zig serves counted (docs), an account whose
+/// name will not read (the broadcast lost, the request whole) and the
+/// retry once it reads (30 s on). Each answer's status, then every frame
+/// each key carried, drained after each request.
+fn presenceRun(a: Alloc, io: Io) !struct { answers: [][]const u8, frames: []const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    _ = try harness.memberSession(a, io, "3", "Ann \"A\"");
+    const zed = try harness.memberSession(a, io, "4", "Zed");
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    var hub = webbox.bus.Hub.init(io, a);
+    var subs: [presence_keys.len]*webbox.bus.Subscriber = undefined;
+    for (presence_keys, &subs) |k, *s| s.* = try hub.open(k);
+    defer chat_router.test_now = null;
+    const name3 = try std.fs.path.join(a, &.{ users.auth_root, "3", "name" });
+    const Step = struct { who: []const u8, target: []const u8, secs: i64, plant: enum { none, break_name, mend_name } = .none };
+    const steps = [_]Step{
+        .{ .who = steve, .target = "/chat/conversations", .secs = 0 },
+        .{ .who = steve, .target = "/chat/conversations", .secs = 1 },
+        .{ .who = debbie, .target = "/chat/conversations", .secs = 2 },
+        .{ .who = steve, .target = "/chat/conversations", .secs = 400 },
+        .{ .who = debbie, .target = "/chat/docs", .secs = 401 },
+        // Docs read no account's name: the request is whole, its broadcast not.
+        .{ .who = zed, .target = "/chat/docs", .secs = 402, .plant = .break_name },
+        .{ .who = zed, .target = "/chat/docs", .secs = 410 },
+        .{ .who = zed, .target = "/chat/docs", .secs = 433, .plant = .mend_name },
+        .{ .who = zed, .target = "/chat/docs", .secs = 470 },
+        .{ .who = zed, .target = "/chat/docs", .secs = 900 },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    var frames: std.ArrayList(u8) = .empty;
+    for (steps) |st| {
+        switch (st.plant) {
+            .none => {},
+            .break_name => {
+                try std.Io.Dir.cwd().deleteFile(io, name3);
+                try std.Io.Dir.cwd().createDirPath(io, name3);
+            },
+            .mend_name => {
+                try std.Io.Dir.cwd().deleteTree(io, name3);
+                try harness.UidSite.disk.write(io, a, name3, "Ann \"A\"", .{});
+            },
+        }
+        chat_router.test_now = Now.at(1_761_400_000 + st.secs);
+        const r = try serveOn(a, io, &hub, try getRaw(a, st.target, st.who));
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} at {d}: {?t} {s}", .{ st.target, st.secs, r.err, harness.status(r.out) }));
+        try frames.print(a, "-- after {s} at {d}\n", .{ st.target, st.secs });
+        for (presence_keys, subs) |k, s| while (s.poll()) |blob| try frames.print(a, "== {s}\n{s}\n", .{ k, blob });
+    }
+    for (subs) |s| hub.close(s);
+    return .{ .answers = answers.items, .frames = frames.items };
+}
+
+test "presence's came-online broadcast (metal-vmm QUEUE 288): the edge tells every other member, once, inside the window nothing, after it again, a Zig route's too; a name that will not read loses the broadcast, never the request, and it is tried again once it reads" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("presenceRun", try presenceRun(a, io), "94d27ba9a55990b2e5cde9fa4e4ef260d0411397ed4186da40fc1b20f31fc2e4");
+}
+
+/// **THE DOCS' READ PAGES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 289):
+/// the landing (the doc touched last, or the editor with none), a doc's
+/// editor, its raw markdown, the list, the live preview, as the owner, as
+/// another member, for a doc not there, a name no slug, a nested path, the
+/// wrong method, and a docs folder that will not list.
+fn docsReadRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Deb <b>&amp;</b>");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    const docs = try std.fs.path.join(a, &.{ store.chat_root, "users", "1", "docs" });
+    // Each doc beside the second its file was last touched: `plans` last.
+    for ([_]struct { []const u8, []const u8, i96 }{
+        .{ "a-b.md", "x", 1_767_225_600 },
+        .{ "plans.md", "# Plans\n\nSome *text*, <b>&amp;</b> and `code`\n\n- one\n- two\n", 1_767_225_700 },
+        .{ "reading-list.md", "", 1_767_225_650 },
+        .{ "Bad.md", "not a slug", 1_767_225_900 },
+        .{ "notes.txt", "not a doc", 1_767_225_900 },
+    }) |d| {
+        const p = try std.fs.path.join(a, &.{ docs, d[0] });
+        try harness.UidSite.disk.write(io, a, p, d[1], .{});
+        var f = try std.Io.Dir.cwd().openFile(io, p, .{ .mode = .read_write });
+        defer f.close(io);
+        try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = d[2] * std.time.ns_per_s } } });
+    }
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ docs, "sub.md" }));
+    // Ann's docs folder is a file: it will not list.
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "docs" }), "", .{});
+    const DocAsk = struct { who: []const u8, method: []const u8 = "GET", target: []const u8, body: []const u8 = "" };
+    const asks = [_]DocAsk{
+        .{ .who = debbie, .target = "/chat/docs" },
+        .{ .who = debbie, .target = "/chat/docs/" },
+        .{ .who = steve, .target = "/chat/docs" },
+        .{ .who = steve, .target = "/chat/docs/" },
+        .{ .who = steve, .target = "/chat/docs/plans" },
+        .{ .who = steve, .target = "/chat/docs/a-b" },
+        .{ .who = steve, .target = "/chat/docs/reading-list" },
+        .{ .who = steve, .target = "/chat/docs/missing" },
+        .{ .who = steve, .target = "/chat/docs/Bad" },
+        .{ .who = steve, .target = "/chat/docs/sub" },
+        .{ .who = steve, .target = "/chat/docs/plans%20" },
+        .{ .who = steve, .target = "/chat/docs/plans.md" },
+        .{ .who = steve, .target = "/chat/docs/reading-list.md" },
+        .{ .who = steve, .target = "/chat/docs/missing.md" },
+        .{ .who = steve, .target = "/chat/docs/Bad.md" },
+        .{ .who = steve, .target = "/chat/docs/list.md" },
+        .{ .who = steve, .target = "/chat/docs/.md" },
+        .{ .who = steve, .target = "/chat/docs/list" },
+        .{ .who = steve, .target = "/chat/docs/plans/x" },
+        .{ .who = steve, .target = "/chat/docs/a/b.md" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/list" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/plans" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/plans.md" },
+        .{ .who = steve, .target = "/chat/docs/render" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/render", .body = "body=%23+Hi%0A%0Aa+*b*+%3Cscript%3E" },
+        .{ .who = steve, .method = "POST", .target = "/chat/docs/render", .body = "other=1" },
+        .{ .who = debbie, .target = "/chat/docs/list" },
+        .{ .who = debbie, .target = "/chat/docs/plans" },
+        .{ .who = debbie, .target = "/chat/docs/plans.md" },
+        .{ .who = ann, .target = "/chat/docs" },
+        .{ .who = ann, .target = "/chat/docs/list" },
+        .{ .who = ann, .target = "/chat/docs/plans" },
+        .{ .who = ann, .target = "/chat/docs/plans.md" },
+    };
+    var hub = webbox.bus.Hub.init(io, a);
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const raw = if (std.mem.eql(u8, q.method, "GET")) try getRaw(a, q.target, q.who) else try postRaw(a, q.who, q.target, q.body);
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} {s}: {?t}\n{s}", .{ q.method, q.target, r.err, r.out }));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "the docs' read pages (metal-vmm QUEUE 289): the landing, a doc's editor, its raw markdown, the list and the preview, as the owner, another member and one whose folder will not list, every 404, 303 and 405, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("docsReadRun", try docsReadRun(a, io), "9f6b8fcbb3407025b30fcd72aed467f2cf97d17ffd52035c3ac7a3950b843589");
+}
+
+/// **THE DOCS' WRITES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 290): a new
+/// doc (its slug made of the title, suffixed past one there, a reserved name
+/// stepped over, nothing made of no title), a save (trimmed slug, emptied,
+/// refused without a body, for a name no slug, for a doc not there), the
+/// live preview (hostile markdown its placeholder, counted), a message saved
+/// to the reading list (a DM's, a channel's, a fence longer than the body's,
+/// one-line fields, the default note, a missing field, a full list), the
+/// wrong methods, malformed and too-big forms, another member's doc never
+/// reached, and a docs folder that will not take a file: each answer, the
+/// files each leaves and the recent feed's frames.
+fn docsWriteRun(a: Alloc, io: Io) !struct { answers: [][]const u8, files: []const u8, frames: []const u8, hostile: usize } {
+    const limits = @import("limits.zig");
+    const reading_list = @import("reading_list.zig");
+    const docs_store = @import("docs_store.zig");
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "users", "3", "docs" }), "", .{});
+    var hub = webbox.bus.Hub.init(io, a);
+    const keys = [_][]const u8{ try chat_fanout.recentBusKey(a, "1"), try chat_fanout.recentBusKey(a, "2") };
+    var subs: [keys.len]*webbox.bus.Subscriber = undefined;
+    for (keys, &subs) |k, *s| s.* = try hub.open(k);
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    var long_title: std.ArrayList(u8) = .empty;
+    try long_title.appendSlice(a, "title=");
+    for (0..30) |_| try long_title.appendSlice(a, "Abc+");
+    const huge = try a.alloc(u8, limits.body.doc + 1);
+    @memset(huge, 'x');
+    const huge_save = try std.fmt.allocPrint(a, "slug=plans&body={s}", .{huge[0 .. huge.len - 40]});
+    var hostile_md: std.ArrayList(u8) = .empty;
+    try hostile_md.appendSlice(a, "body=");
+    for (0..4000) |_| try hostile_md.appendSlice(a, "%5B%5D(");
+    const reading = "conv=1_2&sid=Plans&id=MSG_7&from=Deb%0Abie&at=2026-10-27+14%3A00&body=line+one%0A~~~~+inner%0Aend&note=Read+%0D%0Athis";
+    const WriteAsk = struct { who: []const u8, method: []const u8 = "POST", target: []const u8, body: []const u8 = "", plant: enum { none, full_list } = .none };
+    const asks = [_]WriteAsk{
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/new" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=Plans" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=Plans" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=++%09" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "other=1" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=%21%21%21" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=list" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=Caf%C3%A9+Menu%3A+2026" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = long_title.items },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=%ZZ" },
+        .{ .who = steve, .target = "/chat/docs/new", .body = "title=a&title=b" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans&body=%23+Hi%0A%0Asome+*text*" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans-2&body=" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=Bad&body=x" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=gone&body=x" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=+untitled%0A&body=kept" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "body=x" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = "slug=plans&body=%G1" },
+        .{ .who = steve, .target = "/chat/docs/save", .body = huge_save },
+        .{ .who = steve, .target = "/chat/docs/save", .body = huge },
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/save" },
+        .{ .who = debbie, .target = "/chat/docs/save", .body = "slug=plans&body=hers" },
+        .{ .who = steve, .target = "/chat/docs/render", .body = "body=%23+Hi%0A%0Aa+*b*+%3Cscript%3E" },
+        .{ .who = steve, .target = "/chat/docs/render", .body = "other=1" },
+        .{ .who = steve, .target = "/chat/docs/render", .body = hostile_md.items },
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/render" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = reading },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=general&sid=Hello&id=MSG_2&from=Ann&at=today&body=hi+there&note=" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=+1_3+&sid=Q&id=MSG_3&body=x" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=1_2&sid=Plans&body=no+id" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=1_2&sid=Plans&id=MSG_9&body=" },
+        .{ .who = steve, .target = "/chat/docs/save_to_reading_list", .body = "conv=1_2&sid=Plans&id=MSG_9&body=%ZZ" },
+        .{ .who = steve, .method = "GET", .target = "/chat/docs/save_to_reading_list" },
+        .{ .who = debbie, .target = "/chat/docs/save_to_reading_list", .body = reading, .plant = .full_list },
+        .{ .who = ann, .target = "/chat/docs/new", .body = "title=Mine" },
+        .{ .who = ann, .target = "/chat/docs/save_to_reading_list", .body = reading },
+    };
+    const before = webbox.edge.countOf(.malformed_markdown);
+    var answers: std.ArrayList([]const u8) = .empty;
+    var frames: std.ArrayList(u8) = .empty;
+    for (asks) |q| {
+        if (q.plant == .full_list) {
+            const full = try a.alloc(u8, (1 << 20) - 64);
+            @memset(full, '.');
+            try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, "2", reading_list.reading_list_slug), full, .{});
+        }
+        const raw = if (std.mem.eql(u8, q.method, "GET")) try getRaw(a, q.target, q.who) else try postRaw(a, q.who, q.target, q.body);
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} {s} {s}: {?t}\n{s}", .{ q.method, q.target, q.body[0..@min(q.body.len, 60)], r.err, r.out }));
+        for (keys, subs) |k, s| while (s.poll()) |blob| try frames.print(a, "== {s} after {s}\n{s}\n", .{ k, q.target, blob });
+    }
+    for (subs) |s| hub.close(s);
+    // Every member's docs as they were left: each file, by name, its bytes
+    // (a long one by its length and its first and last lines).
+    var files: std.ArrayList(u8) = .empty;
+    for ([_][]const u8{ "1", "2" }) |uid| {
+        const dir = try docs_store.userDocsDir(a, uid);
+        const entries = try harness.UidSite.disk.list(io, a, dir);
+        std.mem.sort(harness.UidSite.disk.Entry, entries, {}, struct {
+            fn lt(_: void, x: harness.UidSite.disk.Entry, y: harness.UidSite.disk.Entry) bool {
+                return std.mem.lessThan(u8, x.name, y.name);
+            }
+        }.lt);
+        for (entries) |e| {
+            const bytes = try harness.UidSite.disk.readOrEmpty(io, a, try std.fs.path.join(a, &.{ dir, e.name }), .unlimited);
+            if (bytes.len > 4096) {
+                try files.print(a, "-- {s}/{s}: {d} bytes, ending {s}\n", .{ uid, e.name, bytes.len, bytes[bytes.len - 200 ..] });
+            } else try files.print(a, "-- {s}/{s}\n{s}\n", .{ uid, e.name, bytes });
+        }
+    }
+    return .{ .answers = answers.items, .files = files.items, .frames = frames.items, .hostile = webbox.edge.countOf(.malformed_markdown) - before };
+}
+
+test "the docs' writes (metal-vmm QUEUE 290): a new doc, a save, the live preview and a message saved to the reading list, every refusal, the files they leave and the recent feed's frames, as the old Zig did them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("docsWriteRun", try docsWriteRun(a, io), "1eb961a4576e13db45c14d059b209786c9aa92e857220bc71588079420762c72");
+}
+
+/// **A TOPIC'S DOWNLOAD AND ITS UPLOADS, FROZEN ON THE OLD ZIG** (metal-vmm
+/// QUEUE 291): the bundle (its transcript, reactions and uploads, a folder
+/// among them passed over; a topic with none of them), by GET and HEAD and
+/// the wrong method, and to one who is not in the DM; an upload whole, every
+/// shape of range (a start and end, open-ended, a suffix, a list, past the
+/// end, reversed, not bytes, empty file), one streamed past the size read
+/// whole, a name no upload has, one not there, HEAD and POST.
+fn downloadsRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    const sessions = try std.fs.path.join(a, &.{ store.chat_root, "1_2", "sessions" });
+    const png = "0123456789abcdef0123456789abcdef.png";
+    const mp4 = "fedcba9876543210fedcba9876543210.mp4";
+    const empty = "00000000000000000000000000000000.gif";
+    const big = try a.alloc(u8, 5 << 20);
+    for (big, 0..) |*b, i| b.* = @intCast(i % 251);
+    for ([_]struct { []const u8, []const u8 }{
+        .{ "Plans.md", "## Steve at 2026-01-01T00:00:00Z\n\nhello\n" },
+        .{ "Plans.count", "1\n" },
+        .{ "Plans.reactions.jsonl", "{\"msg\":1,\"emoji\":\"x\"}\n" },
+        .{ "Plans.uploads/" ++ png, "\x89PNG\r\n\x1a\nsome image bytes" },
+        .{ "Plans.uploads/" ++ mp4, big },
+        .{ "Plans.uploads/" ++ empty, "" },
+        .{ "Bare.md", "## Debbie at 2026-01-01T00:00:00Z\n\nbare\n" },
+    }) |f| {
+        const p = try std.fs.path.join(a, &.{ sessions, f[0] });
+        try harness.UidSite.disk.write(io, a, p, f[1], .{});
+        var h = try std.Io.Dir.cwd().openFile(io, p, .{ .mode = .read_write });
+        defer h.close(io);
+        try h.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = @as(i96, 1_767_225_600) * std.time.ns_per_s } } });
+    }
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ sessions, "Plans.uploads", "sub" }));
+    const up = "/chat/c/1_2/Plans/uploads/";
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    const Get = struct { who: []const u8, method: []const u8 = "GET", target: []const u8, range: ?[]const u8 = null };
+    const asks = [_]Get{
+        .{ .who = steve, .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .method = "HEAD", .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .method = "POST", .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .target = "/chat/c/1_2/Bare/download" },
+        .{ .who = steve, .target = "/chat/c/1_2/Gone/download" },
+        .{ .who = ann, .target = "/chat/c/1_2/Plans/download" },
+        .{ .who = steve, .target = up ++ png },
+        .{ .who = steve, .method = "HEAD", .target = up ++ png },
+        .{ .who = steve, .method = "POST", .target = up ++ png },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=0-3" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=5-" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=-4" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=-400" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=2-4,8-9" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes= 1 - 2 " },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=3-100" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=100-200" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=4-2" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=-0" },
+        .{ .who = steve, .target = up ++ png, .range = "items=0-1" },
+        .{ .who = steve, .target = up ++ png, .range = "bytes=x-1" },
+        .{ .who = steve, .target = up ++ png, .range = "" },
+        .{ .who = steve, .target = up ++ empty },
+        .{ .who = steve, .target = up ++ empty, .range = "bytes=0-1" },
+        .{ .who = steve, .target = up ++ mp4 },
+        .{ .who = steve, .method = "HEAD", .target = up ++ mp4 },
+        .{ .who = steve, .target = up ++ mp4, .range = "bytes=1000-" },
+        .{ .who = steve, .target = up ++ mp4, .range = "bytes=-10" },
+        .{ .who = steve, .target = up ++ "a.png" },
+        .{ .who = steve, .target = up ++ "0123456789abcdef0123456789abcdef.exe" },
+        .{ .who = steve, .target = up ++ "11111111111111111111111111111111.png" },
+        .{ .who = steve, .target = up ++ "sub" },
+        .{ .who = ann, .target = up ++ png },
+    };
+    var hub = webbox.bus.Hub.init(io, a);
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        const raw = if (q.range) |r|
+            try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nRange: {s}\r\n\r\n", .{ q.method, q.target, q.who, r })
+        else
+            try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ q.method, q.target, q.who });
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try std.fmt.allocPrint(a, "{s} {s} {?s}: {?t}\n{s}", .{ q.method, q.target, q.range, r.err, r.out }));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "a topic's download and its uploads (metal-vmm QUEUE 291): the bundle by GET, HEAD and the wrong method, to a member and not; an upload whole, streamed and by every shape of range; names no upload has, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("downloadsRun", try downloadsRun(a, io), "88d2a760d8f1e99b5a8fac0f1d4ea164038f2702c7c683c61c6a643ae8c3a611");
+}

@@ -34,6 +34,8 @@ const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
 const store = @import("chat_store.zig");
+const chat_sse = @import("chat_sse.zig");
+const sse = @import("webbox").sse;
 const chat_fanout = @import("chat_fanout.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_search = @import("chat_search.zig");
@@ -44,6 +46,8 @@ const markdown = @import("markdown.zig");
 const edge = webbox.edge;
 const Now = @import("request_time.zig").Now;
 const Conv = @import("chat_conv.zig").Conv;
+const upload = @import("chat_upload.zig");
+const download = @import("chat_download.zig");
 
 const Request = std.http.Server.Request;
 const Alloc = std.mem.Allocator;
@@ -128,21 +132,12 @@ pub fn handle(
             next,
         ),
         .serve => |s| {
-            if (s.presence) presence.markActiveAndBroadcast(
-                io,
-                alloc,
-                bus,
-                call.uid,
-                now,
-            );
             return chat.serve(
                 req,
                 io,
                 alloc,
-                bus,
                 call.uid,
                 s.route,
-                now,
             );
         },
         .respond => |r| {
@@ -157,6 +152,21 @@ pub fn handle(
             );
         },
         .not_allowed => |m| return http.methodNotAllowed(req, m),
+        // **A STREAM THE ROC DECIDED** (metal-vmm QUEUE 286): its bus key, and
+        // for a topic's, the transcript whose backlog goes first. Holding the
+        // connection is the host's.
+        .stream => |s| {
+            if (s.transcript.len == 0) return sse.forward(
+                req,
+                bus,
+                s.key,
+            );
+            return chat_sse.streamTranscript(req, io, alloc, bus, .{
+                .path = try std.fs.path.join(alloc, &.{ store.chat_root, s.transcript }),
+                .key = s.key,
+                .sid = s.topic,
+            });
+        },
         // The host answered inside the call (a body too big): nothing more.
         .answered => {},
         // The site's 400 for every malformed form (webbox site.zig).
@@ -245,17 +255,23 @@ pub const Call = struct {
     /// Inside Host.aside! (`asideOf`), and the aside's first failure.
     aside: bool = false,
     aside_failed: ?anyerror = null,
+    /// The topic's bundle Host.bundle_add! builds (metal-vmm QUEUE 291).
+    bundle: download.Bundle = .{},
 
     pub fn host(c: *Call) roc_chat.Host {
         return .{
             .ctx = c,
             .check_member = checkMember,
             .count_presence = presence_,
+            .presence_unspent = presenceUnspent,
             .list_accounts = accounts,
             .fail_account = failAccount,
             .read_body = body,
             .serve_file = serveFile,
             .serve_rendered = serveRendered,
+            .serve_upload = serveUpload,
+            .bundle_add = bundleAdd,
+            .serve_bundle = serveBundle,
             .publish = publish,
             .append_line = appendLine,
             .read = read,
@@ -280,7 +296,10 @@ pub const Call = struct {
             .me = me,
             .now = now_,
             .render = render,
-            .store_message = storeMessage,
+            .render_preview = renderPreview,
+            .append_message = appendMessage,
+            .index_message = indexMessage,
+            .write_cache = writeCache,
             .append_entry = appendEntry,
             .report_fanout_failure = fanoutFailed,
             .read_header = header,
@@ -377,16 +396,17 @@ pub const Call = struct {
         return if (authorized) .member else .outsider;
     }
 
-    fn presence_(ctx: *anyopaque) void {
+    /// The member counted online; whether this was the edge, the Roc's to
+    /// broadcast (metal-vmm QUEUE 288).
+    fn presence_(ctx: *anyopaque) roc_chat.PresenceEdge {
         const c = of(ctx);
-        if (c.dead()) return;
-        presence.markActiveAndBroadcast(
-            c.io,
-            c.alloc,
-            c.bus,
-            c.uid,
-            c.now,
-        );
+        if (c.dead()) return .steady;
+        return if (presence.markActive(c.uid, c.now)) .came_online else .steady;
+    }
+
+    /// The edge's broadcast lost: given back, tried again 30 s on.
+    fn presenceUnspent(ctx: *anyopaque) void {
+        presence.giveBack(of(ctx).uid, of(ctx).now);
     }
 
     /// **EVERY ACCOUNT, THE ROC'S ONE IDENTITY READ** (Host.list_accounts!):
@@ -558,6 +578,51 @@ pub const Call = struct {
     /// the server's own markdown (`renderTrusted`: a curated page has far
     /// more links than a message may), held for the answer: `.serving`
     /// when there is one.
+    /// **AN UPLOAD SERVED** as the Roc decided it (Host.serve_upload!,
+    /// metal-vmm QUEUE 291); `.gone` when it went since the Roc's stat.
+    fn serveUpload(ctx: *anyopaque, u: roc_chat.Upload) roc_chat.UploadServed {
+        const c = of(ctx);
+        if (c.dead()) return .served;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, u.path }) catch |e| {
+            c.fail(e);
+            return .served;
+        };
+        const part: upload.Served = switch (u.part) {
+            .whole => .whole,
+            .range => .{ .range = .{ .first = u.first, .last = u.last } },
+            .unsatisfiable => .unsatisfiable,
+        };
+        // absent-ok: not read as absence: the error is kept and returned once the call ends; only a file gone since the stat is gone.
+        const served = upload.serveStored(c.req, c.io, c.alloc, p, u.size, u.content_type, part) catch |e| {
+            c.fail(e);
+            return .served;
+        };
+        if (served == .served) c.answered = true;
+        return switch (served) {
+            .gone => .gone,
+            .served => .served,
+        };
+    }
+
+    /// The file at `path` added to the bundle as `name` (Host.bundle_add!).
+    fn bundleAdd(ctx: *anyopaque, name: []const u8, path: []const u8) roc_chat.Done {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.no(e);
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.bundle.add(c.io, c.alloc, name, p) catch |e| return c.no(e);
+        return .ok;
+    }
+
+    /// The bundle answered as `<name>.tar.gz` (Host.serve_bundle!).
+    fn serveBundle(ctx: *anyopaque, name: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        c.bundle.serve(c.req, c.alloc, name) catch |e| return c.fail(e);
+        c.answered = true;
+    }
+
     fn serveRendered(ctx: *anyopaque, path: []const u8) roc_chat.Serving {
         const c = of(ctx);
         if (c.dead()) return .not_serving;
@@ -1038,6 +1103,22 @@ pub const Call = struct {
         } };
     }
 
+    /// A doc's live preview (Host.render_preview!): `render`'s, and
+    /// markdown too hostile to render counted (the preview's own
+    /// observable is the placeholder; the counter puts the probing on
+    /// /version).
+    fn renderPreview(ctx: *anyopaque, md: []const u8) roc_chat.Rendered {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        // absent-ok: not read as absence: the error is kept and returned once the call ends.
+        const reason = markdown.hostileReason(c.alloc, md) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        if (reason != null) webbox.edge.count(.malformed_markdown);
+        return render(ctx, md);
+    }
+
     /// The Roc's message as the store keeps it, its bytes copied out of
     /// the Roc's memory (the search index keeps some past the call).
     fn chatMessage(c: *Call, m: roc_chat.Message) !store.ChatMessage {
@@ -1050,32 +1131,57 @@ pub const Call = struct {
         };
     }
 
-    /// **A MESSAGE STORED** (Host.store_message!): chat_store.storeMessage,
-    /// the block the Roc made appended to the topic's transcript, then the
-    /// count cache and the search index told. An append that failed fails
-    /// the request, nothing stored.
-    fn storeMessage(
+    /// **A MESSAGE'S BLOCK APPENDED** (Host.append_message!, metal-vmm QUEUE
+    /// 287): the transcript's size after, or the request's failure.
+    fn appendMessage(
         ctx: *anyopaque,
         conv_: roc_chat.Conv,
         sid: []const u8,
         block: []const u8,
-        index: u64,
-        m: roc_chat.Message,
-    ) roc_chat.Done {
+    ) roc_chat.AppendedAt {
         const c = of(ctx);
         if (c.dead()) return .failed;
-        const t = c.address(conv_, sid) catch |e| return c.no(e);
-        const msg = c.chatMessage(m) catch |e| return c.no(e);
+        const t = c.address(conv_, sid) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        store.storeMessage(
-            c.io,
-            c.alloc,
-            t,
-            block,
-            index,
-            msg,
-        ) catch |e| return c.no(e);
-        return .ok;
+        const size = store.appendBlock(c.io, c.alloc, t, block) catch |e| {
+            c.fail(e);
+            return .failed;
+        };
+        return .{ .appended = size };
+    }
+
+    /// **THE SEARCH INDEX TOLD** (Host.index_message!): as it lands. It cannot
+    /// fail: an index that cannot take it drops itself, to be rebuilt.
+    fn indexMessage(
+        ctx: *anyopaque,
+        conv_: roc_chat.Conv,
+        sid: []const u8,
+        m: roc_chat.Message,
+    ) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        // absent-ok: the index is a cache of the transcripts: a message it cannot be told of is the next build's.
+        const t = c.address(conv_, sid) catch return;
+        // absent-ok: the same: memory for the message's copy, the index's to miss.
+        const msg = c.chatMessage(m) catch return;
+        search_index.noteAppend(c.io, t.dir, t.sid, msg);
+    }
+
+    /// **A CACHE WRITTEN** (Host.write_cache!): a write that failed is said
+    /// in the log and is the next read's miss, never the request's failure.
+    fn writeCache(ctx: *anyopaque, path: []const u8, bytes: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| {
+            std.log.warn("chat: a cache's write failed, a miss: {s}: {t}", .{ path, e });
+            return;
+        };
+        // absent-ok: a cache: one not written is recounted from the transcript (Count.believed).
+        webbox.store.write(c.io, c.alloc, p, bytes, .{}) catch |e|
+            std.log.warn("chat: a cache's write failed, a miss: {s}: {t}", .{ path, e });
     }
 
     /// **THE FAN-OUT'S PRIMITIVES NEVER FAIL THE REQUEST** (metal-vmm QUEUE

@@ -13,7 +13,6 @@
 //! whole-file download (and bounds the bytes held in RAM per request).
 
 const std = @import("std");
-const decimal = @import("decimal.zig");
 const limits = @import("limits.zig");
 const Io = @import("host_io").Io;
 const http = @import("webbox").http;
@@ -28,12 +27,6 @@ const Request = std.http.Server.Request;
 /// the bytes in hand): the largest per-file cap across kinds, plus multipart
 /// slack. The per-kind caps themselves live on UploadKind.cap().
 const max_any_upload = limits.body.upload_any;
-
-/// range_window caps the bytes served for one Range request, so a single 206
-/// stays bounded no matter how open-ended the range — the browser just requests
-/// the next window as playback advances. The window is now streamed in
-/// `stream_piece` chunks (item 105), so this bounds the response, not the heap.
-const range_window = 8 << 20; // 8 MiB
 
 /// **THE LINE BETWEEN HELD-WHOLE AND STREAMED** (QUEUE.md item 105). A plain GET
 /// of a file up to this is read whole — the read zig-metal-unikernel's page cache keeps
@@ -224,91 +217,82 @@ fn storeUpload(
 
 // ── serve path (GET <base>/<sid>/uploads/<file>) ──────────────────────────────
 
-/// serveUpload serves a stored image/video so an `<img src>` / `<video src>`
-/// resolves. The name must be 32 hex + a known ext; content-type by extension;
-/// immutable private cache; nosniff. Path = conv_dir/sessions/<sid>.uploads/<file>.
-///
-/// A `Range:` request (how browsers fetch `<video>`) gets a 206 of one
-/// `range_window` slice, read positionally so only that slice is in RAM; a plain
-/// GET (images, direct download) gets the whole file as before. `accept-ranges`
-/// is always advertised so the player knows it may seek.
-pub fn serveUpload(
+/// The part of an upload the Roc chose to serve (Host.serve_upload!, metal-vmm
+/// QUEUE 291): the whole file, the bytes `first` to `last`, or a range it
+/// cannot serve.
+pub const Served = union(enum) {
+    whole,
+    range: struct { first: u64, last: u64 },
+    unsatisfiable,
+};
+
+/// **AN UPLOAD SERVED**, where the Roc decided it (its name, type, the
+/// viewer's right to it and its range: roc-webbox chat/main.roc
+/// `serve_upload!`, metal-vmm QUEUE 291): the file at `path`, `size` bytes by
+/// the Roc's stat, typed `ct`, immutable private cache, nosniff,
+/// `accept-ranges` always. A range is one window, read positionally, so only
+/// that slice is in RAM; a plain GET (images, direct download) gets the whole
+/// file. `.gone` when the file went since the stat: nothing was answered.
+pub fn serveStored(
     req: *Request,
     io: Io,
     alloc: Alloc,
-    conv_dir: []const u8,
-    sid: []const u8,
-    file: []const u8,
-) !void {
-    const ct = uploadContentType(file) orelse return http.notFound(req);
-    const updir = try std.fmt.allocPrint(
-        alloc,
-        "{s}.uploads",
-        .{sid},
-    );
-    const path = try std.fs.path.join(alloc, &.{
-        conv_dir,
-        "sessions",
-        updir,
-        file,
-    });
-
-    const size = ((try disk.statOrNull(
-        io,
-        alloc,
-        path,
-    )) orelse return http.notFound(req)).size;
-
-    if (try http.header(
-        req,
-        alloc,
-        "range",
-    )) |range_hdr| {
-        const r = parseRange(range_hdr, size) orelse {
+    path: []const u8,
+    size: u64,
+    ct: []const u8,
+    part: Served,
+) !enum { gone, served } {
+    switch (part) {
+        .unsatisfiable => {
             const cr = try std.fmt.allocPrint(
                 alloc,
                 "bytes */{d}",
                 .{size},
             );
-            return req.respond("", .{ .status = .range_not_satisfiable, .extra_headers = &.{
+            try req.respond("", .{ .status = .range_not_satisfiable, .extra_headers = &.{
                 .{ .name = "content-range", .value = cr },
                 .{ .name = "accept-ranges", .value = "bytes" },
             } });
-        };
-        const len: usize = @intCast(r.end - r.start + 1);
-        const buf = try alloc.alloc(u8, len);
-        const n = disk.readAt(
-            io,
-            alloc,
-            path,
-            r.start,
-            buf,
-        ) catch |e| switch (e) {
-            error.FileNotFound => return http.notFound(req), // gone since its stat
-            else => return e,
-        };
-        // An upload is never rewritten, so a read shorter than its stat
-        // promised is a fault, not a range to answer from.
-        if (n != len) return error.UploadShorterThanItsStat;
-        const cr = try std.fmt.allocPrint(
-            alloc,
-            "bytes {d}-{d}/{d}",
-            .{
-                r.start,
-                r.end,
-                size,
-            },
-        );
-        // The Range window is already bounded to `range_window`, so it is read
-        // and sent whole with a content-length (the plain GET below is the one
-        // that was unbounded — item 105).
-        return req.respond(buf[0..n], .{ .status = .partial_content, .extra_headers = &.{
-            .{ .name = "content-type", .value = ct },
-            .{ .name = "content-range", .value = cr },
-            .{ .name = "accept-ranges", .value = "bytes" },
-            .{ .name = "cache-control", .value = "private, max-age=31536000, immutable" },
-            .{ .name = "x-content-type-options", .value = "nosniff" },
-        } });
+            return .served;
+        },
+        .range => |r| {
+            const len: usize = @intCast(r.last - r.first + 1);
+            const buf = try alloc.alloc(u8, len);
+            const n = disk.readAt(
+                io,
+                alloc,
+                path,
+                r.first,
+                buf,
+            ) catch |e| switch (e) {
+                error.FileNotFound => return .gone, // gone since its stat
+                else => return e,
+            };
+            // An upload is never rewritten, so a read shorter than its stat
+            // promised is a fault, not a range to answer from.
+            if (n != len) return error.UploadShorterThanItsStat;
+            const cr = try std.fmt.allocPrint(
+                alloc,
+                "bytes {d}-{d}/{d}",
+                .{
+                    r.first,
+                    r.last,
+                    size,
+                },
+            );
+            // The range is one window, so it is read and sent whole with a
+            // content-length (the plain GET below is the one that was
+            // unbounded — item 105).
+            try req.respond(buf[0..n], .{ .status = .partial_content, .extra_headers = &.{
+                .{ .name = "content-type", .value = ct },
+                .{ .name = "content-range", .value = cr },
+                .{ .name = "accept-ranges", .value = "bytes" },
+                .{ .name = "cache-control", .value = "private, max-age=31536000, immutable" },
+                .{ .name = "x-content-type-options", .value = "nosniff" },
+            } });
+            return .served;
+        },
+        .whole => {},
     }
 
     const headers = [_]std.http.Header{
@@ -334,15 +318,16 @@ pub fn serveUpload(
             0,
             data,
         ) catch |e| switch (e) {
-            error.FileNotFound => return http.notFound(req), // gone since its stat
+            error.FileNotFound => return .gone, // gone since its stat
             else => return e,
         };
         // As for a range: a file shorter than its stat is a fault, never
         // served as the whole file (metal-vmm QUEUE 172).
         if (n != data.len) return error.UploadShorterThanItsStat;
-        return req.respond(data, .{ .extra_headers = &headers });
+        try req.respond(data, .{ .extra_headers = &headers });
+        return .served;
     }
-    return streamFile(
+    try streamFile(
         req,
         io,
         alloc,
@@ -350,6 +335,7 @@ pub fn serveUpload(
         size,
         &headers,
     );
+    return .served;
 }
 
 /// Streams `len` bytes of `path` from the start into the response, `stream_piece`
@@ -398,78 +384,6 @@ fn streamFile(
         }
     }
     body.end() catch {};
-}
-
-const Range = struct { start: u64, end: u64 }; // inclusive byte offsets
-
-/// parseRange reads a single-range `Range: bytes=…` header against a file of
-/// `size` bytes, returning the inclusive [start, end] to serve — clamped to the
-/// file AND to one `range_window` so the response stays bounded. Null on a
-/// malformed or unsatisfiable range (caller answers 416). Multi-range (commas)
-/// is unsupported — we serve the first range's window, which players accept.
-fn parseRange(hdr: []const u8, size: u64) ?Range {
-    if (size == 0) return null;
-    const spec0 = if (std.mem.startsWith(
-        u8,
-        hdr,
-        "bytes=",
-    )) hdr[6..] else return null;
-    // Take only the first range if a comma-list was sent.
-    const spec = if (std.mem.indexOfScalar(
-        u8,
-        spec0,
-        ',',
-    )) |c| spec0[0..c] else spec0;
-    const dash = std.mem.indexOfScalar(
-        u8,
-        spec,
-        '-',
-    ) orelse return null;
-    const left = std.mem.trim(
-        u8,
-        spec[0..dash],
-        " ",
-    );
-    const right = std.mem.trim(
-        u8,
-        spec[dash + 1 ..],
-        " ",
-    );
-
-    var start: u64 = undefined;
-    var end: u64 = size - 1;
-    if (left.len == 0) {
-        // Suffix range: last N bytes.
-        const suffix = decimal.parseInt(u64, right) orelse return null;
-        if (suffix == 0) return null;
-        start = if (suffix >= size) 0 else size - suffix;
-    } else {
-        start = decimal.parseInt(u64, left) orelse return null;
-        if (start >= size) return null;
-        if (right.len != 0) {
-            const e = decimal.parseInt(u64, right) orelse return null;
-            if (e < start) return null;
-            end = @min(e, size - 1);
-        }
-    }
-    end = @min(end, start + range_window - 1);
-    return .{ .start = start, .end = end };
-}
-
-/// uploadContentType validates the served/on-disk filename
-/// $`) and returns its MIME, or null — doubling
-/// as the path-traversal guard for the file segment.
-fn uploadContentType(name: []const u8) ?[]const u8 {
-    const dot = std.mem.lastIndexOfScalar(
-        u8,
-        name,
-        '.',
-    ) orelse return null;
-    if (dot != 32) return null;
-    for (name[0..32]) |c| {
-        if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) return null;
-    }
-    return extMime(name[dot + 1 ..]);
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -799,104 +713,6 @@ test "detectVideoExt splits mp4/mov by brand and finds webm" {
     try testing.expectEqualStrings("mov", detectVideoExt("\x00\x00\x00\x14ftypqt  ").?);
     try testing.expectEqualStrings("mp4", detectVideoExt("\x00\x00\x00\x18ftypisom").?);
     try testing.expect(detectVideoExt("\x89PNG\r\n\x1a\n") == null);
-}
-
-test "parseRange clamps to the file and to one window" {
-    // open-ended within a small file → whole file
-    try testing.expectEqual(Range{ .start = 0, .end = 999 }, parseRange("bytes=0-", 1000).?);
-    // explicit, suffix, and mid ranges
-    try testing.expectEqual(Range{ .start = 500, .end = 999 }, parseRange("bytes=500-999", 1000).?);
-    try testing.expectEqual(Range{ .start = 800, .end = 999 }, parseRange("bytes=-200", 1000).?);
-    // window cap: an open-ended range over a big file is bounded to range_window
-    try testing.expectEqual(
-        Range{ .start = 0, .end = range_window - 1 },
-        parseRange("bytes=0-", 64 << 20).?,
-    );
-    // unsatisfiable / malformed
-    try testing.expect(parseRange("bytes=2000-", 1000) == null);
-    try testing.expect(parseRange("0-100", 1000) == null);
-    try testing.expect(parseRange("bytes=abc", 1000) == null);
-}
-
-test "every type the table offers is one the sniffers find, of the table's kind, and served as its type (the review of 157)" {
-    for (accepted) |t| {
-        const got = detectUpload(t.sample) orelse return error.NotSniffed;
-        try std.testing.expectEqualStrings(t.ext, got.ext);
-        try std.testing.expectEqual(t.kind, got.kind);
-        try std.testing.expectEqualStrings(t.mime, extMime(got.ext).?);
-        try std.testing.expect(std.mem.startsWith(
-            u8,
-            t.mime,
-            @tagName(t.kind),
-        ));
-    }
-}
-
-test "parseRange: a first-pos of size - 1 is the last byte, one of size is unsatisfiable (RFC 9110 §14.1.2)" {
-    const size: u64 = 1000;
-    try testing.expectEqual(
-        Range{ .start = size - 1, .end = size - 1 },
-        parseRange("bytes=999-", size).?,
-    );
-    try testing.expect(parseRange("bytes=1000-", size) == null);
-    // A one-byte file: its only byte, and nothing past it.
-    try testing.expectEqual(Range{ .start = 0, .end = 0 }, parseRange("bytes=0-", 1).?);
-    try testing.expect(parseRange("bytes=1-", 1) == null);
-}
-
-test "parseRange: a last-pos of size - 1 and one of size both end at the last byte" {
-    const size: u64 = 1000;
-    try testing.expectEqual(
-        Range{ .start = 0, .end = size - 1 },
-        parseRange("bytes=0-999", size).?,
-    );
-    try testing.expectEqual(
-        Range{ .start = 0, .end = size - 1 },
-        parseRange("bytes=0-1000", size).?,
-    );
-    // A last-pos one short of first-pos is invalid; equal to it is one byte.
-    try testing.expectEqual(Range{ .start = 500, .end = 500 }, parseRange("bytes=500-500", size).?);
-    try testing.expect(parseRange("bytes=500-499", size) == null);
-}
-
-test "parseRange: a suffix of size - 1 leaves the first byte, one of size or more is the whole file" {
-    const size: u64 = 1000;
-    try testing.expectEqual(Range{ .start = 1, .end = size - 1 }, parseRange("bytes=-999", size).?);
-    try testing.expectEqual(
-        Range{ .start = 0, .end = size - 1 },
-        parseRange("bytes=-1000", size).?,
-    );
-    try testing.expectEqual(
-        Range{ .start = 0, .end = size - 1 },
-        parseRange("bytes=-1001", size).?,
-    );
-    // The last byte alone, and a suffix of nothing, which no file satisfies.
-    try testing.expectEqual(
-        Range{ .start = size - 1, .end = size - 1 },
-        parseRange("bytes=-1", size).?,
-    );
-    try testing.expect(parseRange("bytes=-0", size) == null);
-}
-
-test "parseRange: a range of exactly range_window bytes is served whole, one byte more is cut to the window" {
-    const size: u64 = 64 << 20;
-    try testing.expectEqual(
-        Range{ .start = 0, .end = range_window - 1 },
-        parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window - 1}), size).?,
-    );
-    try testing.expectEqual(
-        Range{ .start = 0, .end = range_window - 1 },
-        parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window}), size).?,
-    );
-    // From a start past zero, the window is counted from the start.
-    try testing.expectEqual(
-        Range{ .start = 5, .end = 5 + range_window - 1 },
-        parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window - 1}), size).?,
-    );
-    try testing.expectEqual(
-        Range{ .start = 5, .end = 5 + range_window - 1 },
-        parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window}), size).?,
-    );
 }
 
 test "the sniffers: data exactly a magic's length is found, one byte less is not" {

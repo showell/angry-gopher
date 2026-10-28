@@ -40,7 +40,6 @@ const EdgeSite = struct {
 
 const edge_sites = [_]EdgeSite{
     .{ .file = "sse.zig", .func = "resumeAt" },
-    .{ .file = "chat_upload.zig", .func = "parseRange" },
     .{ .file = "game.zig", .func = "handle" },
     .{ .file = "game.zig", .func = "sessionRoute" },
     .{ .file = "puzzles.zig", .func = "sessionRoute" },

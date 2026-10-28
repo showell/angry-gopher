@@ -239,7 +239,7 @@ fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus
     } else if (http.pathUnder(path, "/channel")) |sub| {
         try chat_router.handle(req, io, alloc, bus, sub, true);
     } else if (http.pathUnder(path, "/settings")) |sub| {
-        try settings.handle(req, io, alloc, bus, sub);
+        try settings.handle(req, io, alloc, sub);
     } else if (http.pathUnder(path, "/gallery")) |sub| {
         // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
         // images (free-standing content read from gallery/) for the home page.

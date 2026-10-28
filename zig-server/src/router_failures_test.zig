@@ -47,9 +47,12 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     // The same doc, now a link to itself: it cannot be looked at.
     const lost = try docs_store.docPath(a, "2", "lost");
     try std.Io.Dir.cwd().symLink(io, "lost.md", lost, .{});
-    const resp = try harness.UidSite.ask(a, io, "/chat/docs/lost.md", member);
-    try testing.expect(std.mem.indexOf(u8, harness.status(resp), "404") == null);
-    try testing.expect(std.mem.startsWith(u8, harness.status(resp), "5"));
+    // The Roc's read fails the request with its error (metal-vmm QUEUE
+    // 289): the host's 500, never "no such file".
+    if (harness.UidSite.ask(a, io, "/chat/docs/lost.md", member)) |resp| {
+        try testing.expect(std.mem.indexOf(u8, harness.status(resp), "404") == null);
+        try testing.expect(std.mem.startsWith(u8, harness.status(resp), "5"));
+    } else |e| try testing.expect(e != error.FileNotFound);
 }
 
 /// The host's Io, but every file removal fails: a store whose delete is
@@ -641,8 +644,8 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     const ada = try users.allocateUser(io, a, .literal("Ada"));
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
-    const slug = try docs_store.createUserDoc(io, a, ada, "Notes");
-    try docs_store.writeUserDoc(io, a, ada, slug, "what Ada wrote");
+    const slug = "notes";
+    try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, ada, slug), "what Ada wrote", .{});
     const post = struct {
         fn f(al: std.mem.Allocator, i: Io, c: []const u8, path: []const u8, body: []const u8) ![]const u8 {
             return harness.serve(al, i, try std.fmt.allocPrint(al, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ path, c, body.len, body }));
@@ -657,7 +660,7 @@ test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gon
     try testing.expectEqualStrings("404 Not Found", harness.status(gone));
 
     // A reading list at its cap: the next save is the client's limit.
-    try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, &@as([reading_list.max_reading_list_bytes]u8, @splat('x')), 0);
+    try harness.UidSite.disk.write(io, a, try docs_store.docPath(a, ada, reading_list.reading_list_slug), &@as([1 << 20]u8, @splat('x')), .{});
     const full = try post(a, io, cookies, "/chat/docs/save_to_reading_list", "conv=1_2&sid=s&id=s_1&body=hello");
     try testing.expectEqualStrings("413 Payload Too Large", harness.status(full));
 }
@@ -1340,4 +1343,41 @@ test "a doc posted to chat that is not UTF-8 text fails the request with NotUtf8
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "docs", "notes.md" }), "caf\xe9", .{});
     try testing.expectError(error.NotUtf8, harness.postAs(a, io, "/chat/docs/post", steve, "slug=notes"));
     try testing.expect(!try harness.UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2" })));
+}
+
+test "the .count a send writes is the backfill's for the same transcript, byte for byte, and a count a crash left stale is a miss: the next send is numbered by the transcript (metal-vmm QUEUE 287)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_count = @import("chat_count.zig");
+    const chat_store = @import("chat_store.zig");
+    const disk = harness.UidSite.disk;
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2" });
+    const count = try chat_count.countPath(a, dir, "Plans");
+    for ([_][]const u8{ "markdown=one", "markdown=two%0A-------------%0Athree" }) |body| {
+        try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, body)));
+        // The Roc's count, then the backfill's for the same transcript.
+        const roc = try disk.read(io, a, count, .unlimited);
+        try disk.remove(io, a, count);
+        try testing.expectEqual(@as(usize, 1), chat_count.backfillSidecars(io, a, &.{dir}));
+        try testing.expectEqualStrings(try disk.read(io, a, count, .unlimited), roc);
+    }
+    // A crash after the third's append, before its count: the count the
+    // second left, which no longer speaks for the transcript's size.
+    const stale = try disk.read(io, a, count, .unlimited);
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=three")));
+    try disk.write(io, a, count, stale, .{});
+    try testing.expectEqualStrings("303 See Other", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=four")));
+    const transcript = (try chat_paths.readTranscript(io, a, dir, "Plans")).?;
+    try testing.expect(std.mem.indexOf(u8, transcript, "MSG_Plans_4\n") != null);
+    try testing.expect(std.mem.startsWith(u8, try disk.read(io, a, count, .unlimited), "4 "));
 }
