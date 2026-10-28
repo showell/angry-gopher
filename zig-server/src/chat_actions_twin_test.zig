@@ -1060,6 +1060,82 @@ test "the welcome DM (metal-vmm QUEUE 279): a new member's, made once, from the 
     try freezeRun("welcomeRun", try welcomeRun(a, io), "fdedb2107f1f87be8a530f9a8ec778c212cb628d1dba59b0abf8924819e7cb23");
 }
 
+/// GET /chat/search/words (metal-vmm QUEUE 281) over one built index, as
+/// three members who see different conversations: prefixes as typed (cased,
+/// spaced, punctuated, empty, missing, not UTF-8, longer than a word, two
+/// of them), a word no message holds, one only a DM the asker is not in
+/// holds; then a method it refuses, a path past it, and the sixth search in
+/// one second. Every answer.
+fn wordsRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    const debbie = try harness.memberSession(a, io, "2", "Debbie");
+    const ann = try harness.memberSession(a, io, "3", "Ann");
+    try harness.writeTranscript(a, io, "1_2", "Plans", &.{ "the layout is lazy", "Lamp, layout; \u{201C}latte\u{201D}", "la la land" });
+    try harness.writeTranscript(a, io, "2_3", "Secret", &.{"laser lasers"});
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ store.chat_root, "channels", "ops.channel" }), "1\n3\n", .{});
+    try harness.writeTranscript(a, io, "channels/ops", "Standup", &.{ "large latte", "caf\u{00E9} CAF\u{00C9}" });
+    try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ try chat_paths.dmConvDir(a, "1_2"), "sessions", "Bytes.md" }), "MSG_Bytes_1\nfrom: Someone\ndate: 2026-10-10T00:00:00Z\n\nla\xffzy lab\xc3", .{});
+    @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_761_400_000);
+    defer chat_router.test_now = null;
+    var hub = webbox.bus.Hub.init(io, a);
+    const long = "l" ++ &@as([300]u8, @splat('a'));
+    const asks = [_]struct { []const u8, []const u8, []const u8 }{
+        .{ steve, "GET", "/chat/search/words?prefix=la" },
+        .{ steve, "GET", "/chat/search/words?prefix=LA" },
+        .{ steve, "GET", "/chat/search/words?prefix=+%22La%22+" },
+        .{ steve, "GET", "/chat/search/words?prefix=la&prefix=x" },
+        .{ steve, "GET", "/chat/search/words?prefix=" },
+        .{ steve, "GET", "/chat/search/words" },
+        .{ steve, "GET", "/chat/search/words?prefix=%FF" },
+        .{ steve, "GET", "/chat/search/words?prefix=la%FF" },
+        .{ steve, "GET", "/chat/search/words?prefix=caf%C3%A9" },
+        .{ steve, "GET", "/chat/search/words?prefix=%E2%80%9Cla" },
+        .{ steve, "GET", "/chat/search/words?prefix=%ZZ" },
+        .{ steve, "GET", "/chat/search/words?prefix=" ++ long },
+        .{ steve, "GET", "/chat/search/words?prefix=zz" },
+        .{ steve, "GET", "/chat/search/words?prefix=las" },
+        .{ debbie, "GET", "/chat/search/words?prefix=la" },
+        .{ ann, "GET", "/chat/search/words?prefix=la" },
+        .{ steve, "POST", "/chat/search/words?prefix=la" },
+        .{ steve, "HEAD", "/chat/search/words?prefix=la" },
+        .{ steve, "GET", "/chat/search/words/?prefix=la" },
+        .{ steve, "GET", "/chat/search/wordsX?prefix=la" },
+        .{ "", "GET", "/chat/search/words?prefix=la" },
+    };
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks) |q| {
+        chat_search.forgetAll();
+        const r = try serveOn(a, io, &hub, try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{ q[1], q[2], q[0] }));
+        try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out }));
+    }
+    // The sixth in one second is refused.
+    chat_search.forgetAll();
+    for (0..6) |_| {
+        const r = try serveOn(a, io, &hub, try getRaw(a, "/chat/search/words?prefix=la", ann));
+        try answers.append(a, try std.fmt.allocPrint(a, "{?t} {s}", .{ r.err, r.out }));
+    }
+    return .{ .answers = answers.items };
+}
+
+test "search's words (metal-vmm QUEUE 281): each prefix as typed, over what each member sees, every refusal and the rate limit, as the old Zig answered" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("wordsRun", try wordsRun(a, io), "960f33ab4676af6a70d56f4409852d5056841c9d4b8e503621c4555dcd7fba62");
+}
+
 /// key, and every file the site holds.
 fn failedSend(a: Alloc, io: Io, target: []const u8, comptime breaks: enum { append, count, author }) ![]const u8 {
     var site = try harness.UidSite.init(a, io);
