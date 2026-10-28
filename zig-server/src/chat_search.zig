@@ -2,7 +2,7 @@
 //! Both routes, /chat/search/words and /chat/search/messages, are the
 //! Roc's (roc-webbox chat/main.roc `search_words!`, `search_messages!`;
 //! chat/Search.roc): the query, the key, the excerpt and the JSON. The host
-//! answers them from here and the index (chat_router.zig's `admitOf`,
+//! answers them from here and the index (chat_router.zig's `admit`,
 //! `searchWords`, `searchMessages`):
 //!
 //! **A CRUDE RATE LIMIT** (Steve): `per_second` searches a second per

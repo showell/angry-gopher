@@ -4948,14 +4948,14 @@ test "Host.check_online! is presence.isOnline at the request's time: generated l
     };
     const Presence = @import("roc_chat").Presence;
     for (ids, ago) |id, s| {
-        const got = chat_router.Call.online(&call, id);
+        const got = call.check_online(id);
         try testing.expectEqual(if (s < 300) Presence.online else Presence.offline, got);
         try testing.expectEqual(presence.isOnline(id, t), got == .online);
     }
-    try testing.expectEqual(Presence.offline, chat_router.Call.online(&call, "99"));
+    try testing.expectEqual(Presence.offline, call.check_online("99"));
     // **AFTER A FAILURE THE HOST DOES NOTHING MORE**: offline, nothing read.
     call.failed = error.IsDir;
-    try testing.expectEqual(Presence.offline, chat_router.Call.online(&call, ids[0]));
+    try testing.expectEqual(Presence.offline, call.check_online(ids[0]));
 }
 
 /// One stream asked for: as whom, how, and the bus key the stream should
@@ -5736,7 +5736,7 @@ test "search's scope twin (the pure-Roc plan's item 8): the folders the Roc hand
             // Roc handed it.
             var call: chat_router.Call = .{ .req = &req, .io = io, .alloc = a, .bus = &bus, .now = Now.at(1_767_400_000) };
             roc_chat.useRequest(a);
-            const decided = roc_chat.decide(a, "/search/words", false, req.head.method, call.host());
+            const decided = roc_chat.decide(a, "/search/words", false, req.head.method, .of(&call));
             if (chat_paths.visibleConvs(io, a, who.uid)) |want| {
                 _ = try decided;
                 try testing.expectEqual(@as(?anyerror, null), call.failed);

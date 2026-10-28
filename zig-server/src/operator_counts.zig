@@ -9,7 +9,7 @@ const std = @import("std");
 const Alloc = std.mem.Allocator;
 
 /// What is counted. Every kind of Host.roc's `count!` is one of these by
-/// name (chat_router.zig's `countOf` will not compile otherwise).
+/// name (chat_router.zig's `count` will not compile otherwise).
 pub const Kind = enum {
     dropped_announcement,
     dropped_feed_entry,

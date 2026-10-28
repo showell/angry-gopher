@@ -239,8 +239,8 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
 
 /// **A MEMBER MADE FROM NOW ON IS WELCOMED** (metal-vmm QUEUE 283): signup
 /// writes {users_root}/{id}/welcome-pending, the gopher's own state and not
-/// the chat's, and the Roc's first /chat consumes it (Host.welcome_pending!,
-/// Host.welcome_done!). An account made before the marker existed has none,
+/// the chat's, and the Roc's first /chat consumes it (Host.check_welcome!,
+/// Host.clear_welcome!). An account made before the marker existed has none,
 /// so it is old with no migration step; nothing is read from a DM's absence.
 pub fn markWelcomePending(io: Io, alloc: Alloc, id: []const u8) !void {
     const dir = try std.fs.path.join(alloc, &.{ users_root, id });

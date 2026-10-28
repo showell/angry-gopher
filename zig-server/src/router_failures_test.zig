@@ -1229,20 +1229,19 @@ test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mti
     try harness.UidSite.disk.makeDir(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "dir" }));
     const chat_router = @import("chat_router.zig");
     var call: chat_router.Call = .{ .req = undefined, .io = io, .alloc = a, .bus = undefined, .now = @import("request_time.zig").Now.at(1) };
-    const ctx: *anyopaque = @ptrCast(&call);
-    const st = chat_router.Call.stat(ctx, "users/1/f.txt");
+    const st = call.read_stat("users/1/f.txt");
     try testing.expectEqual(@as(u64, 5), st.found.size);
     try testing.expectEqual(@as(i64, 1790000001), st.found.mtime);
-    try testing.expect(chat_router.Call.stat(ctx, "users/1/gone") == .missing);
-    try testing.expectEqualStrings("ell", chat_router.Call.readAt(ctx, "users/1/f.txt", 1, 3).found);
-    try testing.expectEqualStrings("lo", chat_router.Call.readAt(ctx, "users/1/f.txt", 3, 9).found);
-    try testing.expectEqualStrings("", chat_router.Call.readAt(ctx, "users/1/f.txt", 9, 4).found);
-    try testing.expect(chat_router.Call.readAt(ctx, "users/1/gone", 0, 4) == .missing);
+    try testing.expect(call.read_stat("users/1/gone") == .missing);
+    try testing.expectEqualStrings("ell", call.read_at("users/1/f.txt", 1, 3).found);
+    try testing.expectEqualStrings("lo", call.read_at("users/1/f.txt", 3, 9).found);
+    try testing.expectEqualStrings("", call.read_at("users/1/f.txt", 9, 4).found);
+    try testing.expect(call.read_at("users/1/gone", 0, 4) == .missing);
     try testing.expect(call.failed == null);
     // A cache's read (metal-vmm QUEUE 284): a folder is a miss, never the call's failure.
-    try testing.expect(chat_router.Call.readAt(ctx, "users/1/dir", 0, 4) == .failed);
+    try testing.expect(call.read_at("users/1/dir", 0, 4) == .failed);
     try testing.expect(call.failed == null);
-    try testing.expect(chat_router.Call.stat(ctx, "users/1/dir") == .failed);
+    try testing.expect(call.read_stat("users/1/dir") == .failed);
     try testing.expectEqual(@as(?anyerror, error.IsDir), call.failed);
 }
 
