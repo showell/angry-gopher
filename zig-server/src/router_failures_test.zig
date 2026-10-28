@@ -1204,3 +1204,35 @@ test "route: a send too big for its form is the host's 413 and the whole answer:
     try testing.expectEqual(@as(usize, 1), std.mem.count(u8, got, "HTTP/1.1 "));
     try testing.expectEqualStrings(before, (try chat_paths.readTranscript(io, a, dir, "Plans")).?);
 }
+
+test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mtime in seconds, a window of it and a short one, nothing for a missing file, and a folder the call's failure" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const chat_store = @import("chat_store.zig");
+    const f = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "f.txt" });
+    try harness.UidSite.disk.write(io, a, f, "hello", .{});
+    var file = try std.Io.Dir.cwd().openFile(io, f, .{ .mode = .read_write });
+    try file.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = @as(i96, 1790000001) * std.time.ns_per_s + 700_000_000 } } });
+    file.close(io);
+    try harness.UidSite.disk.makeDir(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "dir" }));
+    const chat_router = @import("chat_router.zig");
+    var call: chat_router.Call = .{ .req = undefined, .io = io, .alloc = a, .bus = undefined, .now = @import("request_time.zig").Now.at(1) };
+    const ctx: *anyopaque = @ptrCast(&call);
+    const st = chat_router.Call.stat(ctx, "users/1/f.txt");
+    try testing.expectEqual(@as(u64, 5), st.found.size);
+    try testing.expectEqual(@as(i64, 1790000001), st.found.mtime);
+    try testing.expect(chat_router.Call.stat(ctx, "users/1/gone") == .missing);
+    try testing.expectEqualStrings("ell", chat_router.Call.readAt(ctx, "users/1/f.txt", 1, 3).found);
+    try testing.expectEqualStrings("lo", chat_router.Call.readAt(ctx, "users/1/f.txt", 3, 9).found);
+    try testing.expectEqualStrings("", chat_router.Call.readAt(ctx, "users/1/f.txt", 9, 4).found);
+    try testing.expect(chat_router.Call.readAt(ctx, "users/1/gone", 0, 4) == .missing);
+    try testing.expect(call.failed == null);
+    try testing.expect(chat_router.Call.stat(ctx, "users/1/dir") == .failed);
+    try testing.expectEqual(@as(?anyerror, error.IsDir), call.failed);
+}

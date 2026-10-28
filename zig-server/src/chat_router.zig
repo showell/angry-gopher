@@ -176,6 +176,8 @@ pub const Call = struct {
             .append_line = appendLine,
             .message_count = messageCount,
             .read = read,
+            .stat = stat,
+            .read_at = readAt,
             .write = write,
             .remove = remove,
             .list = list,
@@ -474,6 +476,39 @@ pub const Call = struct {
         // absent-ok: not read as absence: a failed read is kept and returned once the call ends; only "no file" is missing.
         const data = (webbox.store.readOrNull(c.io, c.alloc, p, .unlimited) catch |e| return c.unread(e)) orelse return .missing;
         return .{ .found = data };
+    }
+
+    /// **A FILE'S SIZE AND MTIME** (Host.stat!, metal-vmm QUEUE 274): the
+    /// mtime in whole seconds, floored. A folder is no file this chat
+    /// stats: its failure (error.IsDir), never a size.
+    pub fn stat(ctx: *anyopaque, path: []const u8) roc_chat.Stat {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unstat(e);
+        // absent-ok: not read as absence: a failed stat is kept and returned once the call ends; only "no file" is missing.
+        const st = (webbox.store.statOrNull(c.io, c.alloc, p) catch |e| return c.unstat(e)) orelse return .missing;
+        if (st.kind != .file) return c.unstat(error.IsDir);
+        return .{ .found = .{ .size = st.size, .mtime = @intCast(@divFloor(st.mtime, std.time.ns_per_s)) } };
+    }
+
+    fn unstat(c: *Call, e: anyerror) roc_chat.Stat {
+        c.fail(e);
+        return .failed;
+    }
+
+    /// **AT MOST `max` BYTES FROM `offset`** (Host.read_at!): fewer where
+    /// the file ends first.
+    pub fn readAt(ctx: *anyopaque, path: []const u8, offset: u64, max: u64) roc_chat.Read {
+        const c = of(ctx);
+        if (c.dead()) return .failed;
+        const p = std.fs.path.join(c.alloc, &.{ store.chat_root, path }) catch |e| return c.unread(e);
+        // absent-ok: not read as absence: a failed stat is kept and returned once the call ends; only "no file" is missing.
+        const st = (webbox.store.statOrNull(c.io, c.alloc, p) catch |e| return c.unread(e)) orelse return .missing;
+        if (st.kind != .file) return c.unread(error.IsDir);
+        const buf = c.alloc.alloc(u8, @intCast(@min(max, st.size -| offset))) catch |e| return c.unread(e);
+        if (buf.len == 0) return .{ .found = buf };
+        const n = webbox.store.readAt(c.io, c.alloc, p, offset, buf) catch |e| return c.unread(e);
+        return .{ .found = buf[0..n] };
     }
 
     /// `fail`, answering the Roc that the read failed.
