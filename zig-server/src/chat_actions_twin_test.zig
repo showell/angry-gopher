@@ -5888,3 +5888,112 @@ test "admin retire's twin (metal-vmm QUEUE 293): the Roc's plan and the old Zig'
     try testing.expectEqual(old.answers.len, roc.answers.len);
     for (old.answers, roc.answers) |o, r| try testing.expectEqualStrings(o, r);
 }
+
+const chrome = @import("chat_chrome.zig");
+
+/// One answer with each script's bytes, hash and length named, not
+/// written: `<body NAME>`, `<hash NAME>`, `<length NAME>`. **AN EDIT TO A
+/// SCRIPT IS NO CHANGE OF THE RUN**; which script answered, and how, is.
+fn scriptsSaid(a: Alloc, out: []const u8) ![]const u8 {
+    var said = out;
+    for (chrome.assets) |s| {
+        if (s.body.len > 0 and std.mem.endsWith(u8, said, s.body)) said = try std.mem.concat(a, u8, &.{
+            said[0 .. said.len - s.body.len],
+            try std.fmt.allocPrint(a, "<body {s}>", .{s.name}),
+        });
+        said = try std.mem.replaceOwned(u8, a, said, try scriptHash(a, s.body), try std.fmt.allocPrint(a, "<hash {s}>", .{s.name}));
+        said = try std.mem.replaceOwned(
+            u8,
+            a,
+            said,
+            try std.fmt.allocPrint(a, "content-length: {d}\r\n", .{s.body.len}),
+            try std.fmt.allocPrint(a, "content-length: <length {s}>\r\n", .{s.name}),
+        );
+    }
+    return said;
+}
+
+/// A script's hash, as its ETag and a page's src name it (webbox http.hashedSrc).
+fn scriptHash(a: Alloc, body: []const u8) ![]const u8 {
+    const src = try webbox.http.hashedSrc(a, "", body);
+    return src[std.mem.indexOf(u8, src, "?h=").? + 3 ..];
+}
+
+/// **THE CHAT'S STATIC SCRIPTS** (/chat/<name>.js, chat_client's table):
+/// every script by name, signed out and as a member; names not in the
+/// table, a script's path under /channel or past a `/`; every method; its
+/// hashed src, a wrong hash, and each If-None-Match. Each answer whole, its
+/// script's bytes named (`scriptsSaid`), and the error the route returned.
+/// Frozen on the old Zig (chat.zig's `serve`, its `.asset` arm), before the
+/// script became the Roc's decision.
+fn scriptsRun(a: Alloc, io: Io) !struct { answers: [][]const u8 } {
+    var site = try harness.UidSite.init(a, io);
+    defer site.deinit();
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    @import("presence.zig").forgetForTest();
+    defer @import("presence.zig").forgetForTest();
+    chat_router.test_now = Now.at(1_767_300_000);
+    defer chat_router.test_now = null;
+    const colors = for (chrome.assets) |s| {
+        if (std.mem.eql(u8, s.name, "colors.js")) break s.body;
+    } else return error.NoColorsScript;
+    const hash = try scriptHash(a, colors);
+    const tag = try std.fmt.allocPrint(a, "\"{s}\"", .{hash});
+    const ScriptAsk = struct { method: []const u8 = "GET", target: []const u8, header: []const u8 = "" };
+    var asks: std.ArrayList(ScriptAsk) = .empty;
+    for (chrome.assets) |s| try asks.append(a, .{ .target = try std.fmt.allocPrint(a, "/chat/{s}", .{s.name}) });
+    for ([_][]const u8{
+        "/chat/.js",
+        "/chat/nope.js",
+        "/chat/a/b.js",
+        "/chat/colors.js/",
+        "/chat/colors.jsx",
+        "/chat/colors.JS",
+        "/chat//colors.js",
+        "/chat/%63olors.js",
+        "/channel/colors.js",
+        "/chat/colors.js?v=1",
+    }) |t| try asks.append(a, .{ .target = t });
+    for ([_][]const u8{ "HEAD", "POST", "PUT", "DELETE", "OPTIONS" }) |m| try asks.append(a, .{ .method = m, .target = "/chat/colors.js" });
+    try asks.append(a, .{ .method = "HEAD", .target = "/chat/nope.js" });
+    try asks.append(a, .{ .method = "POST", .target = "/chat/nope.js" });
+    try asks.append(a, .{ .target = try std.fmt.allocPrint(a, "/chat/colors.js?h={s}", .{hash}) });
+    try asks.append(a, .{ .target = try std.fmt.allocPrint(a, "/chat/colors.js?x=1&h={s}", .{hash}) });
+    try asks.append(a, .{ .target = "/chat/colors.js?h=0123456789abcdef" });
+    try asks.append(a, .{ .method = "HEAD", .target = try std.fmt.allocPrint(a, "/chat/colors.js?h={s}", .{hash}) });
+    for ([_][]const u8{
+        try std.fmt.allocPrint(a, "If-None-Match: {s}\r\n", .{tag}),
+        try std.fmt.allocPrint(a, "If-None-Match: \"0\", {s}\r\n", .{tag}),
+        try std.fmt.allocPrint(a, "If-None-Match: W/{s}\r\n", .{tag}),
+        "If-None-Match: \"0\"\r\n",
+        "If-None-Match: *\r\n",
+    }) |h| try asks.append(a, .{ .target = "/chat/colors.js", .header = h });
+    var hub = webbox.bus.Hub.init(io, a);
+    var answers: std.ArrayList([]const u8) = .empty;
+    for (asks.items) |q| for ([_][]const u8{ "", steve }) |who| {
+        const cookie = if (who.len == 0) "" else try std.fmt.allocPrint(a, "Cookie: {s}\r\n", .{who});
+        const raw = try std.fmt.allocPrint(a, "{s} {s} HTTP/1.1\r\nHost: x\r\n{s}{s}\r\n", .{ q.method, q.target, cookie, q.header });
+        const r = try serveOn(a, io, &hub, raw);
+        try answers.append(a, try scriptsSaid(a, try std.fmt.allocPrint(a, "{s} {s} {s} as {s}: {?t}\n{s}", .{
+            q.method,
+            q.target,
+            q.header,
+            if (who.len == 0) "no one" else "a member",
+            r.err,
+            r.out,
+        })));
+    };
+    return .{ .answers = answers.items };
+}
+
+test "the chat's static scripts (/chat/<name>.js): every script by name, signed out and as a member; names not in the table, every method, the hashed src and If-None-Match, as the old Zig served them" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    try freezeRun("scriptsRun", try scriptsRun(a, io), "476cee49281a47c83f930d3b53ef5885a4f5d9c0d5ad9cf7c8c06529d480893c");
+}
