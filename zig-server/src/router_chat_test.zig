@@ -338,3 +338,20 @@ test "route: the chat's gate sends an outsider to sign in and back to the reques
         try testing.expect(harness.responseHeader(refused, "location") == null);
     }
 }
+
+test "route: a chat path that is not UTF-8 is the site's 400, before the gate, never a panic" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    for ([_][]const u8{ "/chat/\xff", "/channel/ops/\xc3" }) |bad| {
+        const refused = try harness.get(a, io, bad);
+        try testing.expectEqualStrings("400 Bad Request", harness.status(refused));
+    }
+}

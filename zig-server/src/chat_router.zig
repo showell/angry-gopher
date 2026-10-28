@@ -86,7 +86,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8, c
     // A failure the Roc could not be told (the store, reading who it is)
     // fails the request, as it did before the router.
     if (call.failed) |e| return e;
-    if (decision != .redirect and !(decision == .serve and decision.serve.route.family == .asset) and !call.asked)
+    // Answered before asking, by design: a redirect, a static asset, and a
+    // path that is not UTF-8 (the Roc's 400 at the door, chat/main.roc `handle!`).
+    if (decision != .redirect and decision != .malformed_form and !(decision == .serve and decision.serve.route.family == .asset) and !call.asked)
         std.debug.panic("the Roc router answered {f} without asking who is asking", .{decision});
     switch (decision) {
         // Built by the Roc from a conversation's base and a topic, which the
