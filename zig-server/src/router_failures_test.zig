@@ -1236,3 +1236,65 @@ test "the host's stat! and read_at! (metal-vmm QUEUE 274): a file's size and mti
     try testing.expect(chat_router.Call.stat(ctx, "users/1/dir") == .failed);
     try testing.expectEqual(@as(?anyerror, error.IsDir), call.failed);
 }
+
+test "a send numbers its message by the Roc's count as chat_count.messageCount counts, over every sidecar the store can be left with (metal-vmm QUEUE 275)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_count = @import("chat_count.zig");
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.memberSession(a, io, "1", "Steve");
+    _ = try harness.memberSession(a, io, "2", "Debbie");
+    const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2" });
+    const Case = struct { what: []const u8, messages: usize, sidecar: ?[]const u8 };
+    // `{size}` is the transcript's own size: a count taken at it is believed.
+    const cases = [_]Case{
+        .{ .what = "no sidecar", .messages = 3, .sidecar = null },
+        .{ .what = "a count at the right size, believed", .messages = 2, .sidecar = "41 {size}\n0 1\n" },
+        .{ .what = "the legacy one-record form", .messages = 2, .sidecar = "41 {size}\n" },
+        .{ .what = "a count at another size", .messages = 4, .sidecar = "3 1\n" },
+        .{ .what = "torn: no newline", .messages = 2, .sidecar = "41 {size}" },
+        .{ .what = "empty", .messages = 2, .sidecar = "" },
+        .{ .what = "not numbers", .messages = 2, .sidecar = "banana\n" },
+        .{ .what = "one number", .messages = 2, .sidecar = "2\n" },
+        .{ .what = "a number too many", .messages = 2, .sidecar = "41 {size} extra\n" },
+        .{ .what = "negative", .messages = 2, .sidecar = "-1 {size}\n" },
+        .{ .what = "a bad second line, the count good", .messages = 2, .sidecar = "41 {size}\nnot a line\n" },
+        .{ .what = "past 1 KiB", .messages = 2, .sidecar = "41 {size}\n" ++ &@as([1100]u8, @splat('x')) ++ "\n" },
+        .{ .what = "no transcript", .messages = 0, .sidecar = null },
+    };
+    for (cases, 0..) |c, k| {
+        const sid = try std.fmt.allocPrint(a, "Case{d}", .{k});
+        if (c.messages > 0) {
+            const bodies = try a.alloc([]const u8, c.messages);
+            for (bodies) |*b| b.* = "hi";
+            try harness.writeTranscript(a, io, "1_2", sid, bodies);
+        }
+        if (c.sidecar) |raw| {
+            const st = try harness.UidSite.disk.stat(io, a, try chat_paths.transcriptPath(a, dir, sid));
+            const text = try std.mem.replaceOwned(u8, a, raw, "{size}", try std.fmt.allocPrint(a, "{d}", .{st.size}));
+            try harness.UidSite.disk.write(io, a, try chat_count.countPath(a, dir, sid), text, .{});
+        }
+        const z = try chat_count.messageCount(io, a, dir, sid);
+        const answer = try harness.postAs(a, io, try std.fmt.allocPrint(a, "/chat/c/1_2/{s}/send", .{sid}), steve, "markdown=next");
+        try testing.expectEqualStrings("303 See Other", harness.status(answer));
+        const transcript = (try chat_paths.readTranscript(io, a, dir, sid)).?;
+        const want = try std.fmt.allocPrint(a, "MSG_{s}_{d}\n", .{ sid, z + 1 });
+        if (std.mem.indexOf(u8, transcript, want) == null) {
+            std.debug.print("{s}: the Zig counts {d}, so the send is {s}; the transcript holds no such message\n", .{ c.what, z, want });
+            return error.TestUnexpectedResult;
+        }
+    }
+    // A transcript that cannot be read: an error to the Zig, the send's 500
+    // to the Roc, nothing stored.
+    try harness.UidSite.disk.makeDir(io, a, try chat_paths.transcriptPath(a, dir, "Folder"));
+    try testing.expect(std.meta.isError(chat_count.messageCount(io, a, dir, "Folder")));
+    try testing.expectError(error.IsDir, harness.postAs(a, io, "/chat/c/1_2/Folder/send", steve, "markdown=next"));
+}

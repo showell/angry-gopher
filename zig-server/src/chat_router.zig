@@ -174,7 +174,6 @@ pub const Call = struct {
             .gather_recent = recentRows,
             .publish = publish,
             .append_line = appendLine,
-            .message_count = messageCount,
             .read = read,
             .stat = stat,
             .read_at = readAt,
@@ -611,23 +610,6 @@ pub const Call = struct {
         // absent-ok: not read as absence: the error is kept and returned once the call ends.
         store.appendLine(c.io, c.alloc, p, line) catch |e| return c.no(e);
         return .ok;
-    }
-
-    /// **A TOPIC'S MESSAGE COUNT** (Host.message_count!): chat_count's,
-    /// its cache and its recount the store's, shared with the append. A
-    /// count that failed fails the request, never 0.
-    fn messageCount(ctx: *anyopaque, conv_: roc_chat.Conv, sid: []const u8) roc_chat.Count {
-        const c = of(ctx);
-        if (c.dead()) return .failed;
-        const t = c.address(conv_, sid) catch |e| return c.uncounted(e);
-        // absent-ok: not read as absence: the error is kept and returned once the call ends.
-        return .{ .counted = chat_count.messageCount(c.io, c.alloc, t.dir, t.sid) catch |e| return c.uncounted(e) };
-    }
-
-    /// `fail`, answering the Roc that the count failed.
-    fn uncounted(c: *Call, e: anyerror) roc_chat.Count {
-        c.fail(e);
-        return .failed;
     }
 
     /// `fail`, answering the Roc nothing.
