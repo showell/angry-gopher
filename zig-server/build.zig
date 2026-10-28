@@ -179,6 +179,8 @@ pub fn build(b: *std.Build) void {
     const webbox_store_source = webbox_dep.path("src/store.zig");
     router_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     router_tests.root_module.addImport("webbox", webbox);
+    // Only a test reaches it (chat_stream_turn_test.zig: the real host).
+    router_tests.root_module.addImport("webbox_linux", webbox_linux);
     router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("codex_chat", codex_chat);
     router_tests.root_module.addImport("uo_town", uo_town);
@@ -225,7 +227,7 @@ pub fn build(b: *std.Build) void {
     const codec_bench_run = b.addRunArtifact(b.addExecutable(.{ .name = "codec-bench", .root_module = codec_bench_mod }));
     codec_bench_run.addPassthruArgs();
     b.step("codec-bench", "Decode a transcript in Zig and in Roc, time and peak memory (src/chat_codec_bench.zig)").dependOn(&codec_bench_run.step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/recent_feed.zig", "src/chat_upload.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/recent_feed.zig", "src/chat_upload.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,

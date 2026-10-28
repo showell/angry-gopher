@@ -324,6 +324,8 @@ const testing = std.testing;
 test {
     _ = @import("chat_route_corpus_test.zig");
     _ = @import("chat_actions_twin_test.zig");
+    // The real Linux host serving the route table: backlog xor live.
+    _ = @import("chat_stream_turn_test.zig");
     // The admin retire's tests run the Roc's plan (metal-vmm QUEUE 293), so
     // they need roc_chat: here, not as roots of their own.
     _ = @import("chat_retire.zig");
