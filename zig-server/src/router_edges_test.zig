@@ -39,7 +39,7 @@ const EdgeSite = struct {
 };
 
 const edge_sites = [_]EdgeSite{
-    .{ .file = "sse.zig", .func = "resumeAt" },
+    .{ .file = "sse.zig", .func = "resumeAt", .unreachable_because = "no route asks it: a topic stream resumes where the Roc says (roc-webbox chat/Backlog.roc, its twin), which the stream requests below reach" },
     .{ .file = "game.zig", .func = "handle" },
     .{ .file = "game.zig", .func = "sessionRoute" },
     .{ .file = "puzzles.zig", .func = "sessionRoute" },
@@ -53,7 +53,6 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "log_view.zig", .func = "parseFilter" },
     .{ .file = "script_route.zig", .func = "parse" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
-    .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseCount", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "chat_count.zig", .func = "parseLast", .unreachable_because = "a .count file the server wrote" },
     .{ .file = "player.zig", .func = "lessThanByID", .unreachable_because = "player ids the server allocated" },

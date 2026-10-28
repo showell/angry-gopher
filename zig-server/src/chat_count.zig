@@ -47,19 +47,6 @@ fn lookupAuthor(
     )) orelse "";
 }
 
-/// The N of a `<sid>_<N>` message id, or null when the id is not this
-/// topic's — which is what a sidecar pointing at the wrong place looks like.
-pub fn numberIn(id: []const u8, sid: []const u8) ?usize {
-    if (!std.mem.startsWith(
-        u8,
-        id,
-        sid,
-    )) return null;
-    const rest = id[sid.len..];
-    if (rest.len < 2 or rest[0] != '_') return null;
-    return decimal.parseInt(usize, rest[1..]);
-}
-
 /// **EVERY TOPIC GETS A SIDECAR AT BOOT.** A conversation written before this
 /// existed, or repaired by hand, would otherwise cost a whole-transcript read
 /// on every listing for as long as nobody posts to it. Both hosts run this —
@@ -183,7 +170,7 @@ pub fn believedCount(counted: ?Count, size: u64) ?usize {
 /// **MESSAGES ARE NUMBERED BY BLOCK** (the review of 156): a block the
 /// decoder refuses keeps its number, so a recount, which numbers the next
 /// message, counts every block that is not blank, and never gives a number
-/// twice; readers take a message's index from its id (`indexOf`), not its
+/// twice; readers take a message's index from its id (roc-webbox Count.index_of), not its
 /// place among the ones that decoded.
 pub fn countBlocks(raw: []const u8) usize {
     var n: usize = 0;
@@ -200,12 +187,6 @@ pub fn countBlocks(raw: []const u8) usize {
         ).len != 0) n += 1;
     }
     return n;
-}
-
-/// A message's index (its number less one) from its id in `sid`, or null.
-pub fn indexOf(id: []const u8, sid: []const u8) ?usize {
-    const n = numberIn(id, sid) orelse return null;
-    return if (n == 0) null else n - 1;
 }
 
 /// **WHERE THE LAST MESSAGE STARTS, WHEN IT WAS SENT, AND BY WHOM** — the
@@ -419,23 +400,6 @@ fn fixtureTranscriptSize(self: *fixtures.CountFixture) !u64 {
         ),
         .{},
     )).size;
-}
-
-test "a message's number has one spelling: digits after the topic and its underscore" {
-    try testing.expectEqual(@as(?usize, 0), indexOf("topic_1", "topic"));
-    try testing.expectEqual(@as(?usize, 9), indexOf("topic_10", "topic"));
-    // Spellings Zig's parseInt took, each a second name for some message.
-    for ([_][]const u8{
-        "topic_1_0",
-        "topic_+5",
-        "topic_-0",
-        "topic_ 1",
-        "topic_",
-        "topic_0",
-        "topic1",
-    }) |id| {
-        try testing.expectEqual(@as(?usize, null), indexOf(id, "topic"));
-    }
 }
 
 test "count: every send records the count and the transcript size it was taken at" {

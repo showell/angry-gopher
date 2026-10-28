@@ -37,10 +37,6 @@ const Alloc = std.mem.Allocator;
 
 const store = @import("webbox").store;
 
-const bus_mod = @import("webbox").bus;
-
-const Bus = bus_mod.Bus;
-
 const search_index = @import("search_index.zig");
 
 /// chat_root is {data_dir}/chat. roots.point overrides this at startup; the
@@ -49,9 +45,9 @@ pub var chat_root: []const u8 = "../games/lynrummy/chat-data";
 
 // No lock: a handler runs only inside the host's turn, one at a time
 // (zig-metal-unikernel HOST.md), so the read-count-then-append on the write path
-// and the read-backlog-then-subscribe on the stream path never interleave. That
-// is what makes a message land in EITHER the backlog OR the live stream, never
-// both and never neither (see appendMessage / openStream).
+// and a topic stream's read-then-subscribe (chat_router.zig `replay`) never
+// interleave. That is what makes a message land in EITHER the backlog OR the
+// live stream, never both and never neither (chat_stream_turn_test.zig).
 
 /// sep joins message blocks on disk: blank line, 13 hyphens, newline. A body
 /// line that would collide with it is backslash-escaped (see unescapeBodyLine).
@@ -76,54 +72,6 @@ pub const ChatMessage = struct {
     markdown: []const u8,
     uid: []const u8 = "",
 };
-
-// ── decode ──────────────────────────────────────────────────────────────────
-
-/// Stream is the result of openStream: the decoded backlog + a live Subscriber.
-/// The caller replays backlog[since..] and holds the subscriber (`Bus.hold`),
-/// which either keeps it for the host or closes it (157(a)).
-///
-/// Two lifetimes deliberately bundled here — keep them straight:
-///   backlog: REQUEST-scoped. Decoded into openStream's arena `alloc`; valid only
-///            for this request and never stored past it (it's replayed, then dropped).
-///   sub:     SERVER-scoped. Owned by the bus on its base allocator; outlives the
-///            request until `bus.close(sub)` removes + frees it.
-pub const Stream = struct {
-    backlog: []ChatMessage, // request-arena: consume in-request, never retain
-    sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
-};
-
-/// **TESTS ONLY: THE STREAM'S WINDOW**, called between the backlog's read
-/// and the subscribe (chat_stream_turn_test.zig). Read only under
-/// `builtin.is_test`.
-pub var test_window: ?*const fn (Io) void = null;
-
-/// openStream: inside one handler's turn, decode the topic backlog at `path`
-/// AND register a live subscriber on `key`, the topic's bus key the Roc
-/// named (`<conv_key>/<sid>`, roc-webbox chat/BusKey.roc) — atomically, so no
-/// message slips between "what's in the backlog" and "what the subscriber sees".
-/// A message appended concurrently is delivered exactly once (backlog xor live).
-pub fn openStream(
-    io: Io,
-    alloc: Alloc,
-    bus: *Bus,
-    path: []const u8,
-    key: []const u8,
-) !Stream {
-
-    // A topic nobody has written to is genuinely empty; a topic that will
-    // not read is not, and showing it as empty is how a transcript looks lost.
-    const raw = try store.readOrEmpty(
-        io,
-        alloc,
-        path,
-        .unlimited,
-    );
-    const msgs = try decodeChatFile(alloc, raw);
-    if (@import("builtin").is_test) if (test_window) |w| w(io);
-    const sub = try bus.open(key);
-    return .{ .backlog = msgs, .sub = sub };
-}
 
 /// **A MESSAGE'S BLOCK APPENDED, AS A PRIMITIVE** (the Roc's
 /// `Host.append_message!`, metal-vmm QUEUE 287): `block` appended to the

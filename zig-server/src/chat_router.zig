@@ -34,10 +34,10 @@ const chat = @import("chat.zig");
 const users = @import("users.zig");
 const presence = @import("presence.zig");
 const store = @import("chat_store.zig");
-const chat_sse = @import("chat_sse.zig");
 const sse = @import("webbox").sse;
 const chat_fanout = @import("chat_fanout.zig");
 const chat_paths = @import("chat_paths.zig");
+const chat_codec = @import("chat_codec.zig");
 const chat_search = @import("chat_search.zig");
 const search_index = @import("search_index.zig");
 const chrome = @import("chat_chrome.zig");
@@ -148,19 +148,15 @@ pub fn handle(
         },
         .not_allowed => |m| return http.methodNotAllowed(req, m),
         // **A STREAM THE ROC DECIDED** (metal-vmm QUEUE 286): its bus key, and
-        // for a topic's, the transcript whose backlog goes first. Holding the
-        // connection is the host's.
+        // for a topic's, the backlog that goes first. Holding the connection
+        // is the host's.
         .stream => |s| {
-            if (s.transcript.len == 0) return sse.forward(
+            if (s.backlog.len == 0) return sse.forward(
                 req,
                 bus,
                 s.key,
             );
-            return chat_sse.streamTranscript(req, io, alloc, bus, .{
-                .path = try std.fs.path.join(alloc, &.{ store.chat_root, s.transcript }),
-                .key = s.key,
-                .sid = s.topic,
-            });
+            return replay(req, io, bus, s.key, s.backlog);
         },
         // The host answered inside the call (a body too big): nothing more.
         .answered => {},
@@ -199,6 +195,55 @@ pub fn handle(
             );
         },
     }
+}
+
+/// **TESTS ONLY: A TOPIC STREAM'S WINDOW**, called between the Roc's read
+/// of the transcript and the subscribe (chat_stream_turn_test.zig). Read
+/// only under `builtin.is_test`.
+pub var test_window: ?*const fn (Io) void = null;
+
+/// **A TOPIC'S STREAM, AS THE ROC DECIDED IT** (roc-webbox
+/// chat/TopicStream.roc): subscribed to `key` in the turn the Roc read the
+/// transcript in, so each message is in the backlog or live, never both,
+/// never neither (a handler runs only in the host's turn, one at a time:
+/// chat_stream_turn_test.zig holds it on Linux); then the head, the Roc's
+/// `backlog` (its preamble and frames), and each published frame as it is.
+/// **THE BODY IS DELIMITED BY THE CONNECTION CLOSING**, not chunked: the
+/// host writes each live frame long after this handler has returned.
+fn replay(
+    req: *Request,
+    io: Io,
+    bus: *Bus,
+    key: []const u8,
+    backlog: []const u8,
+) !void {
+    if (builtin.is_test) if (test_window) |w| w(io);
+    var held = bus.hold(try bus.open(key));
+    defer held.release();
+    var hbuf: [4096]u8 = undefined;
+    var body = sse.respond(req, &hbuf) catch return;
+    sse.push(&body, backlog) catch return;
+    held.keep(verbatim, "");
+}
+
+/// A topic stream's render: what is published on a topic's key is a
+/// finished frame (roc-webbox chat/Frame.roc, built once for every viewer),
+/// so it goes out as it is. It cannot fail, and makes nothing.
+fn verbatim(
+    _: []const u8,
+    _: Alloc,
+    blob: []const u8,
+) Alloc.Error!?[]const u8 {
+    return blob;
+}
+
+test "a topic stream's render sends the published frame as it is" {
+    const frame = "id: 3\ndata: {\"index\":3}\n\n";
+    try std.testing.expectEqualStrings(frame, (try verbatim(
+        "",
+        std.testing.allocator,
+        frame,
+    )).?);
 }
 
 /// To the login page, to come back to `next` after (the Roc's gate,
@@ -340,6 +385,7 @@ pub const Call = struct {
             .fail = refuse,
             .fail_text = failText,
             .count_malformed_channel = malformedChannel,
+            .count_refused_block = refusedBlock,
             .count_dropped = droppedOf,
             .aside = asideOf,
             .check_online = online,
@@ -1039,6 +1085,15 @@ pub const Call = struct {
         const c = of(ctx);
         if (c.dead()) return;
         chat_paths.countMalformed(name_);
+    }
+
+    /// A transcript block the Roc's decoder refused, counted for
+    /// /admin/host (chat_codec.refuseBlock: the reads that met one, and the
+    /// last one's first line, as every reader of a transcript counts it).
+    fn refusedBlock(ctx: *anyopaque, first: []const u8) void {
+        const c = of(ctx);
+        if (c.dead()) return;
+        chat_codec.refuseBlock(first);
     }
 
     /// **THE BUS, AS A PRIMITIVE** (Host.publish!): webbox's bus.publish,

@@ -5,7 +5,7 @@
 //! webbox's Linux host, which runs one handler at a time (`turn`,
 //! zig-webbox linux_host.zig). Here the real host serves real connections,
 //! and a send arrives while the stream's handler stands in that window
-//! (`chat_store.test_window`): it waits for the turn, and lands live, once.
+//! (`chat_router.test_window`): it waits for the turn, and lands live, once.
 //! The control lets the turn go across the window: the send lands inside
 //! it and the stream never sees it, so the check can see the race it
 //! guards against.
@@ -18,6 +18,7 @@ const linux_host = @import("webbox_linux").linux_host;
 const router = @import("router.zig");
 const harness = @import("router_harness.zig");
 const chat_store = @import("chat_store.zig");
+const chat_router = @import("chat_router.zig");
 const chat_codec = @import("chat_codec.zig");
 const testing = std.testing;
 
@@ -157,9 +158,9 @@ fn race(a: std.mem.Allocator, io: Io, let_go: bool) !struct { ids: []const usize
         .let_go = let_go,
     };
     window = &w;
-    chat_store.test_window = inWindow;
+    chat_router.test_window = inWindow;
     defer {
-        chat_store.test_window = null;
+        chat_router.test_window = null;
         window = null;
     }
 

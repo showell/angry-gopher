@@ -14,7 +14,6 @@ const decimal = @import("decimal.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_codec = @import("chat_codec.zig");
 const chat_count = @import("chat_count.zig");
-const chat_frame = @import("chat_frame.zig");
 const markdown = @import("chat_markdown");
 const http = @import("webbox").http;
 const webbox_html = @import("webbox").html;
@@ -1584,6 +1583,7 @@ test "Count: blocks counted, and a message's number and index in its topic" {
     const a = arena.allocator();
     var differ: Differences = .{};
     var compared: usize = 0;
+    var numbered: Frozen = .{};
     for (try codecStrings(
         a,
         0xb10c5,
@@ -1638,29 +1638,15 @@ test "Count: blocks counted, and a message's number and index in its topic" {
             u8,
             &.{ other, tail },
         );
-        for ([_]Fn{ .number_in, .index_of }) |f| {
-            const z = if (f == .number_in) chat_count.numberIn(
-                id,
-                sid,
-            ) else chat_count.indexOf(id, sid);
-            const r = try roc(
-                a,
-                f,
-                &.{ id, sid },
-            );
-            compared += 1;
-            if (!sameResults(
-                try digitsOf(a, z),
-                r,
-            )) differ.add("{t}(\"{s}\", \"{s}\"): zig {?d}, roc {d} results", .{
-                f,
-                id,
-                sid,
-                z,
-                r.len,
-            });
-        }
+        // Frozen (the pure-Roc chat plan, item 1): chat_count.numberIn and
+        // indexOf are gone, the backlog's index the Roc's.
+        for ([_]Fn{ .number_in, .index_of }) |f| numbered.add(try roc(
+            a,
+            f,
+            &.{ id, sid },
+        ));
     };
+    try numbered.check("numberIn, indexOf", "7ddb8193f71131e137a32e39f0c2da287e003e015d1714bc622a77a4df948755", 1080);
     try differ.none(compared);
 }
 
@@ -1867,15 +1853,14 @@ test "Count: the window at the record's offset, believed or read the slow way (f
     );
 }
 
-// ── Frame (chat_frame.zig) ─────────────────────────────────────────────────
+// ── Frame (chat_frame.zig, retired: frozen) ─────────────────────────────────────────────────
 
-test "Frame: a message's frame and a reaction's, whatever their bytes" {
+test "Frame: a message's frame and a reaction's, whatever their bytes (frozen, the pure-Roc chat plan, item 1: chat_frame.zig is gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
-    var compared: usize = 0;
+    var frames: Frozen = .{};
     // The author, id, markdown and cid are text: the Roc's frame takes them
     // decoded.
     const strings = try utf8Only(a, try byteStrings(a));
@@ -1888,7 +1873,7 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
         }
     }.f;
     for (0..2000) |i| {
-        const m: chat_frame.Message = .{
+        const m: struct { index: usize, from: []const u8, from_uid: []const u8, at: []const u8, id: []const u8, markdown: []const u8, cid: []const u8 } = .{
             .index = switch (i % 3) {
                 0 => i,
                 1 => 0,
@@ -1911,14 +1896,13 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
             ),
             .cid = pick(r, strings),
         };
-        const zf = try chat_frame.messageFrame(a, m);
         const idx = try std.fmt.allocPrint(
             a,
             "{d}",
             .{m.index},
         );
         const html = try markdown.render(a, m.markdown);
-        const rf = (try roc1(
+        frames.add(try roc(
             a,
             .message_frame,
             &.{
@@ -1931,35 +1915,17 @@ test "Frame: a message's frame and a reaction's, whatever their bytes" {
                 m.id,
                 m.cid,
             },
-        )).?;
-        compared += 1;
-        if (!std.mem.eql(
-            u8,
-            zf,
-            rf,
-        )) differ.add(
-            "messageFrame: zig \"{f}\", roc \"{f}\"",
-            .{ std.zig.fmtString(zf), std.zig.fmtString(rf) },
-        );
+        ));
     }
-    for (strings) |line| {
-        const zr = try chat_frame.reactionFrame(a, line);
-        const rr = (try roc1(
-            a,
-            .reaction_frame,
-            &.{line},
-        )).?;
-        compared += 1;
-        if (!std.mem.eql(
-            u8,
-            zr,
-            rr,
-        )) differ.add("reactionFrame(\"{f}\")", .{std.zig.fmtString(line)});
-    }
-    try differ.none(compared);
+    for (strings) |line| frames.add(try roc(
+        a,
+        .reaction_frame,
+        &.{line},
+    ));
+    try frames.check("messageFrame, reactionFrame", "f24977abfe6907403cf1c98f4c67c525273c3b07d790adc26dc19b36598fc78f", 2910);
 }
 
-// ── Backlog (webbox sse.resumeAt, std's parseInt and json; chat_sse.zig) ──
+// ── Backlog (webbox sse.resumeAt, std's parseInt and json; chat_sse.zig, retired) ──
 
 /// What a resume source can hold: numbers at u64's edges, signs,
 /// underscores, spaces and tabs around, junk, empty, and none sent.
@@ -2087,13 +2053,12 @@ fn backlogFiles(a: std.mem.Allocator) ![]const []const u8 {
     return files.items;
 }
 
-test "Backlog: a backlog's frames and the messages from where it resumes, as the old Zig's messageFrame and backlogFrom made them" {
+test "Backlog: a backlog's frames and the messages from where it resumes, as the old Zig's messageFrame and backlogFrom made them (frozen, the pure-Roc chat plan, item 1: both are gone)" {
     var arena = setUp();
     defer arena.deinit();
     defer twin.deinit();
     const a = arena.allocator();
-    var differ: Differences = .{};
-    var compared: usize = 0;
+    var frozen: Frozen = .{};
     var rng = std.Random.DefaultPrng.init(0xf5a3e);
     const r = rng.random();
     const uids = [_][]const u8{ "", "1", "12", "07", "\xff", "\"", "1 2" };
@@ -2105,15 +2070,7 @@ test "Backlog: a backlog's frames and the messages from where it resumes, as the
             else => std.math.maxInt(usize),
         };
         const uid = uids[r.uintLessThan(usize, uids.len)];
-        const zf = try chat_frame.messageFrame(a, .{
-            .index = index,
-            .from = m.from,
-            .from_uid = uid,
-            .at = m.at,
-            .id = m.id,
-            .markdown = m.markdown,
-        });
-        const rf = (try roc1(a, .stored_frame, &.{
+        frozen.add(try roc(a, .stored_frame, &.{
             try std.fmt.allocPrint(a, "{d}", .{index}),
             m.id,
             m.from,
@@ -2121,26 +2078,12 @@ test "Backlog: a backlog's frames and the messages from where it resumes, as the
             uid,
             m.markdown,
             try markdown.render(a, m.markdown),
-        })).?;
-        compared += 1;
-        if (!std.mem.eql(u8, zf, rf)) differ.add("messageFrame: zig \"{f}\", roc \"{f}\"", .{ std.zig.fmtString(zf), std.zig.fmtString(rf) });
+        }));
     }
-    const sse_ = @import("chat_sse.zig");
     for (try backlogFiles(a)) |raw| for ([_][]const u8{ "t", "u", "" }) |sid| for ([_]usize{ 0, 1, 2, 3, 5, 8, std.math.maxInt(usize) }) |since| {
-        const before = chat_codec.refused_blocks;
-        const msgs = try chat_codec.decodeChatFile(a, raw);
-        var want: std.ArrayList([]const u8) = .empty;
-        try want.append(a, try std.fmt.allocPrint(a, "{d}", .{chat_codec.refused_blocks - before}));
-        const rest = sse_.backlogFrom(msgs, sid, since);
-        for (rest, msgs.len - rest.len..) |msg, at| try want.appendSlice(a, &.{
-            try std.fmt.allocPrint(a, "{d}", .{chat_count.indexOf(msg.id, sid) orelse at}),
-            msg.id,
-            msg.uid,
-        });
-        compared += 1;
-        if (!sameResults(want.items, try roc(a, .backlog_from, &.{ raw, sid, try std.fmt.allocPrint(a, "{d}", .{since}) }))) differ.add("backlogFrom(\"{f}\", {s}, {d})", .{ std.zig.fmtString(raw), sid, since });
+        frozen.add(try roc(a, .backlog_from, &.{ raw, sid, try std.fmt.allocPrint(a, "{d}", .{since}) }));
     };
-    try differ.none(compared);
+    try frozen.check("messageFrame of a stored block, backlogFrom", "e24d68cdfdde66b28398f70bdf7c9aac55d195b27b30642af7018858e1289aed", 23000);
 }
 
 // ── Form, Reaction (webbox http.formField; the old reactions.zig, frozen) ──

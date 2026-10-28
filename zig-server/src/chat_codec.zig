@@ -11,7 +11,6 @@ const testing = std.testing;
 const chat_store = @import("chat_store.zig");
 const chat_paths = @import("chat_paths.zig");
 const chat_count = @import("chat_count.zig");
-const indexOf = chat_count.indexOf;
 const readCount = chat_count.readCount;
 const backfillSidecars = chat_count.backfillSidecars;
 const countPath = chat_count.countPath;
@@ -294,5 +293,4 @@ test "a refused block keeps its number: a recount counts blocks, so no id is giv
         f.dir,
         "topic",
     ).?.count);
-    try testing.expectEqual(@as(usize, 3), indexOf("topic_4", "topic").?);
 }

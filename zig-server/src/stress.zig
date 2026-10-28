@@ -366,7 +366,7 @@ fn hammerFanout(io: Io, client: *std.http.Client, gpa: std.mem.Allocator, stream
 /// drainStream opens one SSE subscriber on the topic and reads (discards) it until
 /// cancelled — draining the socket so the server's next() loop keeps delivering and
 /// freeing each fanned-out message. Signals `ready` once subscribed (receiveHead
-/// returns after openStream has registered the subscriber).
+/// returns after the stream's handler has registered the subscriber).
 fn drainStream(client: *std.http.Client, url: []const u8, ready: *std.atomic.Value(u32), stop: *std.atomic.Value(bool)) void {
     const uri = std.Uri.parse(url) catch return;
     const extra: []const std.http.Header = if (session_cookie) |c|
