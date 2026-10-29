@@ -227,6 +227,21 @@ pub fn build(b: *std.Build) void {
     const codec_bench_run = b.addRunArtifact(b.addExecutable(.{ .name = "codec-bench", .root_module = codec_bench_mod }));
     codec_bench_run.addPassthruArgs();
     b.step("codec-bench", "Decode a transcript in Zig and in Roc, time and peak memory (src/chat_codec_bench.zig)").dependOn(&codec_bench_run.step);
+    // **THE ROC'S MARKDOWN AGAINST THE ZIG'S** (src/markdown_twin_test.zig,
+    // metal-vmm QUEUE 305): every corpus case through both, html and work
+    // units, each corpus held to its ratchet; the Zig is chat-markdown's
+    // checkout, the dialect's definition. Part of `test`, and on its
+    // own as `zig build markdown-twin [-- --also GOLD | --raise | --fuzz N]`.
+    const md_twin_mod = b.createModule(.{ .root_source_file = b.path("src/markdown_twin_test.zig"), .target = target, .optimize = optimize });
+    md_twin_mod.addImport("roc_chat_twin", roc_webbox.module("roc_chat_twin"));
+    md_twin_mod.addImport("chat_markdown", chat_markdown);
+    const md_twin_run = b.addRunArtifact(b.addExecutable(.{ .name = "markdown-twin", .root_module = md_twin_mod }));
+    md_twin_run.setCwd(b.path("."));
+    md_twin_run.addPassthruArgs();
+    b.step("markdown-twin", "The Roc's markdown against the Zig's, every corpus, html and work units (src/markdown_twin_test.zig)").dependOn(&md_twin_run.step);
+    const md_twin_gate = b.addRunArtifact(md_twin_run.producer.?);
+    md_twin_gate.setCwd(b.path("."));
+    test_step.dependOn(&md_twin_gate.step);
     for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/users_session.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/admin_ui.zig", "src/roots.zig", "src/recent_feed.zig", "src/chat_upload.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/chat_codec.zig", "src/chat_fanout.zig", "src/chat_count.zig", "src/chat_paths.zig", "src/stress.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/decimal.zig", "src/request_time.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),

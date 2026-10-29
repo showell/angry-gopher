@@ -1,0 +1,5 @@
+# The markdown twin's pass counts (src/markdown_twin_test.zig): each may only rise.
+adversarial 29
+dialect 3
+zig_tests 69
+hostile 766
