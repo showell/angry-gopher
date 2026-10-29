@@ -6,9 +6,7 @@ Howell's personal website. Every line of code here was written by Claude.
 
 The site is a handful of small apps served from **one self-contained zig
 binary** — no database, storage is plain files on disk — served by
-zig-metal-unikernel behind Caddy (TLS); see "Where it runs" below. The same
-binary also serves two guests from the sibling cobble-webbox checkout, Codex
-Chat and the UO town (see "Mounted guests" below). Each app has its own README as the canonical
+zig-metal-unikernel behind Caddy (TLS); see "Where it runs" below. Each app has its own README as the canonical
 home for its design intent; this file is the developer/agent map of the
 whole thing.
 
@@ -25,15 +23,12 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   This repo's server is an application of it, as Dog Park is. Its signed
   admin scripts are **[Shale](https://github.com/showell/shale)**'s, another
   sibling (`../shale`).
-- **The guests are cobble-webbox's**, a third sibling checkout beside this one:
-  Codex Chat and the UO town, mounted beside this application with webbox's
-  `combo.Mount` (see "Mounted guests" below).
-- **This repo is the primary, so the combination's build is here:**
-  `zig-server/build.zig.zon` names all three siblings, and
-  `zig-server/src/router.zig` (`combined`) says what mounts where.
+- **The chat's markdown dialect and its browser client** are siblings too,
+  chat-markdown and chat-client; `zig-server/build.zig.zon` names every
+  sibling the build reads.
 - **zig-metal-unikernel is the machine.** Its build (`zig build gopher` →
-  `gopher.elf`) compiles `zig-server/src`, zig-webbox, shale and cobble-webbox's
-  two guests from their sibling checkouts as they are, and hands them metal's
+  `gopher.elf`) compiles `zig-server/src`, zig-webbox, shale, chat-markdown and
+  chat-client from their sibling checkouts as they are, and hands them metal's
   own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
   rewriting no line;
   its gates judge metal against this repo's Linux build, page by page, and
@@ -56,10 +51,8 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   it.
 - **The two hosts are one machine, by contract** (zig-metal-unikernel `HOST.md`,
   `STORE.md`): Linux runs **one handler at a time** as metal's single loop
-  does (the turn in webbox's `linux_host.zig`); every bound on this
-  application's requests is in
-  [`zig-server/src/limits.zig`](zig-server/src/limits.zig) (a guest's body
-  limit is its own `bodyLimit`, in cobble-webbox), which both hosts
+  does (the turn in webbox's `linux_host.zig`); every bound on a request is in
+  [`zig-server/src/limits.zig`](zig-server/src/limits.zig), which both hosts
   size their buffers from and `tools/check_caddy_limits.py` holds the
   Caddyfile to; and zig-webbox's `store.zig` answers the same on Linux and on metal, which
   zig-metal-unikernel's `zig build store-judge` checks operation by operation.
@@ -89,25 +82,6 @@ time. If they disagree, `pages/home.txt` is right.
 | **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the solver and rules, with deterministic undo and replay. | Zig (WASM) + Elm + TS | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
 | **Chess Toys** | `/chess` | Knight's Tour and Eight Queens as watchable, scrubbable backtracking searches — each search narrates onto an event tape, and the sources themselves are exhibited at `/chess/code`. | Zig (WASM) + JS | [`games/chess/README.md`](games/chess/README.md) |
 
-### Mounted guests
-
-`zig-server/src/router.zig` builds the site as
-`webbox.combo.Mount(gopher, &.{ "/codex-chat" → codex_chat, "/uo" → uo_town })`
-(zig-webbox's `src/combo.zig` says how a mount composes). Gopher keeps `/`;
-each guest gets its prefix, stripped before its routes see the path (the bare
-prefix 303s to `prefix/`). Neither is on the home page, and neither passes
-through Gopher's cookies or refusals; each is public, ungated, and counted
-under its own name.
-
-| Guest | URL | Code | Its files |
-|---|---|---|---|
-| **Codex Chat** | `/codex-chat/` | `<cobble-webbox>/src/chat_app.zig` (module `codex_chat`) | `{data_dir}/codex-chat/`, `{auth_dir}/codex-chat/` |
-| **UO town** (Damian's uoaix town) | `/uo/town/` | `<cobble-webbox>/src/uo_app.zig` (module `uo_town`) | `{data_dir}/uo/`, `{auth_dir}/uo/` (made empty; the town keeps its state in memory) |
-
-Their design and their own dev servers are cobble-webbox's README. A change to
-a guest is a change in cobble-webbox; it reaches lynrummy.com the same way as
-a change here (a new zig-metal-unikernel image).
-
 > **The server is the zig implementation in [`zig-server/`](zig-server/)** —
 > see [`zig-server/README.md`](zig-server/README.md).
 
@@ -120,11 +94,10 @@ bash ops/start        # zig server on :9001
 ```
 
 The build needs [zig-webbox](https://github.com/showell/zig-webbox),
-[shale](https://github.com/showell/shale) and cobble-webbox cloned beside this
-repo (`../zig-webbox`, `../shale`, and cobble-webbox the same way):
-`zig-server/build.zig.zon` names all three. `ops/check_zig` runs zig-webbox's
-and shale's tests too, not cobble-webbox's (those also need a Cobblestone
-checkout beside it, cobblestone-pin; run them from cobble-webbox). Shale's `shale` binary
+[shale](https://github.com/showell/shale), chat-markdown and chat-client
+cloned beside this repo (`../zig-webbox`, `../shale`, and the other two the
+same way): `zig-server/build.zig.zon` names them all. `ops/check_zig` runs
+zig-webbox's and shale's tests too. Shale's `shale` binary
 must also be on `PATH`: `ops/check_zig` runs its lints with it.
 
 `ops/start` is the canonical dev loop: it kills anything on :9001,
@@ -238,10 +211,8 @@ data_dir = /home/steve/AngryGopher/local  # all writable state lives here
 auth_dir = /home/steve/Auth               # account store; defaults to ~/Auth
 ```
 
-`data_dir` holds Gopher's four trees: `{data_dir}/lynrummy`, `/chat`,
-`/users`, `/players` (`roots.zig` points them all), plus the guests' own,
-`/codex-chat` and `/uo` (webbox's combo makes them, with the same two under
-`auth_dir`).
+`data_dir` holds four trees: `{data_dir}/lynrummy`, `/chat`, `/users`,
+`/players` (`roots.zig` points them all).
 `auth_dir` is the shared account store — one directory per uid
 (`{auth_dir}/<id>/{name,password,api-key}`) plus `{auth_dir}/next-id.txt` for
 allocation. One uid is the same person across every surface. With the
@@ -392,7 +363,6 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |
 | `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
-| `/codex-chat/`, `/uo/` | The mounted guests (cobble-webbox; "Mounted guests" above): webbox's combo dispatches them before `route()` sees a request |
 
 There is no site-wide login gate — most surfaces are deliberately
 public and ungated (they resolve the viewer only to label the top
@@ -497,7 +467,6 @@ consistency checks that bare commands silently skip.
 | The server internals (routing, modules) | [`zig-server/README.md`](zig-server/README.md) |
 | Lyn Rummy rules / architecture | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md), [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
 | Releasing to lynrummy.com | zig-metal-unikernel's `DEPLOY.md` |
-| Codex Chat and the UO town | cobble-webbox's `README.md` |
 | The Linux fallback host, prod's Caddy | [`deploy/README.md`](deploy/README.md) |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 

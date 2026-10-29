@@ -14,10 +14,6 @@
         // Shale, the script language for the site's own data: the `shale`
         // checkout (../../shale from here), module `shale`.
         .shale = .{ .path = "../../shale" },
-        // Codex Chat, Cobblestone's chat in Codex compiled to Zig, served
-        // under /codex-chat: the `cobble-webbox` checkout (../../cobble-webbox
-        // from here), module `codex_chat`.
-        .cobble_webbox = .{ .path = "../../cobble-webbox" },
         // The chat's markdown dialect: the `chat-markdown` checkout
         // (../../chat-markdown from here), module `chat_markdown`.
         .chat_markdown = .{ .path = "../../chat-markdown" },

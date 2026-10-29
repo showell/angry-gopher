@@ -62,7 +62,7 @@ head_budget=(--budget steps=50000000 --budget arena_bytes=536870912)
 # first: a lint that never fires looks exactly like a clean tree. Run from the
 # folder holding the repos: it reads zig-webbox and shale beside this one.
 echo "==> portable lint (its plants, then the tree)"
-portable_budget=(--budget steps=1500000000 --budget arena_bytes=1073741824)
+portable_budget=(--budget steps=500000000 --budget arena_bytes=1073741824)
 (cd "$REPO_DIR/.." && shale "${portable_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_portable.shale" repo="$(basename "$REPO_DIR")" self_test=1)
 (cd "$REPO_DIR/.." && shale "${portable_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_portable.shale" repo="$(basename "$REPO_DIR")")
 

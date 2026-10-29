@@ -12,9 +12,6 @@ const Io = @import("host_io").Io;
 const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
-/// Mounted beside this application (router.zig); its state is read again
-/// with the rest of memory in `refresh`.
-const codex_chat = @import("codex_chat");
 
 /// What the setup did, for the host to say in its own log.
 pub const StartReport = struct {
@@ -68,8 +65,7 @@ pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartRe
 /// every chat session's last-message record (written where missing), the
 /// search index (built again from every transcript), the two caches
 /// that are filled as they are used (game_limits' usage, measured again on
-/// each player's next write; reading_list's lists, read again), and Codex
-/// Chat's state (read again from its files under codex-chat/). Nothing
+/// each player's next write; reading_list's lists, read again). Nothing
 /// else this server holds is the store's (presence, the throttles and the
 /// counts are its own).
 pub const Refresh = struct {
@@ -92,7 +88,6 @@ pub fn refresh(io: Io, base: std.mem.Allocator) Refresh {
     };
     @import("game_limits.zig").forgetUsage();
     @import("reading_list.zig").forgetCache();
-    codex_chat.refresh();
     const ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
     return .{ .backfilled = backfilled, .search = search, .ms = ms };
 }

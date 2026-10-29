@@ -21,10 +21,7 @@ checkout `../../shale`),
 runs each accepted connection as its own task on the `std.Io` thread pool,
 and hands each
 request to `router.zig`, which routes by path prefix to the per-surface
-handlers (`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …);
-`router.zig`'s `site` is that application with cobble-webbox's Codex Chat and
-UO town mounted under `/codex-chat` and `/uo` (webbox's `combo.Mount`; the
-top-level README's "Mounted guests"). The port
+handlers (`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …). The port
 is `GOPHER_PORT` (default 9001); `data_dir` + auth come from
 `GOPHER_CONFIG`. `server.zig` holds what is this application's own about
 that: its name, its variables, the game store's floor, its startup lines.
