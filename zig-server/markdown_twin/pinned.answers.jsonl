@@ -1,3 +1,3 @@
 {"id":"pin/cjk-strong","md_hash":"7a2a28b691044ba8","html":"<p><strong>「強調」</strong>です</p>\n","work_units":28,"hostile":"","trusted":"<p><strong>「強調」</strong>です</p>\n","trusted_reflow":"<p><strong>「強調」</strong>です</p>\n"}
-{"id":"pin/emphasis-floor","md_hash":"a87c9f632fbe00c6","html":"<p>*a<strong>b</strong> c**</p>\n","work_units":29,"hostile":"","trusted":"<p>*a<strong>b</strong> c**</p>\n","trusted_reflow":"<p>*a<strong>b</strong> c**</p>\n"}
-{"id":"pin/emphasis-floor-short","md_hash":"df666e952ac1d204","html":"<p>x **a<em>a</em>a*</p>\n","work_units":30,"hostile":"","trusted":"<p>x **a<em>a</em>a*</p>\n","trusted_reflow":"<p>x **a<em>a</em>a*</p>\n"}
+{"id":"pin/emphasis-floor","md_hash":"a87c9f632fbe00c6","html":"<p><em>a<strong>b</strong> c</em>*</p>\n","work_units":30,"hostile":"","trusted":"<p><em>a<strong>b</strong> c</em>*</p>\n","trusted_reflow":"<p><em>a<strong>b</strong> c</em>*</p>\n"}
+{"id":"pin/emphasis-floor-short","md_hash":"df666e952ac1d204","html":"<p>x *<em>a<em>a</em>a</em></p>\n","work_units":30,"hostile":"","trusted":"<p>x *<em>a<em>a</em>a</em></p>\n","trusted_reflow":"<p>x *<em>a<em>a</em>a</em></p>\n"}
