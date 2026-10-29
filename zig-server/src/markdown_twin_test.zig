@@ -30,7 +30,8 @@
 //! almost nothing.
 
 const std = @import("std");
-const Io = std.Io;
+/// The host's I/O, by its one name (std's here): no file of the app names std's itself.
+const Io = @import("host_io").Io;
 const markdown = @import("chat_markdown");
 const twin = @import("roc_chat_twin");
 

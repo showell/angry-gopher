@@ -222,6 +222,7 @@ pub fn build(b: *std.Build) void {
     const md_twin_mod = b.createModule(.{ .root_source_file = b.path("src/markdown_twin_test.zig"), .target = target, .optimize = optimize });
     md_twin_mod.addImport("roc_chat_twin", roc_webbox.module("roc_chat_twin"));
     md_twin_mod.addImport("chat_markdown", chat_markdown);
+    md_twin_mod.addImport("host_io", host_io);
     const md_twin_run = b.addRunArtifact(b.addExecutable(.{ .name = "markdown-twin", .root_module = md_twin_mod }));
     md_twin_run.setCwd(b.path("."));
     md_twin_run.addPassthruArgs();
