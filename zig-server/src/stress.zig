@@ -67,7 +67,6 @@ var scenarios = [_]Scenario{
     .{ .label = "/chat/recent", .path = "/chat/recent", .auth = true },
     .{ .label = "/chat/images", .path = "/chat/images", .auth = true },
     .{ .label = "/chat/code", .path = "/chat/code", .auth = true },
-    .{ .label = "/chat/links", .path = "/chat/links", .auth = true },
     .{ .label = "/chat/docs", .path = "/chat/docs", .auth = true },
     // Member-only POST surface (the POST hunt). Bodies built in main.
     .{ .label = "POST /chat/docs/render", .path = "/chat/docs/render", .method = .POST, .auth = true },

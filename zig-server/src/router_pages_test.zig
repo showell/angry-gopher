@@ -69,8 +69,9 @@ test "every page names its scripts by their bytes, and a script asked for by its
     try testing.expect(harness.status(sent)[0] == '2' or harness.status(sent)[0] == '3');
 
     const pages = [_][]const u8{
-        dm,      "/chat/recent", "/chat/images", "/chat/code",    "/chat/docs",    "/chat/links",
-        "/game", "/puzzles",     "/driving",     "/chess/knight", "/chess/queens", "/delivery",
+        dm,          "/chat/recent", "/chat/images", "/chat/code",    "/chat/docs",
+        "/game",     "/puzzles",     "/driving",     "/chess/knight", "/chess/queens",
+        "/delivery",
     };
     for (pages) |page| {
         errdefer std.debug.print("page {s}\n", .{page});

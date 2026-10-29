@@ -91,7 +91,6 @@ const nav_items = [_]NavItem{
     .{ .href = "/chat/recent", .label = "Recent", .key = "recent" },
     .{ .href = "/chat/images", .label = "Images", .key = "images" },
     .{ .href = "/chat/code", .label = "Code", .key = "code" },
-    .{ .href = "/chat/links", .label = "Links", .key = "links" },
 };
 
 /// navLinks emits the sub-nav span body, " · "-joined, with the link whose key

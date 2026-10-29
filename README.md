@@ -385,7 +385,7 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/driving`, `/safari_download`, `/downloads` | Safari Screensaver + its native-download landing page and artifacts (public) |
 | `/chess` | Chess Toys: `/chess/knight`, `/chess/queens`, sources at `/chess/code` (public) |
 | `/game`, `/puzzles` | Lyn Rummy: full game (player name required), puzzle client |
-| `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring; `/chat/recent`, `/chat/images`, `/chat/code`, `/chat/links`, `/chat/search`, `/chat/msg/<id>` (members only; `chat.zig`) |
+| `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring; `/chat/recent`, `/chat/images`, `/chat/code`, `/chat/search`, `/chat/msg/<id>` (members only; `chat.zig`) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
 | `/admin` | The chat roster and API keys (`/admin/apikey`); `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret), `/admin/retire` (retire old topics and users), `/admin/search?key=` (every chat message containing `key`); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script, below) and `/admin/script-key`. All hardcoded to uid 1 |
