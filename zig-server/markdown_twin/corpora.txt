@@ -1,0 +1,4 @@
+# The markdown twin's corpora (src/markdown_twin_test.zig), one jsonl a line, from zig-server.
+adversarial.jsonl
+dialect.jsonl
+markdown_twin/zig_tests.jsonl

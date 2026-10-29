@@ -23,5 +23,9 @@
         // `roc_chat`, built by the Roc its roc-version pins (on the PATH, or
         // -Droc=<path>).
         .roc_webbox = .{ .path = "../../roc-webbox" },
+        // The chat's markdown dialect, the definition the Roc's port is held
+        // to (src/markdown_twin_test.zig): the `chat-markdown` checkout
+        // (../../chat-markdown from here), module `chat_markdown`.
+        .chat_markdown = .{ .path = "../../chat-markdown" },
     },
 }
