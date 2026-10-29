@@ -28,8 +28,8 @@ const mem_meter = webbox.mem_meter;
 /// the Roc's, and every answer, file, frame and search held equal. The
 /// Roc's run alone is now pinned as one SHA-256 of all of it, taken the day
 /// the two agreed, so the hash is the old Zig's run too. A script's hashed
-/// src (`?v=<hex>`) is read as `?v=*`, so an edit to a script is no
-/// change of the run. A change of one byte fails; to see where, run the
+/// src (`?h=<hex>`) is read as `?h=*` (`stable`), so an edit to a script is
+/// no change of the run. A change of one byte fails; to see where, run the
 /// scenario at the commit before 263d, which held it to the old Zig.
 fn freezeRun(
     comptime what: []const u8,
@@ -100,31 +100,9 @@ fn partSaid(name: []const u8, i: usize, bytes: []const u8, all: *std.Io.Writer) 
     all.writeAll("\n") catch {};
 }
 
-/// `bytes`, length-prefixed, into `h`, every `?v=` and the hex after it
-/// as `?v=*`.
-fn stable(h: *std.crypto.hash.sha2.Sha256, bytes: []const u8) void {
-    var len: [8]u8 = undefined;
-    std.mem.writeInt(
-        u64,
-        &len,
-        bytes.len,
-        .little,
-    );
-    h.update(&len);
-    var i: usize = 0;
-    while (std.mem.indexOfPos(
-        u8,
-        bytes,
-        i,
-        "?v=",
-    )) |at| {
-        h.update(bytes[i .. at + 3]);
-        h.update("*");
-        i = at + 3;
-        while (i < bytes.len and std.ascii.isHex(bytes[i])) i += 1;
-    }
-    h.update(bytes[i..]);
-}
+/// `bytes` into `h` as a freeze reads them: its scripts' hashes as `?h=*`
+/// (router_harness.freezable).
+const stable = harness.freezable;
 
 /// One request of the scenario: as whom, and the raw method, target, body
 /// and any extra header lines.
@@ -1905,7 +1883,7 @@ test "a topic's reactions, react, pin and unpin (C4), and a conversation's landi
     try freezeRun(
         "run",
         roc,
-        "6d7a4e52c469f785aa2cc7d10a8d9a382b100196989fabd82e26a87b127078fe",
+        "761e5fdabd9df213dfefb8061a6d12b0e06cc3ee4bf584897438979094e7ad27",
     );
     // The scenario reached what it means to: stores, every refusal, the 404s.
     var seen: [9]bool = @splat(false);
@@ -3549,7 +3527,7 @@ test "the welcome DM (metal-vmm QUEUE 279): a new member's, made once, from the 
     try freezeRun(
         "welcomeRun",
         try welcomeRun(a, io),
-        "fdedb2107f1f87be8a530f9a8ec778c212cb628d1dba59b0abf8924819e7cb23",
+        "779bc2baa93e76202fd5bbdff29f95f26ca540a7605d50e7c39e16af2ff97d3c",
     );
 }
 
@@ -4797,7 +4775,7 @@ test "a conversation's page (its viewer, sidebar and limits the Roc's, over list
     try freezeRun(
         "pageRun",
         roc,
-        "9bafdf5e742ce8c7b1520e82a46342721eff3053a7e45f089212ff417c052269",
+        "1fd4830c07d00c17276b8ebf42333803b42e890eb7d2b52955cd0a6ea7baa67c",
     );
     // Each listing met the malformed channel and counted it.
     try testing.expectEqual(page_asks.len, roc.malformed);
@@ -5196,7 +5174,7 @@ test "every chat stream (metal-vmm QUEUE 286): a DM's topic, a channel's, the fe
     try freezeRun(
         "streamsRun",
         try streamsRun(a, io),
-        "33fca94b316553c2bf57411f3d212171474778117eeb774687420dade1a7318b",
+        "1615644b177d2ba2e3b29655d8906bbcab74f2a625c7990d4b3404fb5f465b25",
     );
 }
 
@@ -5843,7 +5821,7 @@ test "the docs' read pages (metal-vmm QUEUE 289): the landing, a doc's editor, i
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    try freezeRun("docsReadRun", try docsReadRun(a, io), "9f6b8fcbb3407025b30fcd72aed467f2cf97d17ffd52035c3ac7a3950b843589");
+    try freezeRun("docsReadRun", try docsReadRun(a, io), "9795d44916bdc3b26c3a9c90fe767366cbef845591eb992b756b679d1697ba38");
 }
 
 /// **THE DOCS' WRITES, FROZEN ON THE OLD ZIG** (metal-vmm QUEUE 290): a new
@@ -6068,7 +6046,7 @@ test "a topic's download and its uploads (metal-vmm QUEUE 291): the bundle by GE
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    try freezeRun("downloadsRun", try downloadsRun(a, io), "41aaffad2eee14f66e78350ef9988971fa9124f6123c60c9803e2c6ade74022b");
+    try freezeRun("downloadsRun", try downloadsRun(a, io), "fb2b5d30b124f83dadd8369daedb146deba48a57948a86a5dbdb8a56e8af3ee3");
 }
 
 /// Each stored name's fresh 32-hex token as `<token>`, so a run whose names
@@ -6179,7 +6157,7 @@ test "an upload's POST (metal-vmm QUEUE 292): an image and a video stored, named
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    try freezeRun("uploadsRun", try uploadsRun(a, io), "f05ab883040c8780e6d6128322d0cc815d4328864ce4d37bdd4ef03ed1a01f64");
+    try freezeRun("uploadsRun", try uploadsRun(a, io), "7e92488a853166c9ebd14958eb016e6c74eed773e58d72763a4bd8a41cdccd35");
 }
 
 // ── admin retire (metal-vmm QUEUE 293) ────────────────────────────────────────
@@ -6473,7 +6451,7 @@ test "the chat's static scripts (/chat/<name>.js): every script by name, signed 
     const io = threaded.io();
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
-    try freezeRun("scriptsRun", try scriptsRun(a, io), "476cee49281a47c83f930d3b53ef5885a4f5d9c0d5ad9cf7c8c06529d480893c");
+    try freezeRun("scriptsRun", try scriptsRun(a, io), "f4a07b285caa6426781d89438ef2c6971d8da75134cb9ba8d7d0c4e0d63e4940");
 }
 
 /// **THE OPERATOR'S COUNTERS, AS /admin/host SAYS THEM** (the pure-Roc chat

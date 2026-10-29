@@ -180,26 +180,16 @@ pub fn postForm(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []con
 /// answers to the old Zig's, byte for byte (chat_actions_twin.zig, retired),
 /// the Roc's answers are pinned as one SHA-256 of them all, each
 /// length-prefixed, taken the day the two agreed, so the hash is the old
-/// Zig's answers too. A script's hashed src (`?v=<hex>`) is read as `?v=*`,
-/// so an edit to a script is no change. A change of one byte fails; to see
-/// where, run the test at the commit before 263d, which held it to the Zig.
+/// Zig's answers too, its script hashes read as `freezable` reads them. A
+/// change of one byte fails; to see where, run the test at the commit before
+/// 263d, which held it to the Zig.
 pub const Frozen = struct {
     h: std.crypto.hash.sha2.Sha256 = .init(.{}),
     n: usize = 0,
 
     pub fn add(f: *Frozen, bytes: []const u8) void {
         f.n += 1;
-        var len: [8]u8 = undefined;
-        std.mem.writeInt(u64, &len, bytes.len, .little);
-        f.h.update(&len);
-        var i: usize = 0;
-        while (std.mem.indexOfPos(u8, bytes, i, "?v=")) |at| {
-            f.h.update(bytes[i .. at + 3]);
-            f.h.update("*");
-            i = at + 3;
-            while (i < bytes.len and std.ascii.isHex(bytes[i])) i += 1;
-        }
-        f.h.update(bytes[i..]);
+        freezable(&f.h, bytes);
     }
 
     pub fn check(f: *Frozen, comptime what: []const u8, want: []const u8, answers: usize) !void {
@@ -211,3 +201,25 @@ pub const Frozen = struct {
         return error.TestUnexpectedResult;
     }
 };
+
+/// **A FROZEN ANSWER NEVER HOLDS A SCRIPT'S HASH**: `bytes`, length-prefixed,
+/// into `h`, every `?h=` and the hex after it (a page's src for a script,
+/// `/chat/<name>?h=<hash of its bytes>`, webbox http.hashedSrc) as `?h=*`.
+/// A page names each script by its bytes, so without this an edit to any
+/// script moves every freeze that holds a page, though no answer changed.
+/// The same reason `scriptsRun` (chat_actions_twin_test.zig) names a
+/// script's bytes and hash by its name. The one home for both freezes'
+/// reading (`Frozen` and chat_actions_twin_test's `freezeRun`).
+pub fn freezable(h: *std.crypto.hash.sha2.Sha256, bytes: []const u8) void {
+    var len: [8]u8 = undefined;
+    std.mem.writeInt(u64, &len, bytes.len, .little);
+    h.update(&len);
+    var i: usize = 0;
+    while (std.mem.indexOfPos(u8, bytes, i, "?h=")) |at| {
+        h.update(bytes[i .. at + 3]);
+        h.update("*");
+        i = at + 3;
+        while (i < bytes.len and std.ascii.isHex(bytes[i])) i += 1;
+    }
+    h.update(bytes[i..]);
+}

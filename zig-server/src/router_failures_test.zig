@@ -965,7 +965,7 @@ test "route: an account whose name or password will not read fails exactly the r
     try asTheOldZig(a, io, "GET", "/chat/c/1_2", steve, "303 See Other");
     try asTheOldZig(a, io, "GET", "/chat/links", steve, "200 OK");
     try asTheOldZig(a, io, "GET", "/chat/images", steve, "200 OK");
-    try frozen.check("an account that will not read", "14d1da2d5d5d0a74c62251d828f3607e3b0bcf40427c4a3fdb93f36ed0feb05a", 30);
+    try frozen.check("an account that will not read", "309b13d3df658f42b118d00e521435795c857f0d72219c5b432c749979e0d7c6", 30);
 }
 
 test "route: a conversation's page fails where sidebarOf failed, with its error, byte for byte: an account the roster reads, the viewer's name, a channel's member file, the channels folder, a pins file that is a folder, topics that will not list; a malformed channel is skipped, never a failure" {
@@ -1056,7 +1056,7 @@ test "route: a conversation's page fails where sidebarOf failed, with its error,
     try harness.UidSite.disk.write(io, a, channels, "", .{});
     try asTheOldZig(a, io, "GET", both[0], steve, failed);
     try testing.expectEqual(@as(?anyerror, error.NotDir), (try servedBy(a, io, "GET", both[0], steve)).err);
-    try frozen.check("a conversation's page where sidebarOf failed", "3d0adf91917d5279c4e2bd4a51ede9342c9b4e7219f81c9556e11e9d9e37724b", 34);
+    try frozen.check("a conversation's page where sidebarOf failed", "6a7d61a5272b3b4c73fb81603109412d2b90aa483514f2281382a23d79294fb4", 34);
 }
 
 test "route: /chat/msg skips a malformed channel and counts it for /admin/host; a roster that will not read is a 500, never a topic not found" {
