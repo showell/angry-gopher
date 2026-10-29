@@ -6,11 +6,10 @@
 # [dialect]: a departure the dialect means (roc-markdown's README);
 # [gap?]: one it does not name, a candidate bug for Steve to rule on.
 # Licensed CC BY-SA 4.0 as spec_agree.jsonl is (SPEC-LICENSE).
-# considered 401, kept 269 (spec_agree.jsonl), agreeing 230, diverging 39
+# considered 401, kept 269 (spec_agree.jsonl), agreeing 236, diverging 33
 #
 # By reason:
 #     8  [dialect] per-line inline: a span crosses a line break
-#     7  [gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
 #     4  [gap?] link brackets pair the first `[` with the first `]`: no nesting, no innermost-link rule
 #     3  [dialect] no thematic break
 #     3  [gap?] lazy continuation not carried into a nested quote
@@ -24,6 +23,7 @@
 #     1  [gap?] a link destination may hold a space
 #     1  [dialect] no ftp:// autolink
 #     1  [gap?] an email autolink ending in `-` or `_` is trimmed; GFM refuses the whole address
+#     1  [gap?] a blank line inside a fence makes its list loose
 
 cm/77	ATX headings	[dialect] no thematic break
 cm/121	Fenced code blocks	[dialect] per-line inline: a span crosses a line break
@@ -33,17 +33,11 @@ cm/246	Block quotes	[dialect] no thematic break
 cm/250	Block quotes	[gap?] lazy continuation not carried into a nested quote
 cm/251	Block quotes	[gap?] lazy continuation not carried into a nested quote
 cm/252	Block quotes	[dialect] no indented code (a 4-space indent inside a quote)
-cm/256	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
-cm/259	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
-cm/262	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
-cm/277	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
 cm/280	List items	[gap?] an empty list item then a blank line takes the next line as its content
 cm/292	List items	[gap?] lazy continuation not carried into a nested quote
 cm/300	List items	[dialect] no setext heading
 cm/315	Lists	[gap?] an empty item in a loose list is <li>\n</li>, not <li></li>
-cm/316	Lists	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
-cm/318	Lists	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
-cm/325	Lists	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/318	Lists	[gap?] a blank line inside a fence makes its list loose
 cm/335	Code spans	[dialect] per-line inline: a span crosses a line break
 cm/336	Code spans	[dialect] per-line inline: a span crosses a line break
 cm/337	Code spans	[dialect] per-line inline: a span crosses a line break
