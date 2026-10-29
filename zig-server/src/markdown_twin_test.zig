@@ -19,7 +19,9 @@
 //!       a case whose text is not the text frozen, and an answer whose case
 //!       is gone each fail too. Each corpus's pass count is also held to
 //!       markdown_twin/ratchet.txt, which may only rise, so a corpus that
-//!       loses cases is caught.
+//!       loses cases is caught. The spec corpus (spec_agree, CommonMark's
+//!       and GFM's examples) is held to the spec's html too, less the
+//!       divergences markdown_twin/spec_diverge.txt lists (specCheck).
 //!   ... -- --also PATH        one more corpus (the box's gold), not ratcheted
 //!   ... -- --refreeze LABEL   that corpus's answers recorded again from the
 //!                             Roc (LABEL: its file's name less `.jsonl`,
@@ -65,13 +67,17 @@ const corpora_list = "markdown_twin/corpora.txt";
 const ratchet_path = "markdown_twin/ratchet.txt";
 const fuzz_found_path = "markdown_twin/fuzz_found.jsonl";
 const hostile_answers_path = "markdown_twin/hostile.answers.jsonl";
+const spec_label = "spec_agree";
+const spec_diverge_path = "markdown_twin/spec_diverge.txt";
 
 /// The five answers, in twin.roc's order.
 const Part = enum { render, work_units, hostile_reason, trusted, trusted_reflow };
 const part_count = std.enums.values(Part).len;
 const Answers = [part_count][]const u8;
 
-const Case = struct { id: []const u8, md: []const u8 };
+/// A case; `html`, where a corpus has it, is another renderer's answer (the
+/// spec's, for the spec check), never the frozen one.
+const Case = struct { id: []const u8, md: []const u8, html: ?[]const u8 = null };
 
 /// A case's answers as its corpus's answers file records them: each html
 /// as its text, or (a generated corpus's) as its hash, never both.
@@ -442,11 +448,31 @@ fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: [
 
 // ── the hostile shapes ──────────────────────────────────────────────────────
 
-/// A shape a unit repeated: `head`, `unit` n times, `tail`. The documented
-/// adversarial shapes (markdown_hostile_probe.zig's), cmark's pathological
-/// tests (test/pathological_tests.py), and the dialect's own corners: the
-/// fence cap, the nesting cap, the email floor.
-const Shape = struct { name: []const u8, head: []const u8 = "", unit: []const u8, tail: []const u8 = "" };
+/// A shape a unit repeated, on one side or two: `head`, `unit` n times,
+/// `middle`, `after` n times, `tail`. `sizes`, when set, replaces its
+/// list's sizes for that shape. The documented adversarial shapes
+/// (markdown_hostile_probe.zig's), cmark's pathological tests
+/// (test/pathological_tests.py), and the dialect's own corners: the fence
+/// cap, the nesting cap, the email floor.
+const Shape = struct {
+    name: []const u8,
+    head: []const u8 = "",
+    unit: []const u8,
+    middle: []const u8 = "",
+    after: []const u8 = "",
+    tail: []const u8 = "",
+    sizes: ?[]const usize = null,
+};
+
+fn build(a: std.mem.Allocator, s: Shape, n: usize) ![]const u8 {
+    var md: std.ArrayList(u8) = .empty;
+    try md.appendSlice(a, s.head);
+    for (0..n) |_| try md.appendSlice(a, s.unit);
+    try md.appendSlice(a, s.middle);
+    for (0..n) |_| try md.appendSlice(a, s.after);
+    try md.appendSlice(a, s.tail);
+    return md.items;
+}
 
 const shapes = [_]Shape{
     // markdown_hostile_probe.zig's.
@@ -511,20 +537,77 @@ const shapes = [_]Shape{
 
 const sizes = [_]usize{ 1, 2, 3, 4, 10, 100, 1000 };
 
+/// Other renderers' pathological shapes, at `deep_sizes`, whose 8191 is the
+/// largest count roc-parser's fuzzer draws.
+const deep_shapes = [_]Shape{
+    // grayrest/roc-markdown's pathological expects (package/Test.roc 402-651).
+    .{ .name = "gr-tag-openers-one-closer", .unit = "<a", .tail = ">" },
+    .{ .name = "gr-bracket-openers-one-closer", .unit = "[", .tail = "]" },
+    .{ .name = "gr-cdata-openers-one-closer", .head = "a ", .unit = "<![CDATA[", .tail = ">" },
+    .{ .name = "gr-full-references", .unit = "[a][b] ", .tail = "\n\n[b]: /u" },
+    .{ .name = "gr-unclosed-angle-dests", .unit = "[a](<" },
+    .{ .name = "gr-unclosed-angle-dests-one-closer", .unit = "[a](<", .tail = ">" },
+    .{ .name = "gr-angle-openers-in-a-dest", .head = "[a](", .unit = "<" },
+    .{ .name = "gr-unclosed-inline-links", .unit = "[a](" },
+    .{ .name = "gr-many-attributes", .head = "a <a", .unit = " b=\"c\"", .tail = ">" },
+    .{ .name = "gr-escaped-stars", .unit = "\\*" },
+    .{ .name = "gr-label-length", .head = "[", .unit = "a", .middle = "]\n\n[", .after = "a", .tail = "]: /u", .sizes = &.{ 999, 1000 } },
+    .{ .name = "gr-emph-run-nest", .unit = "*", .middle = "a", .after = "*" },
+    .{ .name = "gr-emph-separate-nest", .unit = "*a ", .after = " a*" },
+    .{ .name = "gr-url-close-parens", .head = "https://a", .unit = ")" },
+    // grayrest's with a dotted host, which the autolink needs before it
+    // trims: quadratic in the Zig's urlEnd, which recounts the parens for
+    // each `)` it trims.
+    .{ .name = "url-close-parens-dotted", .head = "https://a.b", .unit = ")" },
+    .{ .name = "www-close-parens", .head = "www.a.b", .unit = ")" },
+    .{ .name = "gr-nested-full-references", .unit = "[", .middle = "a", .after = "][x]" },
+    .{ .name = "gr-label-of-tag-openers", .head = "[", .unit = "<a", .tail = ">]" },
+    .{ .name = "gr-bang-quote-openers", .head = "a ", .unit = "<!\"", .tail = "'>" },
+    .{ .name = "gr-label-of-quote-pairs", .head = "[<a ", .unit = "\"x\"", .tail = ">]" },
+    .{ .name = "gr-emphases", .unit = "*a* " },
+    // lukewilliamboswell/roc-parser fuzz/markdown-inline-pathological.roc:
+    // the two-sided ones, and the one-sided ones the shapes above lack.
+    .{ .name = "lb-nested-strong-emph", .unit = "*a **a ", .middle = "b", .after = " a** a*" },
+    .{ .name = "lb-nested-brackets", .unit = "[", .middle = "a", .after = "]" },
+    .{ .name = "lb-nested-links", .unit = "[", .middle = "a", .after = "](u)" },
+    .{ .name = "lb-nested-images", .unit = "![", .middle = "a", .after = "](u)" },
+    .{ .name = "lb-emph-in-links", .unit = "[*a", .after = "*](u)" },
+    .{ .name = "lb-mixed-delimiters", .unit = "*_", .middle = "x", .after = "_*" },
+    .{ .name = "lb-mixed-delimiters-tilde", .unit = "*_~", .middle = "x", .after = "~_*" },
+    .{ .name = "lb-nested-parens-in-dest", .head = "[a](", .unit = "(", .middle = "b", .after = ")", .tail = ")" },
+    .{ .name = "lb-www-autolinks", .unit = " www.a.b(", .after = ")" },
+    .{ .name = "lb-scheme-autolinks", .unit = "http://a.b/x?" },
+    .{ .name = "lb-email-autolinks", .unit = "a.b@c", .after = "@d.e " },
+    .{ .name = "lb-many-at-signs", .unit = "@", .middle = "a", .after = ".b@" },
+    .{ .name = "lb-long-words-before-colon", .unit = "abc", .middle = "://", .after = ":" },
+    .{ .name = "lb-backtick-runs", .unit = "e`", .after = "e``" },
+    .{ .name = "lb-tilde-runs", .unit = "~a ", .after = " a~" },
+    .{ .name = "lb-reference-like-brackets", .unit = "[a][", .after = "]" },
+    .{ .name = "lb-unclosed-links-c", .unit = "[a](b \"" },
+    .{ .name = "lb-unclosed-processing-instructions", .unit = "<?" },
+    .{ .name = "lb-unclosed-declarations", .unit = "<!A" },
+    .{ .name = "lb-unclosed-open-tags", .unit = "<a b='" },
+    .{ .name = "lb-unclosed-autolinks", .unit = "<http:a" },
+    .{ .name = "lb-entity-prefixes", .unit = "&#", .after = "&a" },
+    .{ .name = "lb-hard-breaks", .unit = "a  \n", .after = "b\\\n" },
+};
+
+const deep_sizes = [_]usize{ 1, 10, 100, 1000, 8191 };
+
 /// Every shape at every size, and the two shapes that are no repeat: a list
 /// whose every line indents one level more (the nesting cap), and a run of
 /// backtick runs each one longer (cmark's "backticks").
 fn hostileCases(a: std.mem.Allocator) ![]Case {
     var cases: std.ArrayList(Case) = .empty;
-    for (shapes) |s| {
-        for (sizes) |n| {
-            var md: std.ArrayList(u8) = .empty;
-            try md.appendSlice(a, s.head);
-            for (0..n) |_| try md.appendSlice(a, s.unit);
-            try md.appendSlice(a, s.tail);
-            try cases.append(a, .{ .id = try std.fmt.allocPrint(a, "hostile/{s}/{d}", .{ s.name, n }), .md = md.items });
+    const lists = [_]struct { shapes: []const Shape, sizes: []const usize }{
+        .{ .shapes = &shapes, .sizes = &sizes },
+        .{ .shapes = &deep_shapes, .sizes = &deep_sizes },
+    };
+    for (lists) |list| for (list.shapes) |s| {
+        for (s.sizes orelse list.sizes) |n| {
+            try cases.append(a, .{ .id = try std.fmt.allocPrint(a, "hostile/{s}/{d}", .{ s.name, n }), .md = try build(a, s, n) });
         }
-    }
+    };
     for ([_]usize{ 2, 17, 40, 200 }) |n| {
         var stair: std.ArrayList(u8) = .empty;
         var ticks: std.ArrayList(u8) = .empty;
@@ -566,6 +649,80 @@ fn hostileCases(a: std.mem.Allocator) ![]Case {
         }
     }
     return cases.items;
+}
+
+// ── the spec check ──────────────────────────────────────────────────────────
+
+/// `render`'s html as the spec writes it: our hard break (`<br>\n`) as its
+/// soft one (`\n`), and an external link's new-tab attributes gone.
+fn specNormal(a: std.mem.Allocator, html: []const u8) ![]const u8 {
+    const soft = try std.mem.replaceOwned(u8, a, html, "<br>\n", "\n");
+    return std.mem.replaceOwned(u8, a, soft, " target=\"_blank\" rel=\"noopener\"", "");
+}
+
+/// spec_diverge.txt's ids: a line a case, its id before the first tab;
+/// `#` lines and blank ones are its commentary.
+fn readDiverge(io: Io, a: std.mem.Allocator) !std.StringHashMapUnmanaged(void) {
+    const data = Io.Dir.cwd().readFileAlloc(io, spec_diverge_path, a, .unlimited) catch |e| {
+        std.debug.print("cannot read {s}: {s}\n", .{ spec_diverge_path, @errorName(e) });
+        return e;
+    };
+    var ids: std.StringHashMapUnmanaged(void) = .empty;
+    var lines = std.mem.splitScalar(u8, data, '\n');
+    while (lines.next()) |line| {
+        if (line.len == 0 or line[0] == '#') continue;
+        const tab = std.mem.indexOfScalar(u8, line, '\t') orelse line.len;
+        try ids.put(a, line[0..tab], {});
+    }
+    return ids;
+}
+
+/// **THE ROC AGAINST COMMONMARK, WITH ITS DIVERGENCES LISTED**: each spec
+/// case's `render`, normalised (specNormal), against the spec's html. A
+/// case that differs must be in spec_diverge.txt, with its reason, and a
+/// listed one that matches fails too (`SPECSTALE`), so the list says what
+/// is true today. The frozen answers hold the Roc still; this says where
+/// still is, against the spec. Gives the failures.
+fn specCheck(io: Io, arena: *std.heap.ArenaAllocator, sa: std.mem.Allocator, cases: []const Case) !usize {
+    var listed = try readDiverge(io, sa);
+    var fails: usize = 0;
+    var agree: usize = 0;
+    var seen: std.StringHashMapUnmanaged(void) = .empty;
+    for (cases) |c| {
+        _ = arena.reset(.retain_capacity);
+        const a = arena.allocator();
+        try seen.put(sa, c.id, {});
+        const spec = c.html orelse {
+            fails += 1;
+            std.debug.print("SPECFAIL\t{s}\tthe case has no html, the spec's\n", .{c.id});
+            continue;
+        };
+        const ours = switch (try rocAnswers(a, c.md)) {
+            .answers => |g| g[@backingInt(Part.render)],
+            else => {
+                fails += 1;
+                std.debug.print("SPECFAIL\t{s}\tthe Roc gave no answers\n", .{c.id});
+                continue;
+            },
+        };
+        const same = std.mem.eql(u8, try specNormal(a, ours), spec);
+        if (same) agree += 1;
+        if (same and listed.contains(c.id)) {
+            fails += 1;
+            std.debug.print("SPECSTALE\t{s}\tmatches CommonMark now: take it out of {s}\n", .{ c.id, spec_diverge_path });
+        } else if (!same and !listed.contains(c.id)) {
+            fails += 1;
+            std.debug.print("SPECFAIL\t{s}\tdiffers from CommonMark, and {s} does not list it\n", .{ c.id, spec_diverge_path });
+        }
+    }
+    var it = listed.keyIterator();
+    while (it.next()) |id| {
+        if (seen.contains(id.*)) continue;
+        fails += 1;
+        std.debug.print("SPECSTALE\t{s}\tlisted in {s}, and no case of {s}\n", .{ id.*, spec_diverge_path, spec_label });
+    }
+    std.debug.print("== spec: {d}/{d} match CommonMark, {d} listed as diverging ({d} fail)\n", .{ agree, cases.len, listed.count(), fails });
+    return fails;
 }
 
 // ── the fuzzer ──────────────────────────────────────────────────────────────
@@ -795,10 +952,19 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("\n", .{});
         if (timed) try timeCorpus(&arena, c.cases);
     }
+    var spec_fails: usize = 0;
+    var spec_checked = false;
+    for (corpora.items) |c| {
+        if (!std.mem.eql(u8, c.label, spec_label)) continue;
+        spec_fails = try specCheck(io, &arena, sa, c.cases);
+        spec_checked = true;
+    }
     std.debug.print("==> {d}/{d} {s} ({d} fail; {d} hostile)\n", .{ total.pass, total.pass + total.fail, verb, total.fail, total.hostile });
     if (fell) std.debug.print("a corpus fell below its ratchet ({s})\n", .{ratchet_path});
     if (unrecorded) std.debug.print("a corpus has no answers\n", .{});
-    if (fell or unrecorded or total.fail > 0) std.process.exit(1);
+    if (!spec_checked) std.debug.print("no corpus is labelled {s}: the spec check judged nothing\n", .{spec_label});
+    if (spec_fails > 0) std.debug.print("the spec check failed: {s} is not what the Roc does today\n", .{spec_diverge_path});
+    if (fell or unrecorded or total.fail > 0 or !spec_checked or spec_fails > 0) std.process.exit(1);
     if (raise and !against_zig) {
         try writeRatchet(io, sa, results.items);
         std.debug.print("ratchet rewritten: {s}\n", .{ratchet_path});

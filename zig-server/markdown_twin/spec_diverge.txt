@@ -1,0 +1,66 @@
+# The spec cases (spec_agree.jsonl) the Roc's `render` does not match, after
+# normalising ours (`<br>\n` to `\n`, ` target="_blank" rel="noopener"` gone).
+# One line a case: id, section, reason, tab-separated. The judge
+# (src/markdown_twin_test.zig, its spec check) fails a case that differs and
+# is not listed, and a listed one that matches, so this says what is true.
+# [dialect]: a departure the dialect means (roc-markdown's README);
+# [gap?]: one it does not name, a candidate bug for Steve to rule on.
+# Licensed CC BY-SA 4.0 as spec_agree.jsonl is (SPEC-LICENSE).
+# considered 401, kept 269 (spec_agree.jsonl), agreeing 230, diverging 39
+#
+# By reason:
+#     8  [dialect] per-line inline: a span crosses a line break
+#     7  [gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+#     4  [gap?] link brackets pair the first `[` with the first `]`: no nesting, no innermost-link rule
+#     3  [dialect] no thematic break
+#     3  [gap?] lazy continuation not carried into a nested quote
+#     2  [dialect] no setext heading
+#     2  [gap?] a link's brackets bind before a code span
+#     2  [dialect] flanking is ASCII-only: Unicode whitespace and punctuation count as letters
+#     2  [gap?] a link destination ends at the first `)`: parens don't balance
+#     1  [dialect] no indented code (a 4-space indent inside a quote)
+#     1  [gap?] an empty list item then a blank line takes the next line as its content
+#     1  [gap?] an empty item in a loose list is <li>\n</li>, not <li></li>
+#     1  [gap?] a link destination may hold a space
+#     1  [dialect] no ftp:// autolink
+#     1  [gap?] an email autolink ending in `-` or `_` is trimmed; GFM refuses the whole address
+
+cm/77	ATX headings	[dialect] no thematic break
+cm/121	Fenced code blocks	[dialect] per-line inline: a span crosses a line break
+cm/141	Fenced code blocks	[dialect] no setext heading
+cm/234	Block quotes	[dialect] no thematic break
+cm/246	Block quotes	[dialect] no thematic break
+cm/250	Block quotes	[gap?] lazy continuation not carried into a nested quote
+cm/251	Block quotes	[gap?] lazy continuation not carried into a nested quote
+cm/252	Block quotes	[dialect] no indented code (a 4-space indent inside a quote)
+cm/256	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/259	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/262	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/277	List items	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/280	List items	[gap?] an empty list item then a blank line takes the next line as its content
+cm/292	List items	[gap?] lazy continuation not carried into a nested quote
+cm/300	List items	[dialect] no setext heading
+cm/315	Lists	[gap?] an empty item in a loose list is <li>\n</li>, not <li></li>
+cm/316	Lists	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/318	Lists	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/325	Lists	[gap?] a blank line inside a list item is dropped: its paragraphs (or a fence's blank lines) merge
+cm/335	Code spans	[dialect] per-line inline: a span crosses a line break
+cm/336	Code spans	[dialect] per-line inline: a span crosses a line break
+cm/337	Code spans	[dialect] per-line inline: a span crosses a line break
+cm/342	Code spans	[gap?] a link's brackets bind before a code span
+cm/353	Emphasis and strong emphasis	[dialect] flanking is ASCII-only: Unicode whitespace and punctuation count as letters
+cm/354	Emphasis and strong emphasis	[dialect] flanking is ASCII-only: Unicode whitespace and punctuation count as letters
+cm/394	Emphasis and strong emphasis	[dialect] per-line inline: a span crosses a line break
+cm/405	Emphasis and strong emphasis	[dialect] per-line inline: a span crosses a line break
+cm/423	Emphasis and strong emphasis	[dialect] per-line inline: a span crosses a line break
+cm/432	Emphasis and strong emphasis	[dialect] per-line inline: a span crosses a line break
+cm/488	Links	[gap?] a link destination may hold a space
+cm/496	Links	[gap?] a link destination ends at the first `)`: parens don't balance
+cm/497	Links	[gap?] a link destination ends at the first `)`: parens don't balance
+cm/512	Links	[gap?] link brackets pair the first `[` with the first `]`: no nesting, no innermost-link rule
+cm/514	Links	[gap?] link brackets pair the first `[` with the first `]`: no nesting, no innermost-link rule
+cm/518	Links	[gap?] link brackets pair the first `[` with the first `]`: no nesting, no innermost-link rule
+cm/519	Links	[gap?] link brackets pair the first `[` with the first `]`: no nesting, no innermost-link rule
+cm/525	Links	[gap?] a link's brackets bind before a code span
+gfm/628	Autolinks (extension)	[dialect] no ftp:// autolink
+gfm/631	Autolinks (extension)	[gap?] an email autolink ending in `-` or `_` is trimmed; GFM refuses the whole address

@@ -2,3 +2,8 @@
 adversarial.jsonl
 dialect.jsonl
 markdown_twin/zig_tests.jsonl
+# CommonMark's and GFM's examples (CC BY-SA 4.0: markdown_twin/SPEC-LICENSE),
+# also held to the spec's html less markdown_twin/spec_diverge.txt.
+markdown_twin/spec_agree.jsonl
+# Pinned departures from CommonMark (each its own note).
+markdown_twin/pinned.jsonl

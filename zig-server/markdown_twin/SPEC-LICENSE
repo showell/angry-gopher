@@ -1,0 +1,23 @@
+spec_agree.jsonl is derived from two specifications, both under the Creative Commons
+Attribution-ShareAlike 4.0 International license:
+
+  "CommonMark Spec", version 0.31.2, by John MacFarlane
+  https://spec.commonmark.org/0.31.2/
+  (the examples as vendored in grayrest/roc-markdown, spec/commonmark-0.31.2.json)
+
+  "GitHub Flavored Markdown Spec", version 0.29-gfm (2019-04-06), by John
+  MacFarlane and GitHub, Inc. (its section "Autolinks (extension)")
+  https://github.github.com/gfm/
+  (as vendored in grayrest/roc-markdown, spec/gfm-extensions.txt)
+
+License: CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+
+Modified: filtered. Only the examples of these sections are kept: Emphasis
+and strong emphasis, Code spans, Links, List items, Lists, Block quotes, ATX
+headings and Fenced code blocks (CommonMark), and Autolinks (extension)
+(GFM's, in place of CommonMark's Autolinks); less every example whose
+markdown holds `\`, `&`, `<`, `![`, `]:`, `"`, a tab, or a line starting
+with 4 spaces; each is re-encoded as one JSON line with an
+id ("cm/<n>" or "gfm/<n>", the spec's example number). The markdown and the
+expected html are the spec's, unchanged. The derived files are shared under
+the same license.

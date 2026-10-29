@@ -2,4 +2,6 @@
 adversarial 29
 dialect 3
 zig_tests 69
-hostile 766
+spec_agree 269
+pinned 3
+hostile 983
