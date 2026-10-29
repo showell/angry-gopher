@@ -1,63 +1,101 @@
-//! **THE ROC'S MARKDOWN, HELD TO THE ZIG'S** (metal-vmm QUEUE 305): every
-//! case of every corpus is rendered by chat-markdown's Zig and by the Roc
-//! port (roc-webbox chat/Md*.roc, through chat/twin.roc's function 82), and
-//! the two must agree on all five answers: `render`'s html, `workUnits`'
-//! number, `hostileReason`'s reason, `renderTrusted`'s html and
-//! `renderTrustedReflow`'s html. The work units are what the Zig's budget
-//! caps, so equal numbers make the Roc's hostility verdict the Zig's.
+//! **THE ROC'S MARKDOWN, HELD TO ITS FROZEN ANSWERS** (metal-vmm QUEUE 305;
+//! roc-markdown's judge): every case of every corpus is rendered by the Roc
+//! (roc-markdown's package, through roc-webbox chat/twin.roc's function 82)
+//! and must give the five answers recorded for it: `render`'s html, the work
+//! units, the hostility words, `render_trusted`'s html and
+//! `render_trusted_reflow`'s html. The answers were first recorded
+//! (2026-10-29) when the Roc equalled chat-markdown's Zig on every case; the
+//! Roc diverges from the Zig from then on, and a case's answers move only by
+//! an explicit re-freeze, which names each case it moves.
 //!
-//! **IT PRINTS ONLY COUNTS AND FAILING CASE IDS, NEVER A CASE'S TEXT**: the
-//! box runs it over the private gold corpus (real messages, which never
-//! leave the box), so nothing a message holds reaches its output. A failing
-//! case is named by its id and the answers that differ.
+//! **IT PRINTS ONLY COUNTS AND CASE IDS, NEVER A CASE'S TEXT**: the box runs
+//! it over the private gold corpus (real messages, which never leave the
+//! box), so nothing a message holds reaches its output. A failing case is
+//! named by its id and the answers that differ.
 //!
 //!   cd zig-server && zig build markdown-twin
 //!       the corpora markdown_twin/corpora.txt lists, and the hostile shapes
-//!       generated here; each corpus held to its line in
-//!       markdown_twin/ratchet.txt, a pass count that may only rise.
+//!       generated here, every case held to its answers: a case with none,
+//!       a case whose text is not the text frozen, and an answer whose case
+//!       is gone each fail too. Each corpus's pass count is also held to
+//!       markdown_twin/ratchet.txt, which may only rise, so a corpus that
+//!       loses cases is caught.
 //!   ... -- --also PATH        one more corpus (the box's gold), not ratcheted
-//!   ... -- --raise            the ratchet rewritten to today's counts, when
-//!                             none fell
-//!   ... -- --fuzz N --seed S  N random messages from the dialect's tokens:
-//!                             a hunt, never a gate; each difference is
-//!                             appended to markdown_twin/fuzz_found.jsonl, a
-//!                             corpus, to commit
+//!   ... -- --refreeze LABEL   that corpus's answers recorded again from the
+//!                             Roc (LABEL: its file's name less `.jsonl`,
+//!                             or `hostile`), each case whose answers changed,
+//!                             was added or was dropped named; the one way a
+//!                             case's answers move. Given again, another.
+//!   ... -- --zig              the Roc against chat-markdown's live Zig, not
+//!                             the answers (the judge before the freeze):
+//!                             every case must agree
+//!   ... -- --raise            the ratchet rewritten to today's counts
+//!   ... -- --fuzz N --seed S  N random messages from the dialect's tokens,
+//!                             the Roc against the Zig: a hunt, never a gate;
+//!                             each difference is appended to
+//!                             markdown_twin/fuzz_found.jsonl, a corpus
 //!   ... -- --time             each corpus's render time, Zig and Roc
 //!
 //! A corpus is jsonl, one `{"id", "md"}` a line (other fields, such as the
-//! regression gold's `html`, are ignored). A corpus that cannot be read
-//! stops the run: a judge that skipped its bulk would pass having checked
-//! almost nothing.
+//! regression gold's `html`, are ignored); an id twice is refused. **ITS
+//! ANSWERS ARE BESIDE IT**: `X.jsonl`'s are `X.answers.jsonl`, one
+//! `{"id", "md_hash", "html", "work_units", "hostile", "trusted",
+//! "trusted_reflow"}` a case, in the corpus's order (`md_hash` the Wyhash of
+//! the case's text); the hostile shapes' are markdown_twin/hostile.answers.jsonl.
+//! So the gold's answers, real messages' html, stay beside gold.jsonl in
+//! gopher-gold, which has no remote. A corpus or an answers file that cannot
+//! be read stops the run: a judge that skipped its bulk would pass having
+//! checked almost nothing.
 
 const std = @import("std");
 const Io = std.Io;
 const markdown = @import("chat_markdown");
 const twin = @import("roc_chat_twin");
 
-/// chat/twin.roc's number for the markdown's five answers.
+/// roc-webbox chat/twin.roc's number for the markdown's five answers.
 const markdown_answers: u8 = 82;
 
 const corpora_list = "markdown_twin/corpora.txt";
 const ratchet_path = "markdown_twin/ratchet.txt";
 const fuzz_found_path = "markdown_twin/fuzz_found.jsonl";
+const hostile_answers_path = "markdown_twin/hostile.answers.jsonl";
 
 /// The five answers, in twin.roc's order.
 const Part = enum { render, work_units, hostile_reason, trusted, trusted_reflow };
 const part_count = std.enums.values(Part).len;
+const Answers = [part_count][]const u8;
 
 const Case = struct { id: []const u8, md: []const u8 };
 
-/// A case's verdict: the parts that differ, or a Roc that crashed or gave
-/// the wrong number of answers.
+/// A case's answers as its corpus's answers file records them.
+const Frozen = struct {
+    id: []const u8,
+    md_hash: []const u8,
+    html: []const u8,
+    work_units: u64,
+    hostile: []const u8,
+    trusted: []const u8,
+    trusted_reflow: []const u8,
+};
+
+/// A corpus's answers, by case id.
+const Book = std.StringHashMapUnmanaged(Frozen);
+
+/// A case's verdict: the parts that differ, a Roc that crashed or gave the
+/// wrong number of answers, or a case the answers do not cover.
 const Verdict = union(enum) {
     same,
     differ: [part_count]bool,
     roc_crashed,
     roc_answered: usize,
+    /// No answers recorded for the case: a case added without a re-freeze.
+    unfrozen,
+    /// The case's text is not the text its answers were recorded for.
+    text_changed,
 };
 
 /// The Zig's five answers for `md`, in `a`.
-fn zigAnswers(a: std.mem.Allocator, md: []const u8) ![part_count][]const u8 {
+fn zigAnswers(a: std.mem.Allocator, md: []const u8) !Answers {
     return .{
         try markdown.render(a, md),
         try std.fmt.allocPrint(a, "{d}", .{try markdown.workUnits(a, md)}),
@@ -67,20 +105,70 @@ fn zigAnswers(a: std.mem.Allocator, md: []const u8) ![part_count][]const u8 {
     };
 }
 
-fn judge(a: std.mem.Allocator, md: []const u8) !Verdict {
-    const zig = try zigAnswers(a, md);
+/// The Roc's five answers for `md`, in `a`, or why there are none.
+const RocResult = union(enum) { answers: Answers, crashed, answered: usize };
+
+fn rocAnswers(a: std.mem.Allocator, md: []const u8) !RocResult {
     const roc = twin.call(a, markdown_answers, &.{md}) catch |e| switch (e) {
         error.OutOfMemory => return e,
-        else => return .roc_crashed,
+        else => return .crashed,
     };
-    if (roc.len != part_count) return .{ .roc_answered = roc.len };
+    if (roc.len != part_count) return .{ .answered = roc.len };
+    var out: Answers = undefined;
+    for (roc, 0..) |r, k| out[k] = r;
+    return .{ .answers = out };
+}
+
+/// `want` against what the Roc answers for `md`.
+fn judgeAgainst(a: std.mem.Allocator, md: []const u8, want: Answers) !Verdict {
+    const got = switch (try rocAnswers(a, md)) {
+        .answers => |g| g,
+        .crashed => return .roc_crashed,
+        .answered => |n| return .{ .roc_answered = n },
+    };
+    return compare(want, got);
+}
+
+fn compare(want: Answers, got: Answers) Verdict {
     var differ: [part_count]bool = @splat(false);
     var any = false;
-    for (zig, roc, 0..) |z, r, k| {
-        differ[k] = !std.mem.eql(u8, z, r);
+    for (want, got, 0..) |w, g, k| {
+        differ[k] = !std.mem.eql(u8, w, g);
         any = any or differ[k];
     }
     return if (any) .{ .differ = differ } else .same;
+}
+
+/// The Roc against the live Zig (`--zig`, `--fuzz`).
+fn judgeZig(a: std.mem.Allocator, md: []const u8) !Verdict {
+    return judgeAgainst(a, md, try zigAnswers(a, md));
+}
+
+/// The Roc against the case's recorded answers.
+fn judgeFrozen(a: std.mem.Allocator, md: []const u8, frozen: ?Frozen) !Verdict {
+    const f = frozen orelse return .unfrozen;
+    if (!std.mem.eql(u8, f.md_hash, try mdHash(a, md))) return .text_changed;
+    return judgeAgainst(a, md, try answersOf(a, f));
+}
+
+fn answersOf(a: std.mem.Allocator, f: Frozen) !Answers {
+    return .{ f.html, try std.fmt.allocPrint(a, "{d}", .{f.work_units}), f.hostile, f.trusted, f.trusted_reflow };
+}
+
+/// A case's text, named by its hash, so a frozen answer knows its case.
+fn mdHash(a: std.mem.Allocator, md: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "{x:0>16}", .{std.hash.Wyhash.hash(0, md)});
+}
+
+/// The parts of a `differ`, comma-separated, onto stderr.
+fn printParts(d: [part_count]bool) void {
+    var first = true;
+    for (d, 0..) |bad, k| {
+        if (!bad) continue;
+        if (!first) std.debug.print(",", .{});
+        std.debug.print("{s}", .{@tagName(@as(Part, @fromBackingInt(@intCast(k))))});
+        first = false;
+    }
 }
 
 /// `FAILID`, the corpus, the id and what differed: never the text.
@@ -90,28 +178,53 @@ fn printFailure(label: []const u8, id: []const u8, v: Verdict) void {
         .same => unreachable,
         .roc_crashed => std.debug.print("roc crashed", .{}),
         .roc_answered => |n| std.debug.print("roc gave {d} answers", .{n}),
-        .differ => |d| {
-            var first = true;
-            for (d, 0..) |bad, k| {
-                if (!bad) continue;
-                if (!first) std.debug.print(",", .{});
-                std.debug.print("{s}", .{@tagName(@as(Part, @fromBackingInt(@intCast(k))))});
-                first = false;
-            }
-        },
+        .unfrozen => std.debug.print("no answers recorded (--refreeze {s})", .{label}),
+        .text_changed => std.debug.print("its text is not the text frozen (--refreeze {s})", .{label}),
+        .differ => |d| printParts(d),
     }
     std.debug.print("\n", .{});
 }
 
-/// A corpus's count: cases agreeing, differing, and the Zig's hostile
-/// ones among all (so a run says how much of the refusal path it reached).
+/// A corpus's count: cases agreeing, failing, and the hostile ones among
+/// all (so a run says how much of the refusal path it reached).
 const Tally = struct { pass: usize = 0, fail: usize = 0, hostile: usize = 0 };
 
-fn judgeCases(arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const Case) !Tally {
+/// Every case against its answers in `book`, and every answer whose case is
+/// gone (`STALE`, a failure: its corpus lost a case without a re-freeze).
+fn judgeFrozenCases(arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const Case, book: *const Book) !Tally {
+    var t: Tally = .{};
+    var seen: std.StringHashMapUnmanaged(void) = .empty;
+    defer seen.deinit(std.heap.page_allocator);
+    for (cases) |c| {
+        _ = arena.reset(.retain_capacity);
+        try seen.put(std.heap.page_allocator, c.id, {});
+        const frozen = book.get(c.id);
+        if (frozen) |f| {
+            if (f.hostile.len > 0) t.hostile += 1;
+        }
+        const v = try judgeFrozen(arena.allocator(), c.md, frozen);
+        if (v == .same) {
+            t.pass += 1;
+        } else {
+            t.fail += 1;
+            printFailure(label, c.id, v);
+        }
+    }
+    var it = book.keyIterator();
+    while (it.next()) |id| {
+        if (seen.contains(id.*)) continue;
+        t.fail += 1;
+        std.debug.print("STALE\t{s}\t{s}\tan answer whose case is gone (--refreeze {s})\n", .{ label, id.*, label });
+    }
+    return t;
+}
+
+/// Every case against the live Zig (`--zig`).
+fn judgeZigCases(arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const Case) !Tally {
     var t: Tally = .{};
     for (cases) |c| {
         _ = arena.reset(.retain_capacity);
-        const v = try judge(arena.allocator(), c.md);
+        const v = try judgeZig(arena.allocator(), c.md);
         if ((try markdown.hostileReason(arena.allocator(), c.md)) != null) t.hostile += 1;
         if (v == .same) {
             t.pass += 1;
@@ -123,13 +236,15 @@ fn judgeCases(arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const
     return t;
 }
 
-/// The cases of a jsonl corpus, in `a`.
+/// The cases of a jsonl corpus, in `a`. An id twice is refused: an answer
+/// is found by its case's id.
 fn readCorpus(io: Io, a: std.mem.Allocator, path: []const u8) ![]Case {
     const data = Io.Dir.cwd().readFileAlloc(io, path, a, .unlimited) catch |e| {
         std.debug.print("cannot read the corpus {s}: {s}\n", .{ path, @errorName(e) });
         return e;
     };
     var cases: std.ArrayList(Case) = .empty;
+    var ids: std.StringHashMapUnmanaged(void) = .empty;
     var lines = std.mem.splitScalar(u8, data, '\n');
     var n: usize = 0;
     while (lines.next()) |line| {
@@ -139,15 +254,136 @@ fn readCorpus(io: Io, a: std.mem.Allocator, path: []const u8) ![]Case {
             std.debug.print("{s}:{d}: not a case: {s}\n", .{ path, n, @errorName(e) });
             return e;
         };
+        if ((try ids.fetchPut(a, c.id, {})) != null) {
+            std.debug.print("{s}:{d}: the id {s} again\n", .{ path, n, c.id });
+            return error.CaseIdTwice;
+        }
         try cases.append(a, c);
     }
     return cases.items;
+}
+
+/// A corpus's answers file, by id, in `a`; null when there is none yet.
+fn readAnswers(io: Io, a: std.mem.Allocator, path: []const u8) !?Book {
+    const data = Io.Dir.cwd().readFileAlloc(io, path, a, .unlimited) catch |e| switch (e) {
+        error.FileNotFound => return null,
+        else => {
+            std.debug.print("cannot read the answers {s}: {s}\n", .{ path, @errorName(e) });
+            return e;
+        },
+    };
+    var book: Book = .empty;
+    var lines = std.mem.splitScalar(u8, data, '\n');
+    var n: usize = 0;
+    while (lines.next()) |line| {
+        n += 1;
+        if (line.len == 0) continue;
+        const f = std.json.parseFromSliceLeaky(Frozen, a, line, .{}) catch |e| {
+            std.debug.print("{s}:{d}: not an answer: {s}\n", .{ path, n, @errorName(e) });
+            return e;
+        };
+        if ((try book.fetchPut(a, f.id, f)) != null) {
+            std.debug.print("{s}:{d}: the id {s} again\n", .{ path, n, f.id });
+            return error.AnswerIdTwice;
+        }
+    }
+    return book;
 }
 
 /// A corpus's label: its file's name without `.jsonl`.
 fn labelOf(path: []const u8) []const u8 {
     const base = std.fs.path.basename(path);
     return if (std.mem.endsWith(u8, base, ".jsonl")) base[0 .. base.len - 6] else base;
+}
+
+/// Where a corpus's answers are: beside it, `X.jsonl`'s as `X.answers.jsonl`.
+fn answersPathOf(a: std.mem.Allocator, path: []const u8) ![]const u8 {
+    const stem = if (std.mem.endsWith(u8, path, ".jsonl")) path[0 .. path.len - 6] else path;
+    return std.fmt.allocPrint(a, "{s}.answers.jsonl", .{stem});
+}
+
+// ── the re-freeze ───────────────────────────────────────────────────────────
+
+/// **A CORPUS'S ANSWERS RECORDED AGAIN, FROM THE ROC**: each case's five,
+/// written over `path`; each case whose answers changed (`REFROZE ...
+/// changed: <parts>`), was added or was dropped named against `old`. A case
+/// the Roc cannot answer stops it, nothing written.
+fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const Case, old: ?Book, path: []const u8) !Tally {
+    const alloc = std.heap.page_allocator;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(alloc);
+    var t: Tally = .{};
+    var added: usize = 0;
+    var changed: usize = 0;
+    var seen: std.StringHashMapUnmanaged(void) = .empty;
+    defer seen.deinit(alloc);
+    for (cases) |c| {
+        _ = arena.reset(.retain_capacity);
+        const a = arena.allocator();
+        try seen.put(alloc, c.id, {});
+        const got = switch (try rocAnswers(a, c.md)) {
+            .answers => |g| g,
+            .crashed => {
+                printFailure(label, c.id, .roc_crashed);
+                return error.RefreezeRocFailed;
+            },
+            .answered => |n| {
+                printFailure(label, c.id, .{ .roc_answered = n });
+                return error.RefreezeRocFailed;
+            },
+        };
+        const units = std.fmt.parseInt(u64, got[@backingInt(Part.work_units)], 10) catch {
+            std.debug.print("FAILID\t{s}\t{s}\tthe Roc's work units are not a number\n", .{ label, c.id });
+            return error.RefreezeRocFailed;
+        };
+        const hash = try mdHash(a, c.md);
+        if (got[@backingInt(Part.hostile_reason)].len > 0) t.hostile += 1;
+        t.pass += 1;
+        const before = if (old) |b| b.get(c.id) else null;
+        if (before) |f| {
+            if (!std.mem.eql(u8, f.md_hash, hash)) {
+                changed += 1;
+                std.debug.print("REFROZE\t{s}\t{s}\tits text changed\n", .{ label, c.id });
+            } else switch (compare(try answersOf(a, f), got)) {
+                .same => {},
+                .differ => |d| {
+                    changed += 1;
+                    std.debug.print("REFROZE\t{s}\t{s}\tchanged: ", .{ label, c.id });
+                    printParts(d);
+                    std.debug.print("\n", .{});
+                },
+                else => unreachable,
+            }
+        } else if (old != null) {
+            added += 1;
+            std.debug.print("REFROZE\t{s}\t{s}\tadded\n", .{ label, c.id });
+        }
+        try out.print(alloc, "{{\"id\":{f},\"md_hash\":\"{s}\",\"html\":{f},\"work_units\":{d},\"hostile\":{f},\"trusted\":{f},\"trusted_reflow\":{f}}}\n", .{
+            std.json.fmt(c.id, .{}),
+            hash,
+            std.json.fmt(got[@backingInt(Part.render)], .{}),
+            units,
+            std.json.fmt(got[@backingInt(Part.hostile_reason)], .{}),
+            std.json.fmt(got[@backingInt(Part.trusted)], .{}),
+            std.json.fmt(got[@backingInt(Part.trusted_reflow)], .{}),
+        });
+    }
+    var dropped: usize = 0;
+    if (old) |b| {
+        var it = b.keyIterator();
+        while (it.next()) |id| {
+            if (seen.contains(id.*)) continue;
+            dropped += 1;
+            std.debug.print("REFROZE\t{s}\t{s}\tdropped\n", .{ label, id.* });
+        }
+    }
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out.items });
+    if (old == null) {
+        std.debug.print("== {s}: frozen, {d} cases, the first answers ({s})\n", .{ label, cases.len, path });
+    } else {
+        std.debug.print("== {s}: refrozen, {d} cases: {d} changed, {d} added, {d} dropped ({s})\n", .{ label, cases.len, changed, added, dropped, path });
+    }
+    return t;
 }
 
 // ── the hostile shapes ──────────────────────────────────────────────────────
@@ -323,7 +559,7 @@ fn fuzz(io: Io, alloc: std.mem.Allocator, n: usize, seed: u64) !void {
         _ = arena.reset(.retain_capacity);
         const a = arena.allocator();
         const md = try fuzzCase(a, prng.random());
-        const v = try judge(a, md);
+        const v = try judgeZig(a, md);
         if (v == .same) {
             t.pass += 1;
             continue;
@@ -382,8 +618,13 @@ fn writeRatchet(io: Io, a: std.mem.Allocator, results: []const Result) !void {
 }
 
 fn usage() noreturn {
-    std.debug.print("arguments: --also PATH, --raise, --fuzz N [--seed S], --time\n", .{});
+    std.debug.print("arguments: --also PATH, --refreeze LABEL, --zig, --raise, --fuzz N [--seed S], --time\n", .{});
     std.process.exit(2);
+}
+
+fn contains(list: []const []const u8, s: []const u8) bool {
+    for (list) |x| if (std.mem.eql(u8, x, s)) return true;
+    return false;
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -394,8 +635,10 @@ pub fn main(init: std.process.Init) !void {
     const sa = setup.allocator();
 
     var also: std.ArrayList([]const u8) = .empty;
+    var refreezing: std.ArrayList([]const u8) = .empty;
     var raise = false;
     var timed = false;
+    var against_zig = false;
     var fuzz_n: ?usize = null;
     var seed: u64 = 1;
     const args = try init.minimal.args.toSlice(sa);
@@ -406,9 +649,14 @@ pub fn main(init: std.process.Init) !void {
             raise = true;
         } else if (std.mem.eql(u8, arg, "--time")) {
             timed = true;
+        } else if (std.mem.eql(u8, arg, "--zig")) {
+            against_zig = true;
         } else if (std.mem.eql(u8, arg, "--also") and k + 1 < args.len) {
             k += 1;
             try also.append(sa, args[k]);
+        } else if (std.mem.eql(u8, arg, "--refreeze") and k + 1 < args.len) {
+            k += 1;
+            try refreezing.append(sa, args[k]);
         } else if (std.mem.eql(u8, arg, "--fuzz") and k + 1 < args.len) {
             k += 1;
             fuzz_n = std.fmt.parseInt(usize, args[k], 10) catch usage();
@@ -422,35 +670,66 @@ pub fn main(init: std.process.Init) !void {
     defer twin.deinit();
 
     if (fuzz_n) |n| return fuzz(io, alloc, n, seed);
+    if (against_zig and refreezing.items.len > 0) {
+        std.debug.print("--refreeze records the Roc's answers, and --zig judges without them: one or the other\n", .{});
+        std.process.exit(2);
+    }
 
     // The corpora: the list's (ratcheted), the hostile shapes (ratcheted),
-    // then each --also (counted, never ratcheted).
-    const Corpus = struct { label: []const u8, cases: []const Case, ratcheted: bool };
+    // then each --also (counted, never ratcheted); each with its answers'
+    // path, beside it.
+    const Corpus = struct { label: []const u8, cases: []const Case, ratcheted: bool, answers: []const u8 };
     var corpora: std.ArrayList(Corpus) = .empty;
     const list = try Io.Dir.cwd().readFileAlloc(io, corpora_list, sa, .unlimited);
     var lines = std.mem.splitScalar(u8, list, '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
-        try corpora.append(sa, .{ .label = labelOf(line), .cases = try readCorpus(io, sa, line), .ratcheted = true });
+        try corpora.append(sa, .{ .label = labelOf(line), .cases = try readCorpus(io, sa, line), .ratcheted = true, .answers = try answersPathOf(sa, line) });
     }
-    try corpora.append(sa, .{ .label = "hostile", .cases = try hostileCases(sa), .ratcheted = true });
-    for (also.items) |path| try corpora.append(sa, .{ .label = labelOf(path), .cases = try readCorpus(io, sa, path), .ratcheted = false });
+    try corpora.append(sa, .{ .label = "hostile", .cases = try hostileCases(sa), .ratcheted = true, .answers = hostile_answers_path });
+    for (also.items) |path| try corpora.append(sa, .{ .label = labelOf(path), .cases = try readCorpus(io, sa, path), .ratcheted = false, .answers = try answersPathOf(sa, path) });
+    for (corpora.items, 0..) |c, i| {
+        for (corpora.items[0..i]) |d| if (std.mem.eql(u8, c.label, d.label)) {
+            std.debug.print("two corpora are labelled {s}: a re-freeze would not know which\n", .{c.label});
+            std.process.exit(2);
+        };
+    }
+    for (refreezing.items) |label| {
+        for (corpora.items) |c| {
+            if (std.mem.eql(u8, c.label, label)) break;
+        } else {
+            std.debug.print("--refreeze {s}: no corpus of this run is labelled so (gold needs its --also)\n", .{label});
+            std.process.exit(2);
+        }
+    }
 
     const rungs = try readRatchet(io, sa);
     var results: std.ArrayList(Result) = .empty;
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     var fell = false;
+    var unrecorded = false;
     var total: Tally = .{};
+    const verb = if (against_zig) "agree with the Zig" else "hold to their answers";
     for (corpora.items) |c| {
-        const t = try judgeCases(&arena, c.label, c.cases);
+        const t = if (against_zig)
+            try judgeZigCases(&arena, c.label, c.cases)
+        else if (contains(refreezing.items, c.label))
+            try refreeze(io, &arena, c.label, c.cases, try readAnswers(io, sa, c.answers), c.answers)
+        else if (try readAnswers(io, sa, c.answers)) |book|
+            try judgeFrozenCases(&arena, c.label, c.cases, &book)
+        else {
+            std.debug.print("== {s}: NO ANSWERS at {s}: --refreeze {s} records them\n", .{ c.label, c.answers, c.label });
+            unrecorded = true;
+            continue;
+        };
         total.pass += t.pass;
         total.fail += t.fail;
         total.hostile += t.hostile;
         try results.append(sa, .{ .label = c.label, .t = t, .ratcheted = c.ratcheted });
-        std.debug.print("== {s}: {d}/{d} agree ({d} differ; {d} hostile)", .{ c.label, t.pass, t.pass + t.fail, t.fail, t.hostile });
-        if (c.ratcheted) {
+        std.debug.print("== {s}: {d}/{d} {s} ({d} fail; {d} hostile)", .{ c.label, t.pass, t.pass + t.fail, verb, t.fail, t.hostile });
+        if (c.ratcheted and !against_zig) {
             const floor = rungFor(rungs, c.label) orelse 0;
             if (t.pass < floor) {
                 fell = true;
@@ -462,12 +741,11 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("\n", .{});
         if (timed) try timeCorpus(&arena, c.cases);
     }
-    std.debug.print("==> {d}/{d} agree ({d} differ; {d} hostile)\n", .{ total.pass, total.pass + total.fail, total.fail, total.hostile });
-    if (fell) {
-        std.debug.print("a corpus fell below its ratchet ({s})\n", .{ratchet_path});
-        std.process.exit(1);
-    }
-    if (raise) {
+    std.debug.print("==> {d}/{d} {s} ({d} fail; {d} hostile)\n", .{ total.pass, total.pass + total.fail, verb, total.fail, total.hostile });
+    if (fell) std.debug.print("a corpus fell below its ratchet ({s})\n", .{ratchet_path});
+    if (unrecorded) std.debug.print("a corpus has no answers\n", .{});
+    if (fell or unrecorded or total.fail > 0) std.process.exit(1);
+    if (raise and !against_zig) {
         try writeRatchet(io, sa, results.items);
         std.debug.print("ratchet rewritten: {s}\n", .{ratchet_path});
     }

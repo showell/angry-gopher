@@ -227,18 +227,20 @@ pub fn build(b: *std.Build) void {
     const codec_bench_run = b.addRunArtifact(b.addExecutable(.{ .name = "codec-bench", .root_module = codec_bench_mod }));
     codec_bench_run.addPassthruArgs();
     b.step("codec-bench", "Decode a transcript in Zig and in Roc, time and peak memory (src/chat_codec_bench.zig)").dependOn(&codec_bench_run.step);
-    // **THE ROC'S MARKDOWN AGAINST THE ZIG'S** (src/markdown_twin_test.zig,
-    // metal-vmm QUEUE 305): every corpus case through both, html and work
-    // units, each corpus held to its ratchet; the Zig is chat-markdown's
-    // checkout, the dialect's definition. Part of `test`, and on its
-    // own as `zig build markdown-twin [-- --also GOLD | --raise | --fuzz N]`.
+    // **THE ROC'S MARKDOWN AGAINST ITS FROZEN ANSWERS** (src/markdown_twin_test.zig,
+    // metal-vmm QUEUE 305): every corpus case through roc-markdown's
+    // package, its html, work units and hostility held to the answers
+    // recorded beside its corpus, each corpus held to its ratchet. Part of
+    // `test`, and on its own as `zig build markdown-twin [-- --also GOLD |
+    // --refreeze LABEL | --zig | --raise | --fuzz N]` (--zig and --fuzz:
+    // against chat-markdown's live Zig).
     const md_twin_mod = b.createModule(.{ .root_source_file = b.path("src/markdown_twin_test.zig"), .target = target, .optimize = optimize });
     md_twin_mod.addImport("roc_chat_twin", roc_webbox.module("roc_chat_twin"));
     md_twin_mod.addImport("chat_markdown", chat_markdown);
     const md_twin_run = b.addRunArtifact(b.addExecutable(.{ .name = "markdown-twin", .root_module = md_twin_mod }));
     md_twin_run.setCwd(b.path("."));
     md_twin_run.addPassthruArgs();
-    b.step("markdown-twin", "The Roc's markdown against the Zig's, every corpus, html and work units (src/markdown_twin_test.zig)").dependOn(&md_twin_run.step);
+    b.step("markdown-twin", "The Roc's markdown against its frozen answers, every corpus, html, work units and hostility (src/markdown_twin_test.zig)").dependOn(&md_twin_run.step);
     const md_twin_gate = b.addRunArtifact(md_twin_run.producer.?);
     md_twin_gate.setCwd(b.path("."));
     test_step.dependOn(&md_twin_gate.step);

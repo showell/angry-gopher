@@ -1,0 +1,3 @@
+{"id":"xline/emphasis","md_hash":"b3bc0fc026e76cde","html":"<p>**foo<br>\nbar**</p>\n","work_units":27,"hostile":"","trusted":"<p>**foo<br>\nbar**</p>\n","trusted_reflow":"<p><strong>foo bar</strong></p>\n"}
+{"id":"xline/code","md_hash":"9cdee1424c1c56cb","html":"<p>`foo<br>\nbar`</p>\n","work_units":22,"hostile":"","trusted":"<p>`foo<br>\nbar`</p>\n","trusted_reflow":"<p><code>foo bar</code></p>\n"}
+{"id":"xline/link","md_hash":"ecc7741969165ebe","html":"<p>[foo<br>\nbar](/u)</p>\n","work_units":19,"hostile":"","trusted":"<p>[foo<br>\nbar](/u)</p>\n","trusted_reflow":"<p><a href=\"/u\">foo bar</a></p>\n"}
