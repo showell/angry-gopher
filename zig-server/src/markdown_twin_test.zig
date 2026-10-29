@@ -42,6 +42,12 @@
 //! `{"id", "md_hash", "html", "work_units", "hostile", "trusted",
 //! "trusted_reflow"}` a case, in the corpus's order (`md_hash` the Wyhash of
 //! the case's text); the hostile shapes' are markdown_twin/hostile.answers.jsonl.
+//! **A GENERATED CORPUS'S HTML IS FROZEN AS ITS HASH** (the hostile shapes':
+//! `html_hash`, `trusted_hash`, `trusted_reflow_hash`, each the Wyhash of
+//! the html, in place of the text): their html is megabytes of one unit
+//! repeated, and their text is regenerated from the shapes, so a re-freeze
+//! names a moved case and the shape and size say what it was. A real
+//! corpus keeps its full html, so a re-freeze's diff shows what moved.
 //! So the gold's answers, real messages' html, stay beside gold.jsonl in
 //! gopher-gold, which has no remote. A corpus or an answers file that cannot
 //! be read stops the run: a judge that skipped its bulk would pass having
@@ -67,16 +73,28 @@ const Answers = [part_count][]const u8;
 
 const Case = struct { id: []const u8, md: []const u8 };
 
-/// A case's answers as its corpus's answers file records them.
+/// A case's answers as its corpus's answers file records them: each html
+/// as its text, or (a generated corpus's) as its hash, never both.
 const Frozen = struct {
     id: []const u8,
     md_hash: []const u8,
-    html: []const u8,
+    html: ?[]const u8 = null,
+    html_hash: ?[]const u8 = null,
     work_units: u64,
     hostile: []const u8,
-    trusted: []const u8,
-    trusted_reflow: []const u8,
+    trusted: ?[]const u8 = null,
+    trusted_hash: ?[]const u8 = null,
+    trusted_reflow: ?[]const u8 = null,
+    trusted_reflow_hash: ?[]const u8 = null,
 };
+
+/// A frozen answer: its text, or the hash of its text.
+const Want = union(enum) { text: []const u8, hash: []const u8 };
+const Wants = [part_count]Want;
+
+/// How a corpus's html is frozen: whole (a real corpus), or hashed (a
+/// generated one).
+const Keep = enum { whole, hashed };
 
 /// A corpus's answers, by case id.
 const Book = std.StringHashMapUnmanaged(Frozen);
@@ -120,20 +138,23 @@ fn rocAnswers(a: std.mem.Allocator, md: []const u8) !RocResult {
 }
 
 /// `want` against what the Roc answers for `md`.
-fn judgeAgainst(a: std.mem.Allocator, md: []const u8, want: Answers) !Verdict {
+fn judgeAgainst(a: std.mem.Allocator, md: []const u8, want: Wants) !Verdict {
     const got = switch (try rocAnswers(a, md)) {
         .answers => |g| g,
         .crashed => return .roc_crashed,
         .answered => |n| return .{ .roc_answered = n },
     };
-    return compare(want, got);
+    return compare(a, want, got);
 }
 
-fn compare(want: Answers, got: Answers) Verdict {
+fn compare(a: std.mem.Allocator, want: Wants, got: Answers) !Verdict {
     var differ: [part_count]bool = @splat(false);
     var any = false;
     for (want, got, 0..) |w, g, k| {
-        differ[k] = !std.mem.eql(u8, w, g);
+        differ[k] = switch (w) {
+            .text => |t| !std.mem.eql(u8, t, g),
+            .hash => |h| !std.mem.eql(u8, h, try textHash(a, g)),
+        };
         any = any or differ[k];
     }
     return if (any) .{ .differ = differ } else .same;
@@ -141,23 +162,41 @@ fn compare(want: Answers, got: Answers) Verdict {
 
 /// The Roc against the live Zig (`--zig`, `--fuzz`).
 fn judgeZig(a: std.mem.Allocator, md: []const u8) !Verdict {
-    return judgeAgainst(a, md, try zigAnswers(a, md));
+    var want: Wants = undefined;
+    for (try zigAnswers(a, md), 0..) |z, k| want[k] = .{ .text = z };
+    return judgeAgainst(a, md, want);
 }
 
 /// The Roc against the case's recorded answers.
 fn judgeFrozen(a: std.mem.Allocator, md: []const u8, frozen: ?Frozen) !Verdict {
     const f = frozen orelse return .unfrozen;
-    if (!std.mem.eql(u8, f.md_hash, try mdHash(a, md))) return .text_changed;
-    return judgeAgainst(a, md, try answersOf(a, f));
+    if (!std.mem.eql(u8, f.md_hash, try textHash(a, md))) return .text_changed;
+    return judgeAgainst(a, md, try wantsOf(a, f));
 }
 
-fn answersOf(a: std.mem.Allocator, f: Frozen) !Answers {
-    return .{ f.html, try std.fmt.allocPrint(a, "{d}", .{f.work_units}), f.hostile, f.trusted, f.trusted_reflow };
+/// A frozen case's answers, each html its text or its hash.
+fn wantsOf(a: std.mem.Allocator, f: Frozen) !Wants {
+    return .{
+        try wantOf(f.id, "html", f.html, f.html_hash),
+        .{ .text = try std.fmt.allocPrint(a, "{d}", .{f.work_units}) },
+        .{ .text = f.hostile },
+        try wantOf(f.id, "trusted", f.trusted, f.trusted_hash),
+        try wantOf(f.id, "trusted_reflow", f.trusted_reflow, f.trusted_reflow_hash),
+    };
 }
 
-/// A case's text, named by its hash, so a frozen answer knows its case.
-fn mdHash(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(a, "{x:0>16}", .{std.hash.Wyhash.hash(0, md)});
+fn wantOf(id: []const u8, part: []const u8, text: ?[]const u8, hash: ?[]const u8) !Want {
+    if (text) |t| {
+        if (hash == null) return .{ .text = t };
+    } else if (hash) |h| return .{ .hash = h };
+    std.debug.print("the answers of {s}: its {s} needs its text or its hash, one of the two\n", .{ id, part });
+    return error.AnswerTextOrHash;
+}
+
+/// A text named by its hash: a case's, so a frozen answer knows its case,
+/// and a generated case's html.
+fn textHash(a: std.mem.Allocator, text: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "{x:0>16}", .{std.hash.Wyhash.hash(0, text)});
 }
 
 /// The parts of a `differ`, comma-separated, onto stderr.
@@ -307,8 +346,9 @@ fn answersPathOf(a: std.mem.Allocator, path: []const u8) ![]const u8 {
 /// **A CORPUS'S ANSWERS RECORDED AGAIN, FROM THE ROC**: each case's five,
 /// written over `path`; each case whose answers changed (`REFROZE ...
 /// changed: <parts>`), was added or was dropped named against `old`. A case
-/// the Roc cannot answer stops it, nothing written.
-fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const Case, old: ?Book, path: []const u8) !Tally {
+/// the Roc cannot answer stops it, nothing written. `keep` says whether the
+/// html is written whole or as its hash.
+fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: []const Case, keep: Keep, old: ?Book, path: []const u8) !Tally {
     const alloc = std.heap.page_allocator;
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(alloc);
@@ -336,7 +376,7 @@ fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: [
             std.debug.print("FAILID\t{s}\t{s}\tthe Roc's work units are not a number\n", .{ label, c.id });
             return error.RefreezeRocFailed;
         };
-        const hash = try mdHash(a, c.md);
+        const hash = try textHash(a, c.md);
         if (got[@backingInt(Part.hostile_reason)].len > 0) t.hostile += 1;
         t.pass += 1;
         const before = if (old) |b| b.get(c.id) else null;
@@ -344,7 +384,7 @@ fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: [
             if (!std.mem.eql(u8, f.md_hash, hash)) {
                 changed += 1;
                 std.debug.print("REFROZE\t{s}\t{s}\tits text changed\n", .{ label, c.id });
-            } else switch (compare(try answersOf(a, f), got)) {
+            } else switch (try compare(a, try wantsOf(a, f), got)) {
                 .same => {},
                 .differ => |d| {
                     changed += 1;
@@ -358,15 +398,29 @@ fn refreeze(io: Io, arena: *std.heap.ArenaAllocator, label: []const u8, cases: [
             added += 1;
             std.debug.print("REFROZE\t{s}\t{s}\tadded\n", .{ label, c.id });
         }
-        try out.print(alloc, "{{\"id\":{f},\"md_hash\":\"{s}\",\"html\":{f},\"work_units\":{d},\"hostile\":{f},\"trusted\":{f},\"trusted_reflow\":{f}}}\n", .{
-            std.json.fmt(c.id, .{}),
-            hash,
-            std.json.fmt(got[@backingInt(Part.render)], .{}),
-            units,
-            std.json.fmt(got[@backingInt(Part.hostile_reason)], .{}),
-            std.json.fmt(got[@backingInt(Part.trusted)], .{}),
-            std.json.fmt(got[@backingInt(Part.trusted_reflow)], .{}),
-        });
+        const html = got[@backingInt(Part.render)];
+        const trusted = got[@backingInt(Part.trusted)];
+        const reflow = got[@backingInt(Part.trusted_reflow)];
+        switch (keep) {
+            .whole => try out.print(alloc, "{{\"id\":{f},\"md_hash\":\"{s}\",\"html\":{f},\"work_units\":{d},\"hostile\":{f},\"trusted\":{f},\"trusted_reflow\":{f}}}\n", .{
+                std.json.fmt(c.id, .{}),
+                hash,
+                std.json.fmt(html, .{}),
+                units,
+                std.json.fmt(got[@backingInt(Part.hostile_reason)], .{}),
+                std.json.fmt(trusted, .{}),
+                std.json.fmt(reflow, .{}),
+            }),
+            .hashed => try out.print(alloc, "{{\"id\":{f},\"md_hash\":\"{s}\",\"html_hash\":\"{s}\",\"work_units\":{d},\"hostile\":{f},\"trusted_hash\":\"{s}\",\"trusted_reflow_hash\":\"{s}\"}}\n", .{
+                std.json.fmt(c.id, .{}),
+                hash,
+                try textHash(a, html),
+                units,
+                std.json.fmt(got[@backingInt(Part.hostile_reason)], .{}),
+                try textHash(a, trusted),
+                try textHash(a, reflow),
+            }),
+        }
     }
     var dropped: usize = 0;
     if (old) |b| {
@@ -678,17 +732,17 @@ pub fn main(init: std.process.Init) !void {
     // The corpora: the list's (ratcheted), the hostile shapes (ratcheted),
     // then each --also (counted, never ratcheted); each with its answers'
     // path, beside it.
-    const Corpus = struct { label: []const u8, cases: []const Case, ratcheted: bool, answers: []const u8 };
+    const Corpus = struct { label: []const u8, cases: []const Case, ratcheted: bool, answers: []const u8, keep: Keep };
     var corpora: std.ArrayList(Corpus) = .empty;
     const list = try Io.Dir.cwd().readFileAlloc(io, corpora_list, sa, .unlimited);
     var lines = std.mem.splitScalar(u8, list, '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
-        try corpora.append(sa, .{ .label = labelOf(line), .cases = try readCorpus(io, sa, line), .ratcheted = true, .answers = try answersPathOf(sa, line) });
+        try corpora.append(sa, .{ .label = labelOf(line), .cases = try readCorpus(io, sa, line), .ratcheted = true, .answers = try answersPathOf(sa, line), .keep = .whole });
     }
-    try corpora.append(sa, .{ .label = "hostile", .cases = try hostileCases(sa), .ratcheted = true, .answers = hostile_answers_path });
-    for (also.items) |path| try corpora.append(sa, .{ .label = labelOf(path), .cases = try readCorpus(io, sa, path), .ratcheted = false, .answers = try answersPathOf(sa, path) });
+    try corpora.append(sa, .{ .label = "hostile", .cases = try hostileCases(sa), .ratcheted = true, .answers = hostile_answers_path, .keep = .hashed });
+    for (also.items) |path| try corpora.append(sa, .{ .label = labelOf(path), .cases = try readCorpus(io, sa, path), .ratcheted = false, .answers = try answersPathOf(sa, path), .keep = .whole });
     for (corpora.items, 0..) |c, i| {
         for (corpora.items[0..i]) |d| if (std.mem.eql(u8, c.label, d.label)) {
             std.debug.print("two corpora are labelled {s}: a re-freeze would not know which\n", .{c.label});
@@ -716,7 +770,7 @@ pub fn main(init: std.process.Init) !void {
         const t = if (against_zig)
             try judgeZigCases(&arena, c.label, c.cases)
         else if (contains(refreezing.items, c.label))
-            try refreeze(io, &arena, c.label, c.cases, try readAnswers(io, sa, c.answers), c.answers)
+            try refreeze(io, &arena, c.label, c.cases, c.keep, try readAnswers(io, sa, c.answers), c.answers)
         else if (try readAnswers(io, sa, c.answers)) |book|
             try judgeFrozenCases(&arena, c.label, c.cases, &book)
         else {
