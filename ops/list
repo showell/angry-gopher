@@ -32,7 +32,7 @@ Available ops commands (run from repo root):
   ops/check_common       Shared base = check_zig + test_docs + test_css (diamond floor).
   ops/test_ts            TS solver/engine suite (~20s) — Lyn Rummy.
   ops/test_elm           Elm client suite (~5s) — Lyn Rummy.
-  ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
+  ops/test_chat          Chat client (~2s): ../chat-client at chat-client-rev, its tools/check, chat_client.py.
   ops/check_solver       Lyn Rummy zig-solver gate (~2s): native unit tests
                          for the solver in games/lynrummy/zig. Composed by
                          ops/check and ops/check_lynrummy.

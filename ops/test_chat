@@ -4,10 +4,11 @@
 # command for build / launch / test / regen, run `ops/list` to see
 # what already exists.
 #
-# Chat subsystem leaf gate (~1s). The chat SERVER (zig) is compiled by
-# ops/check_zig; this leaf lints the chat CLIENT artifacts that nothing else
-# checks — the embedded chat/*.js and the example bot client. We
-# iterate fast and dogfooding catches the shallow bugs.
+# Chat subsystem leaf gate (~2s). The chat SERVER (zig) is compiled by
+# ops/check_zig; this leaf checks the chat CLIENT it embeds: that
+# ../chat-client is at the commit chat-client-rev pins, and that the
+# client's own checks pass there (chat-client's tools/check), then the
+# example bot client's syntax.
 
 set -e
 
@@ -22,20 +23,26 @@ phase() {
     echo "    [phase] ${label}: $((SECONDS - t0))s"
 }
 
-# Syntax-check every client script in ONE node process (vm parses without
-# running). Globbed, not hand-listed, so a new chat/*.js can't slip the gate —
-# and it skips the ~40ms-per-file node-startup tax of a `node --check` loop.
-echo "==> JS syntax (../chat-client/js/*.js, batched)"
-phase "js-syntax" node tools/check_js_syntax.mjs ../chat-client/js/*.js
+# **THE CHAT CLIENT IS PINNED** (chat-client-rev, the commit this server
+# expects): its scripts are embedded by path from ../chat-client, so a
+# checkout at any other commit would ship unseen. A bump is a deliberate
+# one-line commit, made with both hosts' checks (chat-client's README).
+CLIENT_DIR="$REPO_DIR/../chat-client"
+want="$(tr -d '[:space:]' < chat-client-rev)"
+have="$(git -C "$CLIENT_DIR" rev-parse HEAD 2>/dev/null || echo "no checkout")"
+if [ "$have" != "$want" ]; then
+    echo "chat-client: ../chat-client is at $have, but chat-client-rev pins $want."
+    echo "  Check out the pinned commit there, or bump chat-client-rev on purpose."
+    exit 1
+fi
+echo "==> chat-client at the pinned $want"
 
-echo "==> the photo resize decision (chat_compose.js resizePlan)"
-phase "chat-resize" node ../chat-client/tools/test_chat_resize.mjs
+# The client's own checks, from its checkout: the JS syntax, the lint, the
+# resize decision, the contract and its bundle (chat-client's tools/check).
+phase "chat-client" "$CLIENT_DIR/tools/check"
 
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py
-
-echo "==> JS paper-over + dead-code lint"
-phase "js-lint" python3 tools/lint.py
 
 echo
 echo "Chat gate passed."

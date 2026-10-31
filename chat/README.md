@@ -62,10 +62,11 @@ A few load-bearing ideas worth knowing before you dig in:
 
 The front end is its own repository, **chat-client** (a sibling checkout): hand-written JavaScript, no build step, embedded into the
 zig binary through its `chat_client` module and served as-is. Its README
-says how it is organized. The JS is still held honest from here:
-`tools/jsparse.py` parses the (ES5-ish) dialect we write, and `tools/lint.py`
-runs rules over the AST (silent-catch, dead-code, undefined-call,
-called-once, …) on `../chat-client/js/*.js`. Both run in `ops/check_chat`.
+says how it is organized, and its `tools/check` runs every check of its own
+(the JS syntax, its lint, the resize decision, the contract). This server
+pins it: `chat-client-rev` names the commit it expects, and `ops/test_chat`
+(in `ops/check_chat`) fails, naming both commits, when `../chat-client` is
+at another, then runs the client's `tools/check` there.
 
 The markdown dialect is its own repository too, **chat-markdown** (a sibling
 checkout, module `chat_markdown`).
