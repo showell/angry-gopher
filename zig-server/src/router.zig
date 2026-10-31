@@ -98,24 +98,8 @@ pub const edge = @import("webbox").edge;
 /// rule's two questions), and `hosting`, what only the application can say
 /// to a host about itself. A host imports the application's root as a module
 /// and the library as `webbox`, and reaches nothing else of either.
-///
-/// **WHAT ELSE THE SITE SERVES** (webbox's combo): Codex Chat and Damian's UO
-/// town (cobble-webbox), public and ungated, each under its own prefix with
-/// its own files under it in the data and auth roots. Neither passes through
-/// this application's cookies or refusals, and each is counted under its own
-/// name.
-pub const site = combined.site;
-pub const hosting = combined.hosting;
-const combined = @import("webbox").combo.Mount(gopher, &.{
-    .{ .prefix = "/codex-chat", .root = @import("codex_chat") },
-    .{ .prefix = "/uo", .root = @import("uo_town") },
-});
-/// This application alone, as `Mount` takes its primary.
-const gopher = struct {
-    pub const site = webbox_site.Site(App);
-    pub const hosting = gopher_hosting;
-};
-const gopher_hosting = struct {
+pub const site = webbox_site.Site(App);
+pub const hosting = struct {
     /// What its data is called, where a host names it (zig-metal-unikernel's
     /// console and /admin/host).
     pub const data_name = "chat's data";

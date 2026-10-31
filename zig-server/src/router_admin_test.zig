@@ -70,9 +70,9 @@ test "route: start does the host's setup in one call: the data and the store poi
         .trusted_proxy = "10.0.0.2",
     });
     _ = &started;
-    try testing.expectEqual(@as(usize, 1), started.app.primary.backfilled);
+    try testing.expectEqual(@as(usize, 1), started.app.backfilled);
     try testing.expect(try disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" })));
-    try testing.expectEqual(@as(usize, 1), started.app.primary.search.?.messages);
+    try testing.expectEqual(@as(usize, 1), started.app.search.?.messages);
     try testing.expectEqual(@as(?*const fn () ?free_space.Space, null), free_space.reader);
     try testing.expectEqualStrings("10.0.0.2", client_address.trusted_proxy.?);
     try testing.expectEqualStrings(data_dir, disk.data_base.?);
