@@ -25,13 +25,13 @@ const htmlEscape = html.htmlEscape; // internal alias; impl in html.zig
 /// The sibling bundles the conversation page loads, in document order (after the
 /// head's colors.js + chat_theme.js).
 const page_scripts = [_][]const u8{
-    "chat_image_popup.js",   "chat_code_popup.js", "chat_time_popup.js",
-    "chat_save_popup.js",    "message.js",         "message_view.js",
-    "nav_stack.js",          "middle_pane.js",     "chat_search.js",
-    "chat_drag_to_pin.js",   "chat_add_topic.js",  "chat_left_sidebar.js",
-    "chat_right_sidebar.js", "chat_emoji.js",      "chat_reactions.js",
-    "chat_compose.js",       "chat_help.js",       "chat_responsive.js",
-    "chat.js",               "notify.js",
+    "chat_image_popup.js", "chat_code_popup.js",   "chat_time_popup.js",
+    "chat_save_popup.js",  "message.js",           "message_view.js",
+    "middle_pane.js",      "chat_search.js",       "chat_drag_to_pin.js",
+    "chat_add_topic.js",   "chat_left_sidebar.js", "chat_right_sidebar.js",
+    "chat_emoji.js",       "chat_reactions.js",    "chat_compose.js",
+    "chat_help.js",        "chat_responsive.js",   "chat.js",
+    "notify.js",
 };
 
 /// serveNoTopicsPage renders the "no topics yet" bootstrap shell for a conversation
