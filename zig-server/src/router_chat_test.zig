@@ -313,3 +313,54 @@ test "route: pin puts a topic in the viewer's Pinned group and unpin takes it ou
     try testing.expectEqualStrings("204 No Content", harness.status(try harness.postAs(a, io, "/chat/c/1_2/Plans/unpin", steve, "")));
     try testing.expectEqual(@as(usize, 0), (try chat_state.readPinnedTopics(io, a, "1", "1_2")).len);
 }
+
+test "route: /chat/msg/<id> goes to one place: a channel's reference to its own topic, a topic's only where it means one, never a guess" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try harness.UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const steve = try harness.loginMember(a, io, "1", "Steve");
+    const debbie = try harness.loginMember(a, io, "2", "Debbie");
+    _ = try harness.loginMember(a, io, "3", "Ann");
+    // Two channels of Steve's, each with its own `plans`; one he is not in,
+    // with a `plans` too; and the DM 1_2's `ideas`.
+    for ([_][2][]const u8{ .{ "Cobblestone", "1\n2\n" }, .{ "general", "1\n3\n" }, .{ "quiet", "2\n" } }) |ch| {
+        try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", try std.fmt.allocPrint(a, "{s}.channel", .{ch[0]}) }), ch[1], .{});
+        try harness.writeTranscript(a, io, try std.fmt.allocPrint(a, "channels/{s}", .{ch[0]}), "plans", &.{ "one", "two" });
+    }
+    try harness.writeTranscript(a, io, "1_2", "ideas", &.{"hi"});
+
+    // A channel's reference: that channel's topic, and no other.
+    const to_cobble = try harness.UidSite.ask(a, io, "/chat/msg/Cobblestone.plans_2", steve);
+    try testing.expectEqualStrings("302 Found", harness.status(to_cobble));
+    try testing.expectEqualStrings("/channel/Cobblestone/plans#msg-plans_2", harness.responseHeader(to_cobble, "location").?);
+    const to_general = try harness.UidSite.ask(a, io, "/chat/msg/general.plans_1", steve);
+    try testing.expectEqualStrings("/channel/general/plans#msg-plans_1", harness.responseHeader(to_general, "location").?);
+    // Not a member, no such channel, no such topic: the same 404 as no reference.
+    for ([_][]const u8{ "/chat/msg/quiet.plans_1", "/chat/msg/nothere.plans_1", "/chat/msg/Cobblestone.ideas_1", "/chat/msg/1st.plans_1", "/chat/msg/plans" }) |t| {
+        try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, t, steve)));
+    }
+    // Debbie is in quiet: its reference goes there for her.
+    try testing.expectEqualStrings("/channel/quiet/plans#msg-plans_1", harness.responseHeader(try harness.UidSite.ask(a, io, "/chat/msg/quiet.plans_1", debbie), "location").?);
+
+    // A topic's reference: the one place it can mean, or ambiguous.
+    const dm = try harness.UidSite.ask(a, io, "/chat/msg/ideas_1", steve);
+    try testing.expectEqualStrings("/chat/c/1_2/ideas#msg-ideas_1", harness.responseHeader(dm, "location").?);
+    const both = try harness.UidSite.ask(a, io, "/chat/msg/plans_1", steve);
+    try testing.expectEqualStrings("409 Conflict", harness.status(both));
+    try testing.expect(std.mem.indexOf(u8, harness.responseBody(both), "ambiguous") != null);
+    try testing.expect(harness.responseHeader(both, "location") == null);
+    // Debbie has one `plans` in each of Cobblestone and quiet: ambiguous too.
+    try testing.expectEqualStrings("409 Conflict", harness.status(try harness.UidSite.ask(a, io, "/chat/msg/plans_1", debbie)));
+    // Ann: only general's.
+    const ann = try harness.loginMember(a, io, "3", "Ann");
+    try testing.expectEqualStrings("/channel/general/plans#msg-plans_2", harness.responseHeader(try harness.UidSite.ask(a, io, "/chat/msg/plans_2", ann), "location").?);
+    try testing.expectEqualStrings("404 Not Found", harness.status(try harness.UidSite.ask(a, io, "/chat/msg/nothing_1", ann)));
+}

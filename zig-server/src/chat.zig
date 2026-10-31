@@ -143,7 +143,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     if (matchPrefix(sub, "/search")) |rest| return chat_search.handle(req, io, alloc, uid, rest, now);
     // /chat/default — resume the last (conv, topic); /chat/conversations —
     // the (partner × topic) matrix as JSON (the API-key discovery entry point);
-    // /chat/msg/<id> — resolve a global MSG_ ref to its thread and 302 there.
+    // /chat/msg/<id> — resolve a MSG_ ref to its one topic and 302 there.
     if (std.mem.eql(u8, sub, "/default")) return serveChatDefault(req, io, alloc, uid, now);
     if (std.mem.eql(u8, sub, "/conversations")) return serveConversations(req, io, alloc, uid, now);
     if (matchPrefix(sub, "/msg/")) |id| return redirectToMsg(req, io, alloc, uid, id);
@@ -542,30 +542,50 @@ fn serveConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8, now:
     try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });
 }
 
-/// redirectToMsg resolves a global MSG_<id> to the thread it lives in and 302s to
-/// that topic URL + #msg-<id>. Walks the viewer's accessible convs (DM partners,
-/// then channels) and picks the first whose topic list holds the sid embedded
-/// in the id.
+/// **WHERE A MESSAGE REFERENCE GOES, EXACTLY, OR NOWHERE** (/chat/msg/<id>).
+/// A channel's reference (`<channel>.<sid>_<n>`) goes to that channel's topic
+/// and no other, when the viewer is its member; otherwise, and for a channel
+/// or topic not there, the same 404 as an id that is no reference, so the
+/// answer names nothing the viewer cannot see. A topic's reference
+/// (`<sid>_<n>`: DMs, and links made before channels named theirs) goes only
+/// where it can mean one place: the viewer's one conversation with a topic of
+/// that name. Two or more is ambiguous, said so in plain text, never a guess.
 fn redirectToMsg(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []const u8) !void {
-    if (!chat_paths.validMsgRefID(id)) return http.notFound(req);
-    const cut = std.mem.lastIndexOfScalar(u8, id, '_').?; // validMsgRefID guarantees one
-    const sid = id[0..cut];
-
+    const ref = chat_paths.parseMsgRef(id) orelse return http.notFound(req);
+    if (ref.channel) |name| {
+        const members = (try chat_paths.readChannelMembers(io, alloc, name)) orelse return http.notFound(req);
+        if (!chat_paths.hasMember(members, uid)) return http.notFound(req);
+        if (!try hasTopicExactly(io, alloc, try chat_paths.channelConvDir(alloc, name), ref.sid)) return http.notFound(req);
+        return redirectFound(req, try http.Target.format(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, ref.sid, ref.local }));
+    }
+    var found: std.ArrayList(http.Target) = .empty;
     for (try users.listAuthorized(io, alloc)) |partner| {
         if (std.mem.eql(u8, partner.id, uid)) continue;
         const conv = try chat_paths.chatPairKey(alloc, uid, partner.id);
-        const dir = try chat_paths.dmConvDir(alloc, conv);
-        if (try hasTopicExactly(io, alloc, dir, sid)) {
-            return redirectFound(req, try http.Target.format(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
+        if (try hasTopicExactly(io, alloc, try chat_paths.dmConvDir(alloc, conv), ref.sid)) {
+            try found.append(alloc, try http.Target.format(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, ref.sid, ref.local }));
         }
     }
     for (try chat_paths.listUserChannels(io, alloc, uid)) |name| {
-        const dir = try chat_paths.channelConvDir(alloc, name);
-        if (try hasTopicExactly(io, alloc, dir, sid)) {
-            return redirectFound(req, try http.Target.format(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
+        if (try hasTopicExactly(io, alloc, try chat_paths.channelConvDir(alloc, name), ref.sid)) {
+            try found.append(alloc, try http.Target.format(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, ref.sid, ref.local }));
         }
     }
-    return http.notFound(req);
+    return switch (onlyPlace(found.items)) {
+        .none => http.notFound(req),
+        .one => |target| redirectFound(req, target),
+        .ambiguous => req.respond("This reference is ambiguous: more than one of your conversations has a topic of that name.\n", .{ .status = .conflict }),
+    };
+}
+
+/// A short reference's place among `found`, the viewer's conversations with
+/// a topic of its name: none, the one, or more than one.
+fn onlyPlace(found: []const http.Target) union(enum) { none, one: http.Target, ambiguous } {
+    return switch (found.len) {
+        0 => .none,
+        1 => .{ .one = found[0] },
+        else => .ambiguous,
+    };
 }
 
 /// hasTopicExactly reports whether `dir`'s topic list contains `sid`.

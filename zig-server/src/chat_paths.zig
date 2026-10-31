@@ -300,6 +300,34 @@ pub fn validMsgRefID(id: []const u8) bool {
     return true;
 }
 
+/// **A MESSAGE REFERENCE'S ID, READ**: `<sid>_<n>`, a topic's (it names no
+/// conversation, so it means "this topic, on this page" only), or
+/// `<channel>.<sid>_<n>`, a channel's topic's. Neither a channel's name nor a
+/// topic's holds a `.` or a `_`, so an id reads one way only: the channel
+/// before the first `.`, the number after the last `_`.
+pub const MsgRef = struct {
+    /// The channel, for the long form; null for the short.
+    channel: ?[]const u8,
+    /// `<sid>_<n>`: the message's id in its topic, the page's anchor.
+    local: []const u8,
+    /// The topic.
+    sid: []const u8,
+};
+
+/// The reference `id` is, or null for one off either shape.
+pub fn parseMsgRef(id: []const u8) ?MsgRef {
+    var channel: ?[]const u8 = null;
+    var local = id;
+    if (std.mem.indexOfScalar(u8, id, '.')) |dot| {
+        if (!validChannelName(id[0..dot])) return null;
+        channel = id[0..dot];
+        local = id[dot + 1 ..];
+    }
+    if (!validMsgRefID(local)) return null;
+    const cut = std.mem.lastIndexOfScalar(u8, local, '_').?; // validMsgRefID guarantees one
+    return .{ .channel = channel, .local = local, .sid = local[0..cut] };
+}
+
 /// validChannelName matches `^[A-Za-z][A-Za-z0-9-]{0,39}$`
 /// — a letter, then up to 39 of letter/digit/hyphen (1..40 chars total).
 pub fn validChannelName(name: []const u8) bool {
@@ -346,6 +374,20 @@ test "validMsgRefID: accepts slug_index, rejects everything off-shape" {
     try testing.expect(!validMsgRefID("yo_5x"));
     try testing.expect(!validMsgRefID("yo_5_"));
     try testing.expect(!validMsgRefID(""));
+}
+
+test "parseMsgRef: a topic's reference and a channel's, each read one way; anything else is none" {
+    const short = parseMsgRef("plans_3").?;
+    try std.testing.expect(short.channel == null);
+    try std.testing.expectEqualStrings("plans", short.sid);
+    try std.testing.expectEqualStrings("plans_3", short.local);
+    const long = parseMsgRef("Cobblestone.road-trip_12").?;
+    try std.testing.expectEqualStrings("Cobblestone", long.channel.?);
+    try std.testing.expectEqualStrings("road-trip", long.sid);
+    try std.testing.expectEqualStrings("road-trip_12", long.local);
+    for ([_][]const u8{ "", "plans", "plans_", "_3", "1st.plans_3", ".plans_3", "a.b.c_3", "a.b_c", "a/b_3", "a.b_3x", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.b_1" }) |bad| {
+        try std.testing.expect(parseMsgRef(bad) == null);
+    }
 }
 
 test "a channel's member lines are canonical uids, each once, or the channel is malformed (metal-vmm QUEUE 156(d))" {
