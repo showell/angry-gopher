@@ -1,7 +1,7 @@
 //! **WHAT A REQUEST MAY NAME OF A SERVED FOLDER**: the one check the
 //! downloads and the gallery each made of a name from the URL before
 //! reading the file it names (they were two copies, line for line; shale's
-//! cookbook/zig/clones.shale found them).
+//! cookbook/zig/find_clones.shale found them).
 
 /// `[A-Za-z0-9._-]` and nothing else: no path separator, so no traversal
 /// (a `.` is fine; a `..` segment needs a `/` to escape, which is refused).

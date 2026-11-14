@@ -76,8 +76,8 @@ portable_budget=(--budget steps=1500000000 --budget arena_bytes=1073741824)
 # tree and the library's. Its plants run in shale's own tests.
 echo "==> seal lint"
 here="$(basename "$REPO_DIR")/zig-server/src"
-(cd "$REPO_DIR/.." && shale shale/cookbook/sealed.shale dir="$here" seals="id_seal:$here/player.zig,player_id:$here/player.zig,uid_seal:$here/users.zig,account_uid:$here/users.zig,name_seal:$here/names.zig,user_name:$here/names.zig")
-(cd "$REPO_DIR/.." && shale shale/cookbook/sealed.shale dir="zig-webbox/src,$here" seals=target_seal:zig-webbox/src/http.zig,target_path:zig-webbox/src/http.zig headers=location:zig-webbox/src/http.zig)
+(cd "$REPO_DIR/.." && shale shale/cookbook/check_seals.shale dir="$here" seals="id_seal:$here/player.zig,player_id:$here/player.zig,uid_seal:$here/users.zig,account_uid:$here/users.zig,name_seal:$here/names.zig,user_name:$here/names.zig")
+(cd "$REPO_DIR/.." && shale shale/cookbook/check_seals.shale dir="zig-webbox/src,$here" seals=target_seal:zig-webbox/src/http.zig,target_path:zig-webbox/src/http.zig headers=location:zig-webbox/src/http.zig)
 
 # Poka-yoke lint: a read of the store whose failure is caught into a value
 # ("", 0, null, [], a skip) makes a disk that failed look like a file that is
