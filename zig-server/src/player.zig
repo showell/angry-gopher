@@ -81,7 +81,7 @@ pub fn loadCurrent(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player 
 /// as a type only `Id.of` makes, so a call that takes one (storage.deleteUserData)
 /// cannot be handed an id no one checked. Zig has no private fields: a literal
 /// without `id_seal` does not compile, and ops/check_zig's seal lint (shale's
-/// cookbook/sealed.shale) refuses `.id_seal =` and `.player_id =` outside
+/// cookbook/check_seals.shale) refuses `.id_seal =` and `.player_id =` outside
 /// this file, a literal's or a change to one made. `text()` reads it.
 pub const Id = struct {
     player_id: []const u8,

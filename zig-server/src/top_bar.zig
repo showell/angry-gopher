@@ -4,7 +4,7 @@
 //! PRODUCT_DECISION): position sticky, top 0, z-index 10 and a background,
 //! so scrolled content never shows through. The generic pages' stylesheet
 //! (home.zig) and the chat's chrome (chat_chrome.zig) splice it in where
-//! each wrote it out (shale's cookbook/zig/clones.shale found the two).
+//! each wrote it out (shale's cookbook/zig/find_clones.shale found the two).
 
 /// The rules, as a `<style>` holds them.
 pub const css =

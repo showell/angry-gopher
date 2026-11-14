@@ -4,7 +4,7 @@
 //! finger drag survives the card re-rendering mid-drag; the active
 //! pointer's moves and its up go to the app's `pointerMoved` and
 //! `pointerUp` ports. Lyn Rummy's page and the puzzles' splice it in where
-//! each wrote it out (shale's cookbook/zig/clones.shale found the two).
+//! each wrote it out (shale's cookbook/zig/find_clones.shale found the two).
 
 /// The script, as a page's `<script>` holds it: `app` is the Elm app.
 pub const js =
