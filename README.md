@@ -467,7 +467,6 @@ consistency checks that bare commands silently skip.
 | Lyn Rummy rules / architecture | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md), [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
 | Releasing to lynrummy.com | zig-metal-unikernel's `DEPLOY.md` |
 | The Linux fallback host, prod's Caddy | [`deploy/README.md`](deploy/README.md) |
-| Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 
 Per-file domain knowledge lives in module top-of-file comments. Commit
 history is the authoritative design-decision record.

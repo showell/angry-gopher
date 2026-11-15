@@ -131,7 +131,6 @@ def check_link(doc: Path, target: str) -> bool:
 EXTERNAL_PATH_PREFIXES = (
     "memory/",                   # ~/.claude/projects/.../memory/
     "claude-steve/",             # sibling essay repo
-    "claude-collab/",            # sibling collab repo
     "/tmp/",                     # runtime artifacts
     "~/",                        # home-relative
 )
