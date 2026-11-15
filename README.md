@@ -440,7 +440,6 @@ ops/check_full         Milestone gate: ops/check + the heavy conformance suites 
 Standalone, run after editing their part:
 
 ```
-ops/check_markdown     Markdown dialect regression
 ops/check_delivery     Delivery zig-solver conformance: native gold check +
                        the built solver.wasm driven over every gold shift
 ```

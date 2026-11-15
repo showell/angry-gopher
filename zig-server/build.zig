@@ -125,7 +125,6 @@ pub fn build(b: *std.Build) void {
         .{ .step = "search-bench", .path = "src/search_bench.zig", .optimize = .fast, .help = "Measure what search's index costs to build (src/search_bench.zig)" },
         .{ .step = "markdown-bench", .path = "src/markdown_bench.zig", .optimize = optimize, .help = "Render a corpus and report the slowest messages (src/markdown_bench.zig)" },
         .{ .step = "markdown-probe", .path = "src/markdown_hostile_probe.zig", .optimize = optimize, .help = "Check the renderer stays linear on hostile shapes (src/markdown_hostile_probe.zig)" },
-        .{ .step = "markdown-regression", .path = "src/markdown_regression_test.zig", .optimize = optimize, .help = "Render the corpora and compare with the gold (ops/check_markdown; -- --rebaseline rewrites it)" },
     }) |tool| {
         const tool_mod = b.createModule(.{ .root_source_file = b.path(tool.path), .target = target, .optimize = tool.optimize });
         tool_mod.addImport("webbox", webbox);

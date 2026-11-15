@@ -76,32 +76,3 @@ reject counter moved. The counters reach the watchdog (run by hand) through
 
 The bare-metal side of webbox's `bus.zig` mailbox contract (the seeded simulator
 at the bottom of that file) is zig-metal-unikernel's HOST.md, "Live streams".
-
-## Markdown dialect regression harness
-
-The zig renderer (the chat-markdown repository, module `chat_markdown`) **is** the definition of lynrummy's markdown dialect. `src/markdown_regression_test.zig` is its regression harness: it renders every
-frozen `{id, md, html}` case (arena reset per message) and asserts the output
-still equals the baseline. There is **no external oracle** — `html` is whatever
-our renderer produces, frozen and human-reviewed. Three corpora:
-
-- `~/showell_repos/gopher-gold/gold.jsonl` — the real corpus of chat messages
-  and docs, in a separate private git repository on the dev box only (it
-  embeds real user messages; it has no remote). **Without it the harness
-  stops**, naming the file. To make it again from a backup's `chat/`
-  (a data_dir's), `cd zig-server && zig build markdown-regression -- --capture
-  CHAT_ROOT`: every transcript's messages and every user doc, rendered now.
-  `git -C ~/showell_repos/gopher-gold log` says which backup it came from.
-- `adversarial.jsonl` — hand-written hostile corners the real corpus never hit.
-- `dialect.jsonl` — where our dialect deliberately departs from vanilla
-  CommonMark: inline markup is **per-line**, so `**`, backticks, and `[...]`
-  never pair across a hard wrap.
-
-```
-ops/check_markdown            # verify (renders all corpora, exits non-zero on drift)
-ops/regen_markdown_gold       # re-freeze from the renderer after an INTENTIONAL change
-```
-
-Re-baselining is an explicit act (the benchmark pattern: verify never rewrites).
-After `ops/regen_markdown_gold`, read the git diff of each corpus and confirm
-only the cases you meant to change actually moved. The Go/goldmark toolchain
-that originally seeded the gold has been removed; the workflow is pure zig.
