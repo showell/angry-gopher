@@ -6,9 +6,9 @@ block that doesn't.
 
     deploy/check_caddy_logs.py [file ...]
 
-With no files, deploy/Caddyfile. Dog Park's and roc's blocks live in their
-own repositories (dog-park droplet/dogpark.lynrummy.com.caddy, roc-apps
-ops/roc.lynrummy.com.caddy); name them to check them too.
+With no files, deploy/Caddyfile. roc.lynrummy.com's blocks, the redirect
+from Dog Park's old dogpark.lynrummy.com among them, live in roc-apps
+(ops/roc.lynrummy.com.caddy); name that file to check it too.
 
 A site block is a block at the file's top level that is neither the global
 options (`{` alone) nor a snippet (`(name) {`). Braces inside quotes are not
