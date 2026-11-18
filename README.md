@@ -12,6 +12,14 @@ whole thing.
 
 ## Where it runs: on zig-metal-unikernel
 
+**Status (2026-11-18):** the metal stack (zig-metal-unikernel, metal-vmm,
+zig-webbox) is deprecated, and its checkouts are retired from the
+development box. lynrummy.com still runs the last metal release, v47
+(tag `last-on-metal` here and in zig-metal-unikernel). The plan is to move
+this program, Lyn Rummy included, to a regular Linux host. Until then, a new
+metal image means cloning zig-metal-unikernel and zig-webbox again beside
+this repo. The rest of this section describes the metal setup as it runs.
+
 **lynrummy.com is served by [zig-metal-unikernel](https://github.com/showell/zig-metal-unikernel)**,
 this repo's zig server compiled into a kernel with no operating system under
 it, on its own DigitalOcean droplet. The two repos stay separate:
