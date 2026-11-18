@@ -389,8 +389,10 @@ is the only credential `/admin/script` takes.
   `{auth_dir}/shale.conf`; with no key there the route refuses. A
   `mode=background` run is answered at once and stepped between requests on
   both hosts, one at a time; `GET /admin/script` shows its state and output,
-  and `mode=kill` ends it. The language is shale's [`SHALE.md`](https://github.com/showell/shale/blob/master/docs/SHALE.md); how
-  to sign and send a script is zig-metal-unikernel's `DEPLOY.md`.
+  and `mode=kill` ends it. The language is shale's [`SHALE.md`](https://github.com/showell/shale/blob/master/docs/SHALE.md).
+  Shale's signing tool is retired, so nothing on the box signs a script
+  any more; `/admin/script` and `/admin/script-key` are slated for
+  removal.
 
 ## Layout
 

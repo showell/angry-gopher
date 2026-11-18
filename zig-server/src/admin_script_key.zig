@@ -65,8 +65,8 @@ fn serveForm(req: *Request, io: Io, alloc: Alloc, err: []const u8, status: std.h
     try b.print(alloc,
         \\<p>The public key that signed scripts are checked against, and the name they must be signed for.
         \\{s}</p>
-        \\<p>On the box, in the shale checkout: <code>zig build shale-sign -- keygen</code> once, then <code>pubkey</code> prints the key.
-        \\The private key never leaves the box.</p>
+        \\<p>Shale's signing tool is retired, so nothing on the box signs a script any more.
+        \\This page and <code>POST /admin/script</code> are slated for removal.</p>
         \\
     , .{if (now_set) "A key is set; this replaces it." else "No key is set: the script route refuses every request."});
     if (err.len != 0) try b.print(alloc, "<p class=\"err\">{s}</p>\n", .{try html.htmlEscape(alloc, err)});
