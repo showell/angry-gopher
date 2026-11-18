@@ -1,3 +1,29 @@
+# zig-webbox (angry-gopher's copy)
+
+**This folder is angry-gopher's own copy of the webbox library**, copied
+as it was from [zig-webbox](https://github.com/showell/zig-webbox) at
+`e90cc25b` (2026-11-18), so that angry-gopher builds on a web stack of its
+own (Steve, 2026-11-18: "get angry-gopher building on top of its own web
+stack (slightly overabstracted but that's fine)"). zig-webbox stays the
+original experiment and is not read by angry-gopher's build any more;
+the two now change apart.
+
+- **Nothing was simplified.** The `host_io` seam, the metal-portable
+  shape, the one-handler contract and the library's own tests are as they
+  were; whether to simplify any of it is a later decision.
+- **How angry-gopher uses it:** `zig-server/build.zig.zon` names it as the
+  `webbox` dependency (`.path = "webbox"`); `ops/check_zig` runs its
+  `zig build test` here, seals its `http.zig`, and its lints read its
+  `src/` beside `zig-server/src`.
+- **What below is the original's, not this copy's:** the text after this
+  section is zig-webbox's README as copied. Where it says "this repo" or
+  "this checkout" it means zig-webbox; `zig build consumers` (in
+  `build.zig`) runs the sibling repos' checks against a zig-webbox
+  checkout and means nothing here; and zig-metal-unikernel still builds
+  `gopher.elf` with webbox from its own `../zig-webbox`, not from this copy.
+
+---
+
 # zig-webbox
 
 **webbox**, a web server in a box: a small Zig library an application is

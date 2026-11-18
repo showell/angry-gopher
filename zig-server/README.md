@@ -30,8 +30,8 @@ first two:
 ## Server (`src/server.zig`)
 
 `server.zig` is the entry point, and the `webbox` library
-([zig-webbox](https://github.com/showell/zig-webbox), the sibling checkout
-`../../zig-webbox`) does the serving: the portable module `webbox`, which
+(this repo's own copy of [zig-webbox](https://github.com/showell/zig-webbox),
+in `webbox/`) does the serving: the portable module `webbox`, which
 the rest of the server imports by name, and its Linux host, the module
 `webbox_linux` (its `linux_host.zig`), which listens on **:9001**,
 runs each accepted connection as its own task on the `std.Io` thread pool,

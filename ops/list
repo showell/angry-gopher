@@ -20,7 +20,7 @@ Available ops commands (run from repo root):
   ops/check_zig          zig-server gate: compiles the WHOLE server, runs the
                          lints (embedded assets, the webbox library, head
                          access, portable, store absence), the Caddy limits,
-                         zig fmt, every zig-server unit test, and zig-webbox's.
+                         zig fmt, every zig-server unit test, and webbox's.
                          About 8 min (2026-10-17, when it ran shale's suite
                          too); every gate above runs it, through check_common.
 

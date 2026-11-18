@@ -18,17 +18,21 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
 
 - **This repo is the program.** Every route, page and app is written and
   tested here, on Linux, as always (`ops/start`, `ops/check`).
-- **The library is [zig-webbox](https://github.com/showell/zig-webbox)**, a
-  sibling checkout (`../zig-webbox`): the serving, the store, the cookies.
-  This repo's server is an application of it, as Dog Park is.
+- **The library is webbox, this repo's own copy in `zig-server/webbox/`**:
+  the serving, the store, the cookies. It was copied as it was from
+  [zig-webbox](https://github.com/showell/zig-webbox), which stays the
+  original experiment and which this repo's build no longer reads
+  (`zig-server/webbox/README.md` says why). This repo's server is an
+  application of it.
 - **The chat's markdown dialect and its browser client** are siblings too,
   chat-markdown and chat-client; `zig-server/build.zig.zon` names every
   sibling the build reads.
 - **zig-metal-unikernel is the machine.** Its build (`zig build gopher` →
-  `gopher.elf`) compiles `zig-server/src`, zig-webbox, shale, chat-markdown and
-  chat-client from their sibling checkouts as they are, and hands them metal's
-  own `Io` as `host_io` (std's here: zig-webbox's `host_io_std.zig`),
-  rewriting no line;
+  `gopher.elf`) compiles `zig-server/src`, chat-markdown and chat-client from
+  their sibling checkouts as they are, with webbox from its own sibling
+  zig-webbox checkout (not this repo's copy), and hands them metal's own
+  `Io` as `host_io` (std's here: webbox's `host_io_std.zig`), rewriting no
+  line;
   its gates judge metal against this repo's Linux build, page by page, and
   run metal-vmm (test-only). zig-metal-unikernel's `DEPLOY.md` says how a release reaches
   the droplet, and the way back.
@@ -52,7 +56,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   does (the turn in webbox's `linux_host.zig`); every bound on a request is in
   [`zig-server/src/limits.zig`](zig-server/src/limits.zig), which both hosts
   size their buffers from and `tools/check_caddy_limits.py` holds the
-  Caddyfile to; and zig-webbox's `store.zig` answers the same on Linux and on metal, which
+  Caddyfile to; and webbox's `store.zig` answers the same on Linux and on metal, which
   zig-metal-unikernel's `zig build store-judge` checks operation by operation.
 - **Which commit is live:** `https://lynrummy.com/version` reports the running
   build's `commit`; `git tag --points-at <commit>` names its release
@@ -91,10 +95,10 @@ The rest of this README is for developers and agents working on the code.
 bash ops/start        # zig server on :9001
 ```
 
-The build needs [zig-webbox](https://github.com/showell/zig-webbox),
-chat-markdown and chat-client cloned beside this repo (`../zig-webbox`, and
-the other two the same way): `zig-server/build.zig.zon` names them all.
-`ops/check_zig` runs zig-webbox's tests too. The
+The build needs chat-markdown and chat-client cloned beside this repo, as
+sibling checkouts: `zig-server/build.zig.zon` names them, beside webbox,
+which is this repo's own (`zig-server/webbox`).
+`ops/check_zig` runs webbox's tests too. The
 [shale](https://github.com/showell/shale) checkout must be beside it as
 well, though the server no longer compiles it: `ops/check_zig` runs its doc
 check, `ops/build_shale_web` builds the `/shale/` pages from it, and its
@@ -377,7 +381,7 @@ session — read + write as that uid. uid 1's key is therefore admin.
 ### The admin routes, in more detail
 
 - **`/admin/log`** narrows by `since=`, `until=`, `request=`, `path=` and
-  `boot=` (zig-webbox's `admin_log.zig`).
+  `boot=` (webbox's `admin_log.zig`).
 - **`/admin/retire`** is two steps: a dry run that lists what would go, then
   a confirm. Like `/admin/backup` and `/admin/secret`, it asks for the
   password again.
@@ -422,7 +426,7 @@ The gates, cheapest first (`ops/list` gives each one's rough time):
 ops/test_docs          Docs gate: doc_xref --all (dead links/paths)
 ops/test_elm           Elm client suite
 ops/test_ts            TS suite
-ops/check_zig          zig server compiles + the lints + the Caddy limits + every unit test, here and zig-webbox's
+ops/check_zig          zig server compiles + the lints + the Caddy limits + every unit test, here and webbox's
 ops/check_chat         Chat gate: check_common + test_chat
 ops/check_lynrummy     Lyn Rummy gate: check_common + test_elm + test_ts + check_solver
 ops/check              Pre-commit gate: check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
