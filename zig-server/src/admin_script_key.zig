@@ -40,7 +40,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const key_hex = if (std.mem.startsWith(u8, key, prefix)) key[prefix.len..] else key;
     const text = try std.fmt.allocPrint(alloc, "public_key = {s}\ntarget = {s}\n", .{ key_hex, target });
     _ = script_route.parseConfig(text) catch
-        return serveForm(req, io, alloc, "The key is 64 hex digits (shale-sign pubkey prints it), and the target a host name (a-z 0-9 . -).", .bad_request);
+        return serveForm(req, io, alloc, "The key is 64 hex digits, and the target a host name (a-z 0-9 . -).", .bad_request);
     const paths = try script_route.Paths.under(alloc, webbox.store.auth_base orelse users.auth_root);
     // The sequence rises to the clock's seconds with the key: nothing
     // signed before now runs after, even if the old sequence was lost.
