@@ -204,28 +204,15 @@ pub const between = site.between;
 pub const route = site.route;
 
 fn dispatch(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
-    // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
-    // first GET inside the window comes back to the same page with the
-    // signed cookie set, and the unsigned spelling is refused from then on.
     // Who is asking, for the bounds on what one address may make and write
     // (game_limits.zig). Read with the head, which a body read invalidates.
     const client = try client_address.resolve(alloc, req, bus.peer);
-    if (try uid_cookie.reissue(io, alloc, req, client)) |re| switch (re) {
-        .cookie => |c| {
-            // **BACK TO THE SAME PAGE, ON THIS SITE ONLY** (http.Target):
-            // the target as it came, `GET //evil.example/x` or
-            // `GET http://evil.example/`, named another host.
-            const set: std.http.Header = .{ .name = "set-cookie", .value = c.set };
-            const clear: std.http.Header = .{ .name = "set-cookie", .value = http.clearCookie(uid_cookie.legacy_cookie_name) };
-            return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = if (c.clear_legacy) &.{ set, clear } else &.{set} });
-        },
-        .refused => |r| return game_limits.refuse(req, r),
-    };
-    // **A SESSION UNDER ITS LEGACY NAME MOVES ON ITS NEXT GET** (metal-vmm
-    // QUEUE 170.8), back to the same page, the legacy one cleared.
-    if (try users.findSessionToMove(io, alloc, req)) |value| return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = &.{
-        .{ .name = "set-cookie", .value = try login.authCookie(alloc, value) },
-        .{ .name = "set-cookie", .value = http.clearCookie(users.session_cookie_legacy) },
+    // **A gopher_uid DUE TO BE SIGNED AGAIN** (uid_cookie.reissue): its GET
+    // comes back to the same page with the cookie signed anew. **ON THIS SITE
+    // ONLY** (http.Target): the target as it came, `GET //evil.example/x` or
+    // `GET http://evil.example/`, named another host.
+    if (try uid_cookie.reissue(io, alloc, req)) |set| return http.redirectWith(req, .of(try http.target(req, alloc)), .{ .headers = &.{
+        .{ .name = "set-cookie", .value = set },
     } });
     const path = http.pathOf(try http.target(req, alloc));
 
@@ -341,7 +328,6 @@ test {
     _ = @import("router_search_test.zig");
     _ = @import("router_admin_test.zig");
     _ = @import("router_games_test.zig");
-    _ = @import("router_legacy_cookies_test.zig");
     _ = @import("router_identity_test.zig");
     _ = @import("router_pages_test.zig");
 }

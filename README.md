@@ -248,8 +248,7 @@ produces a natural progression:
   which need somewhere to file a board and a name to print on it.
   **Names are not reserved**, so anyone may type any name. The
   `gopher_uid` cookie is signed (`uid_cookie.zig`), so one set by hand
-  names no one; a legacy unsigned cookie is re-signed once, inside its
-  window. Nothing behind a real gate — chat, settings, admin, uploads —
+  names no one. Nothing behind a real gate — chat, settings, admin, uploads —
   resolves through this tier.
 - **Full member** — an account in `{auth_dir}` with a password. Required
   for **chat**. Logging in mirrors the member into the player store under
@@ -373,8 +372,11 @@ There is no site-wide login gate — most surfaces are deliberately
 public and ungated (they resolve the viewer only to label the top
 bar). The gates that exist are per-surface: Lyn Rummy asks for a player
 name, chat requires a full member. `/play` and login set a signed
-`gopher_uid` cookie; members additionally get a signed session cookie,
-`gopher_auth`. An **API key**
+`__Host-gopher_uid` cookie; members additionally get a signed session
+cookie, `__Host-gopher_auth`. These two names are the only ones read: the
+bare `gopher_uid` and `gopher_auth` from before the `__Host-` move were
+read until 2026-11-15, and an unsigned `gopher_uid` was re-signed once
+inside a window; both are gone. An **API key**
 (`Authorization: Bearer`) resolves to its principal exactly like a
 session — read + write as that uid. uid 1's key is therefore admin.
 

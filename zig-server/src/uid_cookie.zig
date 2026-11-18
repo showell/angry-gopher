@@ -1,10 +1,7 @@
-//! uid_cookie: `gopher_uid`, signed; an unsigned one from before is
-//! re-identified once.
+//! uid_cookie: `__Host-gopher_uid`, signed.
 //!
-//! `gopher_uid` names a player (`p<n>`), a member's game identity (digits),
-//! or a legacy guest (digits). It was set in the clear, so whoever set it by
-//! hand WAS that identity: a player's games, a member's games, a guest's
-//! account. Now it is
+//! `__Host-gopher_uid` names a player (`p<n>`), a member's game identity
+//! (digits), or a legacy guest (digits). Its value is
 //!
 //!     <id>.<issued>.<mac>     mac = base64url(HMAC-SHA256(secret, "gopher_uid\n" id "\n" issued))
 //!
@@ -26,40 +23,24 @@
 //! change allowed, and the next GET re-signs it with the new one. That is not
 //! counted against the address: it was validly signed.
 //!
-//! **COOKIES ALREADY IN BROWSERS ARE RE-IDENTIFIED ONCE.** An unsigned
-//! `gopher_uid` is honoured only:
-//!   - while the window is open (`{player_root}/unsigned-window` holds the
-//!     second it closes: 30 days from the first time it is asked, or sooner
-//!     if someone writes an earlier time there, as CUTOVER.md does);
-//!   - for an id that is a player or a guest, not a member or an agent;
-//!   - and only until that id has been signed once (`{player_root}/<id>/
-//!     signed`). The first GET with it is answered with a redirect that
-//!     sets the signed cookie and writes the marker; from then on the
-//!     unsigned spelling is refused, so the owner's first visit closes the
-//!     hole for that id. Nothing else honours it: a POST with it is no one.
-//! A member is never re-identified by an unsigned cookie: their games follow
-//! their session instead (player.current).
+//! **ONLY THE SIGNED `__Host-` COOKIE NAMES ANYONE.** The cookie was once set
+//! in the clear, and then under the bare name `gopher_uid`; an unsigned one
+//! was re-signed once inside a window, and the bare name was read until
+//! 2026-11-15. Both are gone: a `gopher_uid` cookie, signed or not, names no
+//! one, and nothing reads `{player_root}/unsigned-window` or
+//! `{player_root}/<id>/signed` any more.
 
 const std = @import("std");
 const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
-const store = @import("webbox").store;
 const users = @import("users.zig");
-const player = @import("player.zig");
-const game_limits = @import("game_limits.zig");
 
 const signed = @import("webbox").signed;
 const signed_cookie = @import("webbox").signed_cookie;
 
 pub const cookie_name = http.host_prefix ++ "gopher_uid";
-/// Its name before the `__Host-` prefix (metal-vmm QUEUE 167.5): read when a
-/// request has none of the new name, and moved to it on the next GET.
-pub const legacy_cookie_name = "gopher_uid";
 const label = "gopher_uid\n";
-
-/// How long the window for unsigned cookies stays open, from its first use.
-pub const window_seconds: i64 = 30 * 24 * 60 * 60;
 
 // ── the crypto, pure ─────────────────────────────────────────────────────────
 
@@ -93,7 +74,7 @@ pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 
 }
 
 /// The cookie, for webbox's reading and writing of signed cookies.
-const cookie: signed_cookie.Cookie([]const u8) = .{ .name = cookie_name, .legacy_name = legacy_cookie_name, .kind = kind };
+const cookie: signed_cookie.Cookie([]const u8) = .{ .name = cookie_name, .kind = kind };
 
 fn readNowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -105,115 +86,15 @@ pub fn header(alloc: Alloc, value: []const u8) ![]const u8 {
 }
 
 // ── against the disk ─────────────────────────────────────────────────────────
-
-/// A signed Set-Cookie header for `id`, now, and the id marked as signed so
-/// its unsigned spelling is refused from now on. Null when there is no
-/// session secret: nothing unsigned is ever issued.
+/// A signed Set-Cookie header for `id`, now. Null when there is no session
+/// secret: nothing unsigned is ever issued.
 pub fn issue(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
-    return issueMarked(io, alloc, id, "");
-}
-
-/// **A RE-SIGN CAN BE ASKED AGAIN, BRIEFLY.** The marker is written before
-/// the answer leaves, and if the signed cookie never reached the browser
-/// (the tab closed, the connection dropped), the owner had neither cookie
-/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 3). So a re-sign's
-/// marker holds the second it was written, and the same unsigned cookie is
-/// honoured again for `grace_seconds` after it: a reload recovers. A marker
-/// written for a new player or a login holds nothing, and has no grace:
-/// those ids never had an unsigned cookie to come back with.
-pub const grace_seconds: i64 = 10 * 60;
-
-fn issueMarked(io: Io, alloc: Alloc, id: []const u8, marker: []const u8) !?[]const u8 {
     if ((try users.loadSessionSecret(io, alloc)) == null) return null;
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    try store.write(io, alloc, try markerPath(alloc, id), marker, .{});
-    return signed_cookie.issue(cookie, io, alloc, users.session_secret_dir, id, now);
+    return signed_cookie.issue(cookie, io, alloc, users.session_secret_dir, id, readNowUnix(io));
 }
 
-fn markerPath(alloc: Alloc, id: []const u8) ![]const u8 {
-    return std.fs.path.join(alloc, &.{ player.player_root, id, "signed" });
-}
-
-/// Whether `id`'s unsigned spelling is refused for good: marked, and not a
-/// re-sign still inside its grace. A marker that will not read is refused.
-fn isMarked(io: Io, alloc: Alloc, id: []const u8) bool {
-    const p = markerPath(alloc, id) catch return true;
-    // absent-ok: fails closed: a marker that cannot be looked at refuses the unsigned spelling.
-    if (!(store.has(io, alloc, p) catch return true)) return false;
-    // absent-ok: fails closed, as above.
-    const raw = store.read(io, alloc, p, .limited(64)) catch return true;
-    const at = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return true;
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    return pastGrace(now, at);
-}
-
-/// Whether a marker written at `at` is past its grace at `now`. Saturating
-/// (metal-vmm QUEUE 182): `at` is read from a file on the volume, and a
-/// marker of -9223372036854775808 overflowed `now - at`, a panic; it reads
-/// as long past, so the unsigned spelling is refused, as a bad marker is.
-/// **A MARKER FROM THE FUTURE FAILS CLOSED** (Steve, 2026-10-13): one is
-/// written when an id is re-signed, so a later one was tampered with or
-/// written under a wrong clock, and is refused as past its grace.
-fn pastGrace(now: i64, at: i64) bool {
-    if (at > now) return true;
-    return now -| at >= grace_seconds;
-}
-
-test "uid_cookie: a marker's time from the volume, at either end of i64, is judged, never an overflow (metal-vmm QUEUE 182)" {
-    const now: i64 = 1_800_000_000;
-    try std.testing.expect(pastGrace(now, std.math.minInt(i64)));
-    try std.testing.expect(pastGrace(now, std.math.minInt(i64) + 1));
-    try std.testing.expect(!pastGrace(now, now));
-    try std.testing.expect(pastGrace(now, now - grace_seconds));
-    try std.testing.expect(!pastGrace(now, now - grace_seconds + 1));
-}
-
-test "uid_cookie: a marker dated after now fails closed, refused as past its grace (Steve, 2026-10-13)" {
-    // A marker is written when an id is re-signed, so one from the future is
-    // tampered, or written under a clock that was wrong: never a grace.
-    // Both sides: written now (in its grace), one second later (refused).
-    const now: i64 = 1_800_000_000;
-    try std.testing.expect(!pastGrace(now, now));
-    try std.testing.expect(pastGrace(now, now + 1));
-    try std.testing.expect(pastGrace(now, std.math.maxInt(i64)));
-}
-
-/// Whether unsigned cookies are still honoured. The window opens the first
-/// time this is asked and closes `window_seconds` later; a time written
-/// into the file sooner closes it then. A file that will not read or parse
-/// closes it.
-pub fn isWindowOpen(io: Io, alloc: Alloc) bool {
-    const path = std.fs.path.join(alloc, &.{ player.player_root, "unsigned-window" }) catch return false;
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    // absent-ok: fails closed: a window that will not read is shut.
-    const raw = store.readOrEmpty(io, alloc, path, .limited(64)) catch return false;
-    if (raw.len == 0) {
-        const body = std.fmt.allocPrint(alloc, "{d}\n", .{now + window_seconds}) catch return false;
-        store.replace(io, alloc, path, body, .{}) catch return false;
-        return true;
-    }
-    const ends = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return false;
-    return now < ends;
-}
-
-/// Whether an unsigned cookie naming `id` is honoured: see the file header.
-fn isLegacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
-    if (!validId(id)) return false;
-    // absent-ok: fails closed: a member or an agent is never honoured, and one that cannot be told is taken as one.
-    if (users.isPrincipalAuthorized(io, alloc, id) catch true) return false;
-    if (isMarked(io, alloc, id)) return false;
-    const row = std.fs.path.join(alloc, &.{ player.player_root, id, "name" }) catch return false;
-    // absent-ok: fails closed: a player that cannot be looked up is not honoured.
-    if (!(store.has(io, alloc, row) catch return false) and !(users.hasPrincipal(io, alloc, id) catch return false)) return false;
-    return isWindowOpen(io, alloc);
-}
-
-/// The id this request's `gopher_uid` names, signed; null when it names no
-/// one. **AN UNSIGNED COOKIE NEVER NAMES ANYONE HERE,** window or not: the
-/// router re-signs an honoured one on a GET before any handler runs
-/// (`reissue`), so a handler only ever sees a signed id. A POST, which is
-/// never redirected, with the unsigned spelling is no one, so the hole is
-/// not open to anyone who skips the GET that would close it.
+/// The id this request's `__Host-gopher_uid` names, signed; null when it
+/// names no one.
 pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     // **AFTER A CHANGE OF SECRET**, a player's cookie signed with the old one
     // still names them for the days the change allowed (users.rotateSecret);
@@ -224,53 +105,19 @@ pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8
     };
 }
 
-pub const Reissue = union(enum) {
-    /// The Set-Cookie for the signed cookie: the router redirects with it,
-    /// and clears the legacy-named one when that was what came (metal-vmm
-    /// QUEUE 170.8: moved, never left to be read again, and a browser that
-    /// drops the new one over plain http is a new visitor, not a loop).
-    cookie: struct { set: []const u8, clear_legacy: bool },
-    /// This address has had its share of re-signs this hour.
-    refused: game_limits.Refusal,
-};
-
-/// **THE ONE RE-IDENTIFICATION.** For a GET carrying an unsigned cookie the
-/// window still honours: the Set-Cookie for the signed one, with the id
-/// marked so the unsigned spelling is refused from now on. The router
-/// answers it with a redirect to the same page. **Counted per address**
-/// (`client`, game_limits.admitResign), so one address cannot sweep every
-/// legacy id. Null when there is nothing to re-sign.
-pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
+/// **RE-SIGNED WHEN DUE** (Steve, 2026-10-10): for a GET whose cookie
+/// verifies and is past half its life, or signed with the secret before a
+/// change and still taken, the Set-Cookie that signs it again; the router
+/// answers it with a redirect to the same page. Nothing else re-signs a
+/// valid cookie, so a player active all year lost who they were at the
+/// year. Null when there is nothing to re-sign.
+pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     if (req.head.method != .GET) return null;
     const now = readNowUnix(io);
-    switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, now)) {
-        // No cookie, or no secret: nothing re-signed, and nothing counted
-        // against the address.
-        .none, .no_secret => return null,
-        // **PAST HALF ITS LIFE, RE-SIGNED** (Steve, 2026-10-10): nothing
-        // else re-signs a valid cookie, so a player active all year lost
-        // who they were at the year. And signed with the secret before a
-        // change, and still taken: re-signed with the current one. Validly
-        // signed either way, so not counted against the address.
-        .verified => |v| {
-            if (!signed_cookie.needsRenewal(cookie, v, now)) return null;
-            return .{ .cookie = .{ .set = (try issue(io, alloc, v.text)) orelse return null, .clear_legacy = v.legacy } };
-        },
-        // Perhaps a legacy unsigned spelling: below.
-        .invalid => {},
-    }
-    // One unsigned value only: of several, which is meant cannot be told.
-    // Never issued unsigned under the new name, and never read after the
-    // legacy names' end date (170.8's cold review).
-    if (http.namesNow(now) >= http.legacy_names_until_unix) return null;
-    const value = switch (try http.cookie(req, alloc, legacy_cookie_name)) {
-        .one => |v| v,
-        .none, .several => return null,
+    return switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, now)) {
+        .verified => |v| if (signed_cookie.needsRenewal(cookie, v, now)) try issue(io, alloc, v.text) else null,
+        .none, .no_secret, .invalid => null,
     };
-    if (!isLegacyHonoured(io, alloc, value)) return null;
-    if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
-    const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});
-    return .{ .cookie = .{ .set = (try issueMarked(io, alloc, value, marker)) orelse return null, .clear_legacy = true } };
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────

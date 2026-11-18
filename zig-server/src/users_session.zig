@@ -1,6 +1,5 @@
 //! users_session: who is asking. The signed session cookie (its MAC, its
-//! secret and the secret's rotation), the legacy cookie's move to `__Host-`,
-//! API keys and bearer parsing, and the resolver that turns a request into a
+//! secret and the secret's rotation), API keys and bearer parsing, and the resolver that turns a request into a
 //! user (split from users.zig by metal-vmm QUEUE 174; the account records
 //! stay in users.zig).
 
@@ -45,11 +44,9 @@ pub fn loadCurrentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![
     // 2. API key.
     if (try loadApiKeyUserID(io, alloc, req)) |id| return id;
     // 3. guest gopher_uid — only a non-authorized principal that exists, and
-    // only signed (an unsigned one is re-signed once by the router's GET, in
-    // uid_cookie's window, and is no one here). An unsigned cookie used to be
+    // only signed: an unsigned one is no one. An unsigned cookie used to be
     // enough, which let anyone set a guest's password. The value is owned by
-    // http.cookie, so it survives a later
-    // body read.
+    // http.cookie, so it survives a later body read.
     if (try uid_cookie.resolve(io, alloc, req)) |uid| {
         if (allDigits(uid) and try hasAccount(io, alloc, uid) and !try isAuthorized(io, alloc, uid)) {
             return uid;
@@ -59,11 +56,9 @@ pub fn loadCurrentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![
 }
 
 /// The member session cookie's name (metal-vmm QUEUE 167.5: `__Host-`, so no
-/// sibling subdomain can plant one), and its name before, still read when a
-/// request has none of the new one; a login sets the new one.
+/// sibling subdomain can plant one). Its name before, `gopher_auth`, was read
+/// until 2026-11-15 and is read no more.
 pub const session_cookie = http.host_prefix ++ "gopher_auth";
-
-pub const session_cookie_legacy = "gopher_auth";
 
 /// loadSessionUserID returns the member id from a valid gopher_auth cookie whose id
 /// is still a member. Reading a cookie is what identity does and nothing else
@@ -71,19 +66,9 @@ pub const session_cookie_legacy = "gopher_auth";
 /// value borrowed past the body read once mis-attributed an authenticated post
 /// to the wrong principal, which is why `http.cookie` returns an owned copy.
 fn loadSessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    const s = (try readSession(io, alloc, req)) orelse return null;
-    return s.id;
-}
-
-const SessionRead = struct { id: []const u8, value: []const u8, legacy: bool };
-
-/// The session a request carries, verified, and whether under the legacy
-/// name (until `http.legacy_names_until_unix`).
-fn readSession(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRead {
     const now = readNowUnix(io);
     var one: [1][]const u8 = undefined;
-    const named = try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy, http.namesNow(now));
-    const values: []const []const u8 = switch (named.values) {
+    const values: []const []const u8 = switch (try http.cookie(req, alloc, session_cookie)) {
         .none => return null,
         .one => |v| blk: {
             one[0] = v;
@@ -95,56 +80,14 @@ fn readSession(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRea
     // Of several (a parent domain's beside this site's own), the one that
     // verifies; none, or more than one, is no one (metal-vmm QUEUE 162.4,
     // as signed_cookie.read).
-    var verified: ?SessionRead = null; // the one that verified, until a second does
+    var verified: ?[]const u8 = null; // the id that verified, until a second does
     for (values) |val| if (verifySessionWithSecret(alloc, secret, val, now)) |id| {
-        // A legacy-named session signed after the move is a plant: not read.
-        if (named.legacy and !legacyTaken(issuedOfSession(val))) continue;
         if (verified != null) return null;
-        verified = .{ .id = id, .value = val, .legacy = named.legacy };
+        verified = id;
     };
-    const s = verified orelse return null;
-    if (!try hasPassword(io, alloc, s.id)) return null;
-    return s;
-}
-
-/// Whether a legacy-named value signed at `issued` is read: only one signed
-/// before the move (`http.legacy_issued_before_unix`); a later one is a plant.
-fn legacyTaken(issued: i64) bool {
-    return issued < http.legacy_issued_before_unix;
-}
-
-test "a legacy session signed after the move is a plant, not read; one before it is (metal-vmm QUEUE 170.8)" {
-    try std.testing.expect(legacyTaken(http.legacy_issued_before_unix - 1));
-    try std.testing.expect(!legacyTaken(http.legacy_issued_before_unix));
-    try std.testing.expectEqual(@as(i64, 1790000000), issuedOfSession("MQ.1790000000.mac"));
-    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), issuedOfSession("MQ"));
-    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), issuedOfSession("MQ.x.mac"));
-}
-
-/// When a session value says it was signed (its middle part); a value that
-/// does not say is as new as can be.
-fn issuedOfSession(val: []const u8) i64 {
-    var it = std.mem.splitScalar(u8, val, '.');
-    _ = it.next();
-    const t = it.next() orelse return std.math.maxInt(i64);
-    return std.fmt.parseInt(i64, t, 10) catch std.math.maxInt(i64);
-}
-
-/// **A SESSION UNDER ITS LEGACY NAME IS MOVED ON ITS NEXT GET** (metal-vmm
-/// QUEUE 170.8): the signed value, to be set under `session_cookie` (the
-/// signature does not name the cookie) while the legacy one is cleared; null
-/// when there is nothing to move.
-pub fn findSessionToMove(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    if (req.head.method != .GET) return null;
-    const s = (try readSession(io, alloc, req)) orelse return null;
-    return if (s.legacy) s.value else null;
-}
-
-/// **THE BEARER ONLY** (metal-vmm QUEUE 200): the principal an
-/// `Authorization: Bearer` key names, and never a session cookie's, for a
-/// route that a page must not be able to drive (the script route).
-pub fn loadBearerUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    return loadApiKeyUserID(io, alloc, req);
+    const id = verified orelse return null;
+    if (!try hasPassword(io, alloc, id)) return null;
+    return id;
 }
 
 /// loadApiKeyUserID resolves the principal id from an Authorization: Bearer key.
@@ -251,7 +194,7 @@ pub fn loadSessionSecret(io: Io, alloc: Alloc) !?[]const u8 {
 }
 
 /// The member a valid gopher_auth names, or null: player.zig's way to file a
-/// member's games under their session when their gopher_uid is unsigned.
+/// member's games under their session when they have no signed gopher_uid.
 pub fn loadSessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     return loadSessionUserID(io, alloc, req);
 }

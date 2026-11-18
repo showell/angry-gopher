@@ -10,9 +10,9 @@
 //!
 //! On-disk shape under {player_root}/:
 //!   {id}/name        the display name
-//!   {id}/signed      this id's cookie has been signed (uid_cookie.zig)
 //!   next-id.txt      the counter for locally-minted ids
-//!   unsigned-window  when legacy unsigned cookies stop being honoured
+//! (`{id}/signed` and `unsigned-window`, from the unsigned cookies' window,
+//! may still be on a disk; nothing reads them.)
 //!
 //! **A LOCALLY-MINTED ID IS `p<n>`, NEVER A BARE NUMBER.** Account ids are bare
 //! decimals, and both identities ride the same `gopher_uid` cookie during the
@@ -30,8 +30,7 @@
 //!
 //! **WHAT THIS DOES NOT DO, ON PURPOSE.** There is no password and no check
 //! that the name is free: anyone may play under any name. But the cookie is
-//! signed (uid_cookie.zig), so a `gopher_uid` set by hand names no one; only
-//! a legacy unsigned one is honoured, once, inside its window, and re-signed.
+//! signed (uid_cookie.zig), so a `__Host-gopher_uid` set by hand names no one.
 //! Nothing behind a real gate (chat, settings, admin, uploads) resolves
 //! through this module.
 
@@ -65,8 +64,8 @@ pub const Player = struct { id: []const u8, name: []const u8 };
 /// no identity at all, so a stale cookie sends someone to the name page rather
 /// than filing games under a phantom.
 pub fn loadCurrent(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
-    // **SIGNED, OR ONCE** (uid_cookie.zig): a gopher_uid set by hand names no
-    // one. A member whose cookie is unsigned is filed under their session.
+    // **SIGNED** (uid_cookie.zig): a gopher_uid set by hand names no one. A
+    // member with no signed gopher_uid is filed under their session.
     const id = blk: {
         if (try uid_cookie.resolve(io, alloc, req)) |signed| break :blk signed;
         if (try users.loadSessionUser(io, alloc, req)) |member| break :blk member;
@@ -199,9 +198,8 @@ fn readField(io: Io, alloc: Alloc, id: []const u8, field: []const u8) !?[]const 
     return std.mem.trimEnd(u8, raw, "\r\n");
 }
 
-/// issueCookie gives the Set-Cookie value that binds a browser to a player: signed,
-/// with the player marked so an unsigned spelling of it is never honoured.
-/// Null without a session secret: nothing unsigned is issued.
+/// issueCookie gives the Set-Cookie value that binds a browser to a player,
+/// signed. Null without a session secret: nothing unsigned is issued.
 pub fn issueCookie(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     return uid_cookie.issue(io, alloc, id);
 }

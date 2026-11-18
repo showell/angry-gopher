@@ -13,9 +13,8 @@
 //!   - **the floor:** no game write while the data volume has less than a
 //!     quarter of itself free, as the host reports it (free_space.zig). Chat,
 //!     accounts and uploads do not ask, so they carry on.
-//!   - **per address, an hour:** `players_per_hour` new players (/play),
-//!     `bytes_per_hour` bytes of game writes, and `resigns_per_hour` re-signs
-//!     of a legacy unsigned cookie (uid_cookie.zig); past any, a 429. The address
+//!   - **per address, an hour:** `players_per_hour` new players (/play) and
+//!     `bytes_per_hour` bytes of game writes; past either, a 429. The address
 //!     is client_address.zig's: the connection's, or, behind the trusted
 //!     reverse proxy (Caddy: Linux sets 127.0.0.1, Caddy on the same machine;
 //!     zig-metal-unikernel sets prod's private address), the one Caddy added. Kept
@@ -42,11 +41,6 @@ pub const max_sessions: u32 = 500;
 pub const max_bytes: u64 = 16 << 20;
 
 pub const players_per_hour: u32 = 5;
-/// Legacy gopher_uid cookies one address may have re-signed in an hour
-/// (uid_cookie.zig): an owner needs one, a household a few. Without a bound,
-/// one GET per id took every player not yet back, and locked the owners out
-/// (zig-metal-unikernel REVIEW-signed-uid-and-limits.md, finding 1).
-pub const resigns_per_hour: u32 = 3;
 pub const bytes_per_hour: u64 = 20_000_000;
 const hour: i64 = 60 * 60;
 
@@ -61,7 +55,6 @@ pub const Refusal = enum {
     floor,
     address_players,
     address_bytes,
-    address_resigns,
 
     pub fn text(r: Refusal) []const u8 {
         return switch (r) {
@@ -69,7 +62,6 @@ pub const Refusal = enum {
             .bytes => std.fmt.comptimePrint("This player's games already take {d} MiB, the most one may. Nothing was saved.\n", .{max_bytes >> 20}),
             .floor => "The server is low on disk, so games are not being saved for now. Nothing was saved.\n",
             .address_players => std.fmt.comptimePrint("{d} new players have been named from this address in the last hour, the most it may. Try again later.\n", .{players_per_hour}),
-            .address_resigns => std.fmt.comptimePrint("{d} old cookies have been renewed from this address in the last hour, the most it may. Try again later.\n", .{resigns_per_hour}),
             .address_bytes => std.fmt.comptimePrint("This address has saved {d} MB of games in the last hour, the most it may. Nothing was saved; try again later.\n", .{bytes_per_hour / 1_000_000}),
         };
     }
@@ -80,7 +72,7 @@ pub const Refusal = enum {
 pub fn refuse(req: *std.http.Server.Request, r: Refusal) !void {
     const status: std.http.Status = switch (r) {
         .sessions, .bytes, .floor => .insufficient_storage,
-        .address_players, .address_bytes, .address_resigns => .too_many_requests,
+        .address_players, .address_bytes => .too_many_requests,
     };
     try req.respond(r.text(), .{ .status = status });
 }
@@ -124,16 +116,6 @@ pub fn giveBack(io: Io, alloc: Alloc, id: player.Id, client: ?[]const u8, new_se
     if (new_session) u.sessions -|= 1;
     u.bytes -|= bytes;
     if (client) |c| seenSlot(c, readNow(io)).bytes -|= bytes;
-}
-
-/// Whether `client` may have another legacy cookie re-signed this hour; null
-/// when it may, and then it is counted.
-pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
-    const c = client orelse return null;
-    const s = seenSlot(c, readNow(io));
-    if (s.resigns >= resigns_per_hour) return .address_resigns;
-    s.resigns += 1;
-    return null;
 }
 
 /// Whether `client` may name another player this hour; null when it may, and
@@ -201,7 +183,6 @@ const Seen = struct {
     len: u8 = 0, // 0: an empty slot
     since: i64 = 0, // the hour's start: its first count
     players: u32 = 0,
-    resigns: u32 = 0,
     bytes: u64 = 0,
 };
 

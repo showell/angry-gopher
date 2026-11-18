@@ -26,9 +26,6 @@ pub fn Cookie(comptime Id: type) type {
         /// The cookie's name (`http.host_prefix` and a name, for any cookie set
         /// now).
         name: []const u8,
-        /// The name it had before, read when a request has none of `name`; one
-        /// read so is due to be signed again, under `name` (`needsRenewal`).
-        legacy_name: ?[]const u8 = null,
         /// Its signing rules; `kind.lifetime_secs` is also its Max-Age.
         kind: signed.Kind(Id),
         /// How it travels: Secure, behind HTTPS, unless a site says otherwise.
@@ -69,8 +66,6 @@ pub fn Verified(comptime Id: type) type {
         text: []const u8,
         issued: i64,
         by: By,
-        /// Read under the cookie's legacy name.
-        legacy: bool = false,
     };
 }
 
@@ -104,11 +99,7 @@ pub const Invalid = enum {
 pub fn read(c: anytype, io: Io, alloc: Alloc, req: *std.http.Server.Request, secret_dir: []const u8, now: i64) !Reading(@TypeOf(c).Carries) {
     const Id = @TypeOf(c).Carries;
     var one: [1][]const u8 = undefined;
-    const sent: http.Named = if (c.legacy_name) |old|
-        try http.cookieOrLegacy(req, alloc, c.name, old, http.namesNow(now))
-    else
-        .{ .values = try http.cookie(req, alloc, c.name), .legacy = false };
-    const values: []const []const u8 = switch (sent.values) {
+    const values: []const []const u8 = switch (try http.cookie(req, alloc, c.name)) {
         .none => return .none,
         .one => |v| blk: {
             one[0] = v;
@@ -120,14 +111,10 @@ pub fn read(c: anytype, io: Io, alloc: Alloc, req: *std.http.Server.Request, sec
     const prev = try site_secret.previous(io, alloc, secret_dir, now);
     var found: ?Verified(Id) = null;
     for (values) |value| if (verifyEither(c, current, prev, value, now)) |v| {
-        // A legacy-named value signed after the move is a plant: not read.
-        if (sent.legacy and v.issued >= http.legacy_issued_before_unix) continue;
         if (found != null) return .{ .invalid = .more_than_one_verifies };
         found = v;
     };
-    var under = found orelse return .{ .invalid = .does_not_verify };
-    under.legacy = sent.legacy;
-    return .{ .verified = under };
+    return .{ .verified = found orelse return .{ .invalid = .does_not_verify } };
 }
 
 /// One value, under the current secret or else the previous one.
@@ -142,7 +129,7 @@ fn verifyEither(c: anytype, current: []const u8, prev: ?[]const u8, value: []con
 /// its life. Nothing else re-signs a valid cookie, so without this one active
 /// all its life is lost at its end.
 pub fn needsRenewal(c: anytype, v: Verified(@TypeOf(c).Carries), now: i64) bool {
-    return v.legacy or v.by == .previous or now -| v.issued > @divTrunc(c.kind.lifetime_secs, 2);
+    return v.by == .previous or now -| v.issued > @divTrunc(c.kind.lifetime_secs, 2);
 }
 
 /// The Set-Cookie header for `id`, signed now with the secret in
@@ -312,24 +299,22 @@ test "signed_cookie: of two cookies of one name, the one that verifies is read, 
     }
 }
 
-test "signed_cookie: the legacy name is read only when the new one is absent, and is due to move (metal-vmm QUEUE 167.5)" {
+test "signed_cookie: only the cookie's own name is read, a valid value under another name beside it ignored" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const c: Cookie([]const u8) = .{ .name = "__Host-device", .legacy_name = "device", .kind = .{ .label = "device\n", .lifetime_secs = 1000, .skew_secs = 5, .parse = signed.textIf(digits) } };
+    const c: Cookie([]const u8) = .{ .name = "__Host-device", .kind = .{ .label = "device\n", .lifetime_secs = 1000, .skew_secs = 5, .parse = signed.textIf(digits) } };
     const a = rig.arena.allocator();
     const seven = try rig.signedFor(c, "7", 5000);
     const eight = try rig.signedFor(c, "8", 5000);
-    // Only the old name: read, and due to be signed again under the new.
-    const old = (try rig.reading(c, &.{try std.fmt.allocPrint(a, "device={s}", .{seven})}, 5000)).verified;
-    try std.testing.expectEqualStrings("7", old.id);
-    try std.testing.expect(old.legacy and needsRenewal(c, old, 5000));
-    // The new name: read, the old one beside it ignored, however valid (a
-    // sibling's plant under the old name names no one else).
+    // Only the bare name (the one before `__Host-`): no cookie of this name.
+    try std.testing.expect(try rig.reading(c, &.{try std.fmt.allocPrint(a, "device={s}", .{seven})}, 5000) == .none);
+    // The `__Host-` name: read, the bare one beside it ignored, however valid
+    // (a sibling's plant under the bare name names no one else).
     const now = (try rig.reading(c, &.{try std.fmt.allocPrint(a, "device={s}; __Host-device={s}", .{ eight, seven })}, 5000)).verified;
     try std.testing.expectEqualStrings("7", now.id);
-    try std.testing.expect(!now.legacy and !needsRenewal(c, now, 5000));
-    // Issued under the new name.
+    try std.testing.expect(!needsRenewal(c, now, 5000));
+    // Issued under its name.
     try std.testing.expect(std.mem.startsWith(u8, try header(c, a, seven), "__Host-device="));
 }
 

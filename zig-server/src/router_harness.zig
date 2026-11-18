@@ -6,7 +6,6 @@
 
 const std = @import("std");
 const Io = @import("host_io").Io;
-const player = @import("player.zig");
 const users = @import("users.zig");
 const uid_cookie = @import("uid_cookie.zig");
 const streams = @import("webbox").bus;
@@ -101,17 +100,6 @@ pub const UidSite = struct {
     /// GET `target` with `cookies` as the Cookie header.
     pub fn ask(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8) ![]const u8 {
         return serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ target, cookies }));
-    }
-
-    /// Closes the window for unsigned cookies: a time in the past.
-    pub fn closeWindow(a: std.mem.Allocator, io: Io) !void {
-        try disk.replace(io, a, try std.fs.path.join(a, &.{ player.player_root, "unsigned-window" }), "1\n", .{});
-    }
-
-    pub fn isSigned(a: std.mem.Allocator, io: Io, id: []const u8) bool {
-        const p = std.fs.path.join(a, &.{ player.player_root, id, "signed" }) catch return false;
-        // absent-ok: a test's look at its own temporary folder; a failure there fails the test's expect.
-        return disk.has(io, a, p) catch false;
     }
 };
 

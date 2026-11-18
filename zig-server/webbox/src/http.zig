@@ -186,60 +186,6 @@ pub const CookieValues = union(enum) {
 /// and with two that verify naming no one, kept its victim logged out).
 pub const host_prefix = "__Host-";
 
-/// A cookie read under its name, or, when the request has none of that name,
-/// under the name it had before (`legacy`): the migration read. `legacy` in
-/// the answer says which it was, so the caller can move it to the new name.
-pub const Named = struct { values: CookieValues, legacy: bool };
-
-/// **THE LEGACY NAMES ARE READ UNTIL THIS SECOND, AND NEVER AFTER** (metal-vmm
-/// QUEUE 170.8): 2026-11-15, a month past the move. A legacy cookie can be
-/// planted by a sibling subdomain (that is why the names moved), so reading
-/// one at all is a door left open; until then a visitor's next GET moves it.
-pub const legacy_names_until_unix: i64 = 1_794_700_800;
-
-/// **A LEGACY COOKIE ISSUED AFTER THIS IS A PLANT** (170.8's cold review): the
-/// site issues only `__Host-` names from its move on, so a legacy-named value
-/// signed later came from somewhere else (a sibling subdomain), and is not
-/// read, nor moved to the new name (which would outlive the end date). Set
-/// on or after the day the move deploys: 2026-10-14 00:00 UTC, two days
-/// past the planned deploy. A value issued after it, before the deploy, is
-/// read as no one (its visitor signs in again), so a release after this day
-/// moves it first.
-///
-/// **ACCEPTED** (metal-vmm QUEUE 176.9): a sibling subdomain can still plant a
-/// legacy value issued BEFORE the cutoff on a visitor with no `__Host-` cookie
-/// yet, and it is moved to the new name. The cutoff narrows that; the end
-/// date ends it.
-pub const legacy_issued_before_unix: i64 = 1_791_936_000;
-
-/// **THE CLOCK THE END DATE IS READ BY** (metal-vmm QUEUE 176.1): the real one,
-/// but in the tests a fixed day before the end date, so the migration's tests
-/// do not go red on 2026-11-15 with no change. A test of the end itself sets
-/// it; `legacy names have ended` below is the one test that fails that day,
-/// saying what to delete.
-pub var names_clock_for_test: ?i64 = if (@import("builtin").is_test) legacy_names_until_unix - 30 * 86_400 else null;
-
-/// The time the legacy names' end date is judged by, given the real one.
-pub fn namesNow(real_now: i64) i64 {
-    return names_clock_for_test orelse real_now;
-}
-
-pub fn cookieOrLegacy(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8, legacy: []const u8, now_unix: i64) !Named {
-    const current = try cookie(req, alloc, name);
-    if (current != .none or now_unix >= legacy_names_until_unix) return .{ .values = current, .legacy = false };
-    return .{ .values = try cookie(req, alloc, legacy), .legacy = true };
-}
-
-/// The Set-Cookie that clears a legacy-named cookie (its old name, its old
-/// path), sent with the answer that moves it. **NOT SECURE** (170.8's cold
-/// review): over plain http a browser refuses a Set-Cookie that says Secure,
-/// so a clear that said it would be dropped with the move, and the legacy
-/// cookie (set before 162.2, without Secure) would 303 for ever. A clear
-/// carries no value, and still works from HTTPS.
-pub fn clearCookie(comptime name: []const u8) []const u8 {
-    return name ++ "=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
-}
-
 /// Every value of cookie `name`, from every Cookie header.
 pub fn cookie(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !CookieValues {
     var found: std.ArrayList([]const u8) = .empty;
@@ -637,20 +583,6 @@ test "readLimitedBody: a Content-Length body cut short by the connection's end i
     try testing.expectEqualStrings("400", status);
 }
 
-test "cookieOrLegacy: the legacy name is read before its end date and never after (metal-vmm QUEUE 170.8)" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    var in: std.Io.Reader = .fixed("GET / HTTP/1.1\r\nCookie: old=1\r\n\r\n");
-    var out: std.Io.Writer.Allocating = .init(a);
-    var server = std.http.Server.init(&in, &out.writer);
-    var req = try server.receiveHead();
-    const before = try cookieOrLegacy(&req, a, "__Host-old", "old", legacy_names_until_unix - 1);
-    try testing.expect(before.legacy and before.values == .one);
-    const after = try cookieOrLegacy(&req, a, "__Host-old", "old", legacy_names_until_unix);
-    try testing.expect(!after.legacy and after.values == .none);
-}
-
 test "readLimitedBody: a body the host holds is handed over as it is, no copy, its cap still kept (metal-vmm QUEUE 170.5)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -693,16 +625,6 @@ test "readLimitedBody: memory that runs out is the server's error, never the cli
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     try std.testing.expectError(error.OutOfMemory, readLimitedBody(&req, failing.allocator(), 100));
     try std.testing.expectEqual(@as(usize, 0), out.end);
-}
-
-test "the legacy names have ended on 2026-11-15: delete the migration, its tests, and the judges' legacy steps (metal-vmm QUEUE 176.1)" {
-    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
-    defer threaded.deinit();
-    const real: i64 = @intCast(@divFloor(std.Io.Clock.now(.real, threaded.io()).nanoseconds, std.time.ns_per_s));
-    if (real >= legacy_names_until_unix) {
-        std.debug.print("the legacy cookie names ended on 2026-11-15: delete http.cookieOrLegacy's legacy branch, users' session move, uid_cookie's unsigned window, their tests, and zig-metal-unikernel probe/judge_gopher.py's legacy steps\n", .{});
-        return error.LegacyNamesHaveEnded;
-    }
 }
 
 test "methodNotAllowed is a 405 that names the method allowed (RFC 9110 15.5.6; metal-vmm QUEUE 177.6)" {
