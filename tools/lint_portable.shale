@@ -13,9 +13,11 @@
 -- router.zig and from webbox.zig (the library an application imports, which
 -- the metal port carries whole), and checks every file in it. It follows a
 -- file's imports by path (from the importing file's own folder, as Zig does)
--- and the `webbox` and `shale` modules (to webbox.zig, shale.zig). The three
--- trees, zig-server's, webbox's (zig-server/webbox) and shale's, are read as one folder: they
--- hold no file of the same name. A module outside the set (server.zig, the
+-- and the `webbox` and `shale` modules (to webbox.zig, shale.zig). The
+-- trees, zig-server's and webbox's (zig-server/webbox), are read as one
+-- folder: they hold no file of the same name. (The application imports
+-- Shale no more; the lint still knows its module, and its plants keep a
+-- second library's tree.) A module outside the set (server.zig, the
 -- libraries' Linux halves, the stress harness, the markdown tools) is
 -- host-side by definition and is not checked; there is no list of
 -- exemptions to fall out of date.
@@ -361,7 +363,7 @@ function findings(dirs, from)
 end
 
 function trees()
-  return {repo .. "/zig-server/src", repo .. "/zig-server/webbox/src", "shale/src"}
+  return {repo .. "/zig-server/src", repo .. "/zig-server/webbox/src"}
 end
 
 -- ── The plants: one tree a case, each finding (or none) as it must be. ──

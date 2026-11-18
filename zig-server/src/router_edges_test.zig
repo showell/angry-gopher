@@ -3,7 +3,6 @@
 const std = @import("std");
 const Io = @import("host_io").Io;
 const player = @import("player.zig");
-const users = @import("users.zig");
 const mem_meter = @import("webbox").mem_meter;
 const testing = std.testing;
 const harness = @import("router_harness.zig");
@@ -53,7 +52,6 @@ const edge_sites = [_]EdgeSite{
     .{ .file = "admin_secret.zig", .func = "render" },
     .{ .file = "admin_retire.zig", .func = "readForm" },
     .{ .file = "log_view.zig", .func = "parseFilter" },
-    .{ .file = "script_route.zig", .func = "parse" },
     .{ .file = "admin_backup.zig", .func = "members", .unreachable_because = "reads a tar the server itself made (its tests)" },
     .{ .file = "chat.zig", .func = "findHighestGeneralTopic", .unreachable_because = "topic folder names on the disk" },
     .{ .file = "chat_count.zig", .func = "numberIn", .unreachable_because = "a .count file the server wrote" },
@@ -95,18 +93,12 @@ const edge_requests = [_][]const u8{
     "POST /admin/secret HTTP/1.1\r\nHost: x\r\nCookie: {C}\r\nContent-Length: {L}\r\n\r\npassword=pw&days={N}",
     "GET /admin/log?request={N} HTTP/1.1\r\nHost: x\r\nCookie: {C}\r\n\r\n",
     "POST /admin/retire HTTP/1.1\r\nHost: x\r\nCookie: {C}\r\nContent-Length: {L}\r\n\r\npassword=pw&days={N}&keep={N}",
-    // The script route's envelope (metal-vmm 200), by the admin's key: its
-    // numbers are read before the signature is checked.
-    "POST /admin/script HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {B}\r\nContent-Length: {L}\r\n\r\nshale-signature " ++ repeated("00", 64) ++ "\nshale-1 target=x sequence={N} expires=1800000000\nprint(1)\n",
-    "POST /admin/script HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {B}\r\nContent-Length: {L}\r\n\r\nshale-signature " ++ repeated("00", 64) ++ "\nshale-1 target=x sequence=1 expires={N}\nprint(1)\n",
 };
 
-/// `template` with its `{N}`, `{C}`, `{B}` (the admin's API key) and `{L}`
-/// (the body's length) filled.
-fn edgeRequest(a: std.mem.Allocator, template: []const u8, n: []const u8, cookies: []const u8, bearer: []const u8) ![]const u8 {
+/// `template` with its `{N}`, `{C}` and `{L}` (the body's length) filled.
+fn edgeRequest(a: std.mem.Allocator, template: []const u8, n: []const u8, cookies: []const u8) ![]const u8 {
     const with_n = try std.mem.replaceOwned(u8, a, template, "{N}", n);
-    const with_b = try std.mem.replaceOwned(u8, a, with_n, "{B}", bearer);
-    const with_c = try std.mem.replaceOwned(u8, a, with_b, "{C}", cookies);
+    const with_c = try std.mem.replaceOwned(u8, a, with_n, "{C}", cookies);
     const body_at = (std.mem.indexOf(u8, with_c, "\r\n\r\n") orelse return with_c) + 4;
     return std.mem.replaceOwned(u8, a, with_c, "{L}", try std.fmt.allocPrint(a, "{d}", .{with_c.len - body_at}));
 }
@@ -124,18 +116,17 @@ test "request edges: every number a request carries, at its type's edges, as a m
     defer meter.restore();
 
     // **EVERY SITE IS KNOWN**: read from the source as it stands, this
-    // application's and the libraries' (zig-webbox's and Shale's), each
+    // application's and the library's (webbox's, zig-server/webbox), the
     // library's own unreachable sites its to name.
     // Every folder, read as Zig by webbox's own reading
     // (edge_sites.parseSites, Zig's tokenizer), so a site in a sub-folder
-    // (Shale's script/) or after an `inline fn` is seen.
+    // or after an `inline fn` is seen.
     const library_sites = @import("webbox").edge_sites;
     const Folder = struct { dir: []const u8, unreachable_sites: []const library_sites.Site };
     var listed_seen: [edge_sites.len]bool = @splat(false);
     for ([_]Folder{
         .{ .dir = "src", .unreachable_sites = &.{} },
         .{ .dir = @import("build_options").webbox_src, .unreachable_sites = &library_sites.unreachable_from_requests },
-        .{ .dir = @import("build_options").shale_src, .unreachable_sites = &@import("shale").edge_sites.unreachable_from_requests },
     }) |folder| {
         var src = try Io.Dir.cwd().openDir(io, folder.dir, .{ .iterate = true });
         defer src.close(io);
@@ -179,7 +170,6 @@ test "request edges: every number a request carries, at its type's edges, as a m
     _ = try harness.loginMember(a, io, "2", "Debbie");
     const id = try player.allocate(io, a, .literal("Steve"));
     const cookies = try std.fmt.allocPrint(a, "{s}; {s}", .{ steve, try harness.signedUid(a, id) });
-    const bearer = try users.setUserAPIKey(io, a, "1");
     try harness.writeTranscript(a, io, "1_2", "ChitChat", &.{"hello"});
     const chat_store = @import("chat_store.zig");
     try harness.UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.uploads", "a.png" }), "\x89PNG\r\n\x1a\n" ++ &@as([1000]u8, @splat('x')), .{});
@@ -187,7 +177,7 @@ test "request edges: every number a request carries, at its type's edges, as a m
     const current = ".zig-cache/tmp/request_edges_current";
     var sent: usize = 0;
     for (edge_requests) |template| for (edge_numbers) |n| {
-        const raw = try edgeRequest(a, template, n, cookies, bearer);
+        const raw = try edgeRequest(a, template, n, cookies);
         // Where a panic came from: the stack names the site, this the request.
         try Io.Dir.cwd().writeFile(io, .{ .sub_path = current, .data = raw });
         _ = harness.serve(a, io, raw) catch |e| switch (e) {
@@ -199,15 +189,4 @@ test "request edges: every number a request carries, at its type's edges, as a m
         sent += 1;
     };
     try testing.expectEqual(edge_requests.len * edge_numbers.len, sent);
-}
-
-/// `s` repeated `n` times, built at comptime (Zig 0.17 removed `s ** n`).
-fn repeated(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
-    const out = comptime blk: {
-        var a: [s.len * n]u8 = undefined;
-        @setEvalBranchQuota(1000 + n);
-        for (0..n) |i| @memcpy(a[i * s.len ..][0..s.len], s);
-        break :blk a;
-    };
-    return &out;
 }

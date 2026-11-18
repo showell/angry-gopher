@@ -1,8 +1,6 @@
 .{
-    // angry-gopher's server, an application of the `webbox` library, with
-    // Shale for its signed admin scripts. The library is angry-gopher's own
-    // copy (webbox/, below); Shale's module is made from its checkout's
-    // sources in build.zig, not through its build.
+    // angry-gopher's server, an application of the `webbox` library: its
+    // own copy of it (webbox/, below).
     .name = .angry_gopher,
     .version = "0.1.0",
     .fingerprint = 0xc485d60137dc1e9a,

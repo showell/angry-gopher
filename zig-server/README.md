@@ -33,9 +33,7 @@ first two:
 ([zig-webbox](https://github.com/showell/zig-webbox), the sibling checkout
 `../../zig-webbox`) does the serving: the portable module `webbox`, which
 the rest of the server imports by name, and its Linux host, the module
-`webbox_linux` (its `linux_host.zig`), which listens on **:9001** (the
-signed admin scripts are Shale's, the module `shale`, from the sibling
-checkout `../../shale`),
+`webbox_linux` (its `linux_host.zig`), which listens on **:9001**,
 runs each accepted connection as its own task on the `std.Io` thread pool,
 and hands each
 request to `router.zig`, which routes by path prefix to the per-surface

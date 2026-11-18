@@ -34,21 +34,6 @@ pub fn build(b: *std.Build) void {
     root.addImport("host_io", host_io);
     root.addImport("webbox", webbox);
     root.addImport("webbox_linux", webbox_linux);
-    // **SHALE** (the `shale` checkout, ../../shale from here), its scripts on
-    // the site's own data: `shale`, portable, built on the same `webbox` and
-    // `host_io`. Made here from its sources, as zig-metal-unikernel's build
-    // makes it, not through Shale's build: that one builds Shale on its own
-    // sibling, ../zig-webbox, and a second `webbox` module would be another
-    // library to this one, its types not this one's.
-    const shale_src = b.pathResolve(&.{ rootOf(b), "..", "..", "shale", "src" });
-    const shale = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ shale_src, "shale.zig" }) },
-        .imports = &.{
-            .{ .name = "host_io", .module = host_io },
-            .{ .name = "webbox", .module = webbox },
-        },
-    });
-    root.addImport("shale", shale);
     // The chat's markdown dialect and its browser client, each its own
     // checkout (chat-markdown, chat-client): `chat_markdown` and
     // `chat_client`, nothing but std.
@@ -162,18 +147,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     // The request-edge harness reads every number parse in the source, the
-    // libraries' too: where webbox's (the copy's) and Shale's sources are.
+    // library's too: where webbox's sources (the copy's) are.
     const router_opts = b.addOptions();
     router_opts.addOption([]const u8, "commit", "dev");
     router_opts.addOption(bool, "fake_leak", false);
     router_opts.addOption([]const u8, "webbox_src", pathFromRoot(webbox_dep.builder, "src"));
-    router_opts.addOption([]const u8, "shale_src", shale_src);
     router_tests.root_module.addImport("build_options", router_opts.createModule());
     // roots.zig's test reads what the library's store.setBases assigns.
     const webbox_store_source = webbox_dep.path("src/store.zig");
     router_tests.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });
     router_tests.root_module.addImport("webbox", webbox);
-    router_tests.root_module.addImport("shale", shale);
     router_tests.root_module.addImport("chat_markdown", chat_markdown);
     router_tests.root_module.addImport("chat_client", chat_client);
     router_tests.root_module.addImport("host_io", host_io);
@@ -192,7 +175,6 @@ pub fn build(b: *std.Build) void {
         // A file of the application reaches the library as its modules.
         unit.root_module.addImport("webbox", webbox);
         unit.root_module.addImport("webbox_linux", webbox_linux);
-        unit.root_module.addImport("shale", shale);
         unit.root_module.addImport("host_io", host_io);
         unit.root_module.addImport("chat_markdown", chat_markdown);
         unit.root_module.addAnonymousImport("webbox_store_source", .{ .root_source_file = webbox_store_source });

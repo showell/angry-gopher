@@ -130,7 +130,6 @@ const App = struct {
     pub const StartReport = app_start.StartReport;
     pub const bodyLimit = routeBodyLimit;
     pub const uploader = loadUploader;
-    pub const between = runBetweenRequests;
 };
 
 /// **WHICH PART OF THE SITE A REQUEST IS FOR** (metal-vmm QUEUE 189.5), as
@@ -138,12 +137,6 @@ const App = struct {
 /// docs, the rest of chat, the games, the admin pages, or the site around
 /// them (the home page, sign-in, assets).
 pub const Family = enum { uploads, streams, docs, chat, games, admin, site };
-
-/// **BETWEEN REQUESTS**: a slice of the operator's background script
-/// (admin_script.zig, metal-vmm QUEUE 222), while it has more.
-fn runBetweenRequests(io: Io, unix_s: i64) bool {
-    return @import("admin_script.zig").runSlice(io, unix_s);
-}
 
 fn familyOf(path: []const u8) Family {
     if (http.pathUnder(path, "/admin") != null) return .admin;
@@ -187,7 +180,6 @@ fn routeBodyLimit(path: []const u8) u64 {
         return caps.chat_message;
     }
     if (http.pathUnder(path, "/game") != null) return caps.game_new_session;
-    if (std.mem.eql(u8, path, "/admin/script")) return caps.script;
     return caps.largest_form;
 }
 
@@ -344,7 +336,6 @@ const testing = std.testing;
 // Every file of router.zig's tests, so they run (build.zig's root is this file).
 test {
     _ = @import("router_edges_test.zig");
-    _ = @import("router_script_test.zig");
     _ = @import("router_failures_test.zig");
     _ = @import("router_chat_test.zig");
     _ = @import("router_search_test.zig");
@@ -367,8 +358,6 @@ test "routeBodyLimit: every handler's cap is within its path's, and only the upl
         .{ .path = "/admin/retire", .cap = caps.retire_form },
         .{ .path = "/admin/backup", .cap = caps.secret_form },
         .{ .path = "/admin/secret", .cap = caps.secret_form },
-        .{ .path = "/admin/script", .cap = caps.script },
-        .{ .path = "/admin/script-key", .cap = caps.secret_form },
         .{ .path = "/puzzles/sessions/1/puzzles/0/actions", .cap = caps.game_append },
         .{ .path = "/game/new-session", .cap = caps.game_new_session },
         .{ .path = "/game/sessions/1/actions", .cap = caps.game_append },

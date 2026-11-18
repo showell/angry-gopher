@@ -20,9 +20,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   tested here, on Linux, as always (`ops/start`, `ops/check`).
 - **The library is [zig-webbox](https://github.com/showell/zig-webbox)**, a
   sibling checkout (`../zig-webbox`): the serving, the store, the cookies.
-  This repo's server is an application of it, as Dog Park is. Its signed
-  admin scripts are **[Shale](https://github.com/showell/shale)**'s, another
-  sibling (`../shale`).
+  This repo's server is an application of it, as Dog Park is.
 - **The chat's markdown dialect and its browser client** are siblings too,
   chat-markdown and chat-client; `zig-server/build.zig.zon` names every
   sibling the build reads.
@@ -94,11 +92,14 @@ bash ops/start        # zig server on :9001
 ```
 
 The build needs [zig-webbox](https://github.com/showell/zig-webbox),
-[shale](https://github.com/showell/shale), chat-markdown and chat-client
-cloned beside this repo (`../zig-webbox`, `../shale`, and the other two the
-same way): `zig-server/build.zig.zon` names them all. `ops/check_zig` runs
-zig-webbox's and shale's tests too. Shale's `shale` binary
-must also be on `PATH`: `ops/check_zig` runs its lints with it.
+chat-markdown and chat-client cloned beside this repo (`../zig-webbox`, and
+the other two the same way): `zig-server/build.zig.zon` names them all.
+`ops/check_zig` runs zig-webbox's tests too. The
+[shale](https://github.com/showell/shale) checkout must be beside it as
+well, though the server no longer compiles it: `ops/check_zig` runs its doc
+check, `ops/build_shale_web` builds the `/shale/` pages from it, and its
+`shale` binary must be on `PATH`, since `ops/check_zig` runs its lints with
+it.
 
 `ops/start` is the canonical dev loop: it kills anything on :9001,
 rebuilds the front-end bundles and WASM cores (`ops/build_embedded` runs
@@ -359,7 +360,7 @@ The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 | `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring; `/chat/recent`, `/chat/images`, `/chat/code`, `/chat/search`, `/chat/msg/<id>` (members only; `chat.zig`) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
-| `/admin` | The chat roster and API keys (`/admin/apikey`); `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret), `/admin/retire` (retire old topics and users), `/admin/search?key=` (every chat message containing `key`); `/admin/lynrummy` (the game roster); `/admin/script` (a signed Shale script, below) and `/admin/script-key`. All hardcoded to uid 1 |
+| `/admin` | The chat roster and API keys (`/admin/apikey`); `/admin/host` (the running server), `/admin/log` (the log as text), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret), `/admin/retire` (retire old topics and users), `/admin/search?key=` (every chat message containing `key`); `/admin/lynrummy` (the game roster). All hardcoded to uid 1 |
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |
 | `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
@@ -371,8 +372,7 @@ name, chat requires a full member. `/play` and login set a signed
 `gopher_uid` cookie; members additionally get a signed session cookie,
 `gopher_auth`. An **API key**
 (`Authorization: Bearer`) resolves to its principal exactly like a
-session — read + write as that uid. uid 1's key is therefore admin, and it
-is the only credential `/admin/script` takes.
+session — read + write as that uid. uid 1's key is therefore admin.
 
 ### The admin routes, in more detail
 
@@ -383,16 +383,6 @@ is the only credential `/admin/script` takes.
   password again.
 - **`/admin/search`** reads every transcript the admin can see, with no
   index, and holds the turn while it does: every other request waits.
-- **`/admin/script`** takes two locks: the admin's API key as
-  `Authorization: Bearer` (a session cookie is not enough), then an Ed25519
-  signature on the envelope, checked against the public key in
-  `{auth_dir}/shale.conf`; with no key there the route refuses. A
-  `mode=background` run is answered at once and stepped between requests on
-  both hosts, one at a time; `GET /admin/script` shows its state and output,
-  and `mode=kill` ends it. The language is shale's [`SHALE.md`](https://github.com/showell/shale/blob/master/docs/SHALE.md).
-  Shale's signing tool is retired, so nothing on the box signs a script
-  any more; `/admin/script` and `/admin/script-key` are slated for
-  removal.
 
 ## Layout
 

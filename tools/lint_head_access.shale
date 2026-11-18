@@ -16,8 +16,9 @@
 --   `head` `.` `target`         use http.target(req, alloc), an owned copy
 --   `iterateHeaders` `(` `)`    use http.header / http.cookie, owned copies
 --
--- THE TREE: the `.zig` files at the top of zig-server/src, zig-server/webbox/src and
--- shale/src (the application's and the libraries'), read as one folder.
+-- THE TREE: the `.zig` files at the top of zig-server/src and
+-- zig-server/webbox/src (the application's and the library's), read as one
+-- folder.
 -- THE EXEMPTIONS, by name:
 --   http.zig    the chokepoint itself.
 --   stress.zig  a std.http CLIENT program: it reads a Client RESPONSE head, a
@@ -88,7 +89,7 @@ function findings(dirs)
 end
 
 function trees()
-  return {repo .. "/zig-server/src", repo .. "/zig-server/webbox/src", "shale/src"}
+  return {repo .. "/zig-server/src", repo .. "/zig-server/webbox/src"}
 end
 
 -- ── The plants: one tree a case, each finding (or none) as it must be. ──

@@ -9,8 +9,8 @@ user their allowance again. Each was a read whose error was caught into a
 value, so a disk that failed looked exactly like a file that was not there.
 
 WHAT IT REFUSES, in every file of the tree the lints judge (zig_source.TREE:
-the application's zig-server/src and the libraries' zig-server/webbox/src and
-shale/src, read as one folder) but the library's store.zig, and outside `test {}` blocks and
+the application's zig-server/src and the library's zig-server/webbox/src,
+read as one folder) but the library's store.zig, and outside `test {}` blocks and
 the helpers only tests use: a call of one of the store's reads (`read`, `readOrEmpty`, `readOrNull`, `readAt`, `stat`, `statOrNull`,
 `has`, `list`), under whatever name the file gives store.zig, or of any
 function that reads the store, directly or through others (`readers`,
