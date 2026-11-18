@@ -26,7 +26,8 @@ cd "$REPO_DIR"
 python3 "$REPO_DIR/tools/embedded_assets.py" check
 
 # The `webbox` library is two modules, `webbox` and `webbox_linux`; its own
-# shape is zig-webbox's to check (src/library_test.zig, in its tests below).
+# shape is the library's to check (zig-server/webbox/src/library_test.zig, in
+# its tests below).
 # Here: every angry-gopher file imports the library by name, never by path.
 # The Python lints below read the source through tools/zig_source.py: its test first.
 python3 "$REPO_DIR/tools/zig_source.py"
@@ -47,7 +48,7 @@ rm -f "$docs_out"
 # never dangle past the body read that invalidates it (the empty/wrong-author bug).
 # It reads Zig's own tokens, so a string or a comment is never code and a
 # reach split over lines is one. Its plants run first. Run from the folder
-# holding the repos: it reads zig-webbox and shale beside this one.
+# holding the repos: it reads zig-server/webbox, and shale beside this one.
 echo "==> head-access lint (its plants, then the tree)"
 head_budget=(--budget steps=50000000 --budget arena_bytes=536870912)
 (cd "$REPO_DIR/.." && shale "${head_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_head_access.shale" repo="$(basename "$REPO_DIR")" self_test=1)
@@ -60,7 +61,7 @@ head_budget=(--budget steps=50000000 --budget arena_bytes=536870912)
 # there is no exemption list to rot. It reads Zig's own tokens and imports, so
 # a string or a comment is never code (metal-vmm QUEUE 238). Its plants run
 # first: a lint that never fires looks exactly like a clean tree. Run from the
-# folder holding the repos: it reads zig-webbox and shale beside this one.
+# folder holding the repos: it reads zig-server/webbox, and shale beside this one.
 echo "==> portable lint (its plants, then the tree)"
 portable_budget=(--budget steps=500000000 --budget arena_bytes=1073741824)
 (cd "$REPO_DIR/.." && shale "${portable_budget[@]}" "$(basename "$REPO_DIR")/tools/lint_portable.shale" repo="$(basename "$REPO_DIR")" self_test=1)
@@ -77,7 +78,8 @@ portable_budget=(--budget steps=500000000 --budget arena_bytes=1073741824)
 echo "==> seal lint"
 here="$(basename "$REPO_DIR")/zig-server/src"
 (cd "$REPO_DIR/.." && shale shale/cookbook/check_seals.shale dir="$here" seals="id_seal:$here/player.zig,player_id:$here/player.zig,uid_seal:$here/users.zig,account_uid:$here/users.zig,name_seal:$here/names.zig,user_name:$here/names.zig")
-(cd "$REPO_DIR/.." && shale shale/cookbook/check_seals.shale dir="zig-webbox/src,$here" seals=target_seal:zig-webbox/src/http.zig,target_path:zig-webbox/src/http.zig headers=location:zig-webbox/src/http.zig)
+lib="$(basename "$REPO_DIR")/zig-server/webbox/src"
+(cd "$REPO_DIR/.." && shale shale/cookbook/check_seals.shale dir="$lib,$here" seals="target_seal:$lib/http.zig,target_path:$lib/http.zig" headers="location:$lib/http.zig")
 
 # Poka-yoke lint: a read of the store whose failure is caught into a value
 # ("", 0, null, [], a skip) makes a disk that failed look like a file that is
@@ -111,8 +113,8 @@ t0=$SECONDS
 zig build           # compile the whole server
 zig build test      # run the unit tests
 # The libraries' tests are their own builds', not zig-server's: the server
-# builds against the sibling checkouts (build.zig.zon's ../../zig-webbox and
-# ../../shale), so they run here.
-(cd "$REPO_DIR/../zig-webbox" && zig build test)
+# builds on its own copy of webbox (zig-server/webbox) and on the sibling
+# shale checkout's sources (../../shale), so they run here.
+(cd "$REPO_DIR/zig-server/webbox" && zig build test)
 (cd "$REPO_DIR/../shale" && zig build test)
-echo "zig-server build + unit tests, and zig-webbox's and shale's unit tests, passed in $((SECONDS - t0))s."
+echo "zig-server build + unit tests, and webbox's and shale's unit tests, passed in $((SECONDS - t0))s."

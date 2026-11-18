@@ -2,13 +2,13 @@
 """angry-gopher's files reach the `webbox` and `shale` libraries by name, never
 by path.
 
-Each library is two modules: `webbox` (zig-webbox's src/webbox.zig, portable,
+Each library is two modules: `webbox` (zig-server/webbox/src/webbox.zig, portable,
 what every application imports) and `webbox_linux` (its src/webbox_linux.zig,
 the Linux host, which only a Linux `main` imports); `shale` and `shale_linux`
 (the shale checkout's src/shale.zig and src/shale_linux.zig) the same.
 **webbox's own shape** (what each root reaches it names, the modules each
 half may import, no page embedded, every module's tests run) **is
-zig-webbox's to check**, in its src/library_test.zig, on every webbox change.
+the library's to check**, in its src/library_test.zig, on every webbox change.
 This lint checks angry-gopher's side: every file in angry-gopher's folder
 that is not a library's imports it by name, `@import("webbox").x` or
 `@import("shale").x` (or a Linux half), never a library file by path, and
@@ -144,18 +144,19 @@ def main():
         return 0
     src = zig_source.TREE
     found = problems(src)
-    # A library lives in its own checkout: a file of it in the application's
-    # folder would shadow the library's own (the lints read the
-    # application's folder first) and be compiled by nothing.
+    # A library lives in its own folder (webbox in zig-server/webbox, shale
+    # in its checkout): a file of it in the application's folder would
+    # shadow the library's own (the lints read the application's folder
+    # first) and be compiled by nothing.
     members, _ = library(src)
     for name in sorted(members | {"host_io_std.zig"}):
         if os.path.exists(os.path.join(zig_source.APP_SRC, name)):
-            found.append(f"{name} is a file of a library, and is in angry-gopher's zig-server/src: it lives in that library's checkout")
+            found.append(f"{name} is a file of a library, and is in angry-gopher's zig-server/src: it lives in that library's own folder")
     for p in found:
         print("webbox library:", p)
     if found:
         return 1
-    print("webbox library: angry-gopher reaches webbox and shale by name, never by path (webbox's own shape: zig-webbox's library_test.zig)")
+    print("webbox library: angry-gopher reaches webbox and shale by name, never by path (webbox's own shape: zig-server/webbox/src/library_test.zig)")
     return 0
 
 

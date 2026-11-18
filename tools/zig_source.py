@@ -25,12 +25,12 @@ import os
 import re
 
 # The tree the lints judge: the application's sources and the libraries',
-# zig-webbox and shale, sibling checkouts (zig-server/build.zig.zon's
-# dependencies). The three hold no file of the same name, so a lint reads
-# them as one folder.
+# webbox (angry-gopher's own copy, zig-server/webbox) and shale (a sibling
+# checkout, whose sources zig-server/build.zig compiles). The three hold no
+# file of the same name, so a lint reads them as one folder.
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP_SRC = os.path.join(_REPO, "zig-server", "src")
-LIBRARY_SRC = os.path.normpath(os.path.join(_REPO, "..", "zig-webbox", "src"))
+LIBRARY_SRC = os.path.join(_REPO, "zig-server", "webbox", "src")
 SHALE_SRC = os.path.normpath(os.path.join(_REPO, "..", "shale", "src"))
 TREE = (APP_SRC, LIBRARY_SRC, SHALE_SRC)
 

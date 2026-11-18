@@ -14,7 +14,7 @@
 -- the metal port carries whole), and checks every file in it. It follows a
 -- file's imports by path (from the importing file's own folder, as Zig does)
 -- and the `webbox` and `shale` modules (to webbox.zig, shale.zig). The three
--- trees, zig-server's, zig-webbox's and shale's, are read as one folder: they
+-- trees, zig-server's, webbox's (zig-server/webbox) and shale's, are read as one folder: they
 -- hold no file of the same name. A module outside the set (server.zig, the
 -- libraries' Linux halves, the stress harness, the markdown tools) is
 -- host-side by definition and is not checked; there is no list of
@@ -361,7 +361,7 @@ function findings(dirs, from)
 end
 
 function trees()
-  return {repo .. "/zig-server/src", "zig-webbox/src", "shale/src"}
+  return {repo .. "/zig-server/src", repo .. "/zig-server/webbox/src", "shale/src"}
 end
 
 -- ── The plants: one tree a case, each finding (or none) as it must be. ──

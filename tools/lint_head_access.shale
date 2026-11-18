@@ -8,7 +8,7 @@
 -- body read is silently garbage, which once attributed an authenticated chat
 -- post to the wrong principal (the empty/wrong-author bug).
 --
--- zig-webbox's http.zig is the one owning chokepoint: its `header`,
+-- webbox's http.zig (zig-server/webbox/src) is the one owning chokepoint: its `header`,
 -- `target` and `cookie` accessors return memory OWNED by the caller's
 -- allocator, so a head value held can never dangle. Every other module goes
 -- through them, and this lint refuses one that does not, so the foot-gun
@@ -16,7 +16,7 @@
 --   `head` `.` `target`         use http.target(req, alloc), an owned copy
 --   `iterateHeaders` `(` `)`    use http.header / http.cookie, owned copies
 --
--- THE TREE: the `.zig` files at the top of zig-server/src, zig-webbox/src and
+-- THE TREE: the `.zig` files at the top of zig-server/src, zig-server/webbox/src and
 -- shale/src (the application's and the libraries'), read as one folder.
 -- THE EXEMPTIONS, by name:
 --   http.zig    the chokepoint itself.
@@ -88,7 +88,7 @@ function findings(dirs)
 end
 
 function trees()
-  return {repo .. "/zig-server/src", "zig-webbox/src", "shale/src"}
+  return {repo .. "/zig-server/src", repo .. "/zig-server/webbox/src", "shale/src"}
 end
 
 -- ── The plants: one tree a case, each finding (or none) as it must be. ──

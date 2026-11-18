@@ -20,8 +20,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // **THE `webbox` LIBRARY** (zig-webbox, a web server in a box), what
-    // this application is built on: no file here imports a file of it by
+    // **THE `webbox` LIBRARY** (a web server in a box), what this
+    // application is built on: angry-gopher's own copy of zig-webbox, in
+    // webbox/ (its README says why). No file here imports a file of it by
     // path. Three modules: `webbox`, portable, which everything imports;
     // `webbox_linux`, the Linux host, which only a Linux `main` imports; and
     // `host_io`, the one file that names the host (std's here; the
@@ -33,10 +34,20 @@ pub fn build(b: *std.Build) void {
     root.addImport("host_io", host_io);
     root.addImport("webbox", webbox);
     root.addImport("webbox_linux", webbox_linux);
-    // **SHALE** (the `shale` checkout), its scripts on the site's own data:
-    // `shale`, portable, built on the same `webbox` and `host_io`.
-    const shale_dep = b.dependency("shale", .{ .target = target, .optimize = optimize });
-    const shale = shale_dep.module("shale");
+    // **SHALE** (the `shale` checkout, ../../shale from here), its scripts on
+    // the site's own data: `shale`, portable, built on the same `webbox` and
+    // `host_io`. Made here from its sources, as zig-metal-unikernel's build
+    // makes it, not through Shale's build: that one builds Shale on its own
+    // sibling, ../zig-webbox, and a second `webbox` module would be another
+    // library to this one, its types not this one's.
+    const shale_src = b.pathResolve(&.{ rootOf(b), "..", "..", "shale", "src" });
+    const shale = b.createModule(.{
+        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ shale_src, "shale.zig" }) },
+        .imports = &.{
+            .{ .name = "host_io", .module = host_io },
+            .{ .name = "webbox", .module = webbox },
+        },
+    });
     root.addImport("shale", shale);
     // The chat's markdown dialect and its browser client, each its own
     // checkout (chat-markdown, chat-client): `chat_markdown` and
@@ -151,12 +162,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     // The request-edge harness reads every number parse in the source, the
-    // libraries' too: where zig-webbox's and Shale's sources are.
+    // libraries' too: where webbox's (the copy's) and Shale's sources are.
     const router_opts = b.addOptions();
     router_opts.addOption([]const u8, "commit", "dev");
     router_opts.addOption(bool, "fake_leak", false);
     router_opts.addOption([]const u8, "webbox_src", pathFromRoot(webbox_dep.builder, "src"));
-    router_opts.addOption([]const u8, "shale_src", pathFromRoot(shale_dep.builder, "src"));
+    router_opts.addOption([]const u8, "shale_src", shale_src);
     router_tests.root_module.addImport("build_options", router_opts.createModule());
     // roots.zig's test reads what the library's store.setBases assigns.
     const webbox_store_source = webbox_dep.path("src/store.zig");
