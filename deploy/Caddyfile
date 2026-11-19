@@ -72,6 +72,14 @@ lynrummy.com {
 		X-Frame-Options "SAMEORIGIN"
 	}
 
+	# **THE CHAT MOVED TO chat.lynrummy.com** (2026-11-19, roc-chat's
+	# cutover): Gopher Chat's pages, /chat and everything under it and
+	# /channel/<name>, send the browser to roc-chat's front page. It started
+	# fresh, with no history carried over, so no old path has a new twin. A
+	# 302, so the move can be undone without browsers remembering it.
+	@moved_chat path /chat /chat/* /channel/*
+	redir @moved_chat https://chat.lynrummy.com/ 302
+
 	# Since 2026-10-04 the site is served by zig-metal-unikernel, on its private
 	# card (zig-metal-unikernel's CUTOVER.md). The way back is `localhost:9001`, the
 	# zig server on this droplet, which stays stopped while metal serves.
