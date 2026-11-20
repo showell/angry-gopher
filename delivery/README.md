@@ -1,134 +1,74 @@
 # Seattle Delivery
 
-**Welcome to the Seattle Delivery toy!** Open [lynrummy.com/delivery](https://lynrummy.com/delivery),
-press **space**, and watch eight trucks fan out across a deliberately not-to-scale,
-slightly winking map of Seattle to deliver a hundred grocery orders. There's no
-score and nothing to win — it's a screensaver with an algorithm at its heart, and
-the fun is watching the routes make sense.
+Open [lynrummy.com/delivery](https://lynrummy.com/delivery), press **space**,
+and watch eight trucks deliver a hundred grocery orders across a playful,
+out-of-scale map of Seattle. It is a screensaver with an algorithm at its
+heart: the fun is watching the routes make sense.
 
-A few keys are all you need:
+- **space** plays the day: the trucks drive their routes, drop totes and park.
+- **S** shuffles a new shift. Each shift is numbered, so "S58" names one.
+- **A** steps through the solver as it builds the plan. **←/→** scrub either
+  animation; **B** or **Esc** returns to the static map.
 
-- **space** — play the day; the trucks drive their routes and drop totes, then park.
-- **S** — shuffle up a brand-new shift (a fresh random draw of orders). Each shift
-  is numbered, so you can say "that one looked weird on S58" and mean it.
-- **A** — step *through the solver itself*, one move at a time, to watch the plan
-  get built. **←/→** scrub either animation; **B** or **Esc** backs out to the static map.
+Hover a neighbourhood to see its name, or a delivered house to highlight its
+truck.
 
-Hover a neighborhood to see its name; hover a delivered house to highlight its truck.
+## How it works
 
-## Under the hood
+It is a small **capacitated vehicle-routing (CVRP)** simulator. The canvas,
+map and animation are TypeScript. The **solver is Zig**, compiled to
+WebAssembly (`solver.wasm`, from `zig/`). The client calls it at each
+shuffle and gets the whole plan back as one JSON blob: routes, display
+minutes and the replay frames. The zig server embeds both artifacts and
+serves a near-empty HTML shell. Everything runs in the browser and is fully
+deterministic.
 
-This is a small, finished **capacitated vehicle-routing (CVRP)** simulator. The
-canvas, map, and animation are client-side **TypeScript**; the **solver is zig**,
-compiled to WebAssembly (`solver.wasm`, from `zig/`) and called by the bundle at
-each shuffle — it returns the whole plan (routes, display minutes, the solve-replay
-frames) as one JSON blob. The zig server just bakes both artifacts into its binary
-(`@embedFile`) and serves a near-empty HTML shell; everything still runs in your
-browser. No server logic, no user data, fully deterministic.
+**Zig holds the algorithm and TS the display.** The display is ordinary
+canvas work, so it stays in TS. The geography and road graph therefore live
+on both sides: the wasm needs them to decide, the TS to draw. The gold's
+substrate section holds the two in agreement, and `ops/check_delivery` fails
+on any drift.
 
-**Status: parked.** The algorithm was "declared done" in June 2026: we
-could no longer construct a day whose hardest routes were *bugs* rather than
-*explicable structure* (a corridor that's simply overloaded, a sacrificial "hero"
-haul, a cascade of hand-offs). When the routes stopped surprising us, we stopped.
-In July 2026 the solver was **ported to zig and deployed** (see `zig/` below);
-with that done, the toy is parked once more. **The code is the authority** for how
-anything works; this file orients a human, and the deeper "why" lives in the essay
-below.
+[Safari Screensaver](../games/driving/README.md) is its sibling: a canvas
+the client draws, a Zig core in WebAssembly and a deterministic run. Its hard
+part is perception; here it is combinatorial cost.
 
-**The language boundary is a standing decision, not a way-station (2026-07-28):
-zig for the algorithm, TS for the display.** Safari's central aspect is its UI, so
-it earned the nearly-full-zig treatment (draw-commands + a JS blitter); Delivery's
-center is the solver, and the display code is ordinary canvas work that gains
-nothing from a port. Consequence: the geography/road-graph data lives on BOTH
-sides — the wasm needs it to decide, the TS to draw. That duplication is accepted:
-the gold's substrate section pins the two in agreement (any drift fails
-`ops/check_delivery` loudly), and unifying them would just be a single source file
-plus deserializers in two languages — not an interesting problem. Don't "fix" it.
+### The algorithm
 
-**A sibling worth knowing: [Safari Screensaver](../games/driving/README.md).**
-Delivery's twin toy *in spirit* — a `<canvas>` the client draws itself, a near-empty
-shell the zig server only serves, fully deterministic, the same "flipbook + algorithm"
-paradigm. Both are now **Zig→WASM at the core**: Safari's wasm computes the
-geometry and emits draw-commands a tiny JS blitter fills, and Delivery's wasm (since
-2026-07) runs the whole solver behind the original TS canvas code. Same spirit,
-different hard part: here it's **combinatorial cost** (route trucks to minimize an
-honest number), there it's **perception** (the cheapest lie the eye will accept as a
-sunset road).
+Eight trucks carry about a hundred orders, and the west side's trucks carry
+more than the east's. The solver (`zig/solver.zig`) builds routes with the
+**Clarke-Wright savings heuristic**, then improves them by local search
+(2-opt, or-opt, exchange, arc-rebalance). Every move is scored by one
+**integer "pain" cost** (`painOf`). Integer arithmetic keeps the cost
+bit-identical across JavaScript engines, so the greedy tie-breaks agree in
+Node and the browser. A race of construction variants keeps the cheapest,
+so the extra search can only help.
 
-### The algorithm, in one breath
+What you watch **emerges from that cost**. The one piece of local knowledge
+is that Bellevue and Medina go last on their routes, since they sit across
+the lake from the fulfillment center. `geography.ts` holds what is hard-coded
+(the hints, the road graph, the truck anchors). `TAXONOMY.md` reads each
+neighbourhood's role off the resulting routes.
 
-Eight trucks, ~100 orders, asymmetric capacities (the west side carries more than
-the east). The solver (`zig/solver.zig`; `solver.ts` is its port reference) builds routes with the **Clarke-Wright savings
-heuristic**, then improves them with local search (2-opt / or-opt / exchange /
-arc-rebalance). Every move is scored against a single **integer "pain" cost**
-(`painOf`) — and that integer-ness is the one load-bearing trick: the hot path
-does **no floating-point trig**, so the cost is bit-identical across JavaScript
-engines, and the greedy tie-breaks never flip between Node and the browser. An
-8-way construction **race** (pruned to 4-way once arc-rebalance made one axis
-redundant) keeps the minimum, so the solver is provably never *worse* for the
-extra search.
+### The code
 
-Almost everything you watch is **emergent from that cost**, not coded as a rule
-about Seattle. The one genuine bit of local knowledge we lean on: Bellevue and
-Medina get deferred to the end of their routes, because they sit on the
-fulfillment center's doorstep across the lake — Bellevue a direct hop, Medina the
-SR-520 bridgehead. We're not shy about that; every city has its quirks, and coding
-a hint or two is fair game. But the real dynamics live in the **pain cost** — change
-it and the whole map reorganizes. `geography.ts` holds what little we hard-code (the
-hints, the road graph, the truck anchors) and `TAXONOMY.md` reads the resulting
-neighborhood roles straight off the data — revealed, not imposed.
-
-### Where things live
-
-- **Code (the truth):** `main.ts` (canvas/input/animation), `geography.ts` (the
-  map + fleet), `orders.ts` (the daily draw), `roadgraph.ts` (the road substrate),
-  `solver.ts` (the heart), `map_view.ts` (drawing).
-- **`zig/` — the solver, ported and LIVE (2026-07).** `geography/orders/
-  roadgraph/solver.zig` reproduce the TS solver **bit-for-bit** — route
-  structure AND the replay frames/captions/display minutes — and `wasm.zig`
-  ships it as `solver.wasm`, which `main.ts` calls in the browser. Proof:
-  `gold_check.zig` (native) and `wasm_check.ts` (drives the real module)
-  against `solver_gold.json` + `solver_frames_gold.json` — strict equality,
-  trig floats at ULP tolerance. Gate: `ops/check_delivery`. `solver.ts`
-  stays as the REFERENCE implementation (goldgen runs it; it's out of the
-  browser bundle). Faithfulness subtleties (tie-break order, JS Map/Set
-  insertion order, integer-collapsed epsilons, snapshot timing) are
-  documented at the top of `zig/solver.zig`.
-- **Dev harnesses** (deterministic; run from the repo **root** so they find their
-  data; esbuild with `--format=esm` for the `node:` imports): `painsweep.ts` (an
-  N=100 scorecard), `painreg.ts` (an N=500 synergy regression → `pain_baseline.json`),
-  `racerank.ts` (subtractive race-prune analysis), plus `solver_check.ts` /
-  `roadgraph_check.ts`, and `goldgen.ts` (→ `solver_gold.json`, the bit-exact
-  20-shift gold corpus the zig solver port must reproduce).
-- **`TAXONOMY.md`** — the neighborhood-role affinity matrix.
+`main.ts` is the client's entry point and `zig/solver.zig` the solver.
+`solver.ts` is the reference implementation: `goldgen.ts` runs it to mint the
+gold (`solver_gold.json`, `solver_frames_gold.json`), and the Zig solver
+reproduces it bit for bit. The top of `zig/solver.zig` lists what keeps the
+two faithful (tie-break order, Map and Set insertion order, snapshot
+timing). The dev harnesses (`painsweep.ts`, `painreg.ts`, `racerank.ts` and
+the `*_check.ts` files) run from the repo root; each header says how. Change
+`zig/solver.zig` and `solver.ts` together.
 
 ### Building, running, testing
 
-- **Run it:** `ops/start`, then open `/delivery`. The bundle is built by
-  `ops/build_delivery` (esbuild `*.ts` → `app.js`), the solver by
-  `ops/build_delivery_wasm` (`zig/wasm.zig` → `solver.wasm`, committed); both
-  are `@embedFile`'d via `build.zig`; a change reaches the site in
-  a zig-metal-unikernel release (its `DEPLOY.md`).
-- **Typecheck:** `npm --prefix delivery run typecheck` (i.e. `tsc --noEmit -p .`).
-  Note the conformance gate (`ops/check`) does not typecheck this directory — run
-  the typecheck here when you touch the TypeScript.
-- **The port gate:** `ops/check_delivery` — TS typecheck + zig unit tests +
-  `gold_check` (every gold shift re-solved and compared bit-for-bit). Touch
-  anything in `zig/` or the TS solver chain → run it. Regenerate the gold
-  (`goldgen.ts`, header has the command) only on an INTENTIONAL solver
-  semantics change, then eyeball the git diff.
-
-### The one essay to read
-
-The clearest single account of the cost model, the race, and what the routes
-*mean* is the essay **"The Ghost in the Cost Function"** (unpublished since the
-blog was retired).
-For the lineage of this and its sibling toy (the Safari driving screensaver), see
-the repo's top-level `HISTORY.md`.
-
-This was built by Steve and Claude together. It's parked, but the code is tidy and
-the harnesses still run — if you (or an agent you're working with) want to build on
-top of what we wrote, start with this file, then the essay, then the solver:
-`zig/solver.zig` is production, `solver.ts` the readable reference the gold is
-minted from. Change either only in lockstep with the other, gated by
-`ops/check_delivery`.
+- **Run it:** `ops/start`, then open `/delivery`. `ops/build_delivery`
+  bundles the TS into `app.js` and `ops/build_delivery_wasm` builds
+  `solver.wasm` (committed); `zig-server/build.zig` embeds both.
+- **The gate:** `ops/check_delivery` typechecks the TS, runs the Zig unit
+  tests, re-solves every gold shift and compares it bit for bit, then
+  rebuilds `solver.wasm` and drives it over every gold seed. Run it after
+  touching `zig/` or the TS solver. `ops/check` leaves this directory out.
+- **The gold** regenerates with `goldgen.ts` (its header has the command),
+  for an intended change to the solver's behaviour. Read the git diff after.

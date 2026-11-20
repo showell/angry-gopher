@@ -1,297 +1,183 @@
-# Lyn Rummy — the zig solver
+# Lyn Rummy: the Zig solver
 
-The production brain since 2026-07: both Hint buttons, the futility
-certificates, and the Player Two opponent all run this solver (compiled
-to `solver.wasm`; the TS engine keeps the DSL/geometry work). Built up
-in phases over July 2026 and **parked 2026-07-25** — the resume kit at
-the bottom of this file is where to pick the thread back up.
+This solver runs both Hint buttons, the futility certificates and the Player
+Two opponent, compiled to `solver.wasm`; the TS engine does the DSL and
+geometry around it. It is parked; the resume kit at the end says where work
+would pick up.
 
-The framing: the 104-card double
-deck has a static graph (runs = successor edges, sets = same-value
-neighbors), and a clean board is a partition of the board's cards into
-flavor-monochromatic paths of length 3+. Solvability depends only on the
-card **multiset**; deriving human-facing moves from a solution is a
-deliberately separate, later layer.
+**The framing.** The 104-card double deck has a static graph: runs are
+successor edges, sets are same-value neighbours. A clean board is a
+partition of its cards into single-flavour paths of length 3 or more.
+Solvability depends only on the card **multiset**; turning a solution into
+human moves is a separate layer.
+
+## The search
 
 The solver is four layers, each built on the last:
 
-1. **Pure runs only** (`pure_run.zig`). Suits decompose; each suit
-   is a tiny cyclic cover problem. Mostly here to drive out the
-   administrative decisions (encoding, notation, FUTILE-as-an-answer,
-   the test pattern).
-2. **+ red-black runs** (in `solver.zig`). The hard step: a
-   chain-growing DFS (grab-the-loneliest-neighbor) thrashed on dense random boards, and the fix was structural — every
-   run edge steps rank+1, so the 13 ranks are a topological order and
-   the solver is a **rank sweep**: one pass A→K with a bounded frontier
-   of open chains, futile states memoized, and the K→A wrap handled by
-   cutting at the scarcest rank and enumerating the small crossing
-   matchings. Load-bearing lemma: any legal run splits into consecutive
-   runs of length 3..5, so the sweep only ever builds short chains and
-   loses nothing.
-3. **+ sets** (`solver.zig`).
-   Sets are rank-LOCAL (3–4 cards of one rank), so they slot into the
-   sweep's per-rank step rather than changing its shape: the leftover
-   cards at a rank may form sets before the rest start fresh chains. In
-   the next-map a set is a chain of same-rank links, printed with `=`:
-   `KH=KC=KS`.
-4. **Two decks** (`solver.zig` + `suit_first.zig`). The two
-   copies of a (suit, rank) are indistinguishable to legality (a run
-   can't repeat a value, a set can't repeat a suit), so the search stays
-   at (suit, count) level: copy 0 is consumed before copy 1 (WLOG, never
-   a choice point) and memo states carry no copy labels. The board is a
-   canonical u128 multiset bitset; per-rank frontier grows to 8 open
-   chains and up to two sets; the set distinct-SUIT constraint turns
-   load-bearing (`7H 7C 7H'` is three cards at one rank and no set).
-   Validated against a copy-blind oracle that treats all 104 slots as
-   distinct cards — agreement on uniform-random AND meld-seeded boards.
+1. **Pure runs** (`pure_run.zig`). Suits decompose, and each suit is a small
+   cyclic cover problem.
+2. **Red-black runs** (`solver.zig`). Every run edge steps rank+1, so the 13
+   ranks are a topological order and the solver is a **rank sweep**: one
+   pass A→K with a bounded frontier of open chains, futile states memoized,
+   and the K→A wrap handled by cutting at the scarcest rank and enumerating
+   the small crossing matchings. Any legal run splits into consecutive runs
+   of length 3 to 5, so the sweep builds only short chains and loses
+   nothing.
+3. **Sets** (`solver.zig`). Sets are local to a rank, so they fit the sweep's
+   per-rank step: the leftover cards at a rank may form sets before the rest
+   start fresh chains. A set prints with `=`: `KH=KC=KS`.
+4. **Two decks** (`solver.zig`, `suit_first.zig`). The two copies of a card
+   are interchangeable to legality, so the search runs on (suit, count):
+   copy 0 is used before copy 1, and memo states carry counts alone. The
+   board is a canonical u128 multiset bitset. The distinct-suit rule of sets
+   matters here (`7H 7C 7H'` is three cards at one rank, and no set). A
+   copy-blind oracle that treats all 104 slots as distinct agrees with it.
 
-Layered on the sweep: the **counting lemma**, the first of the scarcity
-lemmas, in its color-tightened form. Every rank-r card in a run sits in
-one of three flavor-monochromatic 3-windows — TAIL (r−2, r−1, r), MID
-(r−1, r, r+1), HEAD (r, r+1, r+2); your 678/789/89T — and distinct
-r-cards claim card-disjoint windows, so max-disjoint-legal-windows (an
-exact ≤8-item packing, most-constrained-first B&B, count-only bound as
-budget fallback) caps how many r-cards can live in runs. Cards beyond
-the cap are FORCED into sets. Legality only removes options and packing
-only over-counts a cover, so every conclusion is sound. Three pre-search
-weapons, all monotone: excess beyond the rank's set capacity is futility
-with ZERO search (king scarcity is the degenerate case — and the 59c
-probe10 monster that once burned days of CPU falls here), forced ranks
-skip the sweep's no-set branch, and excess past one set's reach prunes
-single-set carvings. A/B: −21% steps on the quick corpus, −26% on the
-hard corpus's decided rows, 35 of the quick corpus's futile boards
-proven with zero search, no board slower. The puzzle-78 exemplar (7
-tens vs 3 nines + 3 queens force a ten set) is where the lemma was
-mined (the probes are in the laptop's essay archive, `claude-steve/random765.md`;
-not in this repo or on the dev box).
+**The counting lemma** sits on the sweep. Every rank-r card in a run lies in
+one of three single-flavour windows of three: TAIL (r−2, r−1, r), MID
+(r−1, r, r+1) or HEAD (r, r+1, r+2). Distinct r-cards claim disjoint
+windows, so an exact packing of the legal windows caps how many r-cards
+runs can hold, and the rest are **forced into sets**. Every conclusion is
+sound, since legality only removes options and packing only over-counts.
+That gives three monotone checks before any search: excess past a rank's
+set capacity is futility with zero search; forced ranks skip the sweep's
+no-set branch; excess past one set's reach prunes single-set carvings.
 
-The solve is a **portfolio**, cheapest prior first:
+**The solve is a portfolio**, cheapest first:
 
-0. **Suit-first** (`suit_first.zig`) — the human prior: pure runs as
-   the bulk carrier, sets as patch material for orphans, no red-black
-   at all. Answers most boards in microseconds with a human-shaped
-   cover (it reproduced Steve's own solve of the probe's worst board,
-   card for card; the full 104-card board comes back as eight parallel
-   13-runs). At two decks the per-suit arc decomposition is an exact
-   tiny DP — fewest orphan cards, then fewest arcs — because the naive
-   level split loses to the staircase (`3 4 4' 5 5' 6` is two
-   overlapping runs, no set); repair may build two sets per rank, and
-   which copy a card is never enters the search. Allowed to pass —
-   failure falls through to the sweep.
-1. **Rank sweep, scarcest-rank cut**, under a 50k-step budget.
-2. On a budget trip: **sweep from the fewest-matchings cut**, under the
-   1M-step give-up line.
+0. **Suit-first** (`suit_first.zig`), the human prior: pure runs carry the
+   bulk and sets patch the orphans. It answers most boards in microseconds
+   with a human-shaped cover. Per suit it runs an exact small DP (fewest
+   orphans, then fewest arcs), because a naive split by level loses to the
+   staircase (`3 4 4' 5 5' 6` is two overlapping runs). When it passes, the
+   sweep takes over.
+1. **The rank sweep**, cut at the scarcest rank, under a small step budget.
+2. On a budget trip, **the sweep from the fewest-matchings cut**, under the
+   give-up line (`GIVE_UP_STEPS` in `solver.zig`).
 
-**The board bridge (v1)** lifts the solve off the bare multiset and
-onto the player's actual board. An arrangement is a list of stacks in
-the solver's own output notation — glued tokens are stacks
-(`3H>4S>5H`, `KH=KC=KS`), space-separated cards are singletons, `|`
-stays cosmetic — so a plain board line is the degenerate
-all-singletons arrangement and a formatted cover round-trips. Stacks
-must be valid melds relaxed only in length (a 2-stack is one card
-short; `AH 7C` can only ever be two singletons); anything else fails
-loud. `solveArrangement` answers with the SAME verdict `solve` would
-give the multiset — the bias is ordering-only — but the cover
-converges toward the player: tier 0 prefers repair sets that keep the
-player's set pairs together (co-membership, chain order irrelevant)
-and breaks full-cycle 13-runs at the coldest boundary. The EDGES
-metric is the ratified nearness score: `reportKept` counts kept links
-(run links by realized (suit, rank) adjacency with honest counts, set
-links by co-membership, global consumption so two stacks can't claim
-one output suit) and grades each input stack intact / partial /
-shattered. The SWEEP is warm too: chain continuations grab suits that
-extend a player edge before considering closing or cold suits, a rank
-the player holds warm sets at tries the carvings that keep them before
-the no-set branch, and the cut guesses warm crossings first — every
-reorder keyed strictly on warmth, so a cold board explores in the
-historic order exactly. rb stacks warm the sweep (Warm.runs carries
-all run flavors; tier 0 still reads only the pure diagonal). One
-honesty seam: ordering shifts where the step budget trips, so a warm
-`unknown` gets one cold retry — the verdict is never worse than
-solve's. The acceptance fixture is Steve's real 59-card give-up
-consolidation: cold, its cover keeps 16 of his 42 edges after 442,848
-steps; the warm sweep's first cover keeps 32 in ~439 steps, because a
-near-solution arrangement is also a search heuristic.
+## The board bridge
 
-Ahead of the sweep sits LOCAL REPAIR (`repair.zig`) — the human
-search geometry: bounded edits of the player's own arrangement
-(attach, wedge, bring with mid-run pulls, seat swap), true edge
-scores, physical dressing, no normalization seams. Together they are
-`solveArrangement`, ONE pipeline for every surface (the 2026-07-24
-convergence): repair answers the common case perfectly; the sweep is
-the oracle behind it — satisfaction, futility proofs, certificates —
-with one cold retry on a warm unknown. An earlier ANYTIME MIN-BREAK
-layer (enumerate covers, keep the max-kept) was deleted in that
-convergence: the sweep's 3..5-carved output scores long player runs
-below their true value (each carve seam read as a broken edge), so
-the layer defended exactly the boards it was built for worst — and
-repair does its job in the right representation. Its 59c high-water
-mark (37/42 kept, 8 moves) is recorded in the acceptance fixture as
-the yardstick any future polish must beat honestly.
+The bridge solves the player's actual board, beyond the bare multiset. An
+arrangement is a list of stacks in the solver's own notation: glued tokens
+are stacks (`3H>4S>5H`, `KH=KC=KS`), space-separated cards are singletons,
+and `|` is cosmetic. So a plain board line is the all-singletons
+arrangement, and a formatted cover round-trips. Stacks must be valid melds,
+relaxed only in length (a 2-stack is one card short); anything else fails
+loudly.
 
-The edge diff then distills into HUMAN MOVES (`moves.zig`): five
-verbs — peel, steal, push, split, merge — with intact stacks silent.
-In a full cover every card ends up melded, so every break-edge pairs
-with that card's destination edge, and the pair IS the compound verb
-("peel X from [S] onto [T]"). Step 0 re-dresses the cover's copy
-labels (first-come dressing) to hug the player's physical stacks —
-otherwise the diff describes surgery on the wrong twin. The distiller
-builds the plan by SIMULATING it, and the final board must equal the
-cover exactly (runs by sequence, sets by membership) or it fails loud:
-the move list cannot lie about what it builds. It is a faithful build
-recipe, not gesture-level choreography.
+`solveArrangement` judges the multiset as `solve` does; the player's board
+changes only the order of the search, so the cover converges toward the
+player. **Kept edges** measure nearness: `reportKept`
+counts the player's links that survive and grades each input stack intact,
+partial or shattered. The sweep tries warm choices first, those that extend
+or keep the player's edges, so a cold board searches in the plain order.
+Reordering moves where the budget trips, so a warm `unknown` gets one cold
+retry, and the verdict is always at least as good as `solve`'s. A near-solution
+arrangement is also a search heuristic: on the acceptance fixture, the warm
+sweep keeps twice the edges in a tiny fraction of the steps.
 
-The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
-PROOF — completed search or component prefilter, never a guess), or
-`unknown` (the give-up line tripped: no verdict, honestly labeled).
-Steps are the deterministic work unit — every matching's sweep passes
-through `step()`, and `steps_used` is public difficulty telemetry. The
-1M line is tuned from a 20,400-board coverage sweep (99.77% answered,
-no size below 98.5%, worst chase sub-second at the ~1.1M steps/s
-memo-saturated grind rate); it scales UP only on evidence of a real
-board solvable above it. `corpus_quick.txt` (149 ground-truth boards,
-gate-enforced) and `corpus_hard.txt` (the over-the-line evidence pile:
-answered-above-1M boards, unknown-at-50M boards, the named monsters)
-carry the data.
+**Local repair** (`repair.zig`) runs ahead of the sweep, in the player's own
+geometry: bounded single-card edits of the arrangement (attach, wedge,
+bring with mid-run pulls, seat swap), scored by true kept edges. Together
+they are `solveArrangement`, **one pipeline for every surface**: repair
+answers the common case, and the sweep is the oracle behind it for
+satisfaction, futility proofs and certificates. Repair answers "solved"
+alone; futility is the sweep's.
 
-Files:
+**Human moves** (`moves.zig`): the edge diff becomes five verbs (peel,
+steal, push, split, merge), with intact stacks silent. In a full cover every
+card ends melded, so each broken edge pairs with that card's destination
+edge, and the pair is the verb ("peel X from [S] onto [T]"). First the
+cover's copy labels are re-dressed to match the player's physical stacks.
+The distiller builds the plan by **simulating it**, and the final board must
+equal the cover exactly or it fails loudly, so the move list builds what it
+says. It is a build recipe; the TS layer makes the gestures.
 
-- `card.zig` — the vocabulary: (rank, suit, deck), the ASCII notation
-  (`7H`, `TC'`), board-line parsing, and the deck-blind `Counts` view
-  the solver runs on.
-- `graph.zig` — the comptime successor tables over the 52 distinct
-  (suit, rank) cards (pure: 1 per card; rb: 2 per card; the two flavors
-  are disjoint); rank/suit lookups are copy-blind across the 104 slots;
-  `edgeFlavor`, the legal-meld-edge truth.
-- `arrangement.zig` — the board as stacks: parsing + loud validation,
-  the `Warm` counts the solve biases on, and `reportKept`, the
-  kept-edges scorer.
-- `repair.zig` — the local-repair tier: problem-directed IDDFS over
-  single-card edits of the player's own arrangement (attach, wedge,
-  bring with mid-run pulls, seat swap), depth ≤ 6 under a node cap
-  tuned on Steve's puzzle-79 line. Can only answer solved; futility
-  stays the sweep's job.
-- `suit_first.zig` — portfolio tier 0, the human prior (pure runs as
-  bulk carrier, sets absorb orphans).
-- `moves.zig` — the edge diff distilled into the five human verbs,
-  verified by construction.
-- `hint.zig` — the game-hint orchestrator, BEGINNER-FIRST (Steve's
-  objective): scan hand subsets in ascending size (singles, pairs,
-  triples) under strict probe budgets, play the smallest workable one
-  (ties: most kept edges, then hand order), lead the plan with its
-  `place` line — the sixth verb. Nothing playable falls back
-  honestly: consolidation plan / draw / "undo territory" / give-up.
-- `wasm.zig` — the browser build (ops/build_lynrummy_wasm →
-  solver.wasm): arrangement line in, move plan out — puzzleHint,
-  gameHint, and agentStep exports. Serves both Hint buttons AND
-  Player Two via zig-server/src/puzzles.zig + engine_glue.js:
-  agentStep runs sim.agentPlan (the strong policy, not the
-  beginner-first hint) and answers with the distilled build recipe;
-  ts/elm_api/zig_agent.ts lifts it into geometry primitives
-  (conformance: test_zig_agent_step.ts, wired into ops/check_solver).
-- `sim.zig` — full-game agent self-play on the ts/full_game/ rules,
-  deal bit-exact with ts/baseline_deal.ts (a seed names the same game
-  in both engines). The agent plays STRONG, not beginner-shaped:
-  greedy subset cascade, satisfaction probes (`solveArrangementSat`),
-  the winning probe's cover lands as the board. Bake-off driver:
-  `ops/bench_lynrummy_sim` (~100-300ms/game ReleaseFast vs the TS
-  harness's 1.8-11s on the same deals).
-- `cut_dump.zig` — dumps a game's CUT STATE (the board at the first
-  solver give-up) for `ops/publish_lynrummy_cut`, which publishes it
-  as a playable session via ts/publish_cut_game.ts.
-- `puzzle_mine.zig` + `seed_sweep.zig` — the puzzle-mining pair
-  (`ops/mine_lynrummy_puzzle`): the sweep scout plays a seed range
-  through `sim.playGame` and reports each game's hardest solved probe;
-  the miner prints the winning board as a curated-catalog block.
-  Appending to `../conformance/curated_sim_puzzles.dsl` stays a human
-  act; bump the count pin in `../puzzle_gate.zig` after.
-- `calib.zig` — the human-vs-solver grading ritual for mined puzzles:
-  paste the wire lines from `../ts/tools/replay_puzzle.ts` (which replays
-  a puzzle session's gesture log) and it grades both lines with
-  `reportKept` + `distill`.
-- `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
-  as a stepping stone.
-- `solver.zig` — phases 2+3: the rank-sweep solver (with the component
-  prefilter), its independent strict verifier, and the solution
-  formatter (`3H>4S>5H | 9C>TC>JC | KH=KC=KS`).
+**The answer is an Outcome:** `solved` (a verified cover), `futile` (a proof,
+from a completed search or a prefilter) or `unknown` (the give-up line
+tripped). Steps are the deterministic unit of work, and `steps_used` is
+public difficulty telemetry. The give-up line rises only on evidence of a
+real board solvable above it. `corpus_quick.txt` (ground-truth boards, held
+by the gate) and `corpus_hard.txt` (boards near and past the line) carry the
+data.
 
-Gate: `ops/check_solver` (composed into `ops/check` and
-`ops/check_lynrummy`). Tests are zig-native; fixtures are board lines in
-the human notation, e.g. `"4D 5D 5D' 6D 6D' 7D"`.
+## The code
 
-## Parked 2026-07-25 — the resume kit
+`card.zig` is the vocabulary and `solver.zig` the core; read the code, each
+file opens with what it does. Beyond the search:
 
-Everything above ships and is deployed. What follows is the state of
-the open threads at parking time, so un-parking starts from evidence
-instead of archaeology. Queued first, ambient after.
+- `hint.zig`, the game hint, **beginner-first**: it tries hand subsets in
+  ascending size under strict probe budgets, plays the smallest that works
+  and leads the plan with a `place` line, the sixth verb. When every
+  subset fails, it offers a consolidation plan, a draw, "undo territory" or a
+  give-up.
+- `wasm.zig`, the browser build (`ops/build_lynrummy_wasm`): an arrangement
+  line in, a move plan out, as the `puzzleHint`, `gameHint` and `agentStep`
+  exports, reached through `zig-server/src/puzzles.zig` and
+  `engine_glue.js`. `agentStep` runs `sim.agentPlan`, the strong policy;
+  `ts/elm_api/zig_agent.ts` lifts its answer into geometry.
+- `sim.zig`, full-game self-play on the `ts/full_game/` rules, dealing
+  exactly as `ts/baseline_deal.ts` does, so a seed names the same game in
+  both. Its agent plays strong: a greedy subset cascade with satisfaction
+  probes. `ops/bench_lynrummy_sim` is the bake-off against the TS harness.
+- `cut_dump.zig` writes a game's cut state (the board at the first solver
+  give-up) for `ops/publish_lynrummy_cut`.
+- `puzzle_mine.zig` and `seed_sweep.zig` mine puzzles
+  (`ops/mine_lynrummy_puzzle`). A person adds a mined board to
+  `../conformance/curated_sim_puzzles.dsl`, then bumps the count pin in
+  `../puzzle_gate.zig`.
+- `calib.zig` grades a human's line against the solver's, from the wire
+  lines of `../ts/tools/replay_puzzle.ts`.
 
-**Queued (next in line when work resumes):**
+**The gate** is `ops/check_solver`, in `ops/check` and `ops/check_lynrummy`.
+The tests are Zig-native; fixtures are board lines in the human notation,
+such as `"4D 5D 5D' 6D 6D' 7D"`.
 
-- **Certificates v2 — the packing witness.** Today's counting
-  certificate quotes capacities ("runs can hold only 2 and no 8-set is
-  possible"); the lemma's window packing knows the sharper sentence —
-  *which* cards are contended ("both black 8s need the 6♠"). Surfacing
-  the packing's used-cards witness upgrades the English. Same rails
-  would serve **puzzle-path certificates**: the puzzle hint's give-up
-  is a bare code today, while the game hint explains itself.
-- **Deeper anytime repair.** The budget has followed human evidence
-  twice: the 6♣' find created the repair tier, and puzzle 79's 6-verb
-  line drove it to depth 6 / 70k nodes. Puzzle 80 is the first
-  specimen *past* the current budget — Steve's 12-verb line is pure
-  problem-directed repair vocabulary at ~10–12 edits, so repair never
-  sees it and the sweep answers with a 22-verb teardown. One specimen
-  is not a mandate; the next one probably is. (The node cap's tuning
-  line lives in `repair.zig`; the shortness prune is 3-per-edit —
-  see the game-19 comment there before touching either.)
-- **The sets-three-away theorem** (Steve, from solving puzzle 80).
-  Pulling rank r out of the middle of a run leaves remnants
-  `[r−2 r−1]` and `[r+1 r+2]`, whose cheapest completions are ranks
-  **r−3 and r+3** — so "the only red ten is buried mid-run"
-  mechanically implies "look at the 7s and the kings for spares."
-  Worth revisiting on un-park: it is exactly the shape the
-  lemma-as-kibitz surface wants to speak, and possibly a move-ordering
-  hint for repair (when the problem card needs a buried card, try
-  donors at ±3 first).
+## The resume kit
 
-**Ambient (collecting evidence, no action owed):**
+The open threads, so un-parking starts from evidence.
 
-- **Pure-vs-rb tension** (Steve's framing, 2026-07-23): in early hands
-  pure runs are more aesthetic but rb runs are often more strategic —
-  they create easier placements for difficult cards later in the turn.
-  Exemplar: game 11's A♦-on-rb made Q♥ playable in 2 moves vs 3 in
-  the pure world. Collecting examples before Steve votes on a
-  criterion; don't re-raise without new ones.
-- **Lemma-as-kibitz.** The per-rank lemma table (capacities, forced
-  sets) is arrangement-independent and human-meaningful — a natural
-  kibitz surface no bridge work is needed for. Sleeper until wanted.
-- **Player Two's open game-design questions** (it plays correctly and
-  strongly; these are about *feel*): full-cover plays mean the agent
-  tidies the whole table every play, including restructuring the
-  human's half-built stacks — strong tablemate or showing off? It has
-  no hold-back layer (never keeps the third 8 to starve you of the
-  fourth) — satisfaction cascade, not cunning. And it is deliberately
-  stronger than the beginner-first hints — one solver, two policies,
-  adjustable in one place if the gap ever feels wrong at the table.
-  Latency note: agent turns run on the browser main thread; if a
-  late-game turn ever stutters, the fix is a worker thread for the
-  wasm calls, not a weaker budget.
-- **Raising GIVE_UP_STEPS.** Only on evidence: a real board solvable
-  above the line. The evidence pile is `corpus_hard.txt` plus puzzle
-  78's multiset (cold-unknown at 1M, warm-solves at 623k).
+**Queued:**
 
-**Calibration record** (Steve vs the solver on the mined/stretch
-boards — the ~500k–1M-step band is his challenging-but-solvable zone;
-mine upward from there):
+- **Certificates v2, the packing witness.** The counting certificate quotes
+  capacities ("runs can hold only 2"); the lemma's window packing knows
+  which cards are contended ("both black 8s need the 6♠"). Surfacing that
+  witness sharpens the English. The same rails would give the puzzle hint's
+  give-up an explanation, as the game hint has.
+- **Deeper repair.** Human lines have set the repair budget each time it
+  grew. Puzzle 80 is the first board past it: Steve's 12-verb line is plain
+  repair vocabulary at about a dozen edits, beyond repair's depth, so the
+  sweep answers with a 22-verb teardown. Read the game-19 comment in
+  `repair.zig` before changing the node cap or the shortness prune.
+- **The sets-three-away theorem.** Pulling rank r from the middle of a run
+  leaves `[r−2 r−1]` and `[r+1 r+2]`, whose cheapest completions are ranks
+  **r−3 and r+3**. So "the only red ten is buried mid-run" means "look at
+  the 7s and the kings". It fits a lemma-as-kibitz surface, and perhaps
+  repair's move order (try donors at ±3 first).
 
-| board | steps | Steve | solver | verdict |
-|---|---|---|---|---|
-| stretch 59c | 646,834 | solved (one give-up en route) | 37/42 kept in 10 | "challenging but clearly within my reach" |
-| puzzle 78 (s107t4) | 623,630 | 28/40 kept in 16 verbs | 29/40 in 15 | tie by different roads |
-| puzzle 79 (s95t6) | 580,583 | 41/44 in 6 | 21/44 in 34 | human rout → drove repair depth 6 |
-| puzzle 80 (s441t5) | 994,264 | 37/45 in 12 | 33/45 in 22 | human win → deeper-repair specimen |
+**Gathering evidence:**
 
-The mining/grading loop is repeatable: `seed_sweep.zig` →
-`ops/mine_lynrummy_puzzle` → curate → `puzzle_gate` count bump →
-Steve plays it → `../ts/tools/replay_puzzle.ts` + `calib.zig` grade it.
-Post-solve analyses live in the laptop's essay archive (`claude-steve/random793.md`,
-`claude-steve/random798.md`; not in this repo or on the dev box).
+- **Pure versus red-black runs.** Early in a hand pure runs look better, but
+  red-black runs often leave easier placements for hard cards later in the
+  turn. Steve decides the criterion once examples are in; raise it again
+  with new ones.
+- **Lemma-as-kibitz.** The per-rank lemma table (capacities, forced sets)
+  is independent of the arrangement and meaningful to people: a kibitz
+  surface that works from the multiset alone.
+- **Player Two's feel.** It plays correctly and strongly. Its full-cover
+  plays tidy the whole table, the human's half-built stacks included. It
+  plays a satisfaction cascade with no hold-back layer: it never keeps the
+  third 8 to starve you of the fourth. It is stronger than the beginner-first hints by design: one solver,
+  two policies, tuned in one place. Agent turns run on the browser's main
+  thread; a stutter would call for a worker thread for the wasm calls,
+  keeping the budget.
+- **Raising `GIVE_UP_STEPS`**, on evidence: `corpus_hard.txt` and puzzle
+  78's multiset (unknown cold at the line, solved warm below it).
+
+**Calibration.** Steve plays the mined boards against the solver: the loop
+is `seed_sweep.zig`, `ops/mine_lynrummy_puzzle`, curation, the
+`puzzle_gate` count bump, a human play, then `../ts/tools/replay_puzzle.ts`
+and `calib.zig` to grade it. Boards in the band from about half the give-up
+line to the line are challenging but solvable for him; mine upward from
+there.

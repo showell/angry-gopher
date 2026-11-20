@@ -1,115 +1,111 @@
-# Native Safari — the desktop screensaver path
+# Native Safari: the desktop screensaver
 
-The same ride as the browser `/driving`, running as a native executable instead of
-in a canvas. This directory is the **native rendering path**; it reuses the exact zig
-geometry + render core from [`../wasm/`](../wasm/) (wired in as the `safari` module by
-[`../build.zig`](../build.zig)) and only replaces the two things a browser gave for
-free: the pixel fill and the window.
+The same ride as the browser's `/driving`, as a native program. It reuses
+the Zig geometry and render core in [`../wasm/`](../wasm/) (the `safari`
+module in [`../build.zig`](../build.zig)) and supplies the two things a
+browser gave: the pixel fill and the window.
 
-- **Browser:** zig core → draw-command buffer → `../wasm/blitter.js` fills polygons on a
-  `<canvas>` (GPU-accelerated).
-- **Native:** *same* zig core → *same* draw-command buffer → `raster.zig` fills pixels
-  in software → a thin per-OS shim puts that pixel buffer on screen and feeds keys back.
+- **Browser:** the Zig core writes a draw-command buffer, and
+  `../wasm/blitter.js` fills its polygons on a `<canvas>`.
+- **Native:** the same core writes the same buffer, `raster.zig` fills
+  pixels in software, and a small shim for each OS puts the pixels on screen
+  and feeds keys back.
 
-The code is the authority for how any of this works — every file opens with a
-top-of-file comment, and `win32.zig`'s header in particular documents the screensaver
-modes and the threading pipeline in detail. This README is the map.
+[`../wasm/paint.zig`](../wasm/paint.zig) defines the draw-command format
+both consume. Every file here opens with a comment saying what it does;
+`win32.zig`'s covers the screensaver modes and the threading pipeline.
 
 ## The pieces
 
-| file | role |
-|---|---|
-| `raster.zig` | the software rasterizer — consumes the shared `paint.zig` draw buffer (all tags + sky/grass background + sun glow/disc + the camera roll the browser did with `ctx.rotate`) and writes `0x00RRGGBB` pixels. No canvas, no allocator. Supersamples (`SS` knob) then box-downsamples, recovering the anti-aliasing the canvas gave free. |
-| `main.zig` | the headless PNG harness — drives the full route and dumps one frame per segment to `snap/native/seg<NN>.png`. A deterministic, argless perceptual contact sheet (**not** a strict gold), and the target that builds on a bare headless box. |
-| `png.zig` | a zero-dependency PNG encoder (stored deflate) for the harness. |
-| `x11.zig` | the Linux / WSLg live window: aliases an `XImage` onto raster's framebuffer (the pixel format *is* an X11 32-bit TrueColor pixel — zero conversion), `XPutImage`s each frame, `XRender`-scales for fullscreen. |
-| `win32.zig` | the Windows window and the `.scr` screensaver. GDI `StretchDIBits` of a top-down BI_RGB DIB (again, raster's pixel *is* the DIB DWORD — no conversion). Runs a frame-parallel render pipeline and the `.scr` command-line modes. See its header comment. |
-| `prof.zig` | a standalone deterministic profiler (`ops/prof_safari_native`) that times each render sub-phase in isolation — never timers in the hot path. |
+`raster.zig` is the software rasterizer: it reads the draw buffer and writes
+`0x00RRGGBB` pixels, supersampling then downsampling for anti-aliasing. The
+shims are `x11.zig` (the Linux and WSLg window) and `win32.zig` (the Windows
+window and the `.scr` screensaver). Each hands raster's framebuffer to the OS
+as is, since its pixel format is the native one. `main.zig` is a headless
+harness that drives the whole route and writes one PNG a segment to
+`snap/native/`, a contact sheet for the eye and the target that builds on a
+headless box. `prof.zig` times each render phase apart from the hot path.
 
-The seam between zig and the pixel fill (the draw-command tag format) is documented in
-[`../wasm/paint.zig`](../wasm/paint.zig) — that file is the truth for what `raster.zig`
-and `blitter.js` both consume.
+## One shim per OS
 
-## Why native-per-OS instead of SDL
+Each OS gets its own native tool, and the build stays free of large
+dependencies. The reuse that matters is already in `raster.zig`; a shim only
+presents a buffer and feeds keys, about 100 to 200 lines each (Xlib on
+Linux, Win32 GDI on Windows). SDL would merge those small shims into one at
+the cost of a dependency.
 
-A deliberate call: best native tool per OS, no fat dependency. The reuse that matters is
-already isolated — `raster.zig` produces a pixel buffer, and each OS shim only has to
-*present a buffer and feed keys*, which is ~100–200 lines apiece (Xlib on Linux, Win32
-GDI on Windows, Cocoa later). SDL2's one real benefit would be collapsing those tiny
-shims into one; that isn't worth a dependency when each shim is this small.
+## Fullscreen widens the camera
 
-## Fullscreen is a camera flex, not a stretch
+A wider screen widens the camera's horizontal field of view: the rider sees
+more to the sides, and the scene keeps its scale. `camera.FOCAL` stays at its
+960-pixel value while `camera.view_w` widens toward the screen's aspect, so
+object sizes, depth and the sun's height (the **sunset clock**) stay as
+tuned. An aspect past the range gets plain black letterbox bars.
 
-Filling a wider screen widens the camera's horizontal FOV — the rider simply gets more
-peripheral vision — rather than zooming or stretching the scene. `camera.FOCAL` stays
-frozen at the 960-derived value and `camera.view_w` widens toward the screen aspect, so
-object sizes, depth, and the sun's vertical position (hence the whole **sunset clock**)
-are untouched and need no recalibration. Out-of-band aspects get plain black letterbox
-bars — no heroics.
-
-**Guarantee:** the browser and the PNG harness never call `setViewW`, so they stay pinned
-at width 960 and remain bit-identical (the golden PNGs don't move; `ops/check_safari` stays
-green). Only the live native windows flex the camera.
+**The browser and the PNG harness stay at width 960**: only the live native
+windows call `setViewW`. So they stay bit-identical, and `ops/check_safari`
+holds.
 
 ## Building, running, checking
 
-- `ops/build_safari_native` — the headless PNG harness (writes the contact sheet).
-- `ops/run_safari_x11` — build + open the live Linux/WSLg window (needs `libx11-dev`,
-  `libxrender-dev`). `F` toggles fullscreen.
-- `ops/build_safari_windows` — cross-compile the Windows build from Linux (no Windows
-  SDK). Emits both `safari_win32.exe` and the byte-identical `safari.scr`.
-- `ops/build_safari_download` — the Linux binary offered as a download.
-- `ops/prof_safari_native` — the sub-phase profiler.
-- `ops/check_safari` — the gate: drives the wasm a full course and asserts the paint
-  buffer never overflows and both critter culls stay live; **also** fails if `raster.zig`
-  grows a file-scope `var` (see reentrancy below). Wired into `ops/check`.
+- `ops/build_safari_native`: the headless PNG harness.
+- `ops/run_safari_x11`: build and open the live Linux or WSLg window (needs
+  `libx11-dev` and `libxrender-dev`). `F` toggles fullscreen.
+- `ops/build_safari_windows`: cross-compile the Windows build from Linux,
+  with the Windows SDK left out. It writes `safari_win32.exe` and the
+  byte-identical `safari.scr`.
+- `ops/build_safari_download`: the Linux binary offered as a download.
+- `ops/prof_safari_native`: the phase profiler.
+- `ops/check_safari` (in `ops/check`): drives the wasm over the whole course,
+  checks the paint buffer and both critter culls, and fails on a file-scope
+  `var` in `raster.zig` (below).
 
-The Linux exe and the Windows `.scr` are offered to visitors at **`/safari_download`**
-(served by `zig-server/src/downloads.zig` from `downloads/` in the working directory).
-`ops/build_downloads` fills `downloads/` with both. It is one of `zig-server/assets.zon`'s
-`.site` directories, so zig-metal-unikernel's image and judge carry it, and neither can lay
-out a site disk until it has run. The image's release says when lynrummy.com has them
-(`git tag --contains` the commit that added downloads/ to `.site`, in zig-metal-unikernel).
+Visitors download the Linux program and the Windows `.scr` at
+**`/safari_download`** (`zig-server/src/downloads.zig`, serving `downloads/`
+from the working directory). `ops/build_downloads` fills `downloads/`. It is
+one of `zig-server/assets.zon`'s `.site` directories, so zig-metal-unikernel's
+image and judge carry it, and each needs it built before laying out a site
+disk.
 
-## raster.zig must stay reentrant
+## raster.zig stays reentrant
 
-On Windows the frame is ~97% software raster, so `win32.zig` fans `raster.render` across
-two worker threads. That means **`raster.zig` must have no file-scope `var`** — a mutable
-module global is a cross-thread data race hiding behind a pure-looking signature (it once
-shipped as horizontal streaks: per-frame scratch buffers clobbered mid-fill). Per-call
-locals only; `threadlocal var` is the sanctioned escape hatch if per-thread scratch is
-ever genuinely needed. `ops/check_safari` enforces this so it can't regress. Note this is
-scoped to the *worker-parallel* module only — the geometry core (`wasm/paint/render/
-safari.zig`) keeps its globals on purpose because it runs single-threaded on the main
+On Windows the frame is almost all software raster, so `win32.zig` spreads
+`raster.render` across two worker threads. So **`raster.zig` keeps all state
+in per-call locals**: a file-scope `var` is a data race behind a pure-looking
+signature, and it once showed as horizontal streaks from scratch buffers
+clobbered mid-fill. `threadlocal var` is the escape for per-thread scratch.
+`ops/check_safari` enforces the rule. It applies to this worker-parallel
+module alone; the core (`wasm/paint.zig`, `wasm/render.zig`,
+`wasm/safari.zig`) keeps its globals on purpose, since it runs on the main
 thread.
 
-## Performance posture
+## Performance
 
-Native is a software rasterizer with no GPU, so it is slower than the browser (whose
-canvas *is* the GPU) — that's expected; native's value is zero-dependency independence.
-`ReleaseFast` is load-bearing (~7× faster than Debug at runtime). Linux clears 60fps on
-the whole route single-threaded; Windows uses the 2-worker pipeline to get there. Held
-reserves if ever needed: more raster threads, or caching the sky+sun backdrop.
+Native rasterizes in software, so it runs slower than the browser's
+GPU-backed canvas; in return it stands alone. Build it `ReleaseFast`, which
+is several times faster than Debug. Linux reaches 60 fps on one thread;
+Windows uses the two-worker pipeline. More raster threads, or caching the sky
+and sun backdrop, are the reserves.
 
-## zig 0.16 gotchas that will bite again
+## Zig gotchas
 
-- **Cross-directory `@import` by path is forbidden.** The shared core is pulled in as a
-  named module (`safari`) in `build.zig` — that's the fix, not a relative path.
-- **Xlib:** use the `X`-prefixed *function* forms (`XDefaultScreen`, `XRootWindow`, …);
-  zig's translate-c chokes on the classic `DefaultScreen()`-style macros. `XDestroyImage`
-  is also a macro — call `image.*.f.destroy_image.?()` after nulling `image.data` (which
-  points at our static buffer, so it must not be freed).
-- **`std.os.windows`** ships the base types + kernel32 but **no user32/gdi32** — declare
-  those externs inline (the standard no-SDK move). `std.Thread.Mutex`/`Condition` are gone
-  (moved under `std.Io`, needing an `Io` handle), which is why the win32 pipeline is
-  lock-free atomics. `std.process.Args` also needs an OS handle, so the `.scr` flag is
-  parsed straight off `GetCommandLineW`.
-- **64-bit native `usize` surfaces latent bugs wasm32 hid** (an `@intCast` on segment
-  counts, caught the first time the core ran natively).
+- **Cross-directory `@import` by path is forbidden.** `build.zig` brings the
+  shared core in as the named module `safari`.
+- **Xlib:** use the `X`-prefixed function forms (`XDefaultScreen`,
+  `XRootWindow`); translate-c chokes on the `DefaultScreen()`-style macros.
+  `XDestroyImage` is a macro too: call `image.*.f.destroy_image.?()` after
+  setting `image.data` to null, since it points at our static buffer.
+- **`std.os.windows`** has the base types and kernel32 but leaves out user32
+  and gdi32: declare those externs inline. `std.Thread.Mutex` and
+  `Condition` moved under `std.Io`, so the win32 pipeline uses lock-free
+  atomics. `std.process.Args` needs an OS handle too, so the `.scr` flag is
+  parsed from `GetCommandLineW`.
+- **A 64-bit `usize` surfaces bugs wasm32 hid**, such as an `@intCast` on
+  segment counts.
 
-## Deferred
+## Open work
 
-- **macOS** shim (Cocoa `NSWindow` + `CGImage`) — the one platform not yet built.
-- **Windows fullscreen aspect-fit:** the `.scr` currently stretches the 16:10 scene to
-  the monitor (mild on 16:9); the fix is to borrow x11.zig's `view_w`-widening + letterbox.
-- Testing the Linux exe on a real X session (not just WSLg).
+- A **macOS** shim (Cocoa `NSWindow` and `CGImage`).
+- **Windows fullscreen** stretches the 16:10 scene to the monitor (mild on
+  16:9); x11.zig's `view_w` widening and letterbox would fit it.
+- A run of the Linux program on a real X session, beyond WSLg.

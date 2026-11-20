@@ -1,52 +1,46 @@
 # Gallery
 
-One **stylized, somewhat-faithful** image per app, destined for the home page —
-deliberately *not* screenshots (which go stale even on a parked app). Each is a
-one-time render or hand-authored asset, committed here as content.
+One **stylized, faithful-enough** image per app, shown on its home-page card.
+Each is a one-time render or a drawn asset, committed here as content, so it
+stays true as an app's UI changes.
 
-Served by `zig-server/src/gallery.zig` at **`/gallery`** — a hidden-for-now
-preview surface (unlinked, but public): one card per app, in home-page order,
-showing the image if present or a `pending` placeholder otherwise. Images are read
-from this directory at request time, not embedded in the binary; like
-`pages/`, it ships in each zig-metal-unikernel boot image (`assets.zon`'s
-`.site`).
+`zig-server/src/gallery.zig` serves them at **`/gallery/<file>`**. `/gallery`
+itself is an unlinked public preview: one card per app, in home-page order,
+showing its image or a `pending` placeholder. The images are read from this
+folder at request time. Like `pages/`, the folder ships in each
+zig-metal-unikernel boot image (`zig-server/assets.zon`'s `.site`).
 
-Filenames are `<slug>.png` (or `.svg`). `gallery.zig` derives the cards from
-`pages/home.txt`, and each slug is the basename on that app's `image:` line
-there; `grep image: pages/home.txt` lists them.
+Each app's `image:` line in `pages/home.txt` names its file, `<slug>.png` or
+`<slug>.svg`.
 
 ## Authoring rules
 
 - **Anything directional faces RIGHT.** Images sit left of the text on the
-  home page, so a left-facing subject "walks off" the page. Standing rule.
-- **The image must be honest** — it can't imply a feature the app doesn't
-  have. Stylized is fine; fictional is not.
-- **Prefer deriving the image from the app's own code** over inventing an
-  illustration (see `safari.png` and `delivery.svg` below) — faithful and
-  stale-proof by construction. An invented 3D-truck illustration for
-  delivery went in circles until we rendered the app's real map instead.
-- **Previewing SVG:** a browser (or reading the file) shows you the source's
-  intent, but for actual pixels render locally with `cairosvg` to a PNG.
-  The gallery serves from disk at request time, so a running `ops/start`
-  server shows edits at `/gallery` with no rebuild — the final visual call
-  is a browser look.
+  home page, so a subject facing right looks into the page.
+- **The image is honest.** It shows only features the app has. Stylized is
+  fine; fictional is out.
+- **Derive the image from the app's own code** where you can, as
+  `safari.png` and `delivery.svg` do: faithful and current by construction.
+- **Preview SVG** by rendering it to a PNG with `cairosvg`. A running
+  `ops/start` server shows edits at `/gallery` at once; the final call is a
+  look in the browser.
 
 ## How each image is made
 
-- **`safari.png`** — `ops/gallery_cat`. Runs the game's REAL cat-drawing code
-  (`cat_anatomy.ts` via `catScenery`) against the dependency-free `MiniCanvas`
-  rasterizer (`games/driving/gallery_cat.ts`), composing a single dusk-lit cat on
-  the road. Faithful because it *is* the app's code; stale-proof for the same
-  reason. Re-run if the cat anatomy changes.
-- **`delivery.svg`** — `ops/gallery_delivery`. Renders the app's real Seattle map
-  straight from `delivery/geography.ts` (coastlines, lakes, Mercer Island, the road
-  network, the I-5 spine + bridges, the warehouse), then colours 100 homes across the
-  8 truck routes with tour lines routed over the actual road graph (shortest paths).
-  Faithful content — the geometry is the app's own, no duplication — but stylized
-  framing: cropped to the gallery ratio and given a clean solved-looking allocation
-  (nearest-anchor grouping, not the live solver). Re-run if the map geometry changes.
-- **`chess.svg`** — hand-authored via a one-off script (not kept): a Knight's Tour
-  mid-search using the live toys' real visual grammar (a legal knight walk with move
-  numbers, the retracted branch in red, the head's open hops as green dots), plus a
-  knight and a queen standing in the foreground — one piece per shipped toy.
-- The rest are **pending** — approach per app still to be decided.
+- **`safari.png`**: `ops/gallery_cat` runs the game's own cat-drawing code
+  (`cat_anatomy.ts` via `catScenery`) on the `MiniCanvas` rasterizer
+  (`games/driving/gallery_cat.ts`), drawing one dusk-lit cat on the road.
+  Re-run it when the cat's anatomy changes.
+- **`delivery.svg`**: `ops/gallery_delivery` renders the app's Seattle map
+  from `delivery/geography.ts` and colours 100 homes across the eight truck
+  routes, with tour lines over the real road graph. The framing is
+  stylized: cropped to the gallery's ratio, with homes grouped by nearest
+  anchor in place of the live solver. Re-run it when the map changes.
+- **`chess.svg`**: a Knight's Tour mid-search in the toys' own visual
+  grammar (numbered moves, the retracted branch in red, open hops as green
+  dots), with a knight and a queen in front, one piece per toy.
+- **`chat.svg`, `lynrummy.svg`, `puzzles.svg`**: drawn SVGs (abstract
+  message bubbles, a kitchen-table game, a board mid-solve). Each file's
+  opening comment describes it.
+
+Shale's card uses `/shale/card.svg`, from the Shale pages.

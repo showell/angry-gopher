@@ -1,90 +1,53 @@
 # Chat
 
-**Welcome to Chat!** This is the private messaging corner of the site — the
-surface Steve, Claude, and a handful of family and friends actually use every
-day. Log in at [lynrummy.com/chat](https://lynrummy.com/chat) and you get:
+This is the chat that ran on lynrummy.com: DMs, channels and docs, with
+messages in markdown that arrive live. It is retired in favour of roc-chat,
+and lynrummy.com's `/chat` redirects to chat.lynrummy.com
+(`deploy/Caddyfile`).
+The code stays here as a reference and still builds and runs locally.
 
-- **1:1 DMs** and **group channels** (the live one is `#General`), with messages
-  written in **markdown**, updating **live** as people type-and-send.
-- **Topics** — each conversation is split into named threads (a "topic" is just a
-  named session), so a chat can hold many parallel threads without losing the plot.
-- **Emoji** by shortcode — type `:` and pick 🎉 from the autocomplete (a fixed,
-  client-side whitelist in chat-client's chat_emoji.js; the server only ever sees the glyph).
-- **Reactions** — `:` picks an emoji for the selected message, `+` is a thumbs-up,
-  clicking a chip joins or retracts. Stored beside the transcript as an append-only
-  `<sid>.reactions.jsonl` the client folds (chat_reactions.js).
-- **Images & screencasts** you can drag in, a world-clock you get by clicking any
-  timestamp, cross-message references (`MSG_…` links that jump straight to the
-  quoted message), and a **keyboard-first** feel — arrows to move, `/` to search,
-  `q`/`r` to quote or refer, `t` for the raw transcript.
-- Sibling surfaces on the same machinery: **Docs** (`/chat/docs`, markdown
-  authoring), **Recent** (`/chat/recent`, your activity feed), and **Images**
-  (`/chat/images`, every picture you can see, in one stream).
+What it does:
 
-It's live and dogfooded daily; the architecture has settled. **The code is the
-authority** for how anything works — this file is the human orientation, and the
-deeper "why" of one of its best ideas lives in the essay linked below.
+- **DMs and channels**, each split into **topics**, named threads.
+- **Emoji** by shortcode, **reactions**, **images and screencasts**, and
+  `MSG_…` links that jump to a quoted message.
+- **Keyboard-first** use: arrows move, `/` searches, `q` and `r` quote or
+  refer, `t` shows the raw transcript.
+- **Docs** (`/chat/docs`), **Recent** (`/chat/recent`) and **Images**
+  (`/chat/images`), on the same machinery.
 
-## The shape of it: a thin backend, behavior in the browser
+## The shape of it
 
-The one principle that organizes everything: **keep the backend thin.** The
-server (written in **Zig**) authenticates you, stores transcripts as plain files,
-renders markdown to HTML, and echoes the on-disk structure back over the wire. The
-**URL space mirrors the filesystem 1:1**, and the **behavior lives in the
-JavaScript** — navigation, the three-pane layout, the keyboard nav, the bubble
-rendering. New behavior almost always belongs in the client, not the server.
+**The backend is thin.** The Zig server authenticates, stores transcripts
+as plain files, renders markdown and echoes the on-disk structure back. The
+URL space mirrors the filesystem. Behavior lives in the JavaScript client.
 
-A few load-bearing ideas worth knowing before you dig in:
+- **`Conv` unifies DMs and channels.** A DM is a `Conv` with two members, a
+  channel one with many. Storage paths, SSE keys, fan-out and the sidebar all
+  take a `Conv`.
+- **Storage is plain files.** Each topic is a markdown file, with its uploads
+  beside it. Every message is written through `appendMessage`, which fans out
+  the live events to every member.
+- **Live updates ride Server-Sent Events.** The client replays the backlog,
+  then follows live.
+- **Each topic is a page.** One topic is one URL, and switching topics is a
+  real page load. A per-user layer gives the live feel across pages:
+  notifications, the favicon alert, pinned sessions and the Recent feed.
 
-- **`Conv` is the unifying abstraction.** A DM is a `Conv` with two members; a
-  channel is a `Conv` with N. Every storage path, SSE keyspace, fan-out loop, and
-  sidebar payload takes a `Conv` and iterates its members — so DMs and channels
-  share one set of machinery and only diverge at the URL and the notify text.
-- **Storage is plain files on disk — no database.** Each topic is a markdown file;
-  uploads sit beside it. `appendMessage` is the *single* write chokepoint every
-  message is born through, and it fans out the live events (message, notify,
-  recent, sidebar, images) to every member.
-- **Live updates ride Server-Sent Events.** Several per-user and per-conversation
-  SSE streams push new messages and activity; the client replays backlog then
-  follows live.
-- **MPA at the core, SPA-feel from a user-attention layer.** One transcript =
-  one topic = one URL, and switching topics is a real page load (bookmarkable,
-  refreshable, browser-native back/forward). What makes it *feel* live is a
-  separate per-user layer that survives page loads: cross-topic notifications,
-  the violet-favicon alert, pinned sessions, and the Recent feed. The unit of
-  *identity* is the URL; the unit of *attention* is the user.
-- **Markdown is our own dialect.** Rather than pull in a parser, the server hand-rolls
-  a small, deliberate markdown engine — that choice (and why it's the right one for a
-  project like this) is the subject of the essay
-  **"Afford Your Own Markdown Dialect"** (unpublished since the blog was retired).
+## The pieces
 
-## The browser client
+- **The server** is `zig-server/src/chat.zig` and its neighbours
+  (`chat_*.zig`, `docs*.zig`, `recent*.zig`, `images*.zig`).
+- **The browser client** is its own repository, chat-client, a sibling
+  checkout: plain JavaScript, served as written and embedded into the zig
+  binary.
+  `chat-client-rev` pins the commit this server expects.
+- **The markdown dialect** is its own repository too, chat-markdown.
+- **`chat/chat_client.py`** is a small Python reference client for the HTTP
+  API.
 
-The front end is its own repository, **chat-client** (a sibling checkout): hand-written JavaScript, no build step, embedded into the
-zig binary through its `chat_client` module and served as-is. Its README
-says how it is organized, and its `tools/check` runs every check of its own
-(the JS syntax, its lint, the resize decision, the contract). This server
-pins it: `chat-client-rev` names the commit it expects, and `ops/test_chat`
-(in `ops/check_chat`) fails, naming both commits, when `../chat-client` is
-at another, then runs the client's `tools/check` there.
+## Running and testing
 
-The markdown dialect is its own repository too, **chat-markdown** (a sibling
-checkout, module `chat_markdown`).
-
-The **server** side lives over in `zig-server/src/` — `chat.zig` and its focused
-neighbors (`chat_page.zig`, `chat_sse.zig`, `chat_conv.zig`, `chat_chrome.zig`, `recent.zig`,
-`images.zig`, `docs*.zig`, …). `chat/chat_client.py` is a small Python reference
-client for the HTTP API, so other clients (and our backups) have a worked example.
-
-## Running & testing
-
-`ops/start`, then open `/chat`. The subsystem gate is `ops/check_chat` (JS syntax +
-the lint pass + the Python client's syntax); the full pre-commit gate is `ops/check`.
-A change reaches the site in a zig-metal-unikernel release (its `DEPLOY.md`).
-
-For the project-level picture (toolchain, the responsive/mobile design, deploy), see
-the repo's top-level [`README.md`](../README.md).
-
-Built by Steve and Claude, and used daily with apoorva and Debbie. It's live, but the
-code is tidy and the seams are intentional — if you (or an agent you're working with)
-want to build on top of what we wrote, start here, then read the server modules.
+`ops/start`, then open `/chat`. `ops/check_chat` is the chat gate: it holds
+`../chat-client` to the pinned commit, runs the client's own `tools/check`
+and checks the Python client's syntax.
