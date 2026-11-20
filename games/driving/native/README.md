@@ -23,8 +23,8 @@ shims are `x11.zig` (the Linux and WSLg window) and `win32.zig` (the Windows
 window and the `.scr` screensaver). Each hands raster's framebuffer to the OS
 as is, since its pixel format is the native one. `main.zig` is a headless
 harness that drives the whole route and writes one PNG a segment to
-`snap/native/`, a contact sheet for the eye and the target that builds on a
-headless box. `prof.zig` times each render phase apart from the hot path.
+`games/driving/snap/native/`, a contact sheet for the eye and the target that
+builds on a headless box. `prof.zig` times each render phase apart from the hot path.
 
 ## One shim per OS
 
@@ -75,8 +75,8 @@ in per-call locals**: a file-scope `var` is a data race behind a pure-looking
 signature, and it once showed as horizontal streaks from scratch buffers
 clobbered mid-fill. `threadlocal var` is the escape for per-thread scratch.
 `ops/check_safari` enforces the rule. It applies to this worker-parallel
-module alone; the core (`wasm/paint.zig`, `wasm/render.zig`,
-`wasm/safari.zig`) keeps its globals on purpose, since it runs on the main
+module alone; the core (`../wasm/paint.zig`, `../wasm/render.zig`,
+`../wasm/safari.zig`) keeps its globals on purpose, since it runs on the main
 thread.
 
 ## Performance

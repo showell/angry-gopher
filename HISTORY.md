@@ -71,5 +71,6 @@ or the essay):
   law.
 - Define the **population** before ranking it (the early "loops" mislabel).
 
-Both apps reach the site in a zig-metal-unikernel release (its `DEPLOY.md`).
+Both apps reach the site in a zig-metal-unikernel release (its
+[DEPLOY.md](https://github.com/showell/zig-metal-unikernel/blob/master/DEPLOY.md)).
 Reviving either: read this file, then the README / the essay, then the code.

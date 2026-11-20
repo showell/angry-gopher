@@ -115,9 +115,9 @@ file opens with what it does. Beyond the search:
   line in, a move plan out, as the `puzzleHint`, `gameHint` and `agentStep`
   exports, reached through `zig-server/src/puzzles.zig` and
   `engine_glue.js`. `agentStep` runs `sim.agentPlan`, the strong policy;
-  `ts/elm_api/zig_agent.ts` lifts its answer into geometry.
-- `sim.zig`, full-game self-play on the `ts/full_game/` rules, dealing
-  exactly as `ts/baseline_deal.ts` does, so a seed names the same game in
+  `../ts/elm_api/zig_agent.ts` lifts its answer into geometry.
+- `sim.zig`, full-game self-play on the `../ts/full_game/` rules, dealing
+  exactly as `../ts/baseline_deal.ts` does, so a seed names the same game in
   both. Its agent plays strong: a greedy subset cascade with satisfaction
   probes. `ops/bench_lynrummy_sim` is the bake-off against the TS harness.
 - `cut_dump.zig` writes a game's cut state (the board at the first solver

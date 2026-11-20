@@ -91,5 +91,7 @@ success responses to match its error ones (`ok`, `json`, `html`, … beside
 and add a lint beside `lint_head_access.shale` that lets only webbox's `http.zig` call
 `req.respond`. The application's dependency on `std.http.Server` would then be
 `http.zig`'s small surface. It moves calls, not logic, so zig-metal-unikernel's
-chat judge (`probe/judge_gopher.py`), which compares every page from metal and
-from Linux byte for byte, would show it changed nothing. It is not scheduled.
+chat judge
+([probe/judge_gopher.py](https://github.com/showell/zig-metal-unikernel/blob/master/probe/judge_gopher.py)),
+which compares every page from metal and from Linux byte for byte, would show
+it changed nothing. It is not scheduled.

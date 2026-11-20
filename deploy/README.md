@@ -1,7 +1,8 @@
 # Deploying Angry Gopher (Lyn Rummy)
 
 > **lynrummy.com is served by zig-metal-unikernel** (the top-level README,
-> "Where it runs"); releasing it is zig-metal-unikernel's `DEPLOY.md`. This
+> "Where it runs"); releasing it is zig-metal-unikernel's
+> [DEPLOY.md](https://github.com/showell/zig-metal-unikernel/blob/master/DEPLOY.md). This
 > droplet runs Caddy, which proxies to metal, and the watchdog; its zig
 > server is stopped. `ops/deploy` fails closed (below): while metal serves,
 > it refreshes the watchdog and stops. The Linux-host sections are the
@@ -34,7 +35,8 @@ is the mode `ops/start` runs locally, so prod ships what we dogfood. Switch
 
 **metal serves lynrummy.com, and prod's Linux `gopher-server` stays stopped
 by design**: two hosts writing two copies of the data cannot be merged
-(`CUTOVER.md` in zig-metal-unikernel). So:
+(zig-metal-unikernel's
+[CUTOVER.md](https://github.com/showell/zig-metal-unikernel/blob/master/CUTOVER.md)). So:
 
 - **The program and the content** (`pages/`, `gallery/`) ship as a new
   **zig-metal-unikernel image**, built and deployed from that repo. metal
@@ -47,9 +49,9 @@ when prod says plainly that Linux serves: the marker `~/linux-serves`
 present, `ssh` exit 0. **The marker's absence is the production state**
 (metal serves): the script refreshes the watchdog and stops. An `ssh`
 failure, or any answer it cannot read cleanly, **refuses** and names what
-it saw; it never guesses "Linux serves". `CUTOVER.md`'s way back creates the
-marker, the cutover removes it, and the watchdog reads the same file the
-same way. `ops/test_deploy` pins every path, `ssh` failure included.
+it saw; it never guesses "Linux serves". CUTOVER.md's way back (linked
+above) creates the marker, the cutover removes it, and the watchdog reads
+the same file the same way. `ops/test_deploy` pins every path, `ssh` failure included.
 
 ```
 ops/deploy        # metal serving (marker absent): refreshes the watchdog only

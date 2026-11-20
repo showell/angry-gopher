@@ -14,7 +14,8 @@ one-handler contract and the library's own tests.
 `webbox` dependency (`.path = "webbox"`). `ops/check_zig` runs its `zig
 build test` here, and the server's lints read its `src/` beside
 `zig-server/src`. zig-metal-unikernel builds `gopher.elf` with webbox from
-its own sibling `../zig-webbox`, apart from this copy.
+its own sibling checkout of [zig-webbox](https://github.com/showell/zig-webbox),
+apart from this copy; both repos were retired from this box on 2026-11-18.
 
 ## The modules
 
@@ -62,8 +63,9 @@ which exports two declarations:
 - **`hosting`**: what only the application can say about itself: `name`,
   `data_name`, `whole_read_max`, `cache_largest_most` and
   `describeStart(report, writer)`. zig-metal-unikernel's kernel requires the
-  last four and says so at compile time (its `probe/gopher.zig`); a Linux
-  `main` uses what it needs.
+  last four and says so at compile time (its
+  [probe/gopher.zig](https://github.com/showell/zig-metal-unikernel/blob/master/probe/gopher.zig));
+  a Linux `main` uses what it needs.
 
 The Linux host runs it from the application's own `main`; the kernel runs it
 through `addAppKernel` (zig-metal-unikernel's `build.zig`). An application

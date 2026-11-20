@@ -37,8 +37,9 @@ host.
   Caddyfile to.
 - **`/version`** reports the running build's `commit`.
 
-Releasing is in zig-metal-unikernel's `DEPLOY.md`; prod's Caddy and the
-Linux host are in [`deploy/README.md`](deploy/README.md).
+Releasing is in zig-metal-unikernel's
+[DEPLOY.md](https://github.com/showell/zig-metal-unikernel/blob/master/DEPLOY.md); prod's
+Caddy and the Linux host are in [`deploy/README.md`](deploy/README.md).
 
 ## The apps
 
@@ -160,8 +161,8 @@ The environment variables, named in `zig-server/src/server.zig`:
 
 `data_dir` holds four trees, `lynrummy`, `chat`, `users` and `players`
 (`roots.zig`). `auth_dir` is the account store: one directory per uid
-(`{auth_dir}/<id>/{name,password,api-key}`) plus `next-id.txt`. One uid is
-the same person across every surface.
+(`{auth_dir}/<id>/{name,password,api-key}`) plus
+`{auth_dir}/next-id.txt`. One uid is the same person across every surface.
 
 **Keep server data outside the repository.** With `data_dir`, `auth_dir`
 and the config file outside the checkout, the tree can be deleted while the
