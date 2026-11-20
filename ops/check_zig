@@ -36,10 +36,12 @@ python3 "$REPO_DIR/tools/lint_webbox_library.py" --self-test
 python3 "$REPO_DIR/tools/lint_webbox_library.py"
 
 # The docs' cited paths and names, this repo's (shale's
-# tools/doc_check.shale, by its own `zig build doc-check`; a few seconds).
+# tools/doc_check.shale, run by the installed shale from the folder that holds
+# the repos, with the budgets it needs; under a second).
 echo "==> doc check (this repo's docs)"
 docs_out="$(mktemp)"
-(cd "$REPO_DIR/../shale" && env -u ZIG_PROGRESS zig build doc-check -- only=angry-gopher > "$docs_out" 2>&1) \
+doc_budget=(--budget arena_bytes=2000000000 --budget steps=1000000000 --budget reads=1000000 --budget read_bytes=2000000000 --budget output_bytes=8000000)
+(cd "$REPO_DIR/.." && shale "${doc_budget[@]}" shale/tools/doc_check.shale only=angry-gopher > "$docs_out" 2>&1) \
     || { grep -E 'gone |ambiguous |names gone |findings' "$docs_out" | head -9; rm -f "$docs_out"; exit 1; }
 rm -f "$docs_out"
 

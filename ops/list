@@ -67,7 +67,7 @@ Available ops commands (run from repo root):
                          esbuild. Run after any games/lynrummy/ts/
                          edit before testing the live Elm UI.
   ops/build_shale_web    Build Shale's landing page and tutorial (the
-                         sibling shale checkout's `zig build web`) into
+                         sibling shale checkout's legacy_zig/ `zig build web`) into
                          learn_shale/, served at /shale/. Called by
                          ops/build_embedded.
   ops/build_delivery_wasm Build the Delivery solver's zig core into
