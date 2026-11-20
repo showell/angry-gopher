@@ -9,9 +9,8 @@ The rules are in [`RULES.md`](./RULES.md) and the design in
 It is live at https://lynrummy.com: deal, play, hint, let the agent play,
 replay and resume, solo or against the built-in agent.
 
-**The game is mature and parked.** The solver's README,
-[`zig/README.md`](./zig/README.md), has a "resume kit" saying where work
-would pick up.
+**The game is mature and parked.** [`zig/RESUME.md`](./zig/RESUME.md)
+says where work would pick up.
 
 ## How it's built
 

@@ -54,7 +54,9 @@ reads.
   winding road; a Zig core in WebAssembly computes the geometry and a small
   JS blitter draws it. [`games/driving/README.md`](games/driving/README.md)
 - **Chat** (`/chat`): real-time chat, docs and channels over Server-Sent
-  Events. [`chat/README.md`](chat/README.md)
+  Events. It is retired in favour of roc-chat, and lynrummy.com's `/chat`
+  redirects to chat.lynrummy.com (`deploy/Caddyfile`). The code stays here
+  as a reference. [`chat/README.md`](chat/README.md)
 - **Seattle Delivery** (`/delivery`): eight trucks routed across Seattle by a
   Clarke-Wright solver in Zig (WebAssembly), drawn by a TS client.
   [`delivery/README.md`](delivery/README.md)
