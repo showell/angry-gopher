@@ -1,7 +1,7 @@
 # Angry Gopher
 
 This is the source for **[lynrummy.com](https://lynrummy.com)** — Steve
-Howell's personal website. Every line of code here was written by Claude.
+Howell's personal website. The code here was written by AI coding agents (Claude), with human supervision.
 "Angry Gopher" is a dated inside joke; don't ask.
 
 The site is a handful of small apps served from **one self-contained zig
